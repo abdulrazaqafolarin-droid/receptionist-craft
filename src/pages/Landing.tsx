@@ -181,7 +181,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-border py-8">
         <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <p>© 2025 Aisha AI. Built with ❤️ for small businesses.</p>
+          <p>© 2025 Rutex FrontDesk Builder. Built with ❤️ for small businesses.</p>
         </div>
       </footer>
     </div>

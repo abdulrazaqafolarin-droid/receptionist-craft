@@ -37,11 +37,11 @@ export const Navbar = ({ user }: NavbarProps) => {
             className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
             onClick={() => navigate(user ? "/dashboard" : "/")}
           >
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center">
-              <span className="text-xl font-bold text-primary-foreground">A</span>
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center">
+              <span className="text-xl font-bold text-primary-foreground">R</span>
             </div>
             <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
-              Aisha AI
+              Rutex FrontDesk
             </span>
           </div>
 
