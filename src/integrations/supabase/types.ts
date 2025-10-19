@@ -202,9 +202,11 @@ export type Database = {
       receptionists: {
         Row: {
           active: boolean | null
+          address: string | null
           business_name: string
           business_phone: string | null
           created_at: string
+          default_response: string | null
           greeting_message: string | null
           hours_of_operation: Json | null
           id: string
@@ -212,15 +214,19 @@ export type Database = {
           mock_mode: boolean | null
           name: string
           persona_description: string | null
+          services_and_prices: Json | null
           timezone: string | null
           tone: Database["public"]["Enums"]["receptionist_tone"] | null
           user_id: string
+          website: string | null
         }
         Insert: {
           active?: boolean | null
+          address?: string | null
           business_name: string
           business_phone?: string | null
           created_at?: string
+          default_response?: string | null
           greeting_message?: string | null
           hours_of_operation?: Json | null
           id?: string
@@ -228,15 +234,19 @@ export type Database = {
           mock_mode?: boolean | null
           name: string
           persona_description?: string | null
+          services_and_prices?: Json | null
           timezone?: string | null
           tone?: Database["public"]["Enums"]["receptionist_tone"] | null
           user_id: string
+          website?: string | null
         }
         Update: {
           active?: boolean | null
+          address?: string | null
           business_name?: string
           business_phone?: string | null
           created_at?: string
+          default_response?: string | null
           greeting_message?: string | null
           hours_of_operation?: Json | null
           id?: string
@@ -244,9 +254,11 @@ export type Database = {
           mock_mode?: boolean | null
           name?: string
           persona_description?: string | null
+          services_and_prices?: Json | null
           timezone?: string | null
           tone?: Database["public"]["Enums"]["receptionist_tone"] | null
           user_id?: string
+          website?: string | null
         }
         Relationships: [
           {
