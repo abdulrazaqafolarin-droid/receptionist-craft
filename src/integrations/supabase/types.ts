@@ -229,19 +229,25 @@ export type Database = {
       receptionists: {
         Row: {
           active: boolean | null
+          additional_languages: string[] | null
           address: string | null
+          allow_interruptions: boolean | null
           business_name: string
           business_phone: string | null
           created_at: string
           default_response: string | null
+          goal: string | null
           greeting_message: string | null
           hours_of_operation: Json | null
           id: string
+          knowledge_base: string | null
           language: string | null
           mock_mode: boolean | null
           name: string
           persona_description: string | null
           services_and_prices: Json | null
+          system_prompt: string | null
+          temperature: number | null
           timezone: string | null
           tone: Database["public"]["Enums"]["receptionist_tone"] | null
           user_id: string
@@ -249,19 +255,25 @@ export type Database = {
         }
         Insert: {
           active?: boolean | null
+          additional_languages?: string[] | null
           address?: string | null
+          allow_interruptions?: boolean | null
           business_name: string
           business_phone?: string | null
           created_at?: string
           default_response?: string | null
+          goal?: string | null
           greeting_message?: string | null
           hours_of_operation?: Json | null
           id?: string
+          knowledge_base?: string | null
           language?: string | null
           mock_mode?: boolean | null
           name: string
           persona_description?: string | null
           services_and_prices?: Json | null
+          system_prompt?: string | null
+          temperature?: number | null
           timezone?: string | null
           tone?: Database["public"]["Enums"]["receptionist_tone"] | null
           user_id: string
@@ -269,19 +281,25 @@ export type Database = {
         }
         Update: {
           active?: boolean | null
+          additional_languages?: string[] | null
           address?: string | null
+          allow_interruptions?: boolean | null
           business_name?: string
           business_phone?: string | null
           created_at?: string
           default_response?: string | null
+          goal?: string | null
           greeting_message?: string | null
           hours_of_operation?: Json | null
           id?: string
+          knowledge_base?: string | null
           language?: string | null
           mock_mode?: boolean | null
           name?: string
           persona_description?: string | null
           services_and_prices?: Json | null
+          system_prompt?: string | null
+          temperature?: number | null
           timezone?: string | null
           tone?: Database["public"]["Enums"]["receptionist_tone"] | null
           user_id?: string

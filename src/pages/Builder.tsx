@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Trash2, Send, Sparkles, Volume2 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ArrowLeft, Plus, Trash2, Send, Sparkles, Volume2, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -52,6 +53,14 @@ export default function Builder() {
   const [faqs, setFaqs] = useState<FAQ[]>([
     { question: "Do you accept insurance?", answer: "Yes — we accept major insurers." }
   ]);
+  
+  // Advanced configuration state
+  const [goal, setGoal] = useState("");
+  const [language, setLanguage] = useState("English");
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [knowledgeBase, setKnowledgeBase] = useState("");
+  const [temperature, setTemperature] = useState(0.7);
+  const [allowInterruptions, setAllowInterruptions] = useState(false);
 
   // Chat state
   const [currentReceptionist, setCurrentReceptionist] = useState<any>(null);
@@ -241,6 +250,12 @@ export default function Builder() {
         services_and_prices: services as any,
         active: true,
         mock_mode: true,
+        goal: goal,
+        language: language,
+        system_prompt: systemPrompt,
+        knowledge_base: knowledgeBase,
+        temperature: temperature,
+        allow_interruptions: allowInterruptions,
       };
 
       const { data, error } = await supabase
@@ -367,7 +382,10 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
 
       // Call chat edge function
       const { data: aiData, error: aiError } = await supabase.functions.invoke('chat', {
-        body: { messages: openaiMessages },
+        body: { 
+          messages: openaiMessages,
+          receptionistId: currentReceptionist.id 
+        },
       });
 
       if (aiError) throw aiError;
@@ -466,87 +484,154 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
                 Create AI Receptionist
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 max-h-[calc(100vh-16rem)] overflow-y-auto">
-              <div className="space-y-2">
-                <Label htmlFor="receptionist-name">Receptionist Name *</Label>
-                <Input
-                  id="receptionist-name"
-                  value={receptionistName}
-                  onChange={(e) => setReceptionistName(e.target.value)}
-                  placeholder="Aisha — Receptionist"
-                />
-              </div>
+            <CardContent className="space-y-6 max-h-[calc(100vh-16rem)] overflow-y-auto">
+              {/* Agent Info Section */}
+              <Collapsible defaultOpen>
+                <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-muted rounded-lg hover:bg-muted/80 transition-colors">
+                  <h3 className="font-semibold">Agent Info</h3>
+                  <ChevronDown className="h-4 w-4 transition-transform" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="receptionist-name">Receptionist Name *</Label>
+                    <Input
+                      id="receptionist-name"
+                      value={receptionistName}
+                      onChange={(e) => setReceptionistName(e.target.value)}
+                      placeholder="Aisha — Receptionist"
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="business-type">Business Type</Label>
-                <Select value={businessType} onValueChange={setBusinessType}>
-                  <SelectTrigger id="business-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Dental Clinic">Dental Clinic</SelectItem>
-                    <SelectItem value="Beauty Salon">Beauty Salon</SelectItem>
-                    <SelectItem value="Car Dealership">Car Dealership</SelectItem>
-                    <SelectItem value="HVAC">HVAC</SelectItem>
-                    <SelectItem value="Restaurant">Restaurant</SelectItem>
-                    <SelectItem value="Retail">Retail</SelectItem>
-                    <SelectItem value="Contractor">Contractor</SelectItem>
-                    <SelectItem value="Consultant">Consultant</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="business-type">Business Type</Label>
+                    <Select value={businessType} onValueChange={setBusinessType}>
+                      <SelectTrigger id="business-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Dental Clinic">Dental Clinic</SelectItem>
+                        <SelectItem value="Beauty Salon">Beauty Salon</SelectItem>
+                        <SelectItem value="Car Dealership">Car Dealership</SelectItem>
+                        <SelectItem value="HVAC">HVAC</SelectItem>
+                        <SelectItem value="Restaurant">Restaurant</SelectItem>
+                        <SelectItem value="Retail">Retail</SelectItem>
+                        <SelectItem value="Contractor">Contractor</SelectItem>
+                        <SelectItem value="Consultant">Consultant</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="business-phone">Business Phone Number</Label>
-                <Input
-                  id="business-phone"
-                  value={businessPhone}
-                  onChange={(e) => setBusinessPhone(e.target.value)}
-                  placeholder="+234..."
-                />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="business-phone">Business Phone Number</Label>
+                    <Input
+                      id="business-phone"
+                      value={businessPhone}
+                      onChange={(e) => setBusinessPhone(e.target.value)}
+                      placeholder="+234..."
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="tone">Tone of Voice</Label>
-                <Select value={tone} onValueChange={setTone}>
-                  <SelectTrigger id="tone">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Friendly">Friendly</SelectItem>
-                    <SelectItem value="Professional">Professional</SelectItem>
-                    <SelectItem value="Energetic">Energetic</SelectItem>
-                    <SelectItem value="Calm">Calm</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="goal">Goal</Label>
+                    <Textarea
+                      id="goal"
+                      value={goal}
+                      onChange={(e) => setGoal(e.target.value)}
+                      placeholder="e.g., Book appointments and answer customer questions professionally"
+                      rows={2}
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="greeting">Greeting Message</Label>
-                <Textarea
-                  id="greeting"
-                  value={greetingMessage}
-                  onChange={(e) => setGreetingMessage(e.target.value)}
-                  placeholder="Hi! Thanks for calling {BusinessName}. This is {ReceptionistName}. How can I help?"
-                  rows={3}
-                />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="language">Language</Label>
+                    <Input
+                      id="language"
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value)}
+                      placeholder="e.g., English"
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
-              <div className="space-y-2">
-                <Label htmlFor="default-response">Default Response Message</Label>
-                <Textarea
-                  id="default-response"
-                  value={defaultResponse}
-                  onChange={(e) => setDefaultResponse(e.target.value)}
-                  placeholder="I'm sorry — I don't have that info yet..."
-                  rows={2}
-                />
-              </div>
+              {/* Personality & Tone Section */}
+              <Collapsible defaultOpen>
+                <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-muted rounded-lg hover:bg-muted/80 transition-colors">
+                  <h3 className="font-semibold">Personality & Tone</h3>
+                  <ChevronDown className="h-4 w-4 transition-transform" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="tone">Tone of Voice</Label>
+                    <Select value={tone} onValueChange={setTone}>
+                      <SelectTrigger id="tone">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Friendly">Friendly</SelectItem>
+                        <SelectItem value="Professional">Professional</SelectItem>
+                        <SelectItem value="Energetic">Energetic</SelectItem>
+                        <SelectItem value="Calm">Calm</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="border-t pt-4">
-                <h3 className="font-semibold mb-3">Business Info Memory</h3>
+                  <div className="space-y-2">
+                    <Label htmlFor="system-prompt">System Prompt (Persona)</Label>
+                    <Textarea
+                      id="system-prompt"
+                      value={systemPrompt}
+                      onChange={(e) => setSystemPrompt(e.target.value)}
+                      placeholder="Describe the receptionist's personality, behavior, and communication style..."
+                      rows={4}
+                    />
+                  </div>
 
-                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="greeting">Greeting Message</Label>
+                    <Textarea
+                      id="greeting"
+                      value={greetingMessage}
+                      onChange={(e) => setGreetingMessage(e.target.value)}
+                      placeholder="Hi! Thanks for calling {BusinessName}. This is {ReceptionistName}. How can I help?"
+                      rows={2}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="default-response">Default Response (when unsure)</Label>
+                    <Textarea
+                      id="default-response"
+                      value={defaultResponse}
+                      onChange={(e) => setDefaultResponse(e.target.value)}
+                      placeholder="I'm sorry — I don't have that info yet. Can I take your contact so we can follow up?"
+                      rows={2}
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+
+              {/* Knowledge Base Section */}
+              <Collapsible defaultOpen>
+                <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-muted rounded-lg hover:bg-muted/80 transition-colors">
+                  <h3 className="font-semibold">Knowledge Base</h3>
+                  <ChevronDown className="h-4 w-4 transition-transform" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="knowledge-base">Business Information</Label>
+                    <Textarea
+                      id="knowledge-base"
+                      value={knowledgeBase}
+                      onChange={(e) => setKnowledgeBase(e.target.value)}
+                      placeholder="Add comprehensive business details, services, hours, FAQs, policies, etc..."
+                      rows={6}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      This is the main knowledge base that the AI will use to answer questions.
+                    </p>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="business-name">Business Name</Label>
                     <Input
@@ -645,8 +730,50 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
                       <Plus className="h-4 w-4 mr-2" /> Add FAQ
                     </Button>
                   </div>
-                </div>
-              </div>
+                </CollapsibleContent>
+              </Collapsible>
+
+              {/* Advanced Settings Section */}
+              <Collapsible>
+                <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-muted rounded-lg hover:bg-muted/80 transition-colors">
+                  <h3 className="font-semibold">Advanced Settings</h3>
+                  <ChevronDown className="h-4 w-4 transition-transform" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="temperature">Temperature ({temperature.toFixed(1)})</Label>
+                    <input
+                      id="temperature"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={temperature}
+                      onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Lower = more focused and consistent, Higher = more creative and varied
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                      <Label htmlFor="interruptions">Allow Interruptions</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Enable users to interrupt the AI mid-response
+                      </p>
+                    </div>
+                    <input
+                      id="interruptions"
+                      type="checkbox"
+                      checked={allowInterruptions}
+                      onChange={(e) => setAllowInterruptions(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
               <Button onClick={handleSaveReceptionist} className="w-full" size="lg">
                 Save & Generate AI Receptionist
