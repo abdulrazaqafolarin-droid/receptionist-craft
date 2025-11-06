@@ -6,10 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Trash2, Send, Sparkles } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Send, Sparkles, Volume2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import VoiceInput from "@/components/VoiceInput";
+import { speakText } from "@/utils/textToSpeech";
 
 interface ServicePrice {
   service: string;
@@ -56,6 +58,7 @@ export default function Builder() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -236,10 +239,19 @@ export default function Builder() {
     setSending(true);
 
     // Simulate typing delay
-    setTimeout(() => {
+    setTimeout(async () => {
       const reply = generateReply(userMessage);
       setMessages(prev => [...prev, { sender: "ai", text: reply, timestamp: Date.now() }]);
       setSending(false);
+
+      // Auto-speak the reply if enabled
+      if (autoSpeak) {
+        try {
+          await speakText(reply);
+        } catch (error) {
+          console.error('Error speaking reply:', error);
+        }
+      }
 
       // Save to database if receptionist exists
       if (currentReceptionist && user) {
@@ -547,22 +559,71 @@ export default function Builder() {
                 </div>
 
                 {/* Input */}
-                <div className="flex gap-2 pt-3 border-t">
-                  <Input
-                    placeholder="Type a message..."
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    className="flex-1"
-                  />
-                  <Button onClick={handleSendMessage} size="icon">
-                    <Send className="h-4 w-4" />
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAutoSpeak(!autoSpeak)}
+                      className="flex items-center gap-2"
+                    >
+                      <Volume2 className="h-4 w-4" />
+                      Auto-speak: {autoSpeak ? "ON" : "OFF"}
+                    </Button>
+                  </div>
+                  <div className="flex gap-2 pt-3 border-t">
+                    <Input
+                      placeholder="Type a message..."
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                      className="flex-1"
+                      disabled={sending}
+                    />
+                    <VoiceInput 
+                      onTranscript={(text) => {
+                        setInput(text);
+                        // Auto-send after a brief delay
+                        setTimeout(() => {
+                          if (text) {
+                            const userMessage = text;
+                            setMessages(prev => [...prev, { sender: "user", text: userMessage, timestamp: Date.now() }]);
+                            setInput("");
+                            setSending(true);
+                            setTimeout(async () => {
+                              const reply = generateReply(userMessage);
+                              setMessages(prev => [...prev, { sender: "ai", text: reply, timestamp: Date.now() }]);
+                              setSending(false);
+                              if (autoSpeak) {
+                                try {
+                                  await speakText(reply);
+                                } catch (error) {
+                                  console.error('Error speaking reply:', error);
+                                }
+                              }
+                              if (currentReceptionist && user) {
+                                supabase.from("conversations").insert({
+                                  receptionist_id: currentReceptionist.id,
+                                  user_message: userMessage,
+                                  bot_message: reply,
+                                  direction: "inbound",
+                                });
+                              }
+                            }, 900 + Math.random() * 800);
+                          }
+                        }, 100);
+                      }}
+                      disabled={sending}
+                    />
+                    <Button onClick={handleSendMessage} size="icon" disabled={sending}>
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
 
                 <p className="text-xs text-muted-foreground mt-3">
