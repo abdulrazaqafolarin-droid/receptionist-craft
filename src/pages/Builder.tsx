@@ -1,16 +1,15 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect, useRef } from "react";
+import { Navbar } from "@/components/Navbar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowLeft, Plus, Trash2, Send, Sparkles } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Trash2, Send, Loader2, MessageSquare } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Navbar } from "@/components/Navbar";
 
 interface ServicePrice {
   service: string;
@@ -23,292 +22,235 @@ interface FAQ {
 }
 
 interface Message {
-  sender: "user" | "bot";
+  sender: "user" | "ai";
   text: string;
-  timestamp: Date;
+  timestamp?: number;
 }
 
 export default function Builder() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
-  const receptionistId = searchParams.get('id');
   const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Form state
-  const [receptionistName, setReceptionistName] = useState("");
-  const [businessName, setBusinessName] = useState("");
+  const [receptionistName, setReceptionistName] = useState("Aisha - Receptionist");
+  const [businessType, setBusinessType] = useState("Dental Clinic");
   const [businessPhone, setBusinessPhone] = useState("");
-  const [tone, setTone] = useState("friendly");
-  const [greeting, setGreeting] = useState("");
+  const [tone, setTone] = useState("Friendly");
+  const [greetingMessage, setGreetingMessage] = useState("");
   const [defaultResponse, setDefaultResponse] = useState("");
-  const [services, setServices] = useState<ServicePrice[]>([]);
-  const [faqs, setFaqs] = useState<FAQ[]>([]);
-  const [hoursOfOperation, setHoursOfOperation] = useState<any>({});
+  const [businessName, setBusinessName] = useState("");
+  const [address, setAddress] = useState("");
+  const [hours, setHours] = useState("");
+  const [website, setWebsite] = useState("");
+  const [services, setServices] = useState<ServicePrice[]>([
+    { service: "General Consultation", price: "₦5,000" }
+  ]);
+  const [faqs, setFaqs] = useState<FAQ[]>([
+    { question: "Do you accept insurance?", answer: "Yes — we accept major insurers." }
+  ]);
 
-  // Chat simulator state
+  // Chat state
+  const [currentReceptionist, setCurrentReceptionist] = useState<any>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [userInput, setUserInput] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [pastConversations, setPastConversations] = useState<any[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    getUser();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
   }, []);
 
-  // Load existing receptionist if editing
   useEffect(() => {
-    if (receptionistId) {
-      loadReceptionist();
-    }
-  }, [receptionistId]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  // Load chat history when receptionist changes
-  useEffect(() => {
-    if (receptionistId) {
-      loadChatHistory();
-    }
-  }, [receptionistId]);
+  // Chat simulator logic
+  const normalize = (text: string) => {
+    return (text || "").toLowerCase().replace(/[^\w\s]/gi, "");
+  };
 
-  const loadReceptionist = async () => {
-    if (!receptionistId) return;
-    
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('receptionists')
-        .select('*')
-        .eq('id', receptionistId)
-        .single();
+  const containsAny = (text: string, keywords: string[]) => {
+    const t = normalize(text);
+    return keywords.some(k => t.includes(k));
+  };
 
-      if (error) throw error;
-
-      if (data) {
-        setReceptionistName(data.name);
-        setBusinessName(data.business_name);
-        setBusinessPhone(data.business_phone || "");
-        setTone(data.tone || "friendly");
-        setGreeting(data.greeting_message || "");
-        setDefaultResponse(data.default_response || "");
-        setServices(Array.isArray(data.services_and_prices) ? (data.services_and_prices as unknown as ServicePrice[]) : []);
-        setFaqs([]);
-        setHoursOfOperation(data.hours_of_operation || {});
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+  const applyTone = (toneType: string, text: string) => {
+    switch (toneType.toLowerCase()) {
+      case "friendly":
+        return `Hey! 😊 ${text}`;
+      case "energetic":
+        return `Hi! ⚡ ${text}`;
+      case "calm":
+        return `Hello. ${text}`;
+      case "professional":
+      default:
+        return text;
     }
   };
 
-  const loadChatHistory = async () => {
-    if (!receptionistId) return;
-
-    try {
-      const { data, error } = await supabase.functions.invoke('chat-with-receptionist', {
-        body: {
-          action: 'get_history',
-          receptionist_id: receptionistId,
-        },
-      });
-
-      if (error) throw error;
-
-      if (data?.conversations) {
-        const loadedMessages: Message[] = [];
-        data.conversations.forEach((conv: any) => {
-          loadedMessages.push({
-            sender: 'user',
-            text: conv.user_message,
-            timestamp: new Date(conv.created_at),
-          });
-          loadedMessages.push({
-            sender: 'bot',
-            text: conv.bot_message,
-            timestamp: new Date(conv.created_at),
-          });
-        });
-        setMessages(loadedMessages);
-        setPastConversations(data.conversations);
-      }
-    } catch (error: any) {
-      console.error('Error loading chat history:', error);
+  const suggestFakeSlots = () => {
+    const now = new Date();
+    const slots = [];
+    for (let i = 1; i <= 5; i++) {
+      const d = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
+      slots.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} 10:00`);
     }
+    return slots;
+  };
+
+  const formatServices = (servicesList: ServicePrice[]) => {
+    return servicesList.map(s => `${s.service}: ${s.price}`).join(" • ");
+  };
+
+  const generateReply = (userMessage: string): string => {
+    const msg = normalize(userMessage);
+    const name = currentReceptionist?.name || receptionistName;
+    const bName = currentReceptionist?.business_name || businessName || businessType;
+
+    // Greeting
+    const greetingKeywords = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"];
+    if (containsAny(msg, greetingKeywords)) {
+      const gm = currentReceptionist?.greeting_message || greetingMessage || `Hi! Thanks for calling ${bName}. This is ${name}. How can I help?`;
+      return applyTone(tone, `Hello! I'm ${name} at ${bName}. ${gm}`);
+    }
+
+    // Booking
+    const bookingKeywords = ["book", "appointment", "reserve", "schedule"];
+    if (containsAny(msg, bookingKeywords)) {
+      const slots = suggestFakeSlots();
+      return applyTone(tone, `I can help with booking. Our available slots: ${slots.slice(0, 3).join(", ")}. Which one works best?`);
+    }
+
+    // Price
+    const priceKeywords = ["price", "cost", "how much", "fee", "charge"];
+    if (containsAny(msg, priceKeywords)) {
+      if (services.length > 0 && services[0].service) {
+        return applyTone(tone, `Our prices: ${formatServices(services)}. Which service would you like?`);
+      }
+      return applyTone(tone, `Prices vary by service. Could you tell me which service you're interested in?`);
+    }
+
+    // Hours
+    if (containsAny(msg, ["open", "hours", "time"])) {
+      if (hours) return applyTone(tone, `We are open: ${hours}. Would you like to book a slot?`);
+      return applyTone(tone, `Our hours vary by day. What day are you asking about?`);
+    }
+
+    // Address
+    if (containsAny(msg, ["where", "address", "located"])) {
+      if (address) return applyTone(tone, `We are located at ${address}. Can I help you with directions or booking?`);
+      return applyTone(tone, `Could you tell me what city you're in so I can find the nearest branch?`);
+    }
+
+    // FAQ matching
+    for (let faq of faqs) {
+      const qnorm = normalize(faq.question);
+      const qWords = qnorm.split(" ").filter(Boolean);
+      if (qWords.some(w => w.length > 3 && msg.includes(w))) {
+        return applyTone(tone, faq.answer);
+      }
+    }
+
+    // Fallback
+    return applyTone(tone, currentReceptionist?.default_response || defaultResponse || `I'm sorry — I don't have that info yet. Can I take your contact so we can follow up?`);
   };
 
   const handleSaveReceptionist = async () => {
     if (!user) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to create a receptionist.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "You must be logged in", variant: "destructive" });
       return;
     }
 
-    if (!receptionistName || !businessName) {
-      toast({
-        title: "Error",
-        description: "Please fill in at least the receptionist name and business name.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
     try {
-      const payload: any = {
+      const payload = {
         user_id: user.id,
         name: receptionistName,
-        business_name: businessName,
+        business_name: businessName || businessType,
         business_phone: businessPhone,
-        tone,
-        greeting_message: greeting,
-        default_response: defaultResponse,
-        hours_of_operation: hoursOfOperation as any,
+        tone: tone.toLowerCase() as any,
+        greeting_message: greetingMessage || `Hi! Thanks for calling ${businessName || businessType}. This is ${receptionistName}. How can I help?`,
+        default_response: defaultResponse || `I'm sorry — I don't have that info yet. Can I take your contact so we can follow up?`,
+        address,
+        website,
+        hours_of_operation: hours as any,
         services_and_prices: services as any,
+        active: true,
+        mock_mode: true,
       };
 
-      let savedReceptionistId = receptionistId;
+      const { data, error } = await supabase
+        .from("receptionists")
+        .insert([payload])
+        .select()
+        .single();
 
-      if (receptionistId) {
-        // Update existing
-        const { error } = await supabase
-          .from("receptionists")
-          .update(payload)
-          .eq("id", receptionistId);
+      if (error) throw error;
 
-        if (error) throw error;
-      } else {
-        // Insert new
-        const { data, error } = await supabase
-          .from("receptionists")
-          .insert(payload)
-          .select()
-          .single();
-
-        if (error) throw error;
-        savedReceptionistId = data.id;
+      // Save FAQs
+      if (data && faqs.length > 0) {
+        const faqInserts = faqs.map((faq, idx) => ({
+          receptionist_id: data.id,
+          question: faq.question,
+          answer: faq.answer,
+          priority: idx,
+        }));
+        await supabase.from("receptionist_faqs").insert(faqInserts);
       }
+
+      setCurrentReceptionist(data);
+      setMessages([
+        {
+          sender: "ai",
+          text: `👋 Hi, I'm ${data.name}. How can I help you today?`,
+          timestamp: Date.now(),
+        },
+      ]);
 
       toast({
-        title: "Success",
-        description: receptionistId 
-          ? "Receptionist updated successfully!"
-          : "Receptionist created successfully!",
+        title: "🎉 Success!",
+        description: `Your AI Receptionist '${data.name}' has been created successfully!`,
       });
-
-      // Navigate to edit mode if it was a new receptionist
-      if (!receptionistId && savedReceptionistId) {
-        navigate(`/builder?id=${savedReceptionistId}`);
-      }
     } catch (error: any) {
+      console.error(error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to save receptionist",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleSendMessage = async () => {
-    if (!userInput.trim() || !receptionistId) {
-      if (!receptionistId) {
-        toast({
-          title: "Save First",
-          description: "Please save your receptionist before testing the chat.",
-          variant: "destructive",
-        });
-      }
+    if (!input.trim()) return;
+    if (!currentReceptionist && !receptionistName) {
+      toast({ title: "Info", description: "Please save your receptionist first", variant: "default" });
       return;
     }
 
-    const userMessage: Message = {
-      sender: "user",
-      text: userInput.trim(),
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setUserInput("");
-    setIsSending(true);
-    setIsTyping(true);
+    const userMessage = input;
+    setMessages(prev => [...prev, { sender: "user", text: userMessage, timestamp: Date.now() }]);
+    setInput("");
+    setSending(true);
 
-    try {
-      const { data, error } = await supabase.functions.invoke('chat-with-receptionist', {
-        body: {
-          action: 'send_message',
-          receptionist_id: receptionistId,
-          user_message: userMessage.text,
-        },
-      });
+    // Simulate typing delay
+    setTimeout(() => {
+      const reply = generateReply(userMessage);
+      setMessages(prev => [...prev, { sender: "ai", text: reply, timestamp: Date.now() }]);
+      setSending(false);
 
-      if (error) throw error;
-
-      setIsTyping(false);
-      
-      if (data?.bot_message) {
-        const botMessage: Message = {
-          sender: "bot",
-          text: data.bot_message,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, botMessage]);
-        
-        // Refresh past conversations
-        loadChatHistory();
+      // Save to database if receptionist exists
+      if (currentReceptionist && user) {
+        supabase.from("conversations").insert({
+          receptionist_id: currentReceptionist.id,
+          user_message: userMessage,
+          bot_message: reply,
+          direction: "inbound",
+        });
       }
-    } catch (error: any) {
-      console.error('Error sending message:', error);
-      setIsTyping(false);
-      toast({
-        title: "Error",
-        description: "Failed to send message. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  const handleClearHistory = async () => {
-    if (!receptionistId) return;
-
-    try {
-      const { error } = await supabase.functions.invoke('chat-with-receptionist', {
-        body: {
-          action: 'clear_history',
-          receptionist_id: receptionistId,
-        },
-      });
-
-      if (error) throw error;
-
-      setMessages([]);
-      setPastConversations([]);
-      
-      toast({
-        title: "Success",
-        description: "Chat history cleared!",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to clear history.",
-        variant: "destructive",
-      });
-    }
+    }, 900 + Math.random() * 800);
   };
 
   const addService = () => {
@@ -342,320 +284,293 @@ export default function Builder() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar user={user} />
-      
-      <div className="container mx-auto px-4 py-6 max-w-7xl">
-        <Button
-          variant="ghost"
-          className="mb-6"
-          onClick={() => navigate("/dashboard")}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Dashboard
+
+      <div className="container mx-auto px-4 py-8">
+        <Button variant="ghost" onClick={() => navigate("/dashboard")} className="mb-6">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
         </Button>
 
-        <h1 className="text-3xl font-bold mb-8">
-          {receptionistId ? 'Edit' : 'Build'} Your AI Receptionist
-        </h1>
+        <div className="mb-4">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
+            Rutex FrontDesk Builder
+          </h1>
+          <p className="text-muted-foreground mt-2">Create an AI receptionist your customers will talk to</p>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Form Panel */}
-          <div className="lg:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle>Receptionist Configuration</CardTitle>
-                <CardDescription>
-                  Configure your AI receptionist's behavior and knowledge
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Basic Info */}
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="name">Receptionist Name *</Label>
-                    <Input
-                      id="name"
-                      value={receptionistName}
-                      onChange={(e) => setReceptionistName(e.target.value)}
-                      placeholder="e.g., Sarah"
-                    />
-                  </div>
+          {/* Left Panel: Form */}
+          <Card className="animate-fade-in">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Create AI Receptionist
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 max-h-[calc(100vh-16rem)] overflow-y-auto">
+              <div className="space-y-2">
+                <Label htmlFor="receptionist-name">Receptionist Name *</Label>
+                <Input
+                  id="receptionist-name"
+                  value={receptionistName}
+                  onChange={(e) => setReceptionistName(e.target.value)}
+                  placeholder="Aisha — Receptionist"
+                />
+              </div>
 
-                  <div>
-                    <Label htmlFor="business">Business Name *</Label>
+              <div className="space-y-2">
+                <Label htmlFor="business-type">Business Type</Label>
+                <Select value={businessType} onValueChange={setBusinessType}>
+                  <SelectTrigger id="business-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Dental Clinic">Dental Clinic</SelectItem>
+                    <SelectItem value="Beauty Salon">Beauty Salon</SelectItem>
+                    <SelectItem value="Car Dealership">Car Dealership</SelectItem>
+                    <SelectItem value="HVAC">HVAC</SelectItem>
+                    <SelectItem value="Restaurant">Restaurant</SelectItem>
+                    <SelectItem value="Retail">Retail</SelectItem>
+                    <SelectItem value="Contractor">Contractor</SelectItem>
+                    <SelectItem value="Consultant">Consultant</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="business-phone">Business Phone Number</Label>
+                <Input
+                  id="business-phone"
+                  value={businessPhone}
+                  onChange={(e) => setBusinessPhone(e.target.value)}
+                  placeholder="+234..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tone">Tone of Voice</Label>
+                <Select value={tone} onValueChange={setTone}>
+                  <SelectTrigger id="tone">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Friendly">Friendly</SelectItem>
+                    <SelectItem value="Professional">Professional</SelectItem>
+                    <SelectItem value="Energetic">Energetic</SelectItem>
+                    <SelectItem value="Calm">Calm</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="greeting">Greeting Message</Label>
+                <Textarea
+                  id="greeting"
+                  value={greetingMessage}
+                  onChange={(e) => setGreetingMessage(e.target.value)}
+                  placeholder="Hi! Thanks for calling {BusinessName}. This is {ReceptionistName}. How can I help?"
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="default-response">Default Response Message</Label>
+                <Textarea
+                  id="default-response"
+                  value={defaultResponse}
+                  onChange={(e) => setDefaultResponse(e.target.value)}
+                  placeholder="I'm sorry — I don't have that info yet..."
+                  rows={2}
+                />
+              </div>
+
+              <div className="border-t pt-4">
+                <h3 className="font-semibold mb-3">Business Info Memory</h3>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="business-name">Business Name</Label>
                     <Input
-                      id="business"
+                      id="business-name"
                       value={businessName}
                       onChange={(e) => setBusinessName(e.target.value)}
-                      placeholder="e.g., Sunshine Dental"
                     />
                   </div>
 
-                  <div>
-                    <Label htmlFor="phone">Business Phone</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Address</Label>
                     <Input
-                      id="phone"
-                      value={businessPhone}
-                      onChange={(e) => setBusinessPhone(e.target.value)}
-                      placeholder="+1 (555) 123-4567"
+                      id="address"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
                     />
                   </div>
 
-                  <div>
-                    <Label htmlFor="tone">Tone</Label>
-                    <Select value={tone} onValueChange={setTone}>
-                      <SelectTrigger id="tone">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="friendly">Friendly</SelectItem>
-                        <SelectItem value="professional">Professional</SelectItem>
-                        <SelectItem value="casual">Casual</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="greeting">Greeting Message</Label>
-                    <Textarea
-                      id="greeting"
-                      value={greeting}
-                      onChange={(e) => setGreeting(e.target.value)}
-                      placeholder="Hello! Welcome to our business. How can I help you today?"
-                      rows={3}
+                  <div className="space-y-2">
+                    <Label htmlFor="hours">Operating Hours</Label>
+                    <Input
+                      id="hours"
+                      value={hours}
+                      onChange={(e) => setHours(e.target.value)}
+                      placeholder="Mon-Fri 9:00 - 18:00"
                     />
                   </div>
 
-                  <div>
-                    <Label htmlFor="default">Default Response</Label>
-                    <Textarea
-                      id="default"
-                      value={defaultResponse}
-                      onChange={(e) => setDefaultResponse(e.target.value)}
-                      placeholder="I'm not sure about that. Let me connect you with someone who can help."
-                      rows={2}
+                  <div className="space-y-2">
+                    <Label htmlFor="website">Website / Social</Label>
+                    <Input
+                      id="website"
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
                     />
                   </div>
-                </div>
 
-                {/* Services */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
+                  <div className="space-y-2">
                     <Label>Services & Prices</Label>
-                    <Button variant="outline" size="sm" onClick={addService}>
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add
-                    </Button>
-                  </div>
-                  {services.map((service, index) => (
-                    <div key={index} className="flex gap-2">
-                      <Input
-                        placeholder="Service name"
-                        value={service.service}
-                        onChange={(e) => updateService(index, "service", e.target.value)}
-                        className="flex-1"
-                      />
-                      <Input
-                        placeholder="Price"
-                        value={service.price}
-                        onChange={(e) => updateService(index, "price", e.target.value)}
-                        className="w-32"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeService(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* FAQs */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <Label>FAQs</Label>
-                    <Button variant="outline" size="sm" onClick={addFaq}>
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add
-                    </Button>
-                  </div>
-                  {faqs.map((faq, index) => (
-                    <div key={index} className="p-3 border rounded space-y-2">
-                      <div className="flex justify-between items-center">
-                        <Label className="text-xs">FAQ {index + 1}</Label>
+                    {services.map((service, index) => (
+                      <div key={index} className="flex gap-2">
+                        <Input
+                          placeholder="Service"
+                          value={service.service}
+                          onChange={(e) => updateService(index, "service", e.target.value)}
+                          className="flex-1"
+                        />
+                        <Input
+                          placeholder="Price"
+                          value={service.price}
+                          onChange={(e) => updateService(index, "price", e.target.value)}
+                          className="w-32"
+                        />
                         <Button
                           variant="ghost"
-                          size="sm"
-                          onClick={() => removeFaq(index)}
+                          size="icon"
+                          onClick={() => removeService(index)}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                      <Input
-                        placeholder="Question"
-                        value={faq.question}
-                        onChange={(e) => updateFaq(index, "question", e.target.value)}
-                      />
-                      <Textarea
-                        placeholder="Answer"
-                        value={faq.answer}
-                        onChange={(e) => updateFaq(index, "answer", e.target.value)}
-                        rows={2}
-                      />
+                    ))}
+                    <Button variant="outline" size="sm" onClick={addService}>
+                      <Plus className="h-4 w-4 mr-2" /> Add Service
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>FAQs</Label>
+                    {faqs.map((faq, index) => (
+                      <div key={index} className="space-y-2 p-3 border rounded-lg">
+                        <div className="flex justify-between">
+                          <Label className="text-xs">Question {index + 1}</Label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeFaq(index)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <Input
+                          placeholder="Question"
+                          value={faq.question}
+                          onChange={(e) => updateFaq(index, "question", e.target.value)}
+                        />
+                        <Textarea
+                          placeholder="Answer"
+                          value={faq.answer}
+                          onChange={(e) => updateFaq(index, "answer", e.target.value)}
+                          rows={2}
+                        />
+                      </div>
+                    ))}
+                    <Button variant="outline" size="sm" onClick={addFaq}>
+                      <Plus className="h-4 w-4 mr-2" /> Add FAQ
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <Button onClick={handleSaveReceptionist} className="w-full" size="lg">
+                Save & Generate AI Receptionist
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Right Panel: Chat Preview */}
+          <Card className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle>
+                    {currentReceptionist ? currentReceptionist.name : `Preview: ${receptionistName}`}
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Tone: {currentReceptionist ? currentReceptionist.tone : tone}
+                  </p>
+                </div>
+                <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+                  Preview Mode
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col h-[calc(100vh-24rem)]">
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto space-y-3 mb-4 p-2">
+                  {messages.map((message, index) => (
+                    <div
+                      key={index}
+                      className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                          message.sender === "user"
+                            ? "bg-primary text-primary-foreground rounded-br-md"
+                            : "bg-muted rounded-bl-md"
+                        }`}
+                      >
+                        <p className="text-sm">{message.text}</p>
+                        {message.timestamp && (
+                          <p className="text-xs opacity-70 mt-1">
+                            {new Date(message.timestamp).toLocaleTimeString()}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   ))}
+                  {sending && (
+                    <div className="flex justify-start">
+                      <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-2">
+                        <p className="text-sm italic text-muted-foreground">Typing...</p>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
                 </div>
 
-                <Button
-                  className="w-full"
-                  size="lg"
-                  onClick={handleSaveReceptionist}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : receptionistId ? (
-                    'Update Receptionist'
-                  ) : (
-                    'Save Receptionist'
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Chat Simulator */}
-          <div className="lg:col-span-1 space-y-6">
-            <Card className="sticky top-6">
-              <CardHeader>
-                <CardTitle>Chat Simulator</CardTitle>
-                <CardDescription>
-                  Test your AI receptionist in real-time
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ScrollArea className="h-96 border rounded-lg p-4 bg-muted/20">
-                  {messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center">
-                      <MessageSquare className="h-12 w-12 text-muted-foreground mb-3" />
-                      <p className="text-muted-foreground">
-                        {receptionistId 
-                          ? "No messages yet. Start a conversation!" 
-                          : "Save your receptionist to start chatting"}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {messages.map((msg, idx) => (
-                        <div
-                          key={idx}
-                          className={`flex ${
-                            msg.sender === "user" ? "justify-end" : "justify-start"
-                          }`}
-                        >
-                          <div
-                            className={`max-w-[80%] px-4 py-2 rounded-lg ${
-                              msg.sender === "user"
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-secondary text-secondary-foreground"
-                            }`}
-                          >
-                            <p className="text-sm">{msg.text}</p>
-                            <p className="text-xs opacity-70 mt-1">
-                              {msg.timestamp.toLocaleTimeString()}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                      {isTyping && (
-                        <div className="flex justify-start">
-                          <div className="bg-secondary text-secondary-foreground px-4 py-2 rounded-lg">
-                            <div className="flex gap-1">
-                              <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                              <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                              <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </ScrollArea>
-
-                <div className="flex gap-2">
+                {/* Input */}
+                <div className="flex gap-2 pt-3 border-t">
                   <Input
-                    placeholder={receptionistId ? "Type your message..." : "Save receptionist first..."}
-                    value={userInput}
-                    onChange={(e) => setUserInput(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter" && !isSending) {
+                    placeholder="Type a message..."
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
                         handleSendMessage();
                       }
                     }}
-                    disabled={isSending || !receptionistId}
+                    className="flex-1"
                   />
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={isSending || !userInput.trim() || !receptionistId}
-                  >
+                  <Button onClick={handleSendMessage} size="icon">
                     <Send className="h-4 w-4" />
                   </Button>
                 </div>
 
-                {receptionistId && messages.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleClearHistory}
-                    className="w-full"
-                  >
-                    Clear Chat History
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Past Conversations */}
-            {receptionistId && pastConversations.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Past Conversations</CardTitle>
-                  <CardDescription>
-                    View your conversation history
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-64">
-                    <div className="space-y-4">
-                      {pastConversations.map((conv, idx) => (
-                        <div key={conv.id || idx} className="border-b pb-3 last:border-b-0">
-                          <div className="flex items-start gap-2 mb-2">
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">User:</p>
-                              <p className="text-sm text-muted-foreground">{conv.user_message}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">Bot:</p>
-                              <p className="text-sm text-muted-foreground">{conv.bot_message}</p>
-                            </div>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {new Date(conv.created_at).toLocaleString()}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+                <p className="text-xs text-muted-foreground mt-3">
+                  💡 Try: "Hi", "How much is a cleaning?", "Where are you located?"
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
