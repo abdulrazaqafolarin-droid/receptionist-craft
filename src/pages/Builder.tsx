@@ -297,19 +297,82 @@ export default function Builder() {
     setInput("");
     setSending(true);
 
-    // Save user message to database
-    if (currentReceptionist && user) {
-      await supabase.from("chat_messages").insert({
-        user_id: user.id,
-        receptionist_id: currentReceptionist.id,
-        sender: "user",
-        message: userMessage,
-      });
-    }
+    try {
+      // Save user message to database
+      if (currentReceptionist && user) {
+        await supabase.from("chat_messages").insert({
+          user_id: user.id,
+          receptionist_id: currentReceptionist.id,
+          sender: "user",
+          message: userMessage,
+        });
+      }
 
-    // Simulate typing delay
-    setTimeout(async () => {
-      const reply = generateReply(userMessage);
+      // Fetch receptionist data
+      const { data: receptionist, error: recError } = await supabase
+        .from("receptionists")
+        .select("*")
+        .eq("id", currentReceptionist.id)
+        .single();
+
+      if (recError) throw recError;
+
+      // Fetch receptionist FAQs
+      const { data: faqData } = await supabase
+        .from("receptionist_faqs")
+        .select("question, answer")
+        .eq("receptionist_id", currentReceptionist.id)
+        .order("priority", { ascending: true });
+
+      // Fetch previous messages
+      const { data: previousMessages } = await supabase
+        .from("chat_messages")
+        .select("sender, message")
+        .eq("receptionist_id", currentReceptionist.id)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
+
+      // Build system prompt with receptionist context
+      const systemPrompt = `You are ${receptionist.name}, an AI receptionist for ${receptionist.business_name}.
+Tone: ${receptionist.tone} - respond in a ${receptionist.tone} manner.
+Your job is to answer customer questions politely and naturally using the following business information.
+
+Business Information:
+- Business: ${receptionist.business_name}
+- Phone: ${receptionist.business_phone || "Not provided"}
+- Address: ${receptionist.address || "Not provided"}
+- Hours: ${receptionist.hours_of_operation || "Not provided"}
+- Website: ${receptionist.website || "Not provided"}
+
+Services and Prices:
+${Array.isArray(receptionist.services_and_prices) ? receptionist.services_and_prices.map((s: any) => `- ${s.service}: ${s.price}`).join('\n') : "Not provided"}
+
+Frequently Asked Questions:
+${faqData && faqData.length > 0 ? faqData.map((f: any) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n') : "No FAQs configured"}
+
+Greeting Message: ${receptionist.greeting_message || "How can I help you today?"}
+
+If a question isn't covered by the information above, respond with: "${receptionist.default_response || "I'm sorry — I don't have that info yet. Can I take your contact so we can follow up?"}"
+
+Keep your responses concise, helpful, and in character as a receptionist.`;
+
+      // Convert previous messages to OpenAI format
+      const openaiMessages = [
+        { role: "system", content: systemPrompt },
+        ...(previousMessages || []).slice(-10).map((m: any) => ({
+          role: m.sender === "ai" ? "assistant" : "user",
+          content: m.message,
+        })),
+      ];
+
+      // Call chat edge function
+      const { data: aiData, error: aiError } = await supabase.functions.invoke('chat', {
+        body: { messages: openaiMessages },
+      });
+
+      if (aiError) throw aiError;
+
+      const reply = aiData.reply;
       setMessages(prev => [...prev, { sender: "ai", text: reply, timestamp: Date.now() }]);
       setSending(false);
 
@@ -339,7 +402,15 @@ export default function Builder() {
           direction: "inbound",
         });
       }
-    }, 900 + Math.random() * 800);
+    } catch (error: any) {
+      console.error('Error in handleSendMessage:', error);
+      setSending(false);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate response",
+        variant: "destructive",
+      });
+    }
   };
 
   const addService = () => {
