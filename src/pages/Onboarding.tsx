@@ -107,7 +107,7 @@ export default function Onboarding() {
         .update({ onboarding_completed: true })
         .eq("id", user.id);
 
-      toast.success("Your receptionist is live in Demo Mode!");
+      toast.success(`🎉 Your AI Receptionist '${formData.receptionistName}' has been created successfully!`);
       navigate("/dashboard");
     } catch (error: any) {
       toast.error(error.message || "Failed to create receptionist");

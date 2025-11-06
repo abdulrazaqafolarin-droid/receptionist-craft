@@ -70,6 +70,45 @@ export default function Builder() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Load chat history when receptionist is set
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      if (!currentReceptionist || !user) return;
+
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .select("*")
+        .eq("receptionist_id", currentReceptionist.id)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        console.error("Error loading chat history:", error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const loadedMessages: Message[] = data.map(msg => ({
+          sender: msg.sender as "user" | "ai",
+          text: msg.message,
+          timestamp: new Date(msg.created_at).getTime(),
+        }));
+        setMessages(loadedMessages);
+      } else {
+        // No history, show initial greeting
+        setMessages([
+          {
+            sender: "ai",
+            text: `👋 Hi, I'm ${currentReceptionist.name}. How can I help you today?`,
+            timestamp: Date.now(),
+          },
+        ]);
+      }
+    };
+
+    loadChatHistory();
+  }, [currentReceptionist, user]);
+
   // Chat simulator logic
   const normalize = (text: string) => {
     return (text || "").toLowerCase().replace(/[^\w\s]/gi, "");
@@ -112,53 +151,73 @@ export default function Builder() {
     const msg = normalize(userMessage);
     const name = currentReceptionist?.name || receptionistName;
     const bName = currentReceptionist?.business_name || businessName || businessType;
+    const receptionistTone = currentReceptionist?.tone || tone;
+
+    // Build context from receptionist memory
+    const memoryContext = {
+      businessName: currentReceptionist?.business_name || businessName || businessType,
+      address: currentReceptionist?.address || address,
+      hours: currentReceptionist?.hours_of_operation || hours,
+      website: currentReceptionist?.website || website,
+      services: currentReceptionist?.services_and_prices || services,
+      faqs: faqs,
+      greeting: currentReceptionist?.greeting_message || greetingMessage,
+      defaultResponse: currentReceptionist?.default_response || defaultResponse,
+    };
 
     // Greeting
     const greetingKeywords = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"];
     if (containsAny(msg, greetingKeywords)) {
-      const gm = currentReceptionist?.greeting_message || greetingMessage || `Hi! Thanks for calling ${bName}. This is ${name}. How can I help?`;
-      return applyTone(tone, `Hello! I'm ${name} at ${bName}. ${gm}`);
+      const gm = memoryContext.greeting || `Hi! Thanks for calling ${bName}. This is ${name}. How can I help?`;
+      return applyTone(receptionistTone, `Hello! I'm ${name} at ${bName}. ${gm}`);
     }
 
     // Booking
     const bookingKeywords = ["book", "appointment", "reserve", "schedule"];
     if (containsAny(msg, bookingKeywords)) {
       const slots = suggestFakeSlots();
-      return applyTone(tone, `I can help with booking. Our available slots: ${slots.slice(0, 3).join(", ")}. Which one works best?`);
+      return applyTone(receptionistTone, `I can help with booking. Our available slots: ${slots.slice(0, 3).join(", ")}. Which one works best?`);
     }
 
     // Price
     const priceKeywords = ["price", "cost", "how much", "fee", "charge"];
     if (containsAny(msg, priceKeywords)) {
-      if (services.length > 0 && services[0].service) {
-        return applyTone(tone, `Our prices: ${formatServices(services)}. Which service would you like?`);
+      const serviceList = Array.isArray(memoryContext.services) ? memoryContext.services : services;
+      if (serviceList.length > 0 && serviceList[0].service) {
+        return applyTone(receptionistTone, `Our prices: ${formatServices(serviceList)}. Which service would you like?`);
       }
-      return applyTone(tone, `Prices vary by service. Could you tell me which service you're interested in?`);
+      return applyTone(receptionistTone, `Prices vary by service. Could you tell me which service you're interested in?`);
     }
 
     // Hours
     if (containsAny(msg, ["open", "hours", "time"])) {
-      if (hours) return applyTone(tone, `We are open: ${hours}. Would you like to book a slot?`);
-      return applyTone(tone, `Our hours vary by day. What day are you asking about?`);
+      if (memoryContext.hours) return applyTone(receptionistTone, `We are open: ${memoryContext.hours}. Would you like to book a slot?`);
+      return applyTone(receptionistTone, `Our hours vary by day. What day are you asking about?`);
     }
 
     // Address
     if (containsAny(msg, ["where", "address", "located"])) {
-      if (address) return applyTone(tone, `We are located at ${address}. Can I help you with directions or booking?`);
-      return applyTone(tone, `Could you tell me what city you're in so I can find the nearest branch?`);
+      if (memoryContext.address) return applyTone(receptionistTone, `We are located at ${memoryContext.address}. Can I help you with directions or booking?`);
+      return applyTone(receptionistTone, `Could you tell me what city you're in so I can find the nearest branch?`);
+    }
+
+    // Website
+    if (containsAny(msg, ["website", "online", "social", "facebook", "instagram"])) {
+      if (memoryContext.website) return applyTone(receptionistTone, `You can find us at ${memoryContext.website}. Is there anything else I can help with?`);
+      return applyTone(receptionistTone, `I don't have our website info right now. Would you like me to have someone call you back with that?`);
     }
 
     // FAQ matching
-    for (let faq of faqs) {
+    for (let faq of memoryContext.faqs) {
       const qnorm = normalize(faq.question);
       const qWords = qnorm.split(" ").filter(Boolean);
       if (qWords.some(w => w.length > 3 && msg.includes(w))) {
-        return applyTone(tone, faq.answer);
+        return applyTone(receptionistTone, faq.answer);
       }
     }
 
     // Fallback
-    return applyTone(tone, currentReceptionist?.default_response || defaultResponse || `I'm sorry — I don't have that info yet. Can I take your contact so we can follow up?`);
+    return applyTone(receptionistTone, memoryContext.defaultResponse || `I'm sorry — I don't have that info yet. Can I take your contact so we can follow up?`);
   };
 
   const handleSaveReceptionist = async () => {
@@ -238,6 +297,16 @@ export default function Builder() {
     setInput("");
     setSending(true);
 
+    // Save user message to database
+    if (currentReceptionist && user) {
+      await supabase.from("chat_messages").insert({
+        user_id: user.id,
+        receptionist_id: currentReceptionist.id,
+        sender: "user",
+        message: userMessage,
+      });
+    }
+
     // Simulate typing delay
     setTimeout(async () => {
       const reply = generateReply(userMessage);
@@ -253,9 +322,17 @@ export default function Builder() {
         }
       }
 
-      // Save to database if receptionist exists
+      // Save AI reply to database
       if (currentReceptionist && user) {
-        supabase.from("conversations").insert({
+        await supabase.from("chat_messages").insert({
+          user_id: user.id,
+          receptionist_id: currentReceptionist.id,
+          sender: "ai",
+          message: reply,
+        });
+
+        // Also save to conversations table for backward compatibility
+        await supabase.from("conversations").insert({
           receptionist_id: currentReceptionist.id,
           user_message: userMessage,
           bot_message: reply,
