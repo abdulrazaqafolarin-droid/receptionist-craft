@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, receptionistId } = await req.json();
+    const { messages, receptionistId, userId } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
       throw new Error('Messages array is required');
@@ -33,56 +33,72 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch receptionist data
+    // Fetch receptionist data with error handling
     const { data: receptionist, error: recError } = await supabase
       .from('receptionists')
-      .select('*')
+      .select('name, business_name, business_type, business_info, tone, greeting_message, default_response, goal, system_prompt, knowledge_base, language, temperature')
       .eq('id', receptionistId)
-      .single();
+      .maybeSingle();
 
-    if (recError || !receptionist) {
+    if (recError) {
+      console.error('Error fetching receptionist:', recError);
       throw new Error('Failed to fetch receptionist data');
     }
 
+    if (!receptionist) {
+      throw new Error('Receptionist not found');
+    }
+
     // Fetch FAQs
-    const { data: faqs } = await supabase
+    const { data: faqs, error: faqError } = await supabase
       .from('receptionist_faqs')
-      .select('*')
+      .select('question, answer')
       .eq('receptionist_id', receptionistId)
       .order('priority', { ascending: false });
 
-    // Build enhanced system prompt with all receptionist configuration
-    const systemPrompt = `You are ${receptionist.name}, an AI receptionist for ${receptionist.business_name}.
+    if (faqError) {
+      console.error('Error fetching FAQs:', faqError);
+    }
 
-# Goal
-${receptionist.goal || 'Assist customers with their inquiries and provide helpful information.'}
+    // Build context/system prompt
+    const businessInfoText = receptionist.business_info 
+      ? (typeof receptionist.business_info === 'string' 
+          ? receptionist.business_info 
+          : JSON.stringify(receptionist.business_info, null, 2))
+      : 'No additional business information provided';
 
-# Persona
-${receptionist.system_prompt || `You are a ${receptionist.tone || 'professional and friendly'} receptionist.`}
+    const faqsText = faqs && faqs.length > 0 
+      ? faqs.map(faq => `Q: ${faq.question}\nA: ${faq.answer}`).join('\n\n')
+      : 'No FAQs available';
 
-# Business Info
-${receptionist.knowledge_base || `
-Business: ${receptionist.business_name}
-Phone: ${receptionist.business_phone || 'Not provided'}
-Address: ${receptionist.address || 'Not provided'}
-Website: ${receptionist.website || 'Not provided'}
-Hours: ${JSON.stringify(receptionist.hours_of_operation) || 'Not provided'}
-Services: ${JSON.stringify(receptionist.services_and_prices) || 'Not provided'}
-`}
+    const systemPrompt = `You are ${receptionist.name}, an AI receptionist for ${receptionist.business_name}${receptionist.business_type ? ` (${receptionist.business_type})` : ''}.
 
-# FAQs
-${faqs && faqs.length > 0 ? faqs.map(faq => `Q: ${faq.question}\nA: ${faq.answer}`).join('\n\n') : 'No FAQs available'}
-
+${receptionist.goal ? `# Goal\n${receptionist.goal}\n` : ''}
+${receptionist.system_prompt ? `# Persona\n${receptionist.system_prompt}\n` : ''}
 # Tone
 ${receptionist.tone || 'Professional and friendly'}
 
-# Rules
-${receptionist.default_response ? `If unsure, respond: "${receptionist.default_response}"` : 'If unsure, politely ask the customer to call for more details.'}
-Language: ${receptionist.language || 'English'}
-${receptionist.greeting_message ? `Greeting: ${receptionist.greeting_message}` : ''}`;
+# Greeting
+${receptionist.greeting_message || 'Hello! How can I help you today?'}
+
+# Business Information
+${receptionist.knowledge_base || businessInfoText}
+
+# Frequently Asked Questions
+${faqsText}
+
+# Instructions
+${receptionist.default_response ? `If you're unsure about something, respond: "${receptionist.default_response}"` : 'If unsure, politely ask the customer to provide more details or suggest they call for assistance.'}
+- Always respond in ${receptionist.language || 'English'}
+- Maintain a ${receptionist.tone || 'professional and friendly'} tone
+- Be helpful and provide accurate information based on the business details and FAQs above`;
 
     console.log('Generating chat response with', messages.length, 'messages');
 
+    // Get the last user message for logging
+    const lastUserMessage = messages[messages.length - 1]?.content || '';
+
+    // Call OpenAI API
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -111,9 +127,38 @@ ${receptionist.greeting_message ? `Greeting: ${receptionist.greeting_message}` :
 
     console.log('Generated response:', aiMessage.substring(0, 100));
 
+    // Log the conversation to chat_messages table
+    if (userId && lastUserMessage) {
+      try {
+        // Log user message
+        await supabase.from('chat_messages').insert({
+          receptionist_id: receptionistId,
+          user_id: userId,
+          sender: 'user',
+          message: lastUserMessage
+        });
+
+        // Log AI response
+        await supabase.from('chat_messages').insert({
+          receptionist_id: receptionistId,
+          user_id: userId,
+          sender: 'bot',
+          message: aiMessage
+        });
+
+        console.log('Messages logged to database');
+      } catch (logError) {
+        console.error('Error logging messages:', logError);
+        // Don't fail the request if logging fails
+      }
+    }
+
     return new Response(
       JSON.stringify({ reply: aiMessage }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
   } catch (error: any) {
     console.error('Error in chat function:', error);
