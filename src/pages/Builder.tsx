@@ -7,12 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, Plus, Trash2, Send, Sparkles, Volume2, ChevronDown } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Send, Sparkles, Volume2, ChevronDown, Mic } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import VoiceInput from "@/components/VoiceInput";
 import { speakText } from "@/utils/textToSpeech";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ServicePrice {
   service: string;
@@ -68,6 +69,7 @@ export default function Builder() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
+  const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -459,6 +461,27 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
     setFaqs(faqs.filter((_, i) => i !== index));
   };
 
+  const handleSpeakMessage = async (text: string, index: number) => {
+    if (speakingIndex === index) {
+      // Already speaking this message, don't restart
+      return;
+    }
+    
+    setSpeakingIndex(index);
+    try {
+      await speakText(text);
+    } catch (error) {
+      console.error('Error speaking message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to play audio",
+        variant: "destructive",
+      });
+    } finally {
+      setSpeakingIndex(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar user={user} />
@@ -799,7 +822,8 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col h-[calc(100vh-24rem)]">
+              <TooltipProvider>
+                <div className="flex flex-col h-[calc(100vh-24rem)]">
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto space-y-3 mb-4 p-2">
                   {messages.map((message, index) => (
@@ -807,18 +831,38 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
                       key={index}
                       className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
                     >
-                      <div
-                        className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                          message.sender === "user"
-                            ? "bg-primary text-primary-foreground rounded-br-md"
-                            : "bg-muted rounded-bl-md"
-                        }`}
-                      >
-                        <p className="text-sm">{message.text}</p>
-                        {message.timestamp && (
-                          <p className="text-xs opacity-70 mt-1">
-                            {new Date(message.timestamp).toLocaleTimeString()}
-                          </p>
+                      <div className="flex items-start gap-2">
+                        <div
+                          className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                            message.sender === "user"
+                              ? "bg-primary text-primary-foreground rounded-br-md"
+                              : "bg-muted rounded-bl-md"
+                          }`}
+                        >
+                          <p className="text-sm">{message.text}</p>
+                          {message.timestamp && (
+                            <p className="text-xs opacity-70 mt-1">
+                              {new Date(message.timestamp).toLocaleTimeString()}
+                            </p>
+                          )}
+                        </div>
+                        {message.sender === "ai" && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0"
+                                onClick={() => handleSpeakMessage(message.text, index)}
+                                disabled={speakingIndex === index}
+                              >
+                                <Volume2 className={`h-4 w-4 ${speakingIndex === index ? 'animate-pulse text-primary' : ''}`} />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Play audio</p>
+                            </TooltipContent>
+                          </Tooltip>
                         )}
                       </div>
                     </div>
@@ -860,41 +904,50 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
                       className="flex-1"
                       disabled={sending}
                     />
-                    <VoiceInput 
-                      onTranscript={(text) => {
-                        setInput(text);
-                        // Auto-send after a brief delay
-                        setTimeout(() => {
-                          if (text) {
-                            const userMessage = text;
-                            setMessages(prev => [...prev, { sender: "user", text: userMessage, timestamp: Date.now() }]);
-                            setInput("");
-                            setSending(true);
-                            setTimeout(async () => {
-                              const reply = generateReply(userMessage);
-                              setMessages(prev => [...prev, { sender: "ai", text: reply, timestamp: Date.now() }]);
-                              setSending(false);
-                              if (autoSpeak) {
-                                try {
-                                  await speakText(reply);
-                                } catch (error) {
-                                  console.error('Error speaking reply:', error);
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <VoiceInput 
+                            onTranscript={(text) => {
+                              setInput(text);
+                              // Auto-send after a brief delay
+                              setTimeout(() => {
+                                if (text) {
+                                  const userMessage = text;
+                                  setMessages(prev => [...prev, { sender: "user", text: userMessage, timestamp: Date.now() }]);
+                                  setInput("");
+                                  setSending(true);
+                                  setTimeout(async () => {
+                                    const reply = generateReply(userMessage);
+                                    setMessages(prev => [...prev, { sender: "ai", text: reply, timestamp: Date.now() }]);
+                                    setSending(false);
+                                    if (autoSpeak) {
+                                      try {
+                                        await speakText(reply);
+                                      } catch (error) {
+                                        console.error('Error speaking reply:', error);
+                                      }
+                                    }
+                                    if (currentReceptionist && user) {
+                                      supabase.from("conversations").insert({
+                                        receptionist_id: currentReceptionist.id,
+                                        user_message: userMessage,
+                                        bot_message: reply,
+                                        direction: "inbound",
+                                      });
+                                    }
+                                  }, 900 + Math.random() * 800);
                                 }
-                              }
-                              if (currentReceptionist && user) {
-                                supabase.from("conversations").insert({
-                                  receptionist_id: currentReceptionist.id,
-                                  user_message: userMessage,
-                                  bot_message: reply,
-                                  direction: "inbound",
-                                });
-                              }
-                            }, 900 + Math.random() * 800);
-                          }
-                        }, 100);
-                      }}
-                      disabled={sending}
-                    />
+                              }, 100);
+                            }}
+                            disabled={sending}
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Record voice message</p>
+                      </TooltipContent>
+                    </Tooltip>
                     <Button onClick={handleSendMessage} size="icon" disabled={sending}>
                       <Send className="h-4 w-4" />
                     </Button>
@@ -905,6 +958,7 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
                   💡 Try: "Hi", "How much is a cleaning?", "Where are you located?"
                 </p>
               </div>
+              </TooltipProvider>
             </CardContent>
           </Card>
         </div>
