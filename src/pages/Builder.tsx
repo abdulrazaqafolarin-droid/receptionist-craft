@@ -70,6 +70,9 @@ export default function Builder() {
   const [sending, setSending] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
+  const [selectedVoice, setSelectedVoice] = useState("alloy");
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -399,7 +402,7 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
       // Auto-speak the reply if enabled
       if (autoSpeak) {
         try {
-          await speakText(reply);
+          await speakText(reply, selectedVoice);
         } catch (error) {
           console.error('Error speaking reply:', error);
         }
@@ -469,7 +472,7 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
     
     setSpeakingIndex(index);
     try {
-      await speakText(text);
+      await speakText(text, selectedVoice);
     } catch (error) {
       console.error('Error speaking message:', error);
       toast({
@@ -479,6 +482,49 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
       });
     } finally {
       setSpeakingIndex(null);
+    }
+  };
+
+  const handleVoiceToVoice = async (transcript: string) => {
+    if (isProcessing) return;
+    
+    setIsProcessing(true);
+    try {
+      // Add user message
+      const userMessage: Message = { sender: "user", text: transcript, timestamp: Date.now() };
+      setMessages(prev => [...prev, userMessage]);
+
+      // Generate AI response
+      setSending(true);
+      setTimeout(async () => {
+        const reply = generateReply(transcript);
+        const aiMessage: Message = { sender: "ai", text: reply, timestamp: Date.now() };
+        setMessages(prev => [...prev, aiMessage]);
+        setSending(false);
+
+        // Save to database
+        if (currentReceptionist && user) {
+          await supabase.from("conversations").insert({
+            receptionist_id: currentReceptionist.id,
+            user_message: transcript,
+            bot_message: reply,
+            direction: "inbound",
+          });
+        }
+
+        // Automatically speak the AI response in voice mode
+        await speakText(reply, selectedVoice);
+        setIsProcessing(false);
+      }, 900 + Math.random() * 800);
+    } catch (error) {
+      console.error('Error in voice-to-voice:', error);
+      setSending(false);
+      setIsProcessing(false);
+      toast({
+        title: "Error",
+        description: "Failed to process voice input",
+        variant: "destructive",
+      });
     }
   };
 
@@ -880,6 +926,25 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
                 {/* Input */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
+                    <Select value={selectedVoice} onValueChange={setSelectedVoice}>
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="Select voice" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="alloy">Alloy</SelectItem>
+                        <SelectItem value="echo">Echo</SelectItem>
+                        <SelectItem value="fable">Fable</SelectItem>
+                        <SelectItem value="onyx">Onyx</SelectItem>
+                        <SelectItem value="nova">Nova</SelectItem>
+                        <SelectItem value="shimmer">Shimmer</SelectItem>
+                        <SelectItem value="Sarah">Sarah</SelectItem>
+                        <SelectItem value="Rachel">Rachel</SelectItem>
+                        <SelectItem value="Aria">Aria</SelectItem>
+                        <SelectItem value="Roger">Roger</SelectItem>
+                        <SelectItem value="Laura">Laura</SelectItem>
+                        <SelectItem value="Charlie">Charlie</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Button
                       variant="outline"
                       size="sm"
@@ -888,6 +953,15 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
                     >
                       <Volume2 className="h-4 w-4" />
                       Auto-speak: {autoSpeak ? "ON" : "OFF"}
+                    </Button>
+                    <Button
+                      variant={isVoiceMode ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setIsVoiceMode(!isVoiceMode)}
+                      className="flex items-center gap-2"
+                    >
+                      <Mic className="h-4 w-4" />
+                      {isVoiceMode ? "Voice Mode ON" : "Voice Mode OFF"}
                     </Button>
                   </div>
                   <div className="flex gap-2 pt-3 border-t">
@@ -908,7 +982,7 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
                       <TooltipTrigger asChild>
                         <div>
                           <VoiceInput 
-                            onTranscript={(text) => {
+                            onTranscript={isVoiceMode ? handleVoiceToVoice : (text) => {
                               setInput(text);
                               // Auto-send after a brief delay
                               setTimeout(() => {
@@ -923,7 +997,7 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
                                     setSending(false);
                                     if (autoSpeak) {
                                       try {
-                                        await speakText(reply);
+                                        await speakText(reply, selectedVoice);
                                       } catch (error) {
                                         console.error('Error speaking reply:', error);
                                       }
@@ -940,12 +1014,12 @@ Keep your responses concise, helpful, and in character as a receptionist.`;
                                 }
                               }, 100);
                             }}
-                            disabled={sending}
+                            disabled={sending || isProcessing}
                           />
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Record voice message</p>
+                        <p>{isVoiceMode ? "Speak to AI (voice-to-voice)" : "Record voice message"}</p>
                       </TooltipContent>
                     </Tooltip>
                     <Button onClick={handleSendMessage} size="icon" disabled={sending}>
