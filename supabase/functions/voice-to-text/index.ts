@@ -6,36 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Process base64 in chunks to prevent memory issues
-function processBase64Chunks(base64String: string, chunkSize = 32768) {
-  const chunks: Uint8Array[] = [];
-  let position = 0;
-  
-  while (position < base64String.length) {
-    const chunk = base64String.slice(position, position + chunkSize);
-    const binaryChunk = atob(chunk);
-    const bytes = new Uint8Array(binaryChunk.length);
-    
-    for (let i = 0; i < binaryChunk.length; i++) {
-      bytes[i] = binaryChunk.charCodeAt(i);
-    }
-    
-    chunks.push(bytes);
-    position += chunkSize;
-  }
-
-  const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return result;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -48,37 +18,94 @@ serve(async (req) => {
       throw new Error('No audio data provided');
     }
 
-    console.log('Processing audio transcription...');
-
-    // Process audio in chunks
-    const binaryAudio = processBase64Chunks(audio);
+    const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
     
-    // Prepare form data
-    const formData = new FormData();
-    const blob = new Blob([binaryAudio], { type: 'audio/webm' });
-    formData.append('file', blob, 'audio.webm');
-    formData.append('model', 'whisper-1');
-
-    // Send to OpenAI
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenAI API error:', errorText);
-      throw new Error(`OpenAI API error: ${errorText}`);
+    if (!ASSEMBLYAI_API_KEY) {
+      throw new Error('ASSEMBLYAI_API_KEY not configured');
     }
 
-    const result = await response.json();
-    console.log('Transcription successful:', result.text);
+    console.log('Processing audio transcription with AssemblyAI...');
+
+    // Convert base64 to binary
+    const binaryAudio = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
+    
+    // Step 1: Upload audio file to AssemblyAI
+    const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': ASSEMBLYAI_API_KEY,
+        'Content-Type': 'application/octet-stream',
+      },
+      body: binaryAudio,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error('AssemblyAI upload error:', errorText);
+      throw new Error(`AssemblyAI upload error: ${errorText}`);
+    }
+
+    const { upload_url } = await uploadResponse.json();
+    console.log('Audio uploaded successfully');
+
+    // Step 2: Create transcription job
+    const transcriptResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
+      method: 'POST',
+      headers: {
+        'Authorization': ASSEMBLYAI_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        audio_url: upload_url,
+        language_code: 'en',
+      }),
+    });
+
+    if (!transcriptResponse.ok) {
+      const errorText = await transcriptResponse.text();
+      console.error('AssemblyAI transcript error:', errorText);
+      throw new Error(`AssemblyAI transcript error: ${errorText}`);
+    }
+
+    const { id: transcriptId } = await transcriptResponse.json();
+    console.log('Transcription job created:', transcriptId);
+
+    // Step 3: Poll for transcription completion
+    let transcriptResult;
+    let attempts = 0;
+    const maxAttempts = 60; // 60 seconds max wait time
+
+    while (attempts < maxAttempts) {
+      const pollResponse = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
+        headers: {
+          'Authorization': ASSEMBLYAI_API_KEY,
+        },
+      });
+
+      if (!pollResponse.ok) {
+        throw new Error('Failed to poll transcription status');
+      }
+
+      transcriptResult = await pollResponse.json();
+
+      if (transcriptResult.status === 'completed') {
+        console.log('Transcription completed:', transcriptResult.text);
+        break;
+      } else if (transcriptResult.status === 'error') {
+        throw new Error(`Transcription failed: ${transcriptResult.error}`);
+      }
+
+      // Wait 1 second before polling again
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      attempts++;
+    }
+
+    if (attempts >= maxAttempts) {
+      throw new Error('Transcription timeout');
+    }
 
     return new Response(
-      JSON.stringify({ text: result.text }),
+      JSON.stringify({ text: transcriptResult.text }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
