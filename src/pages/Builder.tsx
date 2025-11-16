@@ -194,7 +194,11 @@ export default function BuilderPage() {
         if (error) throw error;
       } else {
         // insert new
+        if (!currentUserId) {
+          throw new Error("User must be logged in to create a receptionist");
+        }
         const { data, error } = await supabase.from("receptionists").insert({
+          user_id: currentUserId,
           name: receptionist.name,
           business_name: receptionist.business_name,
           business_type: receptionist.business_type,
