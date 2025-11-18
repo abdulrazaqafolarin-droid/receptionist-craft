@@ -14,9 +14,18 @@ serve(async (req) => {
   try {
     const { text, voice = 'aura-asteria-en' } = await req.json();
     
-    if (!text) {
-      throw new Error('No text provided');
+    // Input validation
+    if (!text || typeof text !== 'string') {
+      console.error('[TTS] Invalid text input');
+      throw new Error('Valid text string is required');
     }
+
+    if (text.length > 5000) {
+      console.error('[TTS] Text too long:', text.length);
+      throw new Error('Text exceeds maximum length of 5000 characters');
+    }
+
+    console.log('[TTS] Processing text:', text.substring(0, 50) + '...');
 
     const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
     
@@ -24,9 +33,12 @@ serve(async (req) => {
       throw new Error('DEEPGRAM_API_KEY not configured');
     }
 
-    console.log('Generating speech with Deepgram Aura...');
+    console.log('[TTS] Generating speech with Deepgram Aura, voice:', voice);
 
-    // Call Deepgram TTS API
+    // Call Deepgram TTS API with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
     const response = await fetch(
       `https://api.deepgram.com/v1/speak?model=${voice}`,
       {
@@ -38,18 +50,21 @@ serve(async (req) => {
         body: JSON.stringify({
           text: text,
         }),
+        signal: controller.signal,
       }
     );
 
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Deepgram API error:', errorText);
-      throw new Error(`Deepgram API error: ${errorText}`);
+      console.error('[TTS] Deepgram API error:', errorText);
+      throw new Error(`Deepgram API error: ${response.status} ${errorText}`);
     }
 
     // Get audio buffer
     const audioBuffer = await response.arrayBuffer();
-    console.log('Deepgram TTS successful, audio size:', audioBuffer.byteLength);
+    console.log('[TTS] Deepgram TTS successful, audio size:', audioBuffer.byteLength);
 
     // Convert audio buffer to base64
     const base64Audio = btoa(
@@ -62,10 +77,27 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in text-to-speech:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[TTS] Error in text-to-speech:', error);
+    
+    // Handle timeout specifically
+    if (error instanceof Error && error.name === 'AbortError') {
+      return new Response(
+        JSON.stringify({ error: 'Request timeout - please try again with shorter text' }),
+        {
+          status: 504,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorDetails = error instanceof Error ? error.stack : undefined;
+    
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ 
+        error: errorMessage,
+        details: errorDetails 
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
