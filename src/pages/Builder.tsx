@@ -154,7 +154,14 @@ export default function BuilderPage() {
 
       const { data, error } = await query;
       if (error) throw error;
-      setMessages(data || []);
+      
+      // Type-safe mapping to ensure sender is correctly typed
+      setMessages((data || []).map((m) => ({
+        id: m.id,
+        sender: (m.sender === "bot" || m.sender === "user") ? m.sender : "user",
+        message: m.message,
+        created_at: m.created_at,
+      })));
     } catch (err: any) {
       console.error("loadMessages error", err);
       setError(err.message || String(err));
@@ -173,7 +180,7 @@ export default function BuilderPage() {
           business_name: receptionist.business_name,
           business_type: receptionist.business_type,
           phone: receptionist.phone,
-          tone: receptionist.tone,
+          tone: receptionist.tone as any, // Type assertion for enum compatibility
           greeting_message: receptionist.greeting_message,
           default_response: receptionist.default_response,
           knowledge_base: receptionist.knowledge_base,
@@ -189,13 +196,13 @@ export default function BuilderPage() {
         if (!currentUserId) {
           throw new Error("User must be logged in to create a receptionist");
         }
-        const { data, error } = await supabase.from("receptionists").insert({
+        const { data, error } = await supabase.from("receptionists").insert([{
           user_id: currentUserId,
           name: receptionist.name,
           business_name: receptionist.business_name,
           business_type: receptionist.business_type,
           phone: receptionist.phone,
-          tone: receptionist.tone,
+          tone: receptionist.tone as any, // Type assertion for enum compatibility
           greeting_message: receptionist.greeting_message,
           default_response: receptionist.default_response,
           knowledge_base: receptionist.knowledge_base,
@@ -203,7 +210,7 @@ export default function BuilderPage() {
           temperature: receptionist.temperature,
           language: receptionist.language,
           goal: receptionist.goal,
-        }).select().single();
+        }]).select().single();
 
         if (error) throw error;
         if (data?.id) {
@@ -225,30 +232,31 @@ export default function BuilderPage() {
     return `${receptionist.name || "Receptionist"} — Tone: ${receptionist.tone || "Friendly"}`;
   }, [receptionist]);
 
-  // call the chat Edge Function — server will call AI and log messages
-  async function callChatFunction(payload: { receptionist_id: string; user_message: string; user_id?: string }) {
-    // Change the endpoint path here if your Lovable deploy uses a different functions path
-    const url = CHAT_FUNCTION_PATH;
+  // call the chat Edge Function using Supabase client
+  async function callChatFunction(payload: {
+    messages: { role: string; content: string }[];
+    receptionistId: string;
+    userId: string | null;
+  }): Promise<string> {
+    try {
+      const { data, error } = await supabase.functions.invoke('chat', {
+        body: payload
+      });
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        receptionistId: payload.receptionist_id,
-        userId: payload.user_id,
-        messages: [
-          // Provide last messages minimal context; server will fetch authoritative history
-          { role: "user", content: payload.user_message },
-        ],
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Chat function error ${res.status}: ${text}`);
+      if (error) {
+        console.error('Chat function error:', error);
+        throw new Error(error.message || 'Failed to get response from AI');
+      }
+
+      if (!data?.reply) {
+        throw new Error('No response from AI');
+      }
+
+      return data.reply;
+    } catch (err: any) {
+      console.error('Chat function exception:', err);
+      throw new Error(err.message || 'Failed to communicate with AI');
     }
-    return res.json();
   }
 
   // send message handler (optimistic UI)
@@ -267,15 +275,17 @@ export default function BuilderPage() {
     setInput("");
 
     try {
-      const result = await callChatFunction({
-        receptionist_id: receptionistId,
-        user_message: text,
-        user_id: currentUserId ?? undefined,
+      const reply = await callChatFunction({
+        messages: [{ role: "user", content: text }],
+        receptionistId: receptionistId,
+        userId: currentUserId,
       });
 
-      // result expected: { reply: "..." }
-      const aiReply = (result?.reply as string) ?? (result?.reply?.toString() ?? "No reply");
-      const botMsg: ChatMessage = { sender: "bot", message: aiReply, created_at: new Date().toISOString() };
+      const botMsg: ChatMessage = { 
+        sender: "bot", 
+        message: reply, 
+        created_at: new Date().toISOString() 
+      };
 
       setMessages((m) => [...m, botMsg]);
       // Optionally refresh from server to sync persisted messages
