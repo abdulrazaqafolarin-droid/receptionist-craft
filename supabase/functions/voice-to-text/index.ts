@@ -43,14 +43,14 @@ serve(async (req) => {
       throw new Error('Invalid base64 audio format');
     }
     
-    // Step 1: Upload audio file to AssemblyAI
+    // Step 1: Upload audio file to AssemblyAI using Blob
+    const blob = new Blob([binaryAudio as any], { type: 'application/octet-stream' });
     const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
       method: 'POST',
       headers: {
         'Authorization': ASSEMBLYAI_API_KEY,
-        'Content-Type': 'application/octet-stream',
       },
-      body: binaryAudio,
+      body: blob,
     });
 
     if (!uploadResponse.ok) {
