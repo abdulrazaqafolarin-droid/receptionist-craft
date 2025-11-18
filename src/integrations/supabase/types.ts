@@ -247,6 +247,7 @@ export type Database = {
           mock_mode: boolean | null
           name: string
           persona_description: string | null
+          phone: string | null
           services_and_prices: Json | null
           system_prompt: string | null
           temperature: number | null
@@ -275,6 +276,7 @@ export type Database = {
           mock_mode?: boolean | null
           name: string
           persona_description?: string | null
+          phone?: string | null
           services_and_prices?: Json | null
           system_prompt?: string | null
           temperature?: number | null
@@ -303,6 +305,7 @@ export type Database = {
           mock_mode?: boolean | null
           name?: string
           persona_description?: string | null
+          phone?: string | null
           services_and_prices?: Json | null
           system_prompt?: string | null
           temperature?: number | null
