@@ -14,8 +14,15 @@ serve(async (req) => {
   try {
     const { audio } = await req.json();
     
-    if (!audio) {
-      throw new Error('No audio data provided');
+    // Input validation
+    if (!audio || typeof audio !== 'string') {
+      console.error('[VTT] Invalid audio data');
+      throw new Error('Valid base64 audio data is required');
+    }
+
+    if (audio.length < 100) {
+      console.error('[VTT] Audio data too short');
+      throw new Error('Audio data appears to be too short');
     }
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
@@ -24,10 +31,17 @@ serve(async (req) => {
       throw new Error('ASSEMBLYAI_API_KEY not configured');
     }
 
-    console.log('Processing audio transcription with AssemblyAI...');
+    console.log('[VTT] Processing audio transcription with AssemblyAI...');
 
-    // Convert base64 to binary
-    const binaryAudio = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
+    // Convert base64 to binary with error handling
+    let binaryAudio: Uint8Array;
+    try {
+      binaryAudio = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
+      console.log('[VTT] Audio decoded, size:', binaryAudio.length, 'bytes');
+    } catch (decodeError) {
+      console.error('[VTT] Failed to decode base64 audio:', decodeError);
+      throw new Error('Invalid base64 audio format');
+    }
     
     // Step 1: Upload audio file to AssemblyAI
     const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
@@ -101,7 +115,8 @@ serve(async (req) => {
     }
 
     if (attempts >= maxAttempts) {
-      throw new Error('Transcription timeout');
+      console.error('[VTT] Transcription timeout after', maxAttempts, 'attempts');
+      throw new Error('Transcription timeout - please try again with a shorter audio clip');
     }
 
     return new Response(
@@ -110,10 +125,15 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in voice-to-text:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[VTT] Error in voice-to-text:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorDetails = error instanceof Error ? error.stack : undefined;
+    
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ 
+        error: errorMessage,
+        details: errorDetails 
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

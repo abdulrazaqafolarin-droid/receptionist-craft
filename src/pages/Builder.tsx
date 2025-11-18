@@ -1,7 +1,7 @@
 // src/pages/Builder.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 import { useParams, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Builder.tsx
@@ -14,16 +14,8 @@ import { useParams, useNavigate } from "react-router-dom";
  * - Send messages to chat Edge Function (server does AI & logging)
  * - Optimistic UI for user messages
  *
- * Notes:
- * - Replace CHAT_FUNCTION_PATH if your Lovable function route differs.
- * - This file assumes VITE_SUPABASE_URL & VITE_SUPABASE_PUBLISHABLE_KEY are set.
+ * Uses integrated Supabase client from @/integrations/supabase/client
  */
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
-const CHAT_FUNCTION_PATH = "/functions/v1/chat"; // <-- change if your functions route differs
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 type Receptionist = {
   id?: string;
