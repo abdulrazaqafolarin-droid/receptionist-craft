@@ -66,6 +66,7 @@ export type Database = {
           created_at: string
           id: string
           message: string
+          metadata: Json | null
           receptionist_id: string
           sender: string
           user_id: string
@@ -74,6 +75,7 @@ export type Database = {
           created_at?: string
           id?: string
           message: string
+          metadata?: Json | null
           receptionist_id: string
           sender: string
           user_id: string
@@ -82,6 +84,7 @@ export type Database = {
           created_at?: string
           id?: string
           message?: string
+          metadata?: Json | null
           receptionist_id?: string
           sender?: string
           user_id?: string
