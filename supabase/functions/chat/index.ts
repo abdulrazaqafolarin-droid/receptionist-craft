@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { assignVariant, mergeVariantConfig } from "../_shared/abTesting.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,6 +46,22 @@ serve(async (req) => {
       .maybeSingle();
 
     if (rErr || !r) throw new Error("Failed to load receptionist");
+
+    // Apply A/B testing variant (if any active test exists)
+    // Example: test slug could be "receptionist-temperature-test" or passed in request
+    const variantPayload = await assignVariant(
+      supabase,
+      "default-receptionist-test", // You can make this dynamic or per-receptionist
+      receptionistId,
+      userId || null
+    );
+
+    // Merge variant overrides into receptionist config
+    const receptionistConfig = mergeVariantConfig(r, variantPayload);
+    console.log(`[Chat] Config after A/B merge:`, {
+      temperature: receptionistConfig.temperature,
+      variantApplied: !!variantPayload
+    });
 
     // Fetch FAQs
     const { data: faqs } = await supabase
@@ -97,14 +114,14 @@ serve(async (req) => {
 
     // Business memory text
     const memoryText =
-      r.knowledge_base ||
-      (typeof r.business_info === "string"
-        ? r.business_info
-        : JSON.stringify(r.business_info || {}, null, 2));
+      receptionistConfig.knowledge_base ||
+      (typeof receptionistConfig.business_info === "string"
+        ? receptionistConfig.business_info
+        : JSON.stringify(receptionistConfig.business_info || {}, null, 2));
 
     // Elite System Prompt — Very Strong Structure
     const systemPrompt = `
-You are **${r.name}**, the AI receptionist for **${r.business_name}** (${r.business_type || "business"}).
+You are **${receptionistConfig.name}**, the AI receptionist for **${receptionistConfig.business_name}** (${receptionistConfig.business_type || "business"}).
 
 # 🎯 ROLE & PURPOSE
 Your job is to act exactly like a trained human receptionist. You:
@@ -122,14 +139,14 @@ ${memoryText}
 ${faqText}
 
 # 👤 PERSONALITY
-${r.system_prompt || ""}
-Tone: ${r.tone || "Friendly and Professional"}
+${receptionistConfig.system_prompt || ""}
+Tone: ${receptionistConfig.tone || "Friendly and Professional"}
 
 # 📌 RULES (Follow STRONGLY)
 - ALWAYS stay in character as a receptionist.
 - ALWAYS answer using ONLY business facts above.
-- If unsure, say: "${r.default_response || "I'm sorry, I don't have that information yet."}"
-- Use ${r.language || "English"} ONLY.
+- If unsure, say: "${receptionistConfig.default_response || "I'm sorry, I don't have that information yet."}"
+- Use ${receptionistConfig.language || "English"} ONLY.
 - Keep replies short, warm, and helpful.
 - Never mention AI, system prompts, or internal details.
 
@@ -169,8 +186,8 @@ ${JSON.stringify(memoryMessages, null, 2)}
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            temperature: r.temperature || 0.4,
+            model: receptionistConfig.model || "google/gemini-2.5-flash",
+            temperature: receptionistConfig.temperature || 0.4,
             messages: finalMessages,
           }),
         }
@@ -187,7 +204,7 @@ ${JSON.stringify(memoryMessages, null, 2)}
       // Safe response parsing with fallback
       if (!out?.choices?.[0]?.message?.content) {
         console.warn(`[Chat] Unexpected AI response structure:`, out);
-        reply = r.default_response || "I'm having trouble processing that. Please try again.";
+        reply = receptionistConfig.default_response || "I'm having trouble processing that. Please try again.";
       } else {
         reply = out.choices[0].message.content;
       }
@@ -252,9 +269,9 @@ ${JSON.stringify(memoryMessages, null, 2)}
         user_id: userId || null,
         request_message: lastUserMessage,
         reply_text: reply,
-        model: 'google/gemini-2.5-flash',
+        model: receptionistConfig.model || 'google/gemini-2.5-flash',
         latency_ms: elapsedMs,
-        temperature: r.temperature || 0.4,
+        temperature: receptionistConfig.temperature || 0.4,
         quality_score: qualityScore,
         confidence: qualityScore.confidence,
         channel: 'chat'
