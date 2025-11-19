@@ -16,6 +16,7 @@ import Appointments from "./pages/Appointments";
 import Conversations from "./pages/Conversations";
 import Settings from "./pages/Settings";
 import Help from "./pages/Help";
+import QualityReview from "./pages/QualityReview";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -93,6 +94,14 @@ const App = () => {
               element={
                 <ProtectedRoute session={session}>
                   <Conversations />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/quality-review" 
+              element={
+                <ProtectedRoute session={session}>
+                  <QualityReview />
                 </ProtectedRoute>
               } 
             />

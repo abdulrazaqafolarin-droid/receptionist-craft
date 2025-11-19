@@ -4,7 +4,7 @@ import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageCircle, Calendar, BarChart3, Plus, Phone } from "lucide-react";
+import { MessageCircle, Calendar, BarChart3, Plus, Phone, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function Dashboard() {
@@ -161,7 +161,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Quick Actions */}
-        <div className="grid md:grid-cols-3 gap-6 mt-8">
+        <div className="grid md:grid-cols-4 gap-6 mt-8">
           <Card className="cursor-pointer hover:shadow-lg transition-all" onClick={() => navigate("/conversations")}>
             <CardHeader>
               <MessageCircle className="h-8 w-8 text-primary mb-2" />
@@ -175,6 +175,14 @@ export default function Dashboard() {
               <Calendar className="h-8 w-8 text-primary mb-2" />
               <CardTitle>Manage Appointments</CardTitle>
               <CardDescription>View and manage booked appointments</CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-lg transition-all" onClick={() => navigate("/quality-review")}>
+            <CardHeader>
+              <CheckCircle2 className="h-8 w-8 text-primary mb-2" />
+              <CardTitle>Quality Review</CardTitle>
+              <CardDescription>Review AI responses and improve quality</CardDescription>
             </CardHeader>
           </Card>
 
