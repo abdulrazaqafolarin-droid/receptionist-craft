@@ -14,6 +14,197 @@ export type Database = {
   }
   public: {
     Tables: {
+      ab_assignments: {
+        Row: {
+          created_at: string | null
+          id: string
+          receptionist_id: string | null
+          test_id: string | null
+          user_id: string | null
+          variant_key: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          receptionist_id?: string | null
+          test_id?: string | null
+          user_id?: string | null
+          variant_key?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          receptionist_id?: string | null
+          test_id?: string | null
+          user_id?: string | null
+          variant_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ab_assignments_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "ab_tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ab_tests: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          end_at: string | null
+          id: string
+          name: string
+          slug: string
+          start_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          end_at?: string | null
+          id?: string
+          name: string
+          slug: string
+          start_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          end_at?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          start_at?: string | null
+        }
+        Relationships: []
+      }
+      ab_variants: {
+        Row: {
+          id: string
+          key: string
+          payload: Json | null
+          test_id: string | null
+          weight: number | null
+        }
+        Insert: {
+          id?: string
+          key: string
+          payload?: Json | null
+          test_id?: string | null
+          weight?: number | null
+        }
+        Update: {
+          id?: string
+          key?: string
+          payload?: Json | null
+          test_id?: string | null
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ab_variants_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "ab_tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_response_reviews: {
+        Row: {
+          action_taken: string | null
+          ai_response_id: string | null
+          created_at: string | null
+          id: string
+          note: string | null
+          reviewer_id: string | null
+        }
+        Insert: {
+          action_taken?: string | null
+          ai_response_id?: string | null
+          created_at?: string | null
+          id?: string
+          note?: string | null
+          reviewer_id?: string | null
+        }
+        Update: {
+          action_taken?: string | null
+          ai_response_id?: string | null
+          created_at?: string | null
+          id?: string
+          note?: string | null
+          reviewer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_response_reviews_ai_response_id_fkey"
+            columns: ["ai_response_id"]
+            isOneToOne: false
+            referencedRelation: "ai_responses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_responses: {
+        Row: {
+          channel: string | null
+          confidence: number | null
+          created_at: string | null
+          flagged: boolean | null
+          id: string
+          latency_ms: number | null
+          model: string | null
+          quality_score: Json | null
+          receptionist_id: string | null
+          reply_text: string | null
+          request_message: string | null
+          tags: string[] | null
+          temperature: number | null
+          user_id: string | null
+        }
+        Insert: {
+          channel?: string | null
+          confidence?: number | null
+          created_at?: string | null
+          flagged?: boolean | null
+          id?: string
+          latency_ms?: number | null
+          model?: string | null
+          quality_score?: Json | null
+          receptionist_id?: string | null
+          reply_text?: string | null
+          request_message?: string | null
+          tags?: string[] | null
+          temperature?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          channel?: string | null
+          confidence?: number | null
+          created_at?: string | null
+          flagged?: boolean | null
+          id?: string
+          latency_ms?: number | null
+          model?: string | null
+          quality_score?: Json | null
+          receptionist_id?: string | null
+          reply_text?: string | null
+          request_message?: string | null
+          tags?: string[] | null
+          temperature?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_responses_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           created_at: string
