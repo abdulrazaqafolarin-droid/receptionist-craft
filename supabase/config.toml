@@ -1,5 +1,8 @@
 project_id = "xhihzexkqezhpwsryxqv"
 
+[functions.analytics]
+verify_jwt = false
+
 [functions.chat]
 verify_jwt = false
 
