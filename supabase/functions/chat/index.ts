@@ -148,6 +148,9 @@ ${JSON.stringify(memoryMessages, null, 2)}
       ...messages.slice(-3), // include last 3 new messages
     ];
 
+    // Start timing for latency tracking
+    const startTime = Date.now();
+
     // Call Lovable AI
     // If FAQ matched exactly, return it immediately
     let reply: string;
@@ -227,6 +230,40 @@ ${JSON.stringify(memoryMessages, null, 2)}
       }
     } else {
       console.log(`[Chat] Skipping message logging (no userId)`);
+    }
+
+    // Calculate latency
+    const elapsedMs = Date.now() - startTime;
+
+    // Log analytics (fault-tolerant)
+    try {
+      const lastUserMessage = messages[messages.length - 1]?.content || "";
+      
+      // Simple quality score calculation
+      const qualityScore = {
+        overall: faqMatch ? 0.95 : 0.85, // Higher confidence for FAQ matches
+        confidence: faqMatch ? 0.95 : 0.80,
+        clarity: reply.length > 20 && reply.length < 500 ? 0.9 : 0.7,
+        accuracy: faqMatch ? 1.0 : 0.85
+      };
+
+      await supabase.from('ai_responses').insert({
+        receptionist_id: receptionistId,
+        user_id: userId || null,
+        request_message: lastUserMessage,
+        reply_text: reply,
+        model: 'google/gemini-2.5-flash',
+        latency_ms: elapsedMs,
+        temperature: r.temperature || 0.4,
+        quality_score: qualityScore,
+        confidence: qualityScore.confidence,
+        channel: 'chat'
+      });
+
+      console.log(`[Chat] Analytics logged: ${elapsedMs}ms latency`);
+    } catch (analyticsError) {
+      console.error(`[Chat] Analytics logging failed:`, analyticsError);
+      // Continue - don't fail the request
     }
 
     return new Response(JSON.stringify({ reply }), {
