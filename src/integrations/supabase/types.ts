@@ -384,6 +384,50 @@ export type Database = {
           },
         ]
       }
+      kb_rewrite_log: {
+        Row: {
+          auto_suggest: boolean | null
+          changes: Json | null
+          created_at: string | null
+          id: string
+          original: Json | null
+          reason: string | null
+          receptionist_id: string | null
+          rewritten: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          auto_suggest?: boolean | null
+          changes?: Json | null
+          created_at?: string | null
+          id?: string
+          original?: Json | null
+          reason?: string | null
+          receptionist_id?: string | null
+          rewritten?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          auto_suggest?: boolean | null
+          changes?: Json | null
+          created_at?: string | null
+          id?: string
+          original?: Json | null
+          reason?: string | null
+          receptionist_id?: string | null
+          rewritten?: Json | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kb_rewrite_log_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -468,6 +512,7 @@ export type Database = {
           knowledge_base: string | null
           language: string | null
           mock_mode: boolean | null
+          model: string | null
           name: string
           persona_description: string | null
           phone: string | null
@@ -497,6 +542,7 @@ export type Database = {
           knowledge_base?: string | null
           language?: string | null
           mock_mode?: boolean | null
+          model?: string | null
           name: string
           persona_description?: string | null
           phone?: string | null
@@ -526,6 +572,7 @@ export type Database = {
           knowledge_base?: string | null
           language?: string | null
           mock_mode?: boolean | null
+          model?: string | null
           name?: string
           persona_description?: string | null
           phone?: string | null
