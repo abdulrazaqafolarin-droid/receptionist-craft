@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { User, LogOut, Settings, LayoutDashboard, HelpCircle } from "lucide-react";
+import { User, LogOut, Settings, LayoutDashboard, HelpCircle, BarChart } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -66,6 +66,10 @@ export const Navbar = ({ user }: NavbarProps) => {
                 <DropdownMenuItem onClick={() => navigate("/dashboard")}>
                   <LayoutDashboard className="mr-2 h-4 w-4" />
                   Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/analytics")}>
+                  <BarChart className="mr-2 h-4 w-4" />
+                  Analytics
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate("/settings")}>
                   <Settings className="mr-2 h-4 w-4" />
