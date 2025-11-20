@@ -262,6 +262,8 @@ serve(async (req) => {
       console.log("Stats request received");
       const body = await req.json();
       const receptionistId = body.receptionistId;
+      const startDate = body.startDate;
+      const endDate = body.endDate;
       
       if (!receptionistId) {
         return new Response(
@@ -270,21 +272,35 @@ serve(async (req) => {
         );
       }
 
-      console.log("Fetching stats for receptionist:", receptionistId);
+      console.log("Fetching stats for receptionist:", receptionistId, { startDate, endDate });
 
-      // Basic aggregates
-      const totalRes = await supabase
+      // Build query with date filters
+      let countQuery = supabase
         .from("ai_responses")
         .select("id", { count: "exact", head: true })
         .eq("receptionist_id", receptionistId);
 
-      // Fetch rows to compute averages for quality and latency
-      const rows = await supabase
+      let dataQuery = supabase
         .from("ai_responses")
-        .select("quality_score, latency_ms, created_at")
+        .select("quality_score, latency_ms, created_at, request_message, reply_text")
         .eq("receptionist_id", receptionistId)
         .order("created_at", { ascending: false })
         .limit(1000);
+
+      if (startDate) {
+        countQuery = countQuery.gte("created_at", startDate);
+        dataQuery = dataQuery.gte("created_at", startDate);
+      }
+      if (endDate) {
+        countQuery = countQuery.lte("created_at", endDate);
+        dataQuery = dataQuery.lte("created_at", endDate);
+      }
+
+      // Basic aggregates
+      const totalRes = await countQuery;
+
+      // Fetch rows to compute averages for quality and latency
+      const rows = await dataQuery;
 
       let avgQualityScore = null;
       let avgLatency = null;
@@ -347,11 +363,54 @@ serve(async (req) => {
         }));
       }
 
-      const flagged = await supabase
+      let flaggedQuery = supabase
         .from("ai_responses")
         .select("id", { count: "exact", head: true })
         .eq("receptionist_id", receptionistId)
         .eq("flagged", true);
+
+      if (startDate) {
+        flaggedQuery = flaggedQuery.gte("created_at", startDate);
+      }
+      if (endDate) {
+        flaggedQuery = flaggedQuery.lte("created_at", endDate);
+      }
+
+      const flagged = await flaggedQuery;
+
+      // Calculate chart data
+      const messageVolume: Record<string, number> = {};
+      let exactMatches = 0, semanticMatches = 0, fallbacks = 0;
+      const qualityBuckets = { "0-0.3": 0, "0.3-0.6": 0, "0.6-0.9": 0, "0.9-1.0": 0 };
+      const latencyByDate: Record<string, { total: number; count: number }> = {};
+
+      rows?.data?.forEach(r => {
+        // Message volume
+        const date = new Date(r.created_at).toISOString().split('T')[0];
+        messageVolume[date] = (messageVolume[date] || 0) + 1;
+
+        // Match rates
+        const score = typeof r.quality_score === 'string' ? JSON.parse(r.quality_score) : r.quality_score;
+        if (score?.faqMatch) exactMatches++;
+        else if (score?.semanticMatch) semanticMatches++;
+        else fallbacks++;
+
+        // Quality distribution
+        const overall = score?.overall || 0;
+        if (overall < 0.3) qualityBuckets["0-0.3"]++;
+        else if (overall < 0.6) qualityBuckets["0.3-0.6"]++;
+        else if (overall < 0.9) qualityBuckets["0.6-0.9"]++;
+        else qualityBuckets["0.9-1.0"]++;
+
+        // Latency over time
+        if (r.latency_ms) {
+          if (!latencyByDate[date]) latencyByDate[date] = { total: 0, count: 0 };
+          latencyByDate[date].total += r.latency_ms;
+          latencyByDate[date].count++;
+        }
+      });
+
+      const totalMessages = rows?.data?.length || 1;
 
       console.log("Stats computed successfully");
       return new Response(JSON.stringify({
@@ -359,7 +418,24 @@ serve(async (req) => {
         avg_quality_score: avgQualityScore,
         flagged_count: flagged.count ?? 0,
         avg_latency: avgLatency,
-        recent_responses: recentResponses
+        recent_responses: recentResponses,
+        message_volume: Object.entries(messageVolume)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([date, count]) => ({ date, count })),
+        match_rates: {
+          exact: Math.round((exactMatches / totalMessages) * 100),
+          semantic: Math.round((semanticMatches / totalMessages) * 100),
+          fallback: Math.round((fallbacks / totalMessages) * 100)
+        },
+        quality_distribution: [
+          { range: "0-0.3", count: qualityBuckets["0-0.3"] },
+          { range: "0.3-0.6", count: qualityBuckets["0.3-0.6"] },
+          { range: "0.6-0.9", count: qualityBuckets["0.6-0.9"] },
+          { range: "0.9-1.0", count: qualityBuckets["0.9-1.0"] }
+        ],
+        latency_over_time: Object.entries(latencyByDate)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([date, { total, count }]) => ({ date, latency: Math.round(total / count) }))
       }), { headers: CORS, status: 200 });
     }
 
