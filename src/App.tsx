@@ -6,6 +6,9 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
+import { Navbar } from "@/components/Navbar";
 
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
@@ -55,79 +58,43 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route 
-              path="/onboarding" 
-              element={
-                <ProtectedRoute session={session}>
-                  <Onboarding />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute session={session}>
-                  <Dashboard />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/builder/:id?" 
-              element={
-                <ProtectedRoute session={session}>
-                  <Builder />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/appointments" 
-              element={
-                <ProtectedRoute session={session}>
-                  <Appointments />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/conversations" 
-              element={
-                <ProtectedRoute session={session}>
-                  <Conversations />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/quality-review" 
-              element={
-                <ProtectedRoute session={session}>
-                  <QualityReview />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/analytics" 
-              element={
-                <ProtectedRoute session={session}>
-                  <Analytics />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/settings" 
-              element={
-                <ProtectedRoute session={session}>
-                  <Settings />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/help" 
-              element={<Help />} 
-            />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          {session ? (
+            <SidebarProvider>
+              <div className="flex min-h-screen w-full">
+                <AppSidebar />
+                <div className="flex-1 flex flex-col">
+                  <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+                    <div className="container mx-auto px-4 flex h-16 items-center gap-4">
+                      <SidebarTrigger />
+                      <div className="flex-1" />
+                      <Navbar user={session?.user} />
+                    </div>
+                  </header>
+                  <main className="flex-1">
+                    <Routes>
+                      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                      <Route path="/dashboard" element={<ProtectedRoute session={session}><Dashboard /></ProtectedRoute>} />
+                      <Route path="/builder" element={<ProtectedRoute session={session}><Builder /></ProtectedRoute>} />
+                      <Route path="/conversations" element={<ProtectedRoute session={session}><Conversations /></ProtectedRoute>} />
+                      <Route path="/appointments" element={<ProtectedRoute session={session}><Appointments /></ProtectedRoute>} />
+                      <Route path="/analytics" element={<ProtectedRoute session={session}><Analytics /></ProtectedRoute>} />
+                      <Route path="/quality-review" element={<ProtectedRoute session={session}><QualityReview /></ProtectedRoute>} />
+                      <Route path="/settings" element={<ProtectedRoute session={session}><Settings /></ProtectedRoute>} />
+                      <Route path="/help" element={<Help />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </main>
+                </div>
+              </div>
+            </SidebarProvider>
+          ) : (
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/help" element={<Help />} />
+              <Route path="*" element={<Navigate to="/auth" replace />} />
+            </Routes>
+          )}
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
