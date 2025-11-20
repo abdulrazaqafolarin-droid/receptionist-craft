@@ -444,6 +444,110 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          link: string | null
+          message: string
+          metadata: Json | null
+          priority: string
+          read: boolean
+          receptionist_id: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          link?: string | null
+          message: string
+          metadata?: Json | null
+          priority?: string
+          read?: boolean
+          receptionist_id?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          link?: string | null
+          message?: string
+          metadata?: Json | null
+          priority?: string
+          read?: boolean
+          receptionist_id?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      optimization_log: {
+        Row: {
+          action: string
+          created_at: string
+          decision_reason: string | null
+          id: string
+          metadata: Json | null
+          metrics_after: Json | null
+          metrics_before: Json | null
+          receptionist_id: string | null
+          test_id: string | null
+          variant_key: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          decision_reason?: string | null
+          id?: string
+          metadata?: Json | null
+          metrics_after?: Json | null
+          metrics_before?: Json | null
+          receptionist_id?: string | null
+          test_id?: string | null
+          variant_key?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          decision_reason?: string | null
+          id?: string
+          metadata?: Json | null
+          metrics_after?: Json | null
+          metrics_before?: Json | null
+          receptionist_id?: string | null
+          test_id?: string | null
+          variant_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "optimization_log_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "optimization_log_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "ab_tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
