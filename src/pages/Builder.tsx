@@ -87,18 +87,36 @@ export default function BuilderPage() {
       try {
         const {
           data: { user },
+          error
         } = await supabase.auth.getUser();
+        
         if (!mounted) return;
+        
+        if (error) {
+          console.warn("Auth error:", error);
+          setCurrentUserId(null);
+          setError("Please log in to use the Builder. Redirecting to login...");
+          setTimeout(() => navigate("/auth"), 2000);
+          return;
+        }
+        
         setCurrentUserId(user?.id ?? null);
+        
+        if (!user?.id) {
+          setError("Please log in to use the Builder. Redirecting to login...");
+          setTimeout(() => navigate("/auth"), 2000);
+        }
       } catch (err) {
         console.warn("Failed to get supabase user", err);
         setCurrentUserId(null);
+        setError("Authentication failed. Please log in.");
+        setTimeout(() => navigate("/auth"), 2000);
       }
     })();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [navigate]);
 
   // Load receptionist when id changes (or on first mount if id present)
   useEffect(() => {
@@ -171,6 +189,12 @@ export default function BuilderPage() {
 
   // Save or update receptionist
   async function saveReceptionist() {
+    if (!currentUserId) {
+      setError("Please log in to save receptionists.");
+      setTimeout(() => navigate("/auth"), 2000);
+      return;
+    }
+    
     setSaving(true);
     setError(null);
     try {
@@ -194,9 +218,6 @@ export default function BuilderPage() {
         if (error) throw error;
       } else {
         // insert new
-        if (!currentUserId) {
-          throw new Error("User must be logged in to create a receptionist");
-        }
         const { data, error } = await supabase.from("receptionists").insert([{
           user_id: currentUserId,
           name: receptionist.name,
@@ -338,6 +359,17 @@ export default function BuilderPage() {
   // UI small helpers
   function onFieldChange<K extends keyof Receptionist>(key: K, val: Receptionist[K]) {
     setReceptionist((p) => ({ ...p, [key]: val }));
+  }
+
+  // Show loading or auth error state
+  if (!currentUserId && !error) {
+    return (
+      <div className="p-6 max-w-6xl mx-auto">
+        <div className="text-center py-12">
+          <p className="text-lg">Loading authentication...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
