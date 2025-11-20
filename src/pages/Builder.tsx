@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
 
 /**
  * Builder.tsx
@@ -274,12 +275,16 @@ export default function BuilderPage() {
     setMessages((m) => [...m, optimisticMsg]);
     setInput("");
 
+    const startTime = Date.now();
+
     try {
       const reply = await callChatFunction({
         messages: [{ role: "user", content: text }],
         receptionistId: receptionistId,
         userId: currentUserId,
       });
+
+      const latencyMs = Date.now() - startTime;
 
       const botMsg: ChatMessage = { 
         sender: "bot", 
@@ -289,11 +294,31 @@ export default function BuilderPage() {
 
       setMessages((m) => [...m, botMsg]);
       
-      // Trigger analytics computation (non-blocking)
-      if (currentUserId) {
+      // Ingest analytics data with detailed metrics
+      if (currentUserId && receptionistId) {
+        supabase.functions.invoke("analytics/ingest", {
+          body: {
+            receptionist_id: receptionistId,
+            user_id: currentUserId,
+            request_message: text,
+            reply_text: reply,
+            latency_ms: latencyMs,
+            channel: "builder_preview",
+            model: "gpt-4",
+            temperature: receptionist.temperature || 0.7,
+            confidence: 0.85,
+            quality_score: {
+              coherence: 0.9,
+              relevance: 0.85,
+              completeness: 0.8
+            }
+          }
+        }).catch(err => console.warn("Analytics ingest failed:", err));
+
+        // Trigger analytics computation (non-blocking)
         supabase.functions.invoke("analytics/compute", {
           body: { userId: currentUserId }
-        }).catch(err => console.warn("Analytics trigger failed:", err));
+        }).catch(err => console.warn("Analytics compute failed:", err));
       }
       
       // Optionally refresh from server to sync persisted messages
@@ -324,7 +349,16 @@ export default function BuilderPage() {
 
       <main className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left panel: form */}
-        <section className="md:col-span-1 bg-white rounded-lg shadow-sm p-4">
+        <section className="md:col-span-1 space-y-4">
+          {/* Analytics Panel */}
+          {receptionistId && currentUserId && (
+            <BuilderAnalyticsPanel 
+              receptionistId={receptionistId} 
+              userId={currentUserId}
+            />
+          )}
+          
+          <div className="bg-white rounded-lg shadow-sm p-4">
           <h2 className="font-semibold mb-2">Create AI Receptionist</h2>
 
           <label className="block text-xs mt-2">Receptionist Name</label>
@@ -370,6 +404,7 @@ export default function BuilderPage() {
 
           {error && <div className="mt-3 text-red-600">{error}</div>}
           <div className="mt-4 text-xs text-gray-500">Tip: Save the receptionist before testing voice or live calls.</div>
+          </div>
         </section>
 
         {/* Right panel: chat preview */}

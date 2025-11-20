@@ -257,9 +257,12 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: CORS, status: 200 });
     }
 
-    // GET /stats - retrieve aggregate statistics
-    if (req.method === "GET" && url.pathname.endsWith("/stats")) {
-      const receptionistId = url.searchParams.get("receptionistId");
+    // POST /stats - retrieve aggregate statistics for a receptionist
+    if (req.method === "POST" && url.pathname.endsWith("/stats")) {
+      console.log("Stats request received");
+      const body = await req.json();
+      const receptionistId = body.receptionistId;
+      
       if (!receptionistId) {
         return new Response(
           JSON.stringify({ error: "receptionistId required" }), 
@@ -275,30 +278,73 @@ serve(async (req) => {
         .select("id", { count: "exact", head: true })
         .eq("receptionist_id", receptionistId);
 
-      // Fetch rows to compute averages
+      // Fetch rows to compute averages for quality and latency
       const rows = await supabase
         .from("ai_responses")
-        .select("quality_score")
+        .select("quality_score, latency_ms, created_at")
         .eq("receptionist_id", receptionistId)
+        .order("created_at", { ascending: false })
         .limit(1000);
 
-      let avgOverall = null;
+      let avgQualityScore = null;
+      let avgLatency = null;
+      const recentResponses: Array<{created_at: string, quality_score: number, latency_ms: number}> = [];
+
       if (rows?.data?.length) {
-        const vals = rows.data
+        // Calculate average quality score
+        const qualityScores = rows.data
           .map(r => {
             try {
               const score = typeof r.quality_score === 'string' 
                 ? JSON.parse(r.quality_score) 
                 : r.quality_score;
-              return score?.overall || null;
+              
+              // Extract overall score or compute average of sub-scores
+              if (score?.overall) return score.overall;
+              if (score?.coherence && score?.relevance && score?.completeness) {
+                return (score.coherence + score.relevance + score.completeness) / 3;
+              }
+              return null;
             } catch {
               return null;
             }
           })
-          .filter(Boolean);
-        if (vals.length) {
-          avgOverall = vals.reduce((a, b) => a + b, 0) / vals.length;
+          .filter((val): val is number => val !== null);
+        
+        if (qualityScores.length) {
+          avgQualityScore = qualityScores.reduce((a, b) => a + b, 0) / qualityScores.length;
         }
+
+        // Calculate average latency
+        const latencies = rows.data
+          .map(r => r.latency_ms)
+          .filter((val): val is number => val !== null && val > 0);
+        
+        if (latencies.length) {
+          avgLatency = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+        }
+
+        // Prepare recent responses with all needed data
+        recentResponses.push(...rows.data.slice(0, 10).map(r => {
+          let qualityScore = 0;
+          try {
+            const score = typeof r.quality_score === 'string' 
+              ? JSON.parse(r.quality_score) 
+              : r.quality_score;
+            if (score?.overall) qualityScore = score.overall;
+            else if (score?.coherence && score?.relevance && score?.completeness) {
+              qualityScore = (score.coherence + score.relevance + score.completeness) / 3;
+            }
+          } catch {
+            qualityScore = 0;
+          }
+
+          return {
+            created_at: r.created_at,
+            quality_score: qualityScore,
+            latency_ms: r.latency_ms || 0
+          };
+        }));
       }
 
       const flagged = await supabase
@@ -307,19 +353,13 @@ serve(async (req) => {
         .eq("receptionist_id", receptionistId)
         .eq("flagged", true);
 
-      const recent = await supabase
-        .from("ai_responses")
-        .select("id, request_message, reply_text, quality_score, created_at")
-        .eq("receptionist_id", receptionistId)
-        .order("created_at", { ascending: false })
-        .limit(20);
-
       console.log("Stats computed successfully");
       return new Response(JSON.stringify({
-        total: totalRes.count ?? 0,
-        avgOverall,
-        flaggedCount: flagged.count ?? 0,
-        recent: recent.data ?? []
+        total_responses: totalRes.count ?? 0,
+        avg_quality_score: avgQualityScore,
+        flagged_count: flagged.count ?? 0,
+        avg_latency: avgLatency,
+        recent_responses: recentResponses
       }), { headers: CORS, status: 200 });
     }
 
