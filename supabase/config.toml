@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.voice-to-text]
 verify_jwt = false
+
+[functions.optimizer]
+verify_jwt = false
+
+[functions.kb-rewrite]
+verify_jwt = false
