@@ -51,6 +51,7 @@ export type Database = {
       }
       ab_tests: {
         Row: {
+          active: boolean | null
           created_at: string | null
           description: string | null
           end_at: string | null
@@ -60,6 +61,7 @@ export type Database = {
           start_at: string | null
         }
         Insert: {
+          active?: boolean | null
           created_at?: string | null
           description?: string | null
           end_at?: string | null
@@ -69,6 +71,7 @@ export type Database = {
           start_at?: string | null
         }
         Update: {
+          active?: boolean | null
           created_at?: string | null
           description?: string | null
           end_at?: string | null
@@ -81,6 +84,7 @@ export type Database = {
       }
       ab_variants: {
         Row: {
+          created_at: string | null
           id: string
           key: string
           payload: Json | null
@@ -88,6 +92,7 @@ export type Database = {
           weight: number | null
         }
         Insert: {
+          created_at?: string | null
           id?: string
           key: string
           payload?: Json | null
@@ -95,6 +100,7 @@ export type Database = {
           weight?: number | null
         }
         Update: {
+          created_at?: string | null
           id?: string
           key?: string
           payload?: Json | null
@@ -209,22 +215,32 @@ export type Database = {
         Row: {
           data: Json
           id: string
+          receptionist_id: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
           data: Json
           id?: string
+          receptionist_id?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
           data?: Json
           id?: string
+          receptionist_id?: string | null
           updated_at?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "analytics_cache_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "analytics_cache_user_id_fkey"
             columns: ["user_id"]
@@ -432,6 +448,7 @@ export type Database = {
         Row: {
           created_at: string
           email: string
+          full_name: string | null
           id: string
           name: string | null
           onboarding_completed: boolean | null
@@ -441,6 +458,7 @@ export type Database = {
         Insert: {
           created_at?: string
           email: string
+          full_name?: string | null
           id: string
           name?: string | null
           onboarding_completed?: boolean | null
@@ -450,6 +468,7 @@ export type Database = {
         Update: {
           created_at?: string
           email?: string
+          full_name?: string | null
           id?: string
           name?: string | null
           onboarding_completed?: boolean | null
@@ -521,6 +540,7 @@ export type Database = {
           temperature: number | null
           timezone: string | null
           tone: Database["public"]["Enums"]["receptionist_tone"] | null
+          updated_at: string | null
           user_id: string
           website: string | null
         }
@@ -551,6 +571,7 @@ export type Database = {
           temperature?: number | null
           timezone?: string | null
           tone?: Database["public"]["Enums"]["receptionist_tone"] | null
+          updated_at?: string | null
           user_id: string
           website?: string | null
         }
@@ -581,6 +602,7 @@ export type Database = {
           temperature?: number | null
           timezone?: string | null
           tone?: Database["public"]["Enums"]["receptionist_tone"] | null
+          updated_at?: string | null
           user_id?: string
           website?: string | null
         }
@@ -596,26 +618,38 @@ export type Database = {
       }
       usage_logs: {
         Row: {
+          cost_numeric: number | null
           created_at: string
+          details: Json | null
           id: string
           metadata: Json | null
           minutes_used: number | null
+          receptionist_id: string | null
+          tokens_used: number | null
           usage_type: string
           user_id: string
         }
         Insert: {
+          cost_numeric?: number | null
           created_at?: string
+          details?: Json | null
           id?: string
           metadata?: Json | null
           minutes_used?: number | null
+          receptionist_id?: string | null
+          tokens_used?: number | null
           usage_type: string
           user_id: string
         }
         Update: {
+          cost_numeric?: number | null
           created_at?: string
+          details?: Json | null
           id?: string
           metadata?: Json | null
           minutes_used?: number | null
+          receptionist_id?: string | null
+          tokens_used?: number | null
           usage_type?: string
           user_id?: string
         }
