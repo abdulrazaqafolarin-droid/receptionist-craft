@@ -17,6 +17,7 @@ import Conversations from "./pages/Conversations";
 import Settings from "./pages/Settings";
 import Help from "./pages/Help";
 import QualityReview from "./pages/QualityReview";
+import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -102,6 +103,14 @@ const App = () => {
               element={
                 <ProtectedRoute session={session}>
                   <QualityReview />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/analytics" 
+              element={
+                <ProtectedRoute session={session}>
+                  <Analytics />
                 </ProtectedRoute>
               } 
             />

@@ -17,6 +17,215 @@ serve(async (req) => {
   try {
     const url = new URL(req.url);
     
+    // POST /compute - compute comprehensive analytics for a user
+    if (req.method === "POST" && url.pathname.endsWith("/compute")) {
+      console.log("Analytics compute request received");
+      const body = await req.json();
+      const userId = body.userId;
+      
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ error: "userId required" }), 
+          { status: 400, headers: CORS }
+        );
+      }
+
+      // Check cache first
+      const { data: cached } = await supabase
+        .from("analytics_cache")
+        .select("data, updated_at")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      // If cache is fresh (less than 5 minutes old), return it
+      if (cached && cached.updated_at) {
+        const cacheAge = Date.now() - new Date(cached.updated_at).getTime();
+        if (cacheAge < 5 * 60 * 1000) {
+          console.log("Returning cached analytics");
+          return new Response(JSON.stringify({
+            analytics: cached.data,
+            cached: true
+          }), { headers: CORS, status: 200 });
+        }
+      }
+
+      // Get user's receptionists
+      const { data: receptionists } = await supabase
+        .from("receptionists")
+        .select("id, name, business_name")
+        .eq("user_id", userId);
+
+      if (!receptionists || receptionists.length === 0) {
+        const emptyAnalytics = { error: "No receptionists found" };
+        return new Response(JSON.stringify({
+          analytics: emptyAnalytics,
+          cached: false
+        }), { headers: CORS, status: 200 });
+      }
+
+      const receptionistIds = receptionists.map(r => r.id);
+
+      // Compute conversation metrics
+      const { data: conversations } = await supabase
+        .from("conversations")
+        .select("id, created_at, receptionist_id")
+        .in("receptionist_id", receptionistIds);
+
+      const { data: chatMessages } = await supabase
+        .from("chat_messages")
+        .select("id, created_at, metadata, receptionist_id")
+        .in("receptionist_id", receptionistIds);
+
+      const { data: appointments } = await supabase
+        .from("appointments")
+        .select("id, created_at, receptionist_id, status")
+        .in("receptionist_id", receptionistIds);
+
+      const { data: aiResponses } = await supabase
+        .from("ai_responses")
+        .select("quality_score, latency_ms, receptionist_id, created_at, request_message, reply_text")
+        .in("receptionist_id", receptionistIds)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+
+      // Calculate metrics
+      const now = Date.now();
+      const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+
+      const recentConversations = conversations?.filter(c => 
+        new Date(c.created_at).getTime() > thirtyDaysAgo
+      ) || [];
+
+      const recentMessages = chatMessages?.filter(m => 
+        new Date(m.created_at).getTime() > thirtyDaysAgo
+      ) || [];
+
+      // Conversations per day (last 30 days)
+      const conversationsPerDay: Record<string, number> = {};
+      recentConversations.forEach(c => {
+        const date = new Date(c.created_at).toISOString().split('T')[0];
+        conversationsPerDay[date] = (conversationsPerDay[date] || 0) + 1;
+      });
+
+      // AI Quality metrics
+      let totalQuality = 0, totalClarity = 0, totalAccuracy = 0, totalConfidence = 0;
+      let qualityCount = 0, clarityCount = 0, accuracyCount = 0, confidenceCount = 0;
+      let faqMatches = 0, semanticMatches = 0, fallbacks = 0, unanswered = 0;
+      let totalLatency = 0, latencyCount = 0;
+
+      aiResponses?.forEach(resp => {
+        const qs = typeof resp.quality_score === 'string' 
+          ? JSON.parse(resp.quality_score) 
+          : resp.quality_score;
+        
+        if (qs) {
+          if (qs.overall != null) { totalQuality += qs.overall; qualityCount++; }
+          if (qs.clarity != null) { totalClarity += qs.clarity; clarityCount++; }
+          if (qs.accuracy != null) { totalAccuracy += qs.accuracy; accuracyCount++; }
+          if (qs.confidence != null) { totalConfidence += qs.confidence; confidenceCount++; }
+          if (qs.faqMatch) faqMatches++;
+          if (qs.semanticMatch) semanticMatches++;
+          if (qs.fallback) fallbacks++;
+          if (qs.unanswered) unanswered++;
+        }
+
+        if (resp.latency_ms) {
+          totalLatency += resp.latency_ms;
+          latencyCount++;
+        }
+      });
+
+      const totalAIResponses = aiResponses?.length || 0;
+
+      // Per-receptionist breakdown
+      const receptionistBreakdown = receptionists.map(rec => {
+        const recConvs = conversations?.filter(c => c.receptionist_id === rec.id).length || 0;
+        const recAppts = appointments?.filter(a => a.receptionist_id === rec.id).length || 0;
+        const recResponses = aiResponses?.filter(r => r.receptionist_id === rec.id) || [];
+        
+        let recQuality = 0, recQualityCount = 0;
+        let recFaqMatches = 0;
+        
+        recResponses.forEach(resp => {
+          const qs = typeof resp.quality_score === 'string' 
+            ? JSON.parse(resp.quality_score) 
+            : resp.quality_score;
+          if (qs?.overall != null) {
+            recQuality += qs.overall;
+            recQualityCount++;
+          }
+          if (qs?.faqMatch) recFaqMatches++;
+        });
+
+        return {
+          id: rec.id,
+          name: rec.name,
+          business_name: rec.business_name,
+          conversations: recConvs,
+          appointments: recAppts,
+          avg_quality_score: recQualityCount > 0 ? (recQuality / recQualityCount) : null,
+          faq_match_rate: recResponses.length > 0 ? (recFaqMatches / recResponses.length) : 0
+        };
+      });
+
+      const analytics = {
+        conversation_metrics: {
+          total_conversations: conversations?.length || 0,
+          total_messages: chatMessages?.length || 0,
+          conversations_per_receptionist: (conversations?.length || 0) / receptionists.length,
+          conversations_per_day: conversationsPerDay,
+          average_conversation_length: chatMessages?.length && conversations?.length 
+            ? (chatMessages.length / conversations.length) 
+            : 0,
+        },
+        ai_quality_metrics: {
+          avg_quality_score: qualityCount > 0 ? (totalQuality / qualityCount) : null,
+          avg_clarity: clarityCount > 0 ? (totalClarity / clarityCount) : null,
+          avg_accuracy: accuracyCount > 0 ? (totalAccuracy / accuracyCount) : null,
+          avg_confidence: confidenceCount > 0 ? (totalConfidence / confidenceCount) : null,
+          faq_match_rate: totalAIResponses > 0 ? (faqMatches / totalAIResponses) : 0,
+          semantic_match_rate: totalAIResponses > 0 ? (semanticMatches / totalAIResponses) : 0,
+          fallback_rate: totalAIResponses > 0 ? (fallbacks / totalAIResponses) : 0,
+          unanswered_questions: unanswered,
+        },
+        business_metrics: {
+          appointments_booked: appointments?.length || 0,
+          lead_captures: chatMessages?.filter(m => 
+            m.metadata && (m.metadata as any).lead_captured
+          ).length || 0,
+          booking_conversion_rate: conversations?.length 
+            ? ((appointments?.length || 0) / conversations.length) 
+            : 0,
+        },
+        performance_metrics: {
+          average_response_time: latencyCount > 0 ? (totalLatency / latencyCount) : null,
+        },
+        receptionist_breakdown: receptionistBreakdown,
+        computed_at: new Date().toISOString()
+      };
+
+      // Cache the result
+      const { error: cacheError } = await supabase
+        .from("analytics_cache")
+        .upsert({
+          user_id: userId,
+          data: analytics,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: "user_id"
+        });
+
+      if (cacheError) {
+        console.error("Error caching analytics:", cacheError);
+      }
+
+      console.log("Analytics computed successfully");
+      return new Response(JSON.stringify({
+        analytics,
+        cached: false
+      }), { headers: CORS, status: 200 });
+    }
+    
     // POST /ingest - persist analytics data
     if (req.method === "POST" && url.pathname.endsWith("/ingest")) {
       console.log("Analytics ingest request received");
