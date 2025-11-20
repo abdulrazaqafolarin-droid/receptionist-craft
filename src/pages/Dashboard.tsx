@@ -178,19 +178,19 @@ export default function Dashboard() {
             </CardHeader>
           </Card>
 
+          <Card className="cursor-pointer hover:shadow-lg transition-all" onClick={() => navigate("/analytics")}>
+            <CardHeader>
+              <BarChart3 className="h-8 w-8 text-primary mb-2" />
+              <CardTitle>Analytics Dashboard</CardTitle>
+              <CardDescription>Comprehensive performance insights</CardDescription>
+            </CardHeader>
+          </Card>
+
           <Card className="cursor-pointer hover:shadow-lg transition-all" onClick={() => navigate("/quality-review")}>
             <CardHeader>
               <CheckCircle2 className="h-8 w-8 text-primary mb-2" />
               <CardTitle>Quality Review</CardTitle>
               <CardDescription>Review AI responses and improve quality</CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card className="cursor-pointer hover:shadow-lg transition-all" onClick={() => navigate("/settings")}>
-            <CardHeader>
-              <BarChart3 className="h-8 w-8 text-primary mb-2" />
-              <CardTitle>Settings & Integrations</CardTitle>
-              <CardDescription>Configure integrations and preferences</CardDescription>
             </CardHeader>
           </Card>
         </div>

@@ -205,6 +205,35 @@ export type Database = {
           },
         ]
       }
+      analytics_cache: {
+        Row: {
+          data: Json
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          data: Json
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          data?: Json
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_cache_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           created_at: string

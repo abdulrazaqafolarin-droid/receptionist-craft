@@ -288,6 +288,14 @@ export default function BuilderPage() {
       };
 
       setMessages((m) => [...m, botMsg]);
+      
+      // Trigger analytics computation (non-blocking)
+      if (currentUserId) {
+        supabase.functions.invoke("analytics/compute", {
+          body: { userId: currentUserId }
+        }).catch(err => console.warn("Analytics trigger failed:", err));
+      }
+      
       // Optionally refresh from server to sync persisted messages
       setTimeout(() => loadMessages(receptionistId), 400);
     } catch (err: any) {
