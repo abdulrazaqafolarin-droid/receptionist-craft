@@ -15,6 +15,7 @@ import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Builder from "./pages/Builder";
+import TestReceptionist from "./pages/TestReceptionist";
 import Appointments from "./pages/Appointments";
 import Conversations from "./pages/Conversations";
 import Settings from "./pages/Settings";
@@ -79,6 +80,7 @@ const App = () => {
                       <Route path="/onboarding" element={<ProtectedRoute session={session}><Onboarding /></ProtectedRoute>} />
                       <Route path="/builder" element={<ProtectedRoute session={session}><Builder /></ProtectedRoute>} />
                       <Route path="/builder/:id" element={<ProtectedRoute session={session}><Builder /></ProtectedRoute>} />
+                      <Route path="/test/:id" element={<ProtectedRoute session={session}><TestReceptionist /></ProtectedRoute>} />
                       <Route path="/conversations" element={<ProtectedRoute session={session}><Conversations /></ProtectedRoute>} />
                       <Route path="/appointments" element={<ProtectedRoute session={session}><Appointments /></ProtectedRoute>} />
                       <Route path="/analytics" element={<ProtectedRoute session={session}><Analytics /></ProtectedRoute>} />
