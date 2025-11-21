@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
+import { useToast } from "@/hooks/use-toast";
 
 /**
  * Builder.tsx
@@ -45,6 +46,7 @@ type ChatMessage = {
 export default function BuilderPage() {
   const params = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const receptionistIdParam = params.id;
   const [receptionistId, setReceptionistId] = useState<string | undefined>(receptionistIdParam ?? undefined);
 
@@ -191,7 +193,28 @@ export default function BuilderPage() {
   async function saveReceptionist() {
     if (!currentUserId) {
       setError("Please log in to save receptionists.");
+      toast({ title: "Authentication Required", description: "Please log in first.", variant: "destructive" });
       setTimeout(() => navigate("/auth"), 2000);
+      return;
+    }
+    
+    // Validation
+    if (!receptionist.name?.trim()) {
+      const errorMsg = "Receptionist name is required";
+      setError(errorMsg);
+      toast({ title: "Validation Error", description: errorMsg, variant: "destructive" });
+      return;
+    }
+    if (!receptionist.business_name?.trim()) {
+      const errorMsg = "Business name is required";
+      setError(errorMsg);
+      toast({ title: "Validation Error", description: errorMsg, variant: "destructive" });
+      return;
+    }
+    if (!receptionist.tone) {
+      const errorMsg = "Tone of voice is required";
+      setError(errorMsg);
+      toast({ title: "Validation Error", description: errorMsg, variant: "destructive" });
       return;
     }
     
@@ -213,9 +236,15 @@ export default function BuilderPage() {
           temperature: receptionist.temperature,
           language: receptionist.language,
           goal: receptionist.goal,
-        }).eq("id", receptionistId);
+        }).eq("id", receptionistId).eq("user_id", currentUserId);
 
-        if (error) throw error;
+        if (error) {
+          console.error("Update error:", error);
+          throw new Error(`Failed to update: ${error.message}`);
+        }
+        
+        toast({ title: "Success", description: "Receptionist updated successfully!" });
+        await loadReceptionist(receptionistId);
       } else {
         // insert new
         const { data, error } = await supabase.from("receptionists").insert([{
@@ -234,16 +263,22 @@ export default function BuilderPage() {
           goal: receptionist.goal,
         }]).select().single();
 
-        if (error) throw error;
+        if (error) {
+          console.error("Create error:", error);
+          throw new Error(`Failed to create: ${error.message}`);
+        }
+        
+        toast({ title: "Success", description: "Receptionist created successfully!" });
+        
         if (data?.id) {
-          setReceptionistId(data.id);
-          // update url to new id (optional)
           navigate(`/builder/${data.id}`, { replace: true });
         }
       }
     } catch (err: any) {
       console.error("saveReceptionist error", err);
-      setError(err.message || String(err));
+      const errorMsg = err.message || "Failed to save receptionist";
+      setError(errorMsg);
+      toast({ title: "Error", description: errorMsg, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -287,7 +322,9 @@ export default function BuilderPage() {
     const text = input.trim();
     if (!text) return;
     if (!receptionistId) {
-      setError("Please save the receptionist first (click Save & Generate).");
+      const errorMsg = "Please save the receptionist first before testing chat.";
+      setError(errorMsg);
+      toast({ title: "Save Required", description: errorMsg, variant: "destructive" });
       return;
     }
 
@@ -344,9 +381,23 @@ export default function BuilderPage() {
       
       // Optionally refresh from server to sync persisted messages
       setTimeout(() => loadMessages(receptionistId), 400);
+      
+      toast({ title: "Success", description: "Response received" });
     } catch (err: any) {
       console.error("handleSendMessage error", err);
-      setError(err.message || "Failed to send message");
+      
+      let errorMsg = "Failed to get response";
+      
+      if (err.message?.includes("402")) {
+        errorMsg = "Lovable AI credits exhausted. Please add credits to continue.";
+      } else if (err.message?.includes("429")) {
+        errorMsg = "Rate limit exceeded. Please wait a moment and try again.";
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      
+      setError(errorMsg);
+      toast({ title: "Error", description: errorMsg, variant: "destructive" });
     }
   }
 
