@@ -379,8 +379,7 @@ export default function BuilderPage() {
         }).catch(err => console.warn("Analytics compute failed:", err));
       }
       
-      // Optionally refresh from server to sync persisted messages
-      setTimeout(() => loadMessages(receptionistId), 400);
+      // Don't reload messages - keep the optimistic UI
       
       toast({ title: "Success", description: "Response received" });
     } catch (err: any) {
@@ -479,6 +478,14 @@ export default function BuilderPage() {
             <button className="px-4 py-2 bg-yellow-500 text-white rounded" onClick={saveReceptionist} disabled={saving}>
               {saving ? "Saving..." : receptionistId ? "Save & Update" : "Save & Generate AI Receptionist"}
             </button>
+            {receptionistId && (
+              <button 
+                className="px-4 py-2 bg-blue-500 text-white rounded" 
+                onClick={() => navigate(`/test/${receptionistId}`)}
+              >
+                Test Your AI Receptionist
+              </button>
+            )}
             <button className="px-4 py-2 border rounded" onClick={() => { setReceptionistId(undefined); setReceptionist({ name: "", business_name: "", business_type: "", phone: "", tone: "friendly", greeting_message: "", default_response: "I'm sorry — I don't have that info yet.", knowledge_base: "", system_prompt: "", temperature: 0.7, language: "English", goal: "" }); navigate("/builder"); }}>
               New Receptionist
             </button>
