@@ -53,7 +53,7 @@ export default function BuilderPage() {
     business_name: "",
     business_type: "",
     phone: "",
-    tone: "Friendly",
+    tone: "friendly",
     greeting_message: "",
     default_response: "I'm sorry — I don't have that info yet.",
     knowledge_base: "",
@@ -407,10 +407,9 @@ export default function BuilderPage() {
 
           <label className="block text-xs mt-2">Tone of Voice</label>
           <select className="w-full border rounded p-2" value={receptionist.tone} onChange={(e) => onFieldChange("tone", e.target.value)}>
-            <option>Friendly</option>
-            <option>Professional</option>
-            <option>Energetic</option>
-            <option>Calm</option>
+            <option value="friendly">Friendly</option>
+            <option value="professional">Professional</option>
+            <option value="playful">Playful</option>
           </select>
 
           <label className="block text-xs mt-2">Greeting Message</label>
@@ -429,7 +428,7 @@ export default function BuilderPage() {
             <button className="px-4 py-2 bg-yellow-500 text-white rounded" onClick={saveReceptionist} disabled={saving}>
               {saving ? "Saving..." : receptionistId ? "Save & Update" : "Save & Generate AI Receptionist"}
             </button>
-            <button className="px-4 py-2 border rounded" onClick={() => { setReceptionistId(undefined); setReceptionist({ name: "", business_name: "", business_type: "", phone: "", tone: "Friendly", greeting_message: "", default_response: "I'm sorry — I don't have that info yet.", knowledge_base: "", system_prompt: "", temperature: 0.7, language: "English", goal: "" }); navigate("/builder"); }}>
+            <button className="px-4 py-2 border rounded" onClick={() => { setReceptionistId(undefined); setReceptionist({ name: "", business_name: "", business_type: "", phone: "", tone: "friendly", greeting_message: "", default_response: "I'm sorry — I don't have that info yet.", knowledge_base: "", system_prompt: "", temperature: 0.7, language: "English", goal: "" }); navigate("/builder"); }}>
               New Receptionist
             </button>
           </div>
