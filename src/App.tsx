@@ -76,7 +76,9 @@ const App = () => {
                     <Routes>
                       <Route path="/" element={<Navigate to="/dashboard" replace />} />
                       <Route path="/dashboard" element={<ProtectedRoute session={session}><Dashboard /></ProtectedRoute>} />
+                      <Route path="/onboarding" element={<ProtectedRoute session={session}><Onboarding /></ProtectedRoute>} />
                       <Route path="/builder" element={<ProtectedRoute session={session}><Builder /></ProtectedRoute>} />
+                      <Route path="/builder/:id" element={<ProtectedRoute session={session}><Builder /></ProtectedRoute>} />
                       <Route path="/conversations" element={<ProtectedRoute session={session}><Conversations /></ProtectedRoute>} />
                       <Route path="/appointments" element={<ProtectedRoute session={session}><Appointments /></ProtectedRoute>} />
                       <Route path="/analytics" element={<ProtectedRoute session={session}><Analytics /></ProtectedRoute>} />
