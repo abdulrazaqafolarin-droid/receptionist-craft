@@ -446,6 +446,8 @@ export type Database = {
       }
       notifications: {
         Row: {
+          body: string | null
+          category: string | null
           created_at: string
           id: string
           link: string | null
@@ -454,11 +456,14 @@ export type Database = {
           priority: string
           read: boolean
           receptionist_id: string | null
+          severity: string | null
           title: string
           type: string
           user_id: string
         }
         Insert: {
+          body?: string | null
+          category?: string | null
           created_at?: string
           id?: string
           link?: string | null
@@ -467,11 +472,14 @@ export type Database = {
           priority?: string
           read?: boolean
           receptionist_id?: string | null
+          severity?: string | null
           title: string
           type: string
           user_id: string
         }
         Update: {
+          body?: string | null
+          category?: string | null
           created_at?: string
           id?: string
           link?: string | null
@@ -480,6 +488,7 @@ export type Database = {
           priority?: string
           read?: boolean
           receptionist_id?: string | null
+          severity?: string | null
           title?: string
           type?: string
           user_id?: string
