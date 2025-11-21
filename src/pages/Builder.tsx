@@ -24,7 +24,7 @@ type Receptionist = {
   business_name?: string;
   business_type?: string;
   phone?: string;
-  tone?: string;
+  tone?: "friendly" | "professional" | "playful";
   greeting_message?: string;
   default_response?: string;
   knowledge_base?: string;
@@ -205,7 +205,7 @@ export default function BuilderPage() {
           business_name: receptionist.business_name,
           business_type: receptionist.business_type,
           phone: receptionist.phone,
-          tone: receptionist.tone as any, // Type assertion for enum compatibility
+          tone: receptionist.tone,
           greeting_message: receptionist.greeting_message,
           default_response: receptionist.default_response,
           knowledge_base: receptionist.knowledge_base,
@@ -224,7 +224,7 @@ export default function BuilderPage() {
           business_name: receptionist.business_name,
           business_type: receptionist.business_type,
           phone: receptionist.phone,
-          tone: receptionist.tone as any, // Type assertion for enum compatibility
+          tone: receptionist.tone,
           greeting_message: receptionist.greeting_message,
           default_response: receptionist.default_response,
           knowledge_base: receptionist.knowledge_base,
@@ -406,7 +406,7 @@ export default function BuilderPage() {
           <input className="w-full border rounded p-2" value={receptionist.phone || ""} onChange={(e) => onFieldChange("phone", e.target.value)} />
 
           <label className="block text-xs mt-2">Tone of Voice</label>
-          <select className="w-full border rounded p-2" value={receptionist.tone} onChange={(e) => onFieldChange("tone", e.target.value)}>
+          <select className="w-full border rounded p-2" value={receptionist.tone} onChange={(e) => onFieldChange("tone", e.target.value as "friendly" | "professional" | "playful")}>
             <option value="friendly">Friendly</option>
             <option value="professional">Professional</option>
             <option value="playful">Playful</option>
