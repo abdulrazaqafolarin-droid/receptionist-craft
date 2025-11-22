@@ -28,6 +28,9 @@ import Notifications from "./pages/Notifications";
 import RealtimeLogs from "./pages/RealtimeLogs";
 import Services from "./pages/Services";
 import Availability from "./pages/Availability";
+import Widget from "./pages/Widget";
+import ConfirmAppointment from "./pages/ConfirmAppointment";
+import CancelAppointment from "./pages/CancelAppointment";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -108,6 +111,9 @@ const App = () => {
               <Route path="/" element={<Landing />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/help" element={<Help />} />
+              <Route path="/widget" element={<Widget />} />
+              <Route path="/appointments/confirm" element={<ConfirmAppointment />} />
+              <Route path="/appointments/cancel" element={<CancelAppointment />} />
               <Route path="*" element={<Navigate to="/auth" replace />} />
             </Routes>
           )}
