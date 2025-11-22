@@ -24,6 +24,7 @@ import QualityReview from "./pages/QualityReview";
 import Analytics from "./pages/Analytics";
 import KBRewrite from "./pages/KBRewrite";
 import Diagnostics from "./pages/Diagnostics";
+import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -87,6 +88,7 @@ const App = () => {
                       <Route path="/quality-review" element={<ProtectedRoute session={session}><QualityReview /></ProtectedRoute>} />
                       <Route path="/kb-rewrite" element={<ProtectedRoute session={session}><KBRewrite /></ProtectedRoute>} />
                       <Route path="/diagnostics" element={<ProtectedRoute session={session}><Diagnostics /></ProtectedRoute>} />
+                      <Route path="/notifications" element={<ProtectedRoute session={session}><Notifications /></ProtectedRoute>} />
                       <Route path="/settings" element={<ProtectedRoute session={session}><Settings /></ProtectedRoute>} />
                       <Route path="/help" element={<Help />} />
                       <Route path="*" element={<NotFound />} />
