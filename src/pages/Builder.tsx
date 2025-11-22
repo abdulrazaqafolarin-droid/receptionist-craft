@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
+import { FAQManager } from "@/components/FAQManager";
 import { useToast } from "@/hooks/use-toast";
 
 /**
@@ -597,6 +598,11 @@ export default function BuilderPage() {
           {error && <div className="mt-3 text-red-600">{error}</div>}
           <div className="mt-4 text-xs text-gray-500">Tip: Save the receptionist before testing voice or live calls.</div>
           </div>
+
+          {/* FAQ Manager */}
+          {receptionistId && (
+            <FAQManager receptionistId={receptionistId} />
+          )}
         </section>
 
         {/* Right panel: chat preview */}
