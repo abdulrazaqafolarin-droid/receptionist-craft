@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Navbar } from "@/components/Navbar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Flag, Copy, AlertCircle, TrendingDown } from "lucide-react";
+import { notify } from "@/lib/notify";
 
 interface AIResponse {
   id: string;
@@ -105,12 +106,22 @@ export default function QualityReview() {
 
   async function flagResponse(id: string) {
     try {
+      const response = items.find(r => r.id === id);
       const { error } = await supabase
         .from("ai_responses")
         .update({ flagged: true })
         .eq("id", id);
 
       if (error) throw error;
+
+      // Send notification
+      await notify({
+        type: "quality.flagged",
+        title: "Low Quality Response Flagged",
+        body: `A response has been flagged for review. Quality score: ${response?.quality_score?.overall?.toFixed(2) || "N/A"}`,
+        severity: "critical",
+        receptionist_id: selectedReceptionist,
+      });
 
       toast({
         title: "Response Flagged",

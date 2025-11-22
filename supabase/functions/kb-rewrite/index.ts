@@ -176,6 +176,26 @@ Format:
 
         if (logError) {
           console.error("[KB] Failed to log suggestions:", logError);
+        } else {
+          // Send notification about new KB suggestions
+          try {
+            await supabase.functions.invoke("create-notification", {
+              body: {
+                type: "kb.suggestion",
+                title: "Knowledge Base Improvement Suggestions",
+                body: `${suggestions.suggestions.length} suggestions generated from ${poorResponses.length} low-quality responses`,
+                severity: "info",
+                receptionist_id: receptionistId,
+                user_id: userId,
+                meta: {
+                  suggestions_count: suggestions.suggestions.length,
+                  poor_responses_count: poorResponses.length
+                }
+              }
+            });
+          } catch (notifError) {
+            console.warn("[KB] Failed to send notification:", notifError);
+          }
         }
       }
 
