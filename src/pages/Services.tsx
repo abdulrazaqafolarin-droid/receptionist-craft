@@ -22,6 +22,8 @@ interface Service {
 
 export default function Services() {
   const [services, setServices] = useState<Service[]>([]);
+  const [receptionists, setReceptionists] = useState<any[]>([]);
+  const [selectedReceptionist, setSelectedReceptionist] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const { toast } = useToast();
@@ -35,15 +37,44 @@ export default function Services() {
   });
 
   useEffect(() => {
-    loadServices();
+    loadReceptionists();
   }, []);
 
+  useEffect(() => {
+    if (selectedReceptionist) {
+      loadServices();
+    }
+  }, [selectedReceptionist]);
+
+  async function loadReceptionists() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("receptionists")
+      .select("*")
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Error loading receptionists:", error);
+      return;
+    }
+
+    setReceptionists(data || []);
+    if (data && data.length > 0) {
+      setSelectedReceptionist(data[0].id);
+    }
+  }
+
   async function loadServices() {
+    if (!selectedReceptionist) return;
+    
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("services")
         .select("*")
+        .eq("receptionist_id", selectedReceptionist)
         .order("name");
 
       if (error) throw error;
@@ -57,6 +88,11 @@ export default function Services() {
   }
 
   async function createService() {
+    if (!selectedReceptionist) {
+      toast({ title: "Error", description: "Please select a receptionist first", variant: "destructive" });
+      return;
+    }
+    
     if (!newService.name.trim()) {
       toast({ title: "Error", description: "Service name is required", variant: "destructive" });
       return;
@@ -69,6 +105,7 @@ export default function Services() {
 
       const { error } = await supabase.from("services").insert({
         user_id: user.id,
+        receptionist_id: selectedReceptionist,
         name: newService.name.trim(),
         description: newService.description.trim() || null,
         duration_minutes: newService.duration_minutes,
@@ -142,6 +179,43 @@ export default function Services() {
             Refresh
           </Button>
         </div>
+
+        {/* Receptionist Selector */}
+        {receptionists.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Select Receptionist</CardTitle>
+              <CardDescription>Manage services for a specific receptionist</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <select 
+                className="w-full p-2 border rounded-md bg-background"
+                value={selectedReceptionist} 
+                onChange={(e) => setSelectedReceptionist(e.target.value)}
+              >
+                {receptionists.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} - {r.business_name}
+                  </option>
+                ))}
+              </select>
+            </CardContent>
+          </Card>
+        )}
+
+        {!selectedReceptionist && (
+          <Card className="mb-6">
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground">Please create a receptionist first to manage services.</p>
+              <Button onClick={() => window.location.href = '/onboarding'} className="mt-4">
+                Create Receptionist
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {selectedReceptionist && (
+          <>
 
         {/* Create Service Form */}
         <Card className="mb-6">
@@ -259,6 +333,8 @@ export default function Services() {
             ))
           )}
         </div>
+          </>
+        )}
       </div>
     </>
   );
