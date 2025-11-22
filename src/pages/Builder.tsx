@@ -6,6 +6,17 @@ import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
 import { FAQManager } from "@/components/FAQManager";
 import { WidgetEmbedCode } from "@/components/WidgetEmbedCode";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 /**
  * Builder.tsx
@@ -76,6 +87,7 @@ export default function BuilderPage() {
   const [error, setError] = useState<string | null>(null);
   const [alternatives, setAlternatives] = useState<Array<{ start: string; end: string; score?: number; reason?: string }> | null>(null);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const messagesRef = useRef<HTMLDivElement | null>(null);
 
@@ -458,6 +470,33 @@ export default function BuilderPage() {
     await loadMessages(receptionistId);
   }
 
+  // Delete receptionist
+  async function handleDeleteReceptionist() {
+    if (!receptionistId || !currentUserId) {
+      toast({ title: "Error", description: "Cannot delete receptionist", variant: "destructive" });
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("receptionists")
+        .delete()
+        .eq("id", receptionistId)
+        .eq("user_id", currentUserId);
+
+      if (error) throw error;
+
+      toast({ title: "Success", description: "Receptionist deleted successfully" });
+      navigate("/dashboard");
+    } catch (err: any) {
+      console.error("Delete receptionist error:", err);
+      toast({ title: "Error", description: err.message || "Failed to delete receptionist", variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   // Book an alternative slot
   async function handleBookAlternative(startTime: string, endTime: string) {
     if (!receptionistId) {
@@ -594,6 +633,33 @@ export default function BuilderPage() {
             <button className="px-4 py-2 border rounded" onClick={() => { setReceptionistId(undefined); setReceptionist({ name: "", business_name: "", business_type: "", phone: "", tone: "friendly", greeting_message: "", default_response: "I'm sorry — I don't have that info yet.", knowledge_base: "", system_prompt: "", temperature: 0.7, language: "English", goal: "" }); navigate("/builder"); }}>
               New Receptionist
             </button>
+            {receptionistId && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+                    Delete Receptionist
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete the receptionist "{receptionist.name || 'this receptionist'}" and all associated data including FAQs, conversations, and appointments. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction 
+                      onClick={handleDeleteReceptionist}
+                      disabled={deleting}
+                      className="bg-red-500 hover:bg-red-600"
+                    >
+                      {deleting ? "Deleting..." : "Yes, Delete Receptionist"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
 
           {error && <div className="mt-3 text-red-600">{error}</div>}
