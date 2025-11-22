@@ -20,3 +20,21 @@ verify_jwt = false
 
 [functions.kb-rewrite]
 verify_jwt = false
+
+[functions.create-notification]
+verify_jwt = false
+
+[functions.appointment-reminder-runner]
+verify_jwt = false
+
+[functions.book-appointment]
+verify_jwt = false
+
+[functions.check-availability]
+verify_jwt = false
+
+[functions.cancel-appointment]
+verify_jwt = false
+
+[functions.confirm-appointment]
+verify_jwt = false
