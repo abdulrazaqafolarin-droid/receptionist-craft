@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
+import { AppointmentModal } from "@/components/appointments/AppointmentModal";
 import type { Appointment } from "@/types/appointments";
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
 
   useEffect(() => {
     loadAppointments();
@@ -30,9 +33,18 @@ export default function Appointments() {
     }
   }
 
-  async function openAppointment(a: Appointment) {
-    // Open a drawer or navigate to detail (simple alert for now)
-    alert(`Appointment for ${a.customer_name} at ${new Date(a.start_time).toLocaleString()}`);
+  function openAppointment(a: Appointment) {
+    setSelectedAppointment(a);
+    setModalOpen(true);
+  }
+
+  function openNewAppointment() {
+    setSelectedAppointment(null);
+    setModalOpen(true);
+  }
+
+  function handleModalSuccess() {
+    loadAppointments();
   }
 
   return (
@@ -42,7 +54,8 @@ export default function Appointments() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Appointments</h1>
           <div className="flex gap-2">
-            <Button onClick={() => loadAppointments()}>Refresh</Button>
+            <Button variant="outline" onClick={() => loadAppointments()}>Refresh</Button>
+            <Button onClick={openNewAppointment}>+ New Appointment</Button>
           </div>
         </div>
 
@@ -57,12 +70,19 @@ export default function Appointments() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="ghost" onClick={() => openAppointment(a)}>Open</Button>
+                  <Button variant="ghost" onClick={() => openAppointment(a)}>Edit</Button>
                 </div>
               </div>
             ))}
           </div>
         )}
+
+        <AppointmentModal
+          open={modalOpen}
+          onOpenChange={setModalOpen}
+          appointment={selectedAppointment}
+          onSuccess={handleModalSuccess}
+        />
       </div>
     </>
   );
