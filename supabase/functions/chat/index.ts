@@ -2,6 +2,15 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { assignVariant, mergeVariantConfig } from "../_shared/abTesting.ts";
+import { 
+  buildIdempotencyKey, 
+  parseISOLocal, 
+  formatHumanSlot, 
+  sanitizeInput, 
+  extractJSON, 
+  retryWithBackoff,
+  isSlotMatch
+} from "../_shared/bookingHelpers.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -87,12 +96,21 @@ serve(async (req) => {
     }));
 
     const userMessage = messages[messages.length - 1]?.content?.toLowerCase().trim() || "";
+    const userMessageRaw = messages[messages.length - 1]?.content?.trim() || "";
+
+    // Generate correlation ID for logging
+    const correlationId = `chat_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    console.log(`[${correlationId}] Processing message for receptionist ${receptionistId}, user ${userId}`);
 
     // BOOKING INTENT DETECTION
-    const bookIntentKeywords = ["book", "appointment", "schedule", "reserve", "see a", "see an", "book me", "i need an appointment", "make an appointment"];
+    const bookIntentKeywords = ["book", "appointment", "schedule", "reserve", "see a", "see an", "book me", "i need an appointment", "make an appointment", "accept_alternative"];
     const isBookingIntent = bookIntentKeywords.some(k => userMessage.includes(k));
+    
+    // Check if this is a follow-up to accept an alternative
+    const acceptAltMatch = userMessage.match(/accept[_\s]alternative[:\s]*(\d+)/i);
+    const isAcceptingAlternative = !!acceptAltMatch;
 
-    console.log(`[Chat] Booking intent detected: ${isBookingIntent}`);
+    console.log(`[${correlationId}] Booking intent: ${isBookingIntent}, Accepting alternative: ${isAcceptingAlternative}`);
 
     // Check for FAQ match
     let faqMatch = null;
@@ -167,76 +185,178 @@ ${JSON.stringify(memoryMessages, null, 2)}
     const startTime = Date.now();
 
     // BOOKING FLOW
-    if (isBookingIntent && !faqMatch) {
-      console.log(`[Chat] Entering booking flow`);
+    if ((isBookingIntent || isAcceptingAlternative) && !faqMatch) {
+      console.log(`[${correlationId}] Entering booking flow`);
+      
+      const idempotencyKey = buildIdempotencyKey(userId, userMessageRaw);
+      console.log(`[${correlationId}] Idempotency key: ${idempotencyKey}`);
+
+      // HANDLE ALTERNATIVE ACCEPTANCE
+      if (isAcceptingAlternative && acceptAltMatch) {
+        const altIndex = parseInt(acceptAltMatch[1]) - 1;
+        console.log(`[${correlationId}] User accepting alternative #${altIndex + 1}`);
+        
+        // Try to extract alternatives from recent conversation metadata
+        const { data: recentBotMsg } = await supabase
+          .from("chat_messages")
+          .select("metadata")
+          .eq("receptionist_id", receptionistId)
+          .eq("user_id", userId || "")
+          .eq("sender", "bot")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        const alternatives = recentBotMsg?.metadata?.alternatives;
+        
+        if (!alternatives || !Array.isArray(alternatives) || altIndex >= alternatives.length) {
+          const errMsg = "I couldn't find that alternative option. Could you please start over and tell me when you'd like to book?";
+          await logMessages(supabase, receptionistId, userId, userMessageRaw, errMsg);
+          return jsonResponse({ reply: errMsg });
+        }
+        
+        const selectedSlot = alternatives[altIndex];
+        const startTime = typeof selectedSlot === 'string' ? selectedSlot : selectedSlot.start;
+        
+        // Book the alternative
+        try {
+          const bookRes = await retryWithBackoff(() => 
+            supabase.functions.invoke("book-appointment", {
+              body: {
+                receptionistId,
+                serviceId: null,
+                startTime,
+                customerName: "Guest",
+                customerPhone: null,
+                customerEmail: null,
+                source: "ai_receptionist",
+                metadata: { 
+                  booked_via_chat: true, 
+                  idempotency_key: idempotencyKey,
+                  alternative_selected: altIndex + 1
+                }
+              }
+            })
+          );
+          
+          if (bookRes.error) throw new Error(bookRes.error.message);
+          
+          const appointment = bookRes.data?.appointment;
+          const confirmMsg = `✅ Perfect! I've booked your appointment for ${formatHumanSlot(appointment.start_time, r.timezone || 'UTC')}. Your confirmation ID is ${appointment.id}.`;
+          
+          await logMessages(supabase, receptionistId, userId, userMessageRaw, confirmMsg, null, { 
+            booking_flow: 'alternative_accepted',
+            appointment_id: appointment.id,
+            idempotency_key: idempotencyKey
+          });
+          
+          // Notification
+          await supabase.from("notifications").insert({
+            type: "appointment.created",
+            title: "New Appointment Booked",
+            body: `Appointment booked via chat for ${formatHumanSlot(appointment.start_time, r.timezone || 'UTC')}`,
+            receptionist_id: receptionistId,
+            user_id: r.user_id,
+            severity: "info",
+            metadata: { appointment_id: appointment.id }
+          });
+          
+          const elapsedMs = Date.now() - startTime;
+          await logAnalytics(supabase, receptionistId, userId, userMessageRaw, confirmMsg, receptionistConfig, elapsedMs);
+          
+          return jsonResponse({ reply: confirmMsg, appointment });
+        } catch (err: any) {
+          console.error(`[${correlationId}] Alternative booking failed:`, err);
+          const errMsg = "Sorry, I couldn't book that time. Please try again or choose a different option.";
+          await logMessages(supabase, receptionistId, userId, userMessageRaw, errMsg);
+          return jsonResponse({ reply: errMsg });
+        }
+      }
 
       // SLOT EXTRACTION
-      const slotPrompt = `You are a slot extraction assistant. Extract booking information from user text and return ONLY valid JSON with these keys:
+      const slotPrompt = `You are a slot extraction assistant. Extract booking information from user text and return ONLY valid JSON with these exact keys:
 - intent: "book_appointment" or "none"
-- service: string (service name or null)
+- service: string (service name) or null
 - date: ISO date string (YYYY-MM-DD) or null
 - time: time string (HH:MM in 24h format) or null
 - customer_name: string or null
 - contact: phone or email string or null
 - clarity: "clear" or "uncertain"
 
-If you cannot extract reliable information, set that key to null and clarity to "uncertain".
-Return ONLY valid JSON, no explanations.`;
+Rules:
+- If ANY required field (service, date, time) is missing or unclear, set clarity to "uncertain"
+- Parse relative dates like "tomorrow", "next Monday" into ISO format
+- Parse times like "3pm", "2:30" into 24h format (e.g., "15:00", "14:30")
+- Extract contact from patterns like "+234...", "email@..." 
+- If you cannot extract reliable information, set that key to null
 
-      const slotCallMessages = [
-        { role: "system", content: slotPrompt },
-        { role: "user", content: userMessage }
-      ];
+Return ONLY valid JSON, no explanations or markdown.`;
 
-      const slotRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: slotCallMessages,
-          temperature: 0.0
-        })
-      });
+      let slotOut: any;
+      try {
+        slotOut = await retryWithBackoff(async () => {
+          const slotRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: [
+                { role: "system", content: slotPrompt },
+                { role: "user", content: userMessageRaw }
+              ],
+              temperature: 0.0
+            })
+          });
 
-      if (!slotRes.ok) {
-        const errtxt = await slotRes.text();
-        console.error(`[Chat] Slot extraction failed:`, errtxt);
-        throw new Error(`Slot extraction failed: ${slotRes.status}`);
+          if (!slotRes.ok) {
+            if (slotRes.status === 429) {
+              throw new Error("Rate limit exceeded");
+            }
+            if (slotRes.status === 402) {
+              throw new Error("Payment required - Lovable AI credits exhausted");
+            }
+            const errtxt = await slotRes.text();
+            throw new Error(`Slot extraction failed: ${slotRes.status} ${errtxt}`);
+          }
+
+          return await slotRes.json();
+        });
+      } catch (err: any) {
+        console.error(`[${correlationId}] Slot extraction error:`, err);
+        let errMsg = "I'm having trouble processing your request. Could you rephrase that?";
+        if (err.message.includes("Rate limit")) {
+          errMsg = "System is busy. Please try again in a moment.";
+        } else if (err.message.includes("Payment required")) {
+          errMsg = "Service temporarily unavailable. Please contact support.";
+        }
+        await logMessages(supabase, receptionistId, userId, userMessageRaw, errMsg);
+        return jsonResponse({ reply: errMsg });
       }
 
-      const slotOut = await slotRes.json();
       const slotText = slotOut?.choices?.[0]?.message?.content || "{}";
-
-      // Extract JSON from response (handle markdown fences)
-      let slotJsonStr = slotText;
-      const mdJson = slotText.match(/```json\s*([\s\S]*?)```/);
-      if (mdJson) slotJsonStr = mdJson[1];
-      else {
-        const fenced = slotText.match(/```\s*([\s\S]*?)```/);
-        if (fenced) slotJsonStr = fenced[1];
-      }
+      const slotJsonStr = extractJSON(slotText);
 
       let slots: any = {};
       try {
         slots = JSON.parse(slotJsonStr);
-        console.log(`[Chat] Extracted slots:`, slots);
+        console.log(`[${correlationId}] Extracted slots:`, slots);
       } catch (e) {
-        console.warn("Slot parse failed:", e, slotText);
-        const clarify = "I can help book that appointment. Could you tell me which service you need and your preferred date and time?";
-        await logMessages(supabase, receptionistId, userId, userMessage, clarify);
+        console.warn(`[${correlationId}] Slot parse failed:`, e, slotJsonStr);
+        const clarify = "I can help book that appointment. Could you tell me which service you need, your preferred date and time?";
+        await logMessages(supabase, receptionistId, userId, userMessageRaw, clarify);
         return jsonResponse({ reply: clarify });
       }
 
       const { intent, service, date, time, customer_name, contact, clarity } = slots;
 
       if (intent !== "book_appointment") {
-        console.log(`[Chat] Intent not booking, falling back to normal chat`);
-        // Fall through to normal chat flow
+        console.log(`[${correlationId}] Intent not booking, falling through to normal chat`);
+        // Fall through to normal chat flow below
       } else {
-        // Check which slots are missing
+        // Check which critical slots are missing
         const missing = [];
         if (!service) missing.push("service");
         if (!date) missing.push("date");
@@ -244,105 +364,163 @@ Return ONLY valid JSON, no explanations.`;
 
         if (missing.length > 0 || clarity !== "clear") {
           const q = buildClarifyingQuestion(missing, { service, date, time, customer_name, contact });
-          await logMessages(supabase, receptionistId, userId, userMessage, q);
+          await logMessages(supabase, receptionistId, userId, userMessageRaw, q, null, {
+            booking_flow: 'clarification_needed',
+            missing_fields: missing,
+            clarity
+          });
           return jsonResponse({ reply: q });
         }
 
-        // CHECK AVAILABILITY
-        console.log(`[Chat] Checking availability for ${service} on ${date} at ${time}`);
-        
-        const checkRes = await supabase.functions.invoke("check-availability", {
-          body: {
-            receptionistId,
-            serviceId: null, // Will match by name
-            startDate: date,
-            endDate: date,
-            maxSlots: 10
-          }
-        });
+        // Parse datetime with timezone
+        let requestedDateTime: string;
+        try {
+          requestedDateTime = parseISOLocal(date, time, r.timezone || 'UTC');
+          console.log(`[${correlationId}] Requested datetime: ${requestedDateTime}`);
+        } catch (err: any) {
+          console.error(`[${correlationId}] Date parse error:`, err);
+          const errMsg = "I couldn't understand that date/time. Could you provide it in format like 'December 1 at 2:30pm'?";
+          await logMessages(supabase, receptionistId, userId, userMessageRaw, errMsg);
+          return jsonResponse({ reply: errMsg });
+        }
 
-        if (checkRes.error) {
-          console.error("check-availability error:", checkRes.error);
+        // CHECK AVAILABILITY with retry
+        console.log(`[${correlationId}] Checking availability for ${service} on ${date} at ${time}`);
+        
+        let checkRes: any;
+        try {
+          checkRes = await retryWithBackoff(() => 
+            supabase.functions.invoke("check-availability", {
+              body: {
+                receptionist_id: receptionistId,
+                service_id: null,
+                startDate: date,
+                endDate: date,
+                desiredStart: requestedDateTime,
+                maxSlots: 10
+              }
+            })
+          );
+          
+          if (checkRes.error) throw new Error(checkRes.error.message);
+        } catch (err: any) {
+          console.error(`[${correlationId}] check-availability error:`, err);
           const errMsg = "I can't check availability right now. Please try again shortly.";
-          await logMessages(supabase, receptionistId, userId, userMessage, errMsg);
+          await logMessages(supabase, receptionistId, userId, userMessageRaw, errMsg);
           return jsonResponse({ reply: errMsg });
         }
 
         const availableSlots = checkRes.data?.slots || [];
-        console.log(`[Chat] Available slots:`, availableSlots.length);
-
-        // Check if requested time is available
-        const requestedDateTime = `${date}T${time}:00.000Z`;
-        const isAvailable = availableSlots.some((slot: string) => {
-          const slotDate = new Date(slot);
-          const requestedDate = new Date(requestedDateTime);
-          return Math.abs(slotDate.getTime() - requestedDate.getTime()) < 3600000; // Within 1 hour
-        });
+        const isAvailable = checkRes.data?.available === true;
+        
+        console.log(`[${correlationId}] Available: ${isAvailable}, Slots: ${availableSlots.length}`);
 
         if (!isAvailable && availableSlots.length === 0) {
           const altMsg = `Sorry, we don't have any available times on ${date}. Would you like to try a different date?`;
-          await logMessages(supabase, receptionistId, userId, userMessage, altMsg);
+          await logMessages(supabase, receptionistId, userId, userMessageRaw, altMsg, null, {
+            booking_flow: 'no_availability',
+            requested_date: date
+          });
           return jsonResponse({ reply: altMsg });
         }
 
         if (!isAvailable) {
-          const alternatives = availableSlots.slice(0, 3).map((slot: string, i: number) => {
-            const d = new Date(slot);
-            return `${d.toLocaleDateString()} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+          // Offer alternatives
+          const topAlts = (checkRes.data?.alternatives || availableSlots).slice(0, 3);
+          const alternatives = topAlts.map((slot: any, i: number) => {
+            const slotTime = typeof slot === 'string' ? slot : slot.start;
+            return formatHumanSlot(slotTime, r.timezone || 'UTC');
           });
-          const altMsg = `That time isn't available. Here are some nearby options:\n${alternatives.map((a: string, i: number) => `${i + 1}. ${a}`).join('\n')}\n\nWould any of these work for you?`;
-          await logMessages(supabase, receptionistId, userId, userMessage, altMsg);
-          return jsonResponse({ reply: altMsg, alternatives: availableSlots.slice(0, 3) });
+          
+          const altMsg = `That time isn't available. Here are some nearby options:\n${alternatives.map((a: string, i: number) => `${i + 1}. ${a}`).join('\n')}\n\nReply with "accept_alternative:1" (or 2, 3) to book one of these, or suggest a different time.`;
+          
+          await logMessages(supabase, receptionistId, userId, userMessageRaw, altMsg, null, {
+            booking_flow: 'alternatives_offered',
+            alternatives: topAlts,
+            requested_time: requestedDateTime
+          });
+          
+          return jsonResponse({ reply: altMsg, alternatives: topAlts });
         }
 
         // Need contact info before booking
         if (!contact) {
           const ask = "Great! I can book that time. Could you provide your phone number or email to confirm the appointment?";
-          await logMessages(supabase, receptionistId, userId, userMessage, ask);
+          await logMessages(supabase, receptionistId, userId, userMessageRaw, ask, null, {
+            booking_flow: 'contact_needed',
+            requested_time: requestedDateTime,
+            service
+          });
           return jsonResponse({ reply: ask });
         }
 
-        // BOOK APPOINTMENT
-        console.log(`[Chat] Booking appointment`);
+        // BOOK APPOINTMENT with retry
+        console.log(`[${correlationId}] Booking appointment`);
         
-        const bookRes = await supabase.functions.invoke("book-appointment", {
-          body: {
-            receptionistId,
-            serviceId: null,
-            startTime: requestedDateTime,
-            customerName: customer_name || "Guest",
-            customerEmail: contact.includes("@") ? contact : null,
-            customerPhone: !contact.includes("@") ? contact : null,
-            source: "ai_receptionist",
-            metadata: { booked_via_chat: true }
-          }
-        });
-
-        if (bookRes.error) {
-          console.error("book-appointment error:", bookRes.error);
-          const errMsg = "Sorry, I couldn't create that appointment right now. Please try again.";
-          await logMessages(supabase, receptionistId, userId, userMessage, errMsg);
+        let bookRes: any;
+        try {
+          bookRes = await retryWithBackoff(() => 
+            supabase.functions.invoke("book-appointment", {
+              body: {
+                receptionistId,
+                serviceId: null,
+                startTime: requestedDateTime,
+                customerName: sanitizeInput(customer_name || "Guest"),
+                customerEmail: contact.includes("@") ? sanitizeInput(contact) : null,
+                customerPhone: !contact.includes("@") ? sanitizeInput(contact) : null,
+                source: "ai_receptionist",
+                metadata: { 
+                  booked_via_chat: true,
+                  idempotency_key: idempotencyKey,
+                  correlation_id: correlationId
+                }
+              }
+            })
+          );
+          
+          if (bookRes.error) throw new Error(bookRes.error.message);
+        } catch (err: any) {
+          console.error(`[${correlationId}] book-appointment error:`, err);
+          const errMsg = "Sorry, I couldn't create that appointment right now. Please try again in a moment.";
+          await logMessages(supabase, receptionistId, userId, userMessageRaw, errMsg);
           return jsonResponse({ reply: errMsg });
         }
 
         const appointment = bookRes.data?.appointment;
-        const confirmMsg = `✅ Perfect! I've booked your ${service} appointment for ${new Date(appointment.start_time).toLocaleString()}. ${customer_name ? `See you soon, ${customer_name}!` : 'See you soon!'} Your confirmation ID is ${appointment.id}.`;
+        const existed = bookRes.data?.existed === true;
         
-        await logMessages(supabase, receptionistId, userId, userMessage, confirmMsg);
-
-        // Create notification
-        await supabase.from("notifications").insert({
-          type: "appointment.created",
-          title: `New Appointment: ${service}`,
-          body: `${customer_name || 'Guest'} booked ${service} for ${new Date(appointment.start_time).toLocaleString()}`,
-          receptionist_id: receptionistId,
-          user_id: r.user_id,
-          severity: "info",
-          metadata: { appointment_id: appointment.id, contact }
+        const confirmMsg = existed 
+          ? `You already have an appointment for ${formatHumanSlot(appointment.start_time, r.timezone || 'UTC')}. Your confirmation ID is ${appointment.id}.`
+          : `✅ Perfect! I've booked your ${service} appointment for ${formatHumanSlot(appointment.start_time, r.timezone || 'UTC')}. ${customer_name ? `See you soon, ${customer_name}!` : 'See you soon!'} Your confirmation ID is ${appointment.id}.`;
+        
+        await logMessages(supabase, receptionistId, userId, userMessageRaw, confirmMsg, null, {
+          booking_flow: existed ? 'duplicate_prevented' : 'booked',
+          appointment_id: appointment.id,
+          idempotency_key: idempotencyKey,
+          service,
+          contact
         });
 
+        // Create notification (only if new)
+        if (!existed) {
+          await supabase.from("notifications").insert({
+            type: "appointment.created",
+            title: `New Appointment: ${service}`,
+            body: `${customer_name || 'Guest'} booked ${service} for ${formatHumanSlot(appointment.start_time, r.timezone || 'UTC')}`,
+            receptionist_id: receptionistId,
+            user_id: r.user_id,
+            severity: "info",
+            priority: "normal",
+            metadata: { appointment_id: appointment.id, contact }
+          });
+        }
+
         const elapsedMs = Date.now() - startTime;
-        await logAnalytics(supabase, receptionistId, userId, userMessage, confirmMsg, receptionistConfig, elapsedMs);
+        await logAnalytics(supabase, receptionistId, userId, userMessageRaw, confirmMsg, receptionistConfig, elapsedMs, null, {
+          booking_completed: true,
+          appointment_id: appointment.id,
+          was_duplicate: existed
+        });
 
         return jsonResponse({ reply: confirmMsg, appointment });
       }
@@ -421,7 +599,15 @@ function jsonResponse(obj: any) {
   });
 }
 
-async function logMessages(supabase: any, receptionistId: string, userId: string | null, userMessage: string, reply: string, faqMatch?: any) {
+async function logMessages(
+  supabase: any, 
+  receptionistId: string, 
+  userId: string | null, 
+  userMessage: string, 
+  reply: string, 
+  faqMatch?: any,
+  extraMetadata?: Record<string, any>
+) {
   if (!userId) return;
   try {
     await supabase.from("chat_messages").insert([
@@ -429,17 +615,21 @@ async function logMessages(supabase: any, receptionistId: string, userId: string
         receptionist_id: receptionistId,
         user_id: userId,
         sender: "user",
-        message: userMessage,
-        metadata: { timestamp: new Date().toISOString() },
+        message: sanitizeInput(userMessage),
+        metadata: { 
+          timestamp: new Date().toISOString(),
+          ...(extraMetadata || {})
+        },
       },
       {
         receptionist_id: receptionistId,
         user_id: userId,
         sender: "bot",
-        message: reply,
+        message: sanitizeInput(reply),
         metadata: { 
           timestamp: new Date().toISOString(),
-          faq_matched: !!faqMatch 
+          faq_matched: !!faqMatch,
+          ...(extraMetadata || {})
         },
       },
     ]);
@@ -449,26 +639,38 @@ async function logMessages(supabase: any, receptionistId: string, userId: string
   }
 }
 
-async function logAnalytics(supabase: any, receptionistId: string, userId: string | null, request: string, reply: string, config: any, latencyMs: number, faqMatch?: any) {
+async function logAnalytics(
+  supabase: any, 
+  receptionistId: string, 
+  userId: string | null, 
+  request: string, 
+  reply: string, 
+  config: any, 
+  latencyMs: number, 
+  faqMatch?: any,
+  extraTags?: Record<string, any>
+) {
   try {
     const qualityScore = {
       overall: faqMatch ? 0.95 : 0.85,
       confidence: faqMatch ? 0.95 : 0.80,
       clarity: reply.length > 20 && reply.length < 500 ? 0.9 : 0.7,
-      accuracy: faqMatch ? 1.0 : 0.85
+      accuracy: faqMatch ? 1.0 : 0.85,
+      ...(extraTags || {})
     };
 
     await supabase.from('ai_responses').insert({
       receptionist_id: receptionistId,
       user_id: userId || null,
-      request_message: request,
-      reply_text: reply,
+      request_message: sanitizeInput(request),
+      reply_text: sanitizeInput(reply),
       model: config.model || 'google/gemini-2.5-flash',
       latency_ms: latencyMs,
       temperature: config.temperature || 0.4,
       quality_score: qualityScore,
       confidence: qualityScore.confidence,
-      channel: 'chat'
+      channel: 'chat',
+      tags: extraTags ? Object.keys(extraTags) : []
     });
 
     console.log(`[Chat] Analytics logged: ${latencyMs}ms`);
