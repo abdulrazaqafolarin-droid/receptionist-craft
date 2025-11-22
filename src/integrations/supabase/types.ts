@@ -117,6 +117,44 @@ export type Database = {
           },
         ]
       }
+      ai_booking_suggestions: {
+        Row: {
+          created_at: string
+          id: string
+          latency_ms: number | null
+          model: string | null
+          receptionist_id: string
+          request_message: string
+          suggestions: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latency_ms?: number | null
+          model?: string | null
+          receptionist_id: string
+          request_message: string
+          suggestions: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latency_ms?: number | null
+          model?: string | null
+          receptionist_id?: string
+          request_message?: string
+          suggestions?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_booking_suggestions_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_response_reviews: {
         Row: {
           action_taken: string | null
@@ -281,6 +319,44 @@ export type Database = {
             columns: ["appointment_id"]
             isOneToOne: false
             referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      appointment_slots: {
+        Row: {
+          created_at: string
+          end_time: string
+          id: string
+          is_available: boolean
+          metadata: Json | null
+          receptionist_id: string
+          start_time: string
+        }
+        Insert: {
+          created_at?: string
+          end_time: string
+          id?: string
+          is_available?: boolean
+          metadata?: Json | null
+          receptionist_id: string
+          start_time: string
+        }
+        Update: {
+          created_at?: string
+          end_time?: string
+          id?: string
+          is_available?: boolean
+          metadata?: Json | null
+          receptionist_id?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_slots_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
             referencedColumns: ["id"]
           },
         ]

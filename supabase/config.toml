@@ -27,6 +27,9 @@ verify_jwt = false
 [functions.appointment-reminder-runner]
 verify_jwt = false
 
+[functions.appointment-action]
+verify_jwt = false
+
 [functions.book-appointment]
 verify_jwt = false
 
