@@ -294,7 +294,7 @@ export default function BuilderPage() {
     messages: { role: string; content: string }[];
     receptionistId: string;
     userId: string | null;
-  }): Promise<string> {
+  }): Promise<{ reply: string; alternatives?: string[]; appointment?: any }> {
     try {
       const { data, error } = await supabase.functions.invoke('chat', {
         body: payload
@@ -309,7 +309,11 @@ export default function BuilderPage() {
         throw new Error('No response from AI');
       }
 
-      return data.reply;
+      return {
+        reply: data.reply,
+        alternatives: data.alternatives,
+        appointment: data.appointment
+      };
     } catch (err: any) {
       console.error('Chat function exception:', err);
       throw new Error(err.message || 'Failed to communicate with AI');
@@ -336,7 +340,7 @@ export default function BuilderPage() {
     const startTime = Date.now();
 
     try {
-      const reply = await callChatFunction({
+      const result = await callChatFunction({
         messages: [{ role: "user", content: text }],
         receptionistId: receptionistId,
         userId: currentUserId,
@@ -346,11 +350,24 @@ export default function BuilderPage() {
 
       const botMsg: ChatMessage = { 
         sender: "bot", 
-        message: reply, 
+        message: result.reply, 
         created_at: new Date().toISOString() 
       };
 
       setMessages((m) => [...m, botMsg]);
+
+      // Handle appointment confirmation
+      if (result.appointment) {
+        toast({ 
+          title: "✅ Appointment Booked!", 
+          description: `Confirmation ID: ${result.appointment.id}` 
+        });
+      }
+
+      // Handle alternatives (if time not available)
+      if (result.alternatives && result.alternatives.length > 0) {
+        console.log('Available alternative times:', result.alternatives);
+      }
       
       // Ingest analytics data with detailed metrics
       if (currentUserId && receptionistId) {
@@ -359,7 +376,7 @@ export default function BuilderPage() {
             receptionist_id: receptionistId,
             user_id: currentUserId,
             request_message: text,
-            reply_text: reply,
+            reply_text: result.reply,
             latency_ms: latencyMs,
             channel: "builder_preview",
             model: "gpt-4",
