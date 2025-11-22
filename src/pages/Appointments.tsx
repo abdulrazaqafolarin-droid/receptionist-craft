@@ -9,19 +9,44 @@ import { MessageCircle, RefreshCw } from "lucide-react";
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [receptionists, setReceptionists] = useState<any[]>([]);
+  const [selectedReceptionist, setSelectedReceptionist] = useState<string>("all");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    loadReceptionists();
     loadAppointments();
   }, []);
+
+  useEffect(() => {
+    loadAppointments();
+  }, [selectedReceptionist]);
+
+  async function loadReceptionists() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from("receptionists")
+      .select("id, name, business_name")
+      .eq("user_id", user.id);
+
+    setReceptionists(data || []);
+  }
 
   async function loadAppointments() {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("appointments")
         .select("*")
         .order("start_time", { ascending: true });
+
+      if (selectedReceptionist !== "all") {
+        query = query.eq('receptionist_id', selectedReceptionist);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setAppointments((data || []) as Appointment[]);
@@ -41,10 +66,26 @@ export default function Appointments() {
             <h1 className="text-3xl font-bold mb-2">Appointments Calendar</h1>
             <p className="text-muted-foreground">View all appointments booked via AI chat</p>
           </div>
-          <Button onClick={() => loadAppointments()} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex gap-2 items-center">
+            {receptionists.length > 0 && (
+              <select 
+                className="px-4 py-2 border rounded-md bg-background"
+                value={selectedReceptionist} 
+                onChange={(e) => setSelectedReceptionist(e.target.value)}
+              >
+                <option value="all">All Receptionists</option>
+                {receptionists.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} - {r.business_name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Button onClick={() => loadAppointments()} disabled={loading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <Alert className="mb-6 border-primary/20 bg-primary/5">

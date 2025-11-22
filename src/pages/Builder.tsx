@@ -4,6 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
 import { FAQManager } from "@/components/FAQManager";
+import { WidgetEmbedCode } from "@/components/WidgetEmbedCode";
 import { useToast } from "@/hooks/use-toast";
 
 /**
@@ -585,7 +586,7 @@ export default function BuilderPage() {
             {receptionistId && (
               <button 
                 className="px-4 py-2 bg-blue-500 text-white rounded" 
-                onClick={() => navigate(`/test/${receptionistId}`)}
+                onClick={() => navigate(`/builder/${receptionistId}#test`)}
               >
                 Test Your AI Receptionist
               </button>
@@ -602,6 +603,14 @@ export default function BuilderPage() {
           {/* FAQ Manager */}
           {receptionistId && (
             <FAQManager receptionistId={receptionistId} />
+          )}
+
+          {/* Widget Embed Code */}
+          {receptionistId && receptionist.name && (
+            <WidgetEmbedCode 
+              receptionistId={receptionistId} 
+              receptionistName={receptionist.name}
+            />
           )}
         </section>
 

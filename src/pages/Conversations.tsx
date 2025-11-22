@@ -20,19 +20,45 @@ export default function Conversations() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [receptionists, setReceptionists] = useState<any[]>([]);
+  const [selectedReceptionist, setSelectedReceptionist] = useState<string>("all");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    loadReceptionists();
     fetchConversations();
   }, []);
 
+  useEffect(() => {
+    fetchConversations();
+  }, [selectedReceptionist]);
+
+  const loadReceptionists = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from("receptionists")
+      .select("id, name, business_name")
+      .eq("user_id", user.id);
+
+    setReceptionists(data || []);
+  };
+
   const fetchConversations = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('conversations')
-        .select('*')
+        .select('*, receptionists(name, business_name)')
         .order('created_at', { ascending: false })
         .limit(50);
+
+      if (selectedReceptionist !== "all") {
+        query = query.eq('receptionist_id', selectedReceptionist);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setConversations(data || []);
@@ -58,12 +84,29 @@ export default function Conversations() {
         </Button>
 
         <Card className="p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <MessageSquare className="h-8 w-8 text-primary" />
-            <div>
-              <h1 className="text-3xl font-bold">Conversation History</h1>
-              <p className="text-muted-foreground">View all receptionist conversations</p>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <MessageSquare className="h-8 w-8 text-primary" />
+              <div>
+                <h1 className="text-3xl font-bold">Conversation History</h1>
+                <p className="text-muted-foreground">View all receptionist conversations</p>
+              </div>
             </div>
+            
+            {receptionists.length > 0 && (
+              <select 
+                className="px-4 py-2 border rounded-md bg-background"
+                value={selectedReceptionist} 
+                onChange={(e) => setSelectedReceptionist(e.target.value)}
+              >
+                <option value="all">All Receptionists</option>
+                {receptionists.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} - {r.business_name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {loading ? (
@@ -82,9 +125,16 @@ export default function Conversations() {
             </div>
           ) : (
             <div className="space-y-4">
-              {conversations.map((conv) => (
+              {conversations.map((conv: any) => (
                 <Card key={conv.id} className="p-4 hover:bg-accent transition-colors">
                   <div className="space-y-3">
+                    {conv.receptionists && (
+                      <div className="flex items-center gap-2 pb-2 border-b">
+                        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-primary/10 text-primary">
+                          {conv.receptionists.name} - {conv.receptionists.business_name}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-start gap-2">
                       <span className="text-xs font-semibold text-primary">Customer:</span>
                       <p className="flex-1 text-sm">{conv.user_message}</p>
