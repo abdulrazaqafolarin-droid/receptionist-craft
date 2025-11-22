@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format, isSameDay } from "date-fns";
 import type { Appointment } from "@/types/appointments";
-import { Phone, Mail, Clock } from "lucide-react";
+import { Phone, Mail, Clock, Calendar as CalendarIcon } from "lucide-react";
 
 interface AppointmentCalendarProps {
   appointments: Appointment[];
@@ -33,7 +33,7 @@ export function AppointmentCalendar({ appointments }: AppointmentCalendarProps) 
             mode="single"
             selected={selectedDate}
             onSelect={setSelectedDate}
-            className="rounded-md border"
+            className="rounded-md border pointer-events-auto"
             modifiers={{
               booked: datesWithAppointments
             }}
@@ -58,7 +58,7 @@ export function AppointmentCalendar({ appointments }: AppointmentCalendarProps) 
         <CardContent>
           {selectedDateAppointments.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No appointments scheduled for this date</p>
             </div>
           ) : (
