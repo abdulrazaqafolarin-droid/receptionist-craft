@@ -1,4 +1,4 @@
-import { BarChart, Home, Calendar, MessageSquare, Settings, HelpCircle, ClipboardCheck, Lightbulb, Activity, Bell, Radio } from "lucide-react";
+import { BarChart, Home, Calendar, MessageSquare, Settings, HelpCircle, ClipboardCheck, Lightbulb, Activity, Bell, Radio, Clock, Briefcase } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import {
@@ -18,6 +18,8 @@ const items = [
   { title: "Analytics", url: "/analytics", icon: BarChart },
   { title: "Conversations", url: "/conversations", icon: MessageSquare },
   { title: "Appointments", url: "/appointments", icon: Calendar },
+  { title: "Services", url: "/services", icon: Briefcase },
+  { title: "Availability", url: "/availability", icon: Clock },
   { title: "Quality Review", url: "/quality-review", icon: ClipboardCheck },
   { title: "KB Suggestions", url: "/kb-rewrite", icon: Lightbulb },
   { title: "Diagnostics", url: "/diagnostics", icon: Activity },

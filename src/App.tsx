@@ -27,6 +27,7 @@ import Diagnostics from "./pages/Diagnostics";
 import Notifications from "./pages/Notifications";
 import RealtimeLogs from "./pages/RealtimeLogs";
 import Services from "./pages/Services";
+import Availability from "./pages/Availability";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -87,6 +88,7 @@ const App = () => {
                       <Route path="/conversations" element={<ProtectedRoute session={session}><Conversations /></ProtectedRoute>} />
                       <Route path="/appointments" element={<ProtectedRoute session={session}><Appointments /></ProtectedRoute>} />
                       <Route path="/services" element={<ProtectedRoute session={session}><Services /></ProtectedRoute>} />
+                      <Route path="/availability" element={<ProtectedRoute session={session}><Availability /></ProtectedRoute>} />
                       <Route path="/analytics" element={<ProtectedRoute session={session}><Analytics /></ProtectedRoute>} />
                       <Route path="/quality-review" element={<ProtectedRoute session={session}><QualityReview /></ProtectedRoute>} />
                       <Route path="/kb-rewrite" element={<ProtectedRoute session={session}><KBRewrite /></ProtectedRoute>} />
