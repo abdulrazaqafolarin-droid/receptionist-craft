@@ -35,6 +35,7 @@ export interface Appointment {
   id?: UUID;
   receptionist_id: UUID;
   service_id?: UUID | null;
+  service?: string; // Service name
   customer_name: string;
   customer_phone?: string | null;
   customer_email?: string | null;
