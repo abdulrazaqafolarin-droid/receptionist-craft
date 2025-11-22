@@ -250,46 +250,179 @@ export type Database = {
           },
         ]
       }
+      appointment_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          appointment_id: string
+          created_at: string
+          id: string
+          payload: Json | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          appointment_id: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          appointment_id?: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_logs_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
+          booking_source: string | null
           created_at: string
+          created_by: string | null
+          customer_email: string | null
           customer_name: string
           customer_phone: string | null
           end_time: string
           id: string
+          metadata: Json | null
           notes: string | null
           receptionist_id: string
           service: string
+          service_id: string | null
           start_time: string
           status: Database["public"]["Enums"]["appointment_status"] | null
         }
         Insert: {
+          booking_source?: string | null
           created_at?: string
+          created_by?: string | null
+          customer_email?: string | null
           customer_name: string
           customer_phone?: string | null
           end_time: string
           id?: string
+          metadata?: Json | null
           notes?: string | null
           receptionist_id: string
           service: string
+          service_id?: string | null
           start_time: string
           status?: Database["public"]["Enums"]["appointment_status"] | null
         }
         Update: {
+          booking_source?: string | null
           created_at?: string
+          created_by?: string | null
+          customer_email?: string | null
           customer_name?: string
           customer_phone?: string | null
           end_time?: string
           id?: string
+          metadata?: Json | null
           notes?: string | null
           receptionist_id?: string
           service?: string
+          service_id?: string | null
           start_time?: string
           status?: Database["public"]["Enums"]["appointment_status"] | null
         }
         Relationships: [
           {
             foreignKeyName: "appointments_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      availability_exceptions: {
+        Row: {
+          created_at: string
+          end_timestamptz: string
+          id: string
+          reason: string | null
+          receptionist_id: string
+          start_timestamptz: string
+        }
+        Insert: {
+          created_at?: string
+          end_timestamptz: string
+          id?: string
+          reason?: string | null
+          receptionist_id: string
+          start_timestamptz: string
+        }
+        Update: {
+          created_at?: string
+          end_timestamptz?: string
+          id?: string
+          reason?: string | null
+          receptionist_id?: string
+          start_timestamptz?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "availability_exceptions_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      availability_rules: {
+        Row: {
+          created_at: string
+          day_of_week: number
+          end_time: string
+          id: string
+          priority: number
+          receptionist_id: string
+          start_time: string
+          timezone: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week: number
+          end_time: string
+          id?: string
+          priority?: number
+          receptionist_id: string
+          start_time: string
+          timezone?: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          priority?: number
+          receptionist_id?: string
+          start_time?: string
+          timezone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "availability_rules_receptionist_id_fkey"
             columns: ["receptionist_id"]
             isOneToOne: false
             referencedRelation: "receptionists"
@@ -725,6 +858,53 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      services: {
+        Row: {
+          active: boolean | null
+          buffer_after_minutes: number
+          buffer_before_minutes: number
+          created_at: string
+          description: string | null
+          duration_minutes: number
+          id: string
+          name: string
+          receptionist_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          buffer_after_minutes?: number
+          buffer_before_minutes?: number
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          name: string
+          receptionist_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          buffer_after_minutes?: number
+          buffer_before_minutes?: number
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          name?: string
+          receptionist_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "services_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
             referencedColumns: ["id"]
           },
         ]
