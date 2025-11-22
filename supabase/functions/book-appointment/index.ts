@@ -99,6 +99,10 @@ serve(async (req) => {
       );
     }
 
+    // Generate secure tokens for cancellation and confirmation
+    const cancellationToken = crypto.randomUUID();
+    const confirmationToken = crypto.randomUUID();
+
     // Create appointment
     const { data: appointment, error: insertErr } = await supabase
       .from("appointments")
@@ -116,6 +120,8 @@ serve(async (req) => {
         metadata: {
           created_via: bookingSource,
           created_at: new Date().toISOString(),
+          cancellation_token: cancellationToken,
+          confirmation_token: confirmationToken,
         },
       })
       .select()
@@ -170,6 +176,8 @@ serve(async (req) => {
         appointment: {
           ...appointment,
           service_name: service.name,
+          cancellation_token: cancellationToken,
+          confirmation_token: confirmationToken,
         },
       }),
       {
