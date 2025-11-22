@@ -1,0 +1,132 @@
+import { useState } from "react";
+import { Calendar } from "@/components/ui/calendar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { format, isSameDay } from "date-fns";
+import type { Appointment } from "@/types/appointments";
+import { Phone, Mail, Clock } from "lucide-react";
+
+interface AppointmentCalendarProps {
+  appointments: Appointment[];
+}
+
+export function AppointmentCalendar({ appointments }: AppointmentCalendarProps) {
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+
+  // Get appointments for selected date
+  const selectedDateAppointments = appointments.filter(apt => 
+    selectedDate && isSameDay(new Date(apt.start_time), selectedDate)
+  );
+
+  // Get dates that have appointments
+  const datesWithAppointments = appointments.map(apt => new Date(apt.start_time));
+
+  return (
+    <div className="grid lg:grid-cols-[350px_1fr] gap-6">
+      {/* Calendar */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Select Date</CardTitle>
+        </CardHeader>
+        <CardContent className="flex justify-center">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={setSelectedDate}
+            className="rounded-md border"
+            modifiers={{
+              booked: datesWithAppointments
+            }}
+            modifiersStyles={{
+              booked: {
+                fontWeight: 'bold',
+                backgroundColor: 'hsl(var(--primary) / 0.1)',
+                color: 'hsl(var(--primary))'
+              }
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Day View */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {selectedDate ? format(selectedDate, "EEEE, MMMM d, yyyy") : "Select a date"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {selectedDateAppointments.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No appointments scheduled for this date</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {selectedDateAppointments
+                .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+                .map(apt => (
+                  <Card key={apt.id} className="border-l-4 border-l-primary">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h4 className="font-semibold text-lg">{apt.customer_name}</h4>
+                          <p className="text-sm text-muted-foreground">{apt.service || "Service"}</p>
+                        </div>
+                        <Badge variant={
+                          apt.status === 'booked' ? 'default' : 
+                          apt.status === 'completed' ? 'secondary' : 
+                          'outline'
+                        }>
+                          {apt.status}
+                        </Badge>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <span>
+                            {format(new Date(apt.start_time), "h:mm a")} - {format(new Date(apt.end_time), "h:mm a")}
+                          </span>
+                        </div>
+                        
+                        {apt.customer_phone && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Phone className="h-4 w-4 text-muted-foreground" />
+                            <span>{apt.customer_phone}</span>
+                          </div>
+                        )}
+                        
+                        {apt.customer_email && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                            <span>{apt.customer_email}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {apt.notes && (
+                        <p className="mt-3 text-sm text-muted-foreground border-t pt-3">
+                          {apt.notes}
+                        </p>
+                      )}
+
+                      {apt.metadata && (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          {(apt.metadata as any).booked_via_chat && (
+                            <Badge variant="outline" className="text-xs">
+                              Booked via AI Chat
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

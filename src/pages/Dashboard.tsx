@@ -66,12 +66,57 @@ export default function Dashboard() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
-            <p className="text-muted-foreground">Manage your AI receptionists and track performance</p>
+            <p className="text-muted-foreground">Your AI-powered appointment booking system</p>
           </div>
           <Button onClick={() => navigate("/onboarding")} size="lg">
             <Plus className="mr-2 h-4 w-4" /> Create Receptionist
           </Button>
         </div>
+
+        {/* Getting Started Guide - Only show if no receptionists */}
+        {receptionists.length === 0 && (
+          <Card className="mb-8 border-primary/20 bg-gradient-to-br from-primary/5 to-background">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-primary" />
+                Getting Started
+              </CardTitle>
+              <CardDescription>Follow these steps to set up your AI receptionist</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">1</div>
+                  <div>
+                    <h4 className="font-semibold mb-1">Create Your AI Receptionist</h4>
+                    <p className="text-sm text-muted-foreground">Set up your receptionist's name, business details, and personality</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">2</div>
+                  <div>
+                    <h4 className="font-semibold mb-1">Add Services</h4>
+                    <p className="text-sm text-muted-foreground">Define the services you offer (haircut, massage, consultation, etc.)</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">3</div>
+                  <div>
+                    <h4 className="font-semibold mb-1">Test the AI Chat</h4>
+                    <p className="text-sm text-muted-foreground">Go to Builder and chat with your AI to book test appointments</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">4</div>
+                  <div>
+                    <h4 className="font-semibold mb-1">View in Calendar</h4>
+                    <p className="text-sm text-muted-foreground">Check the Appointments page to see all booked appointments in calendar view</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats Grid */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
@@ -173,8 +218,8 @@ export default function Dashboard() {
           <Card className="cursor-pointer hover:shadow-lg transition-all" onClick={() => navigate("/appointments")}>
             <CardHeader>
               <Calendar className="h-8 w-8 text-primary mb-2" />
-              <CardTitle>Manage Appointments</CardTitle>
-              <CardDescription>View and manage booked appointments</CardDescription>
+              <CardTitle>Appointments Calendar</CardTitle>
+              <CardDescription>View all AI-booked appointments in calendar</CardDescription>
             </CardHeader>
           </Card>
 
@@ -194,6 +239,21 @@ export default function Dashboard() {
             </CardHeader>
           </Card>
         </div>
+
+        {/* Services Quick Link */}
+        {receptionists.length > 0 && (
+          <Card className="mt-8 cursor-pointer hover:shadow-lg transition-all" onClick={() => navigate("/services")}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Plus className="h-5 w-5" />
+                Manage Services
+              </CardTitle>
+              <CardDescription>
+                Add and manage the services that customers can book via AI chat (haircut, massage, consultation, etc.)
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        )}
       </div>
     </div>
   );
