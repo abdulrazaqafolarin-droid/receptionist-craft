@@ -3,16 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { AppointmentCalendar } from "@/components/appointments/AppointmentCalendar";
-import { AppointmentModal } from "@/components/appointments/AppointmentModal";
 import type { Appointment } from "@/types/appointments";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MessageCircle, RefreshCw, Plus } from "lucide-react";
+import { MessageCircle, RefreshCw } from "lucide-react";
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
 
   useEffect(() => {
     loadAppointments();
@@ -44,16 +41,10 @@ export default function Appointments() {
             <h1 className="text-3xl font-bold mb-2">Appointments Calendar</h1>
             <p className="text-muted-foreground">View all appointments booked via AI chat</p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => { setSelectedAppointment(null); setModalOpen(true); }} variant="default">
-              <Plus className="mr-2 h-4 w-4" />
-              New Appointment
-            </Button>
-            <Button onClick={() => loadAppointments()} disabled={loading} variant="outline">
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
+          <Button onClick={() => loadAppointments()} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
 
         <Alert className="mb-6 border-primary/20 bg-primary/5">
@@ -74,13 +65,6 @@ export default function Appointments() {
         ) : (
           <AppointmentCalendar appointments={appointments} />
         )}
-
-        <AppointmentModal
-          open={modalOpen}
-          onOpenChange={setModalOpen}
-          appointment={selectedAppointment}
-          onSuccess={loadAppointments}
-        />
       </div>
     </>
   );
