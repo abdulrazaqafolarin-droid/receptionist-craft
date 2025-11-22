@@ -41,6 +41,17 @@ serve(async (req) => {
       throw new Error("Missing required fields: receptionistId, serviceId, startTime, customerName");
     }
 
+    // Require contact info (phone or email)
+    if (!customerEmail && !customerPhone) {
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: "Contact information required: please provide phone or email" 
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Load service
     const { data: service, error: srvErr } = await supabase
       .from("services")
@@ -64,6 +75,37 @@ serve(async (req) => {
     const endWithBuffer = new Date(end.getTime() + bufferAfter * 60000);
 
     console.log(`[book-appointment] Slot: ${start.toISOString()} - ${end.toISOString()}`);
+
+    // Check for duplicate/idempotent bookings (same contact, same time +/- 15min)
+    const windowBefore = new Date(start.getTime() - 15 * 60000).toISOString();
+    const windowAfter = new Date(start.getTime() + 15 * 60000).toISOString();
+
+    let duplicateQuery = supabase
+      .from("appointments")
+      .select("id, start_time, end_time, status, customer_name")
+      .eq("receptionist_id", receptionistId)
+      .gte("start_time", windowBefore)
+      .lte("start_time", windowAfter);
+
+    if (customerEmail) duplicateQuery = duplicateQuery.eq("customer_email", customerEmail);
+    if (customerPhone) duplicateQuery = duplicateQuery.eq("customer_phone", customerPhone);
+
+    const { data: existing } = await duplicateQuery.limit(1);
+
+    if (existing && existing.length > 0) {
+      console.log(`[book-appointment] Found existing appointment (idempotency): ${existing[0].id}`);
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          appointment: existing[0], 
+          existed: true 
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    }
 
     // Check for conflicts with existing appointments
     const { data: conflicts, error: conflictErr } = await supabase
@@ -89,6 +131,7 @@ serve(async (req) => {
       console.log(`[book-appointment] Conflict detected with existing appointments`);
       return new Response(
         JSON.stringify({ 
+          success: false,
           error: "Selected time slot is no longer available",
           conflicts 
         }),
@@ -103,7 +146,7 @@ serve(async (req) => {
     const cancellationToken = crypto.randomUUID();
     const confirmationToken = crypto.randomUUID();
 
-    // Create appointment
+    // Create appointment with source metadata
     const { data: appointment, error: insertErr } = await supabase
       .from("appointments")
       .insert({
@@ -118,7 +161,8 @@ serve(async (req) => {
         booking_source: bookingSource,
         created_by: userId || null,
         metadata: {
-          created_via: bookingSource,
+          source: bookingSource,
+          booked_via_chat: bookingSource === "ai_receptionist",
           created_at: new Date().toISOString(),
           cancellation_token: cancellationToken,
           confirmation_token: confirmationToken,
@@ -135,38 +179,56 @@ serve(async (req) => {
     console.log(`[book-appointment] Created appointment ${appointment.id}`);
 
     // Log audit trail
-    await supabase.from("appointment_logs").insert({
-      appointment_id: appointment.id,
-      action: "created",
-      actor_id: userId || null,
-      payload: {
-        appointment,
-        service: service.name,
-        booking_source: bookingSource,
-      },
-    });
-
-    // Send notification
-    await supabase.from("notifications").insert({
-      type: "appointment.created",
-      title: `New Appointment: ${customerName}`,
-      body: `${service.name} scheduled for ${start.toLocaleString("en-US", {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      })}`,
-      receptionist_id: receptionistId,
-      user_id: userId || null,
-      severity: "info",
-      category: "appointments",
-      metadata: {
+    try {
+      await supabase.from("appointment_logs").insert({
         appointment_id: appointment.id,
-        customer_name: customerName,
-        service_name: service.name,
-      },
-    });
+        action: "created",
+        actor_id: userId || null,
+        payload: {
+          appointment,
+          service: service.name,
+          booking_source: bookingSource,
+        },
+      });
+    } catch (logErr) {
+      console.error("[book-appointment] log error:", logErr);
+    }
+
+    // Send notification to receptionist owner
+    const { data: receptionist } = await supabase
+      .from("receptionists")
+      .select("user_id")
+      .eq("id", receptionistId)
+      .maybeSingle();
+
+    if (receptionist?.user_id) {
+      try {
+        await supabase.from("notifications").insert({
+          type: "appointment.created",
+          title: `New Appointment: ${customerName}`,
+          body: `${service.name} scheduled for ${start.toLocaleString("en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}`,
+          message: `Appointment booked via ${bookingSource}`,
+          receptionist_id: receptionistId,
+          user_id: receptionist.user_id,
+          severity: "info",
+          category: "appointments",
+          priority: "normal",
+          metadata: {
+            appointment_id: appointment.id,
+            customer_name: customerName,
+            service_name: service.name,
+          },
+        });
+      } catch (notifErr) {
+        console.error("[book-appointment] notification error:", notifErr);
+      }
+    }
 
     console.log(`[book-appointment] Notification sent`);
 
@@ -188,7 +250,10 @@ serve(async (req) => {
   } catch (err: any) {
     console.error("[book-appointment] Error:", err);
     return new Response(
-      JSON.stringify({ error: err.message || String(err) }),
+      JSON.stringify({ 
+        success: false,
+        error: err.message || String(err) 
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

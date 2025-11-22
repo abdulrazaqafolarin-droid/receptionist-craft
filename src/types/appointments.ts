@@ -1,32 +1,37 @@
 // src/types/appointments.ts
 export type UUID = string;
 
-export type Service = {
+export type AppointmentStatus = "booked" | "confirmed" | "cancelled" | "completed";
+
+export interface Service {
   id?: UUID;
   name: string;
   duration_minutes: number;
-  buffer_minutes?: number; // before/after buffer
+  buffer_before_minutes?: number;
+  buffer_after_minutes?: number;
   price_cents?: number | null;
-};
+  active?: boolean;
+}
 
-export type AvailabilityRule = {
+export interface AvailabilityRule {
   id?: UUID;
   receptionist_id: UUID;
   day_of_week: number; // 0 Sun - 6 Sat
   start_time: string; // "09:00"
   end_time: string;   // "17:00"
   timezone?: string;  // e.g. "Africa/Lagos"
-};
+  priority?: number;
+}
 
-export type AvailabilityException = {
+export interface AvailabilityException {
   id?: UUID;
   receptionist_id: UUID;
-  start_datetime: string; // ISO
-  end_datetime: string;   // ISO
+  start_timestamptz: string; // ISO
+  end_timestamptz: string;   // ISO
   reason?: string | null;
-};
+}
 
-export type Appointment = {
+export interface Appointment {
   id?: UUID;
   receptionist_id: UUID;
   service_id?: UUID | null;
@@ -35,47 +40,60 @@ export type Appointment = {
   customer_email?: string | null;
   start_time: string; // ISO
   end_time: string; // ISO
-  status?: "booked" | "confirmed" | "cancelled" | "completed";
+  status?: AppointmentStatus;
   created_at?: string;
   notes?: string | null;
-  metadata?: Record<string, any> | null; // e.g. { source: 'ai_receptionist' }
-};
+  metadata?: Record<string, any> | null;
+  booking_source?: string; // e.g. 'ai_receptionist'
+  source?: string; // alias for booking_source
+}
 
-export type CheckAvailabilityRequest = {
+export interface CheckAvailabilityRequest {
   receptionist_id: UUID;
   service_id?: UUID | null;
-  date_from_iso?: string; // optional date window start ISO
-  date_to_iso?: string;   // optional date window end ISO
+  startDate?: string; // ISO
+  endDate?: string;   // ISO
   timezone?: string | null;
-  duration_minutes?: number | null; // override duration
-  max_slots?: number; // how many slots to return
-};
+  duration_minutes?: number | null;
+  max_slots?: number;
+  desiredStart?: string | null;
+  desiredEnd?: string | null;
+  request_message?: string;
+}
 
-export type CheckAvailabilityResult = {
-  slots: Array<{
-    start_time: string;
-    end_time: string;
-    display?: string;
-    score?: number;
-  }>;
-  receptionist_id: UUID;
-};
+export interface AvailabilitySlot {
+  start: string;
+  end: string;
+  display?: string;
+  score?: number;
+  reason?: string;
+}
 
-export type BookAppointmentRequest = {
-  receptionist_id: UUID;
-  service_id?: UUID | null;
-  start_time: string; // ISO
-  end_time?: string | null; // optional; if omitted compute from service
-  customer_name: string;
-  customer_phone?: string | null;
-  customer_email?: string | null;
+export interface CheckAvailabilityResult {
+  success: boolean;
+  available?: boolean;
+  slots: AvailabilitySlot[];
+  alternatives?: AvailabilitySlot[];
+  service?: Service | null;
+}
+
+export interface BookAppointmentRequest {
+  receptionistId: UUID;
+  serviceId?: UUID | null;
+  startTime: string; // ISO
+  endTime?: string | null;
+  customerName: string;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
   notes?: string | null;
   metadata?: Record<string, any> | null;
-  auto_confirm?: boolean; // if true mark as confirmed (e.g. calendar sync)
-};
+  source?: string; // 'ai_receptionist' | 'manual' | etc
+  userId?: UUID | null;
+}
 
-export type BookAppointmentResult = {
-  success: boolean;
+export interface BookAppointmentResult {
+  success?: boolean;
   appointment?: Appointment | null;
+  existed?: boolean;
   error?: string | null;
-};
+}
