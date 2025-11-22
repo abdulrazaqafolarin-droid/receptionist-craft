@@ -22,30 +22,40 @@ serve(async (req) => {
       serviceId, 
       startDate, 
       endDate, 
-      maxSlots = 10 
+      maxSlots = 10,
+      desiredStart = null,
+      desiredEnd = null,
+      durationMinutes = null,
+      request_message = ""
     } = body;
 
     if (!receptionistId) throw new Error("receptionistId required");
-    if (!serviceId) throw new Error("serviceId required");
 
-    console.log(`[check-availability] Checking for receptionist ${receptionistId}, service ${serviceId}`);
+    console.log(`[check-availability] Checking for receptionist ${receptionistId}`);
 
-    // Load service details
-    const { data: service, error: srvErr } = await supabase
-      .from("services")
-      .select("*")
-      .eq("id", serviceId)
-      .maybeSingle();
+    // Load service details (if serviceId provided)
+    let service = null;
+    let duration = durationMinutes || 30;
+    let bufferBefore = 5;
+    let bufferAfter = 5;
 
-    if (srvErr || !service) {
-      throw new Error("Service not found");
+    if (serviceId) {
+      const { data: svc, error: srvErr } = await supabase
+        .from("services")
+        .select("*")
+        .eq("id", serviceId)
+        .maybeSingle();
+
+      if (srvErr || !svc) {
+        console.warn("[check-availability] Service not found, using defaults");
+      } else {
+        service = svc;
+        duration = svc.duration_minutes || 30;
+        bufferBefore = svc.buffer_before_minutes || 5;
+        bufferAfter = svc.buffer_after_minutes || 5;
+        console.log(`[check-availability] Service: ${svc.name}, duration: ${duration}min`);
+      }
     }
-
-    const duration = service.duration_minutes || 30;
-    const bufferBefore = service.buffer_before_minutes || 5;
-    const bufferAfter = service.buffer_after_minutes || 5;
-
-    console.log(`[check-availability] Service: ${service.name}, duration: ${duration}min`);
 
     // Define search window (default: next 7 days from now)
     const now = new Date();
@@ -161,8 +171,57 @@ serve(async (req) => {
 
     console.log(`[check-availability] Generated ${slots.length} available slots`);
 
+    // Check if specific time was requested
+    let available = false;
+    let alternatives: any[] = [];
+
+    if (desiredStart && desiredEnd) {
+      const requestedStart = new Date(desiredStart);
+      const requestedEnd = new Date(desiredEnd);
+      
+      // Check if requested time is in our available slots
+      available = slots.some((slot: any) => {
+        const slotStart = new Date(slot.start);
+        const slotEnd = new Date(slot.end);
+        return Math.abs(slotStart.getTime() - requestedStart.getTime()) < 60000 &&
+               Math.abs(slotEnd.getTime() - requestedEnd.getTime()) < 60000;
+      });
+
+      if (!available) {
+        // Generate scored alternatives
+        alternatives = slots.slice(0, 5).map((slot: any) => {
+          const slotStart = new Date(slot.start);
+          const timeDiff = Math.abs(slotStart.getTime() - requestedStart.getTime());
+          const hoursDiff = timeDiff / (1000 * 60 * 60);
+          const score = Math.max(0, 1 - (hoursDiff / 24)); // Closer = higher score
+          
+          return {
+            start: slot.start,
+            end: slot.end,
+            score,
+            reason: `${slot.display} (${hoursDiff.toFixed(1)}h from requested)`
+          };
+        }).sort((a: any, b: any) => b.score - a.score);
+
+        // Save suggestions for analytics
+        await supabase.from("ai_booking_suggestions").insert({
+          receptionist_id: receptionistId,
+          request_message,
+          suggestions: alternatives,
+          model: "slot-scoring",
+          latency_ms: Date.now() - Date.parse(new Date().toISOString()),
+        });
+      }
+    }
+
     return new Response(
-      JSON.stringify({ success: true, slots, service }),
+      JSON.stringify({ 
+        success: true, 
+        available, 
+        slots, 
+        alternatives,
+        service 
+      }),
       { 
         status: 200, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 

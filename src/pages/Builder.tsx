@@ -72,6 +72,8 @@ export default function BuilderPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [alternatives, setAlternatives] = useState<Array<{ start: string; end: string; score?: number; reason?: string }> | null>(null);
+  const [bookingLoading, setBookingLoading] = useState(false);
 
   const messagesRef = useRef<HTMLDivElement | null>(null);
 
@@ -365,8 +367,39 @@ export default function BuilderPage() {
       }
 
       // Handle alternatives (if time not available)
-      if (result.alternatives && result.alternatives.length > 0) {
+      if (result.alternatives && Array.isArray(result.alternatives) && result.alternatives.length > 0) {
         console.log('Available alternative times:', result.alternatives);
+        
+        // Transform alternatives to proper format if needed
+        const formattedAlternatives = result.alternatives.map((alt: any) => {
+          // If it's already an object with start/end, use it
+          if (typeof alt === 'object' && alt.start && alt.end) {
+            return {
+              start: alt.start,
+              end: alt.end,
+              score: alt.score,
+              reason: alt.reason
+            };
+          }
+          // If it's a string (ISO date), create object
+          if (typeof alt === 'string') {
+            const start = new Date(alt);
+            const end = new Date(start.getTime() + 30 * 60000); // 30min default
+            return {
+              start: start.toISOString(),
+              end: end.toISOString(),
+              score: undefined,
+              reason: undefined
+            };
+          }
+          return null;
+        }).filter(Boolean);
+        
+        if (formattedAlternatives.length > 0) {
+          setAlternatives(formattedAlternatives as Array<{ start: string; end: string; score?: number; reason?: string }>);
+        }
+      } else {
+        setAlternatives(null);
       }
       
       // Ingest analytics data with detailed metrics
@@ -421,6 +454,59 @@ export default function BuilderPage() {
   async function handleRefresh() {
     if (!receptionistId) return;
     await loadMessages(receptionistId);
+  }
+
+  // Book an alternative slot
+  async function handleBookAlternative(startTime: string, endTime: string) {
+    if (!receptionistId) {
+      toast({ title: "Error", description: "Save receptionist first", variant: "destructive" });
+      return;
+    }
+
+    setBookingLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("book-appointment", {
+        body: {
+          receptionistId,
+          customerName: "Guest",
+          customerEmail: null,
+          customerPhone: null,
+          startTime,
+          endTime,
+          serviceId: null,
+          userId: currentUserId,
+          source: "builder_preview",
+          metadata: { booked_via_alternatives: true },
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast({ 
+          title: "✅ Appointment Booked!", 
+          description: `Booked for ${new Date(startTime).toLocaleString()}` 
+        });
+        setAlternatives(null);
+        // Add bot message confirming booking
+        setMessages(m => [...m, {
+          sender: "bot",
+          message: `✅ Perfect! I've booked your appointment for ${new Date(startTime).toLocaleString()}.`,
+          created_at: new Date().toISOString()
+        }]);
+      } else {
+        throw new Error(data?.error || "Booking failed");
+      }
+    } catch (err: any) {
+      console.error("Book alternative error:", err);
+      toast({ 
+        title: "Booking Failed", 
+        description: err.message || "Could not book appointment", 
+        variant: "destructive" 
+      });
+    } finally {
+      setBookingLoading(false);
+    }
   }
 
   // UI small helpers
@@ -538,6 +624,51 @@ export default function BuilderPage() {
               </div>
             ))}
           </div>
+
+          {/* alternatives panel */}
+          {alternatives && alternatives.length > 0 && (
+            <div className="mb-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-sm font-semibold mb-3">📅 Available Alternative Times</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {alternatives.map((alt, idx) => (
+                  <div key={idx} className="p-3 bg-white border rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                    <div className="text-sm font-medium">
+                      {new Date(alt.start).toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </div>
+                    <div className="text-lg font-bold text-blue-600">
+                      {new Date(alt.start).toLocaleTimeString('en-US', { 
+                        hour: 'numeric', 
+                        minute: '2-digit' 
+                      })}
+                    </div>
+                    {alt.reason && (
+                      <div className="text-xs text-gray-500 mt-1">{alt.reason}</div>
+                    )}
+                    {alt.score && (
+                      <div className="text-xs text-gray-400 mt-1">Match: {(alt.score * 100).toFixed(0)}%</div>
+                    )}
+                    <button
+                      className="mt-2 w-full px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                      onClick={() => handleBookAlternative(alt.start, alt.end)}
+                      disabled={bookingLoading}
+                    >
+                      {bookingLoading ? "Booking..." : "Book This Time"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                className="mt-3 text-sm text-gray-600 hover:text-gray-900 underline"
+                onClick={() => setAlternatives(null)}
+              >
+                Close alternatives
+              </button>
+            </div>
+          )}
 
           {/* input */}
           <div className="flex gap-2 items-center">
