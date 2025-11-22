@@ -81,6 +81,13 @@ export default function Notifications() {
   useEffect(() => {
     loadNotifications();
     
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        console.log('Notification permission:', permission);
+      });
+    }
+    
     // Setup realtime listener
     const channel = supabase
       .channel("notifications-changes")
@@ -92,8 +99,25 @@ export default function Notifications() {
           table: "notifications",
         },
         (payload) => {
-          setNotifications((prev) => [payload.new as Notification, ...prev]);
+          const newNotif = payload.new as Notification;
+          setNotifications((prev) => [newNotif, ...prev]);
           toast.info("New notification received");
+          
+          // Show browser notification
+          if ('Notification' in window && Notification.permission === 'granted') {
+            const notification = new Notification(newNotif.title, {
+              body: newNotif.message || newNotif.body || '',
+              icon: '/favicon.ico',
+              badge: '/favicon.ico',
+              tag: newNotif.id,
+              requireInteraction: newNotif.severity === 'critical',
+            });
+            
+            notification.onclick = () => {
+              window.focus();
+              notification.close();
+            };
+          }
         }
       )
       .subscribe();
