@@ -166,6 +166,7 @@ Deno.serve(async (req) => {
     console.log(`[send-appointment-email] Sending ${type} email to ${to}`);
 
     if (!to || !customerName || !serviceName || !startTime) {
+      console.error('[send-appointment-email] Missing required fields:', { to, customerName, serviceName, startTime });
       throw new Error('Missing required fields');
     }
 
