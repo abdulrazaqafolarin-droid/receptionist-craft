@@ -1,7 +1,3 @@
-import { Resend } from 'npm:resend@2.0.0';
-
-const resend = new Resend(Deno.env.get('RESEND_API_KEY') as string);
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -205,18 +201,33 @@ Deno.serve(async (req) => {
       throw new Error('Invalid email type');
     }
 
-    const { data, error } = await resend.emails.send({
-      from: `${businessName} <onboarding@resend.dev>`,
-      to: [to],
-      subject,
-      html,
-    });
-
-    if (error) {
-      console.error('[send-appointment-email] Resend error:', error);
-      throw error;
+    // Send email via Resend API
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    if (!resendApiKey) {
+      throw new Error('RESEND_API_KEY not configured');
     }
 
+    const resendResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `${businessName} <onboarding@resend.dev>`,
+        to: [to],
+        subject,
+        html,
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const error = await resendResponse.text();
+      console.error('[send-appointment-email] Resend API error:', error);
+      throw new Error(`Resend API error: ${error}`);
+    }
+
+    const data = await resendResponse.json();
     console.log('[send-appointment-email] Email sent successfully:', data);
 
     return new Response(
