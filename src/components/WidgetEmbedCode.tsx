@@ -1,7 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Code, Copy, ExternalLink } from "lucide-react";
+import { Code, Copy, ExternalLink, TestTube } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface WidgetEmbedCodeProps {
   receptionistId: string;
@@ -82,11 +83,32 @@ export function WidgetEmbedCode({ receptionistId, receptionistName }: WidgetEmbe
           </div>
         </div>
 
+        {/* Test Widget Button */}
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button className="w-full" size="lg" variant="secondary">
+              <TestTube className="mr-2 h-4 w-4" />
+              Test Widget in Preview
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-[450px] h-[650px] p-0">
+            <DialogHeader className="p-4 pb-0">
+              <DialogTitle>Widget Preview</DialogTitle>
+            </DialogHeader>
+            <iframe 
+              src={widgetUrl}
+              className="w-full h-[calc(100%-60px)] border-none"
+              title="Widget Preview"
+            />
+          </DialogContent>
+        </Dialog>
+
         {/* Instructions */}
         <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
           <h4 className="font-semibold mb-2 text-sm">How to embed:</h4>
           <ol className="text-sm space-y-1 text-muted-foreground list-decimal list-inside">
-            <li>Copy the embed code above</li>
+            <li>Test the widget above to make sure it works</li>
+            <li>Copy the embed code</li>
             <li>Open your website's HTML file</li>
             <li>Paste the code just before the closing &lt;/body&gt; tag</li>
             <li>Save and publish your website</li>

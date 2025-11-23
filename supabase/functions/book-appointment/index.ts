@@ -197,7 +197,7 @@ serve(async (req) => {
     // Send notification to receptionist owner
     const { data: receptionist } = await supabase
       .from("receptionists")
-      .select("user_id")
+      .select("user_id, business_name, business_phone, address")
       .eq("id", receptionistId)
       .maybeSingle();
 
@@ -231,6 +231,32 @@ serve(async (req) => {
     }
 
     console.log(`[book-appointment] Notification sent`);
+
+    // Send confirmation email if customer has email
+    if (customerEmail) {
+      try {
+        console.log(`[book-appointment] Sending confirmation email to ${customerEmail}`);
+        await supabase.functions.invoke("send-appointment-email", {
+          body: {
+            type: "confirmation",
+            to: customerEmail,
+            customerName,
+            serviceName: service.name,
+            startTime: start.toISOString(),
+            endTime: end.toISOString(),
+            businessName: receptionist?.business_name || "Business",
+            businessPhone: receptionist?.business_phone,
+            businessAddress: receptionist?.address,
+            confirmationToken,
+            cancellationToken,
+            notes: appointment.notes,
+          },
+        });
+        console.log(`[book-appointment] Confirmation email sent`);
+      } catch (emailErr) {
+        console.error("[book-appointment] Email error (non-blocking):", emailErr);
+      }
+    }
 
     return new Response(
       JSON.stringify({
