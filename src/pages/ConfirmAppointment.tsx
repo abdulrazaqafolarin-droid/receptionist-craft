@@ -172,24 +172,7 @@ export default function ConfirmAppointment() {
             )}
           </Button>
 
-          <div className="flex gap-2 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => window.location.href = `/reschedule-appointment?token=${token}`}
-              className="flex-1"
-            >
-              Reschedule
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => window.location.href = `/cancel-appointment?token=${appointment.metadata?.cancellation_token}`}
-              className="flex-1"
-            >
-              Cancel Instead
-            </Button>
-          </div>
-
-          <p className="text-xs text-muted-foreground text-center mt-4">
+          <p className="text-xs text-muted-foreground text-center">
             By confirming, you agree to attend this appointment at the scheduled time.
           </p>
         </CardContent>

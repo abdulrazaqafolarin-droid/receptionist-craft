@@ -30,7 +30,6 @@ import Availability from "./pages/Availability";
 import Widget from "./pages/Widget";
 import ConfirmAppointment from "./pages/ConfirmAppointment";
 import CancelAppointment from "./pages/CancelAppointment";
-import RescheduleAppointment from "./pages/RescheduleAppointment";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -111,9 +110,8 @@ const App = () => {
               <Route path="/auth" element={<Auth />} />
               <Route path="/help" element={<Help />} />
               <Route path="/widget" element={<Widget />} />
-              <Route path="/confirm-appointment" element={<ConfirmAppointment />} />
-              <Route path="/cancel-appointment" element={<CancelAppointment />} />
-              <Route path="/reschedule-appointment" element={<RescheduleAppointment />} />
+              <Route path="/appointments/confirm" element={<ConfirmAppointment />} />
+              <Route path="/appointments/cancel" element={<CancelAppointment />} />
               <Route path="*" element={<Navigate to="/auth" replace />} />
             </Routes>
           )}
