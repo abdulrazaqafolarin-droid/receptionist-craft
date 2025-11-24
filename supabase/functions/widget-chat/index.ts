@@ -24,7 +24,7 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY missing");
     }
 
-    console.log(`[Widget Chat] Processing message for receptionist ${receptionistId}`);
+    console.log(`[Widget Chat] Processing message for receptionist ${receptionistId}, session: ${sessionId}`);
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -43,6 +43,15 @@ serve(async (req) => {
       throw new Error("Receptionist not found or inactive");
     }
 
+    // Fetch conversation history (last 10 messages)
+    const { data: history } = await supabase
+      .from("chat_messages")
+      .select("sender, message")
+      .eq("receptionist_id", receptionistId)
+      .eq("session_id", sessionId || "default")
+      .order("created_at", { ascending: true })
+      .limit(10);
+
     // Fetch FAQs
     const { data: faqs } = await supabase
       .from("receptionist_faqs")
@@ -59,46 +68,95 @@ serve(async (req) => {
         ? receptionist.business_info 
         : JSON.stringify(receptionist.business_info || {}, null, 2));
 
-    const systemPrompt = `
-You are **${receptionist.name}**, the AI receptionist for **${receptionist.business_name}**.
+    // Detect urgency keywords
+    const urgencyKeywords = ["pain", "hurts", "hurt", "bleeding", "emergency", "urgent", "broken", "swollen", "can't eat", "can't sleep", "severe", "immediately"];
+    const hasUrgency = urgencyKeywords.some(k => message.toLowerCase().includes(k));
+    const urgencyLevel = hasUrgency ? "HIGH - Customer needs immediate attention" : "NORMAL";
 
-# 🎯 ROLE
-You are a professional receptionist helping customers:
-- Answer questions about the business
-- Book appointments
-- Provide service information
-- Assist with inquiries
+    // Extract context from conversation
+    const extractContext = (text: string) => {
+      const serviceMentioned = text.match(/(?:need|want|book|schedule|appointment for)\s+(?:a\s+)?([a-z\s]+)/i)?.[1]?.trim() || null;
+      const dateMentioned = text.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|next week)/i)?.[0] || null;
+      const timeMentioned = text.match(/(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm))/i)?.[0] || null;
+      return { serviceMentioned, dateMentioned, timeMentioned };
+    };
+
+    const context = extractContext(message);
+    const contextBlock = `
+# CURRENT CONTEXT
+Service mentioned: ${context.serviceMentioned || "Not yet specified"}
+Date mentioned: ${context.dateMentioned || "Not yet specified"}
+Time mentioned: ${context.timeMentioned || "Not yet specified"}
+Urgency level: ${urgencyLevel}
+`;
+
+    const systemPrompt = `
+You are **${receptionist.name}**, a warm, friendly, and professional receptionist for **${receptionist.business_name}**.
+
+# 👤 PERSONALITY
+- Warm, empathetic, and conversational
+- You can engage in short natural small talk (greetings, well-wishes, weather)
+- You adjust tone based on customer emotion
+- You detect urgency and react appropriately with concern and priority
+- You remember earlier parts of the conversation
+- Tone: ${receptionist.tone || "Friendly and Professional"}
+- Language: ${receptionist.language || "English"}
+
+# 💬 CONVERSATION GUIDELINES
+- Greet warmly and ask how you can help
+- Show empathy when customer expresses pain, frustration, or confusion
+- Confirm understanding before taking action
+- Offer helpful suggestions proactively
+- Close conversations with friendly sign-offs
+- Use natural, conversational language - NOT robotic or overly formal
+
+# 🚫 MESSAGES YOU SHOULD AVOID
+- Robotic or overly formal tone
+- Ignoring emotional cues
+- Forgetting context from previous messages
+- Making up facts not in the business information
+
+# 🚨 URGENCY DETECTION
+If customer mentions: "pain", "hurts", "bleeding", "emergency", "urgent", "broken", "swollen", "can't eat", "can't sleep"
+→ Respond with genuine concern, acknowledge their discomfort, and prioritize the earliest available appointment.
 
 # 📘 BUSINESS INFORMATION
 ${memoryText}
 
-# ❓ FAQS
+# ❓ FREQUENTLY ASKED QUESTIONS
 ${faqText}
 
-# 👤 PERSONALITY
-Tone: ${receptionist.tone || "Friendly and Professional"}
-Language: ${receptionist.language || "English"}
+# 📅 BOOKING FLOW RULES
+Natural conversation flow:
+1. Understand what service they need
+2. Clarify their preferred date and time
+3. Suggest alternatives if that time is booked (use natural language, list options clearly)
+4. Collect their name and phone/email
+5. Confirm the booking details
 
-# 📌 RULES
-- Stay professional and helpful
-- Answer using ONLY the business information provided
-- If unsure, say: "${receptionist.default_response || "I don't have that information yet."}"
-- Keep responses concise and clear
-- For appointments, collect: service, date, time, name, phone/email
+**IMPORTANT**: Use natural, conversational language. 
+- ✅ "That time is booked, but I have Tuesday at 2:00 PM or Wednesday at 9:00 AM available. Which works better for you?"
+- ❌ Never say "Reply with 'accept_alternative:1'" or use technical commands
+- Just ask them naturally to choose from the options you present
 
-# 📅 BOOKING
-When customers want to book:
-1. Ask for service name
-2. Ask for preferred date and time
-3. Collect their name and contact info
-4. Confirm availability and book
+${contextBlock}
 
-Remember: You represent ${receptionist.business_name}. Be warm, professional, and helpful!
+Remember: You represent ${receptionist.business_name}. Be warm, professional, and genuinely helpful!
 `;
 
     const startTime = Date.now();
 
-    // Call AI
+    // Build conversation messages array with history
+    const conversationMessages = [
+      { role: "system", content: systemPrompt },
+      ...(history || []).map((h: any) => ({
+        role: h.sender === "bot" ? "assistant" : "user",
+        content: h.message
+      })),
+      { role: "user", content: message }
+    ];
+
+    // Call AI with increased creativity
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -107,11 +165,8 @@ Remember: You represent ${receptionist.business_name}. Be warm, professional, an
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message }
-        ],
-        temperature: receptionist.temperature || 0.7
+        messages: conversationMessages,
+        temperature: 0.9
       })
     });
 
@@ -139,7 +194,27 @@ Remember: You represent ${receptionist.business_name}. Be warm, professional, an
 
     const latencyMs = Date.now() - startTime;
 
-    // Log conversation (optional, for analytics)
+    // Store user message in chat history
+    await supabase.from("chat_messages").insert({
+      receptionist_id: receptionistId,
+      session_id: sessionId || "default",
+      user_id: sessionId || "anonymous",
+      sender: "user",
+      message: message,
+      metadata: { timestamp: new Date().toISOString() }
+    });
+
+    // Store bot reply in chat history
+    await supabase.from("chat_messages").insert({
+      receptionist_id: receptionistId,
+      session_id: sessionId || "default",
+      user_id: sessionId || "anonymous",
+      sender: "bot",
+      message: reply,
+      metadata: { timestamp: new Date().toISOString(), latency_ms: latencyMs }
+    });
+
+    // Log conversation (for analytics)
     await supabase.from("conversations").insert({
       receptionist_id: receptionistId,
       user_message: message,
@@ -148,7 +223,8 @@ Remember: You represent ${receptionist.business_name}. Be warm, professional, an
       metadata: { 
         channel: "widget",
         session_id: sessionId,
-        latency_ms: latencyMs
+        latency_ms: latencyMs,
+        urgency_detected: hasUrgency
       }
     });
 
