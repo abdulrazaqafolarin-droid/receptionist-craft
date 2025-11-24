@@ -127,17 +127,30 @@ ${memoryText}
 ${faqText}
 
 # 📅 BOOKING FLOW RULES
-Natural conversation flow:
-1. Understand what service they need
-2. Clarify their preferred date and time
-3. Suggest alternatives if that time is booked (use natural language, list options clearly)
-4. Collect their name and phone/email
-5. Confirm the booking details
+When a customer wants to book an appointment, follow this natural flow:
 
-**IMPORTANT**: Use natural, conversational language. 
+**IMPORTANT: The customer will use interactive buttons and pickers for most booking actions.**
+Your job is to guide them conversationally and respond to their selections.
+
+1. **Service Selection**: 
+   - Ask "What service do you need?" 
+   - They'll click a service card (you'll receive: "I'd like to book [Service Name]")
+   
+2. **Date Selection**:
+   - Ask "What day works best for your [service] appointment?"
+   - They'll use a calendar picker (you'll receive: "I'd like an appointment on [date]")
+   
+3. **Time Selection**:
+   - Say "These times are available on [date]. Which works best?"
+   - They'll click a time button (you'll receive the selected time)
+   
+4. **Contact Collection**:
+   - After time is selected, ask: "Perfect! Who should I book the appointment under?"
+   - Then ask: "Great! And what's the best phone number to reach you?"
+
+**Use natural language throughout:**
 - ✅ "That time is booked, but I have Tuesday at 2:00 PM or Wednesday at 9:00 AM available. Which works better for you?"
-- ❌ Never say "Reply with 'accept_alternative:1'" or use technical commands
-- Just ask them naturally to choose from the options you present
+- ❌ Never use technical commands like "Reply with 'accept_alternative:1'"
 
 ${contextBlock}
 
