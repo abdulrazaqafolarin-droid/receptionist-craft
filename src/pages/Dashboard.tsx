@@ -21,6 +21,16 @@ export default function Dashboard() {
     loadData();
   }, []);
 
+  // Auto-redirect new users to onboarding wizard
+  useEffect(() => {
+    if (receptionists.length === 0 && user) {
+      const timer = setTimeout(() => {
+        navigate("/onboarding-wizard");
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [receptionists, user, navigate]);
+
   const loadData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setUser(user);
@@ -68,7 +78,7 @@ export default function Dashboard() {
             <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
             <p className="text-muted-foreground">Your AI-powered appointment booking system</p>
           </div>
-          <Button onClick={() => navigate("/onboarding")} size="lg">
+          <Button onClick={() => navigate("/onboarding-wizard")} size="lg">
             <Plus className="mr-2 h-4 w-4" /> Create Receptionist
           </Button>
         </div>
@@ -173,7 +183,7 @@ export default function Dashboard() {
                 <Phone className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-lg font-semibold mb-2">No receptionists yet</h3>
                 <p className="text-muted-foreground mb-4">Create your first AI receptionist to get started</p>
-              <Button onClick={() => navigate("/onboarding")}>
+              <Button onClick={() => navigate("/onboarding-wizard")}>
                 <Plus className="mr-2 h-4 w-4" /> Create Your First Receptionist
               </Button>
               </div>

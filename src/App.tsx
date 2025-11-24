@@ -13,6 +13,7 @@ import { Navbar } from "@/components/Navbar";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
+import OnboardingWizard from "./pages/OnboardingWizard";
 import Dashboard from "./pages/Dashboard";
 import Builder from "./pages/Builder";
 import Appointments from "./pages/Appointments";
@@ -84,6 +85,7 @@ const App = () => {
                       <Route path="/" element={<Navigate to="/dashboard" replace />} />
                       <Route path="/dashboard" element={<ProtectedRoute session={session}><Dashboard /></ProtectedRoute>} />
                       <Route path="/onboarding" element={<ProtectedRoute session={session}><Onboarding /></ProtectedRoute>} />
+                      <Route path="/onboarding-wizard" element={<ProtectedRoute session={session}><OnboardingWizard /></ProtectedRoute>} />
                       <Route path="/builder" element={<ProtectedRoute session={session}><Builder /></ProtectedRoute>} />
                       <Route path="/builder/:id" element={<ProtectedRoute session={session}><Builder /></ProtectedRoute>} />
                       <Route path="/conversations" element={<ProtectedRoute session={session}><Conversations /></ProtectedRoute>} />
