@@ -6,11 +6,23 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Send, Loader2, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
+import { ServiceSelector } from "@/components/widget/ServiceSelector";
+import { DateSelector } from "@/components/widget/DateSelector";
+import { TimeSlotSelector } from "@/components/widget/TimeSlotSelector";
+import { BookingConfirmation } from "@/components/widget/BookingConfirmation";
+import { format } from "date-fns";
 
 type Message = {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  showQuickReplies?: boolean;
+  showServices?: boolean;
+  showDatePicker?: boolean;
+  showTimeSlots?: boolean;
+  timeSlots?: any[];
+  bookingConfirmation?: any;
 };
 
 export default function Widget() {
@@ -24,10 +36,18 @@ export default function Widget() {
   const [receptionist, setReceptionist] = useState<any>(null);
   const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).substring(7)}`);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [services, setServices] = useState<any[]>([]);
+  const [bookingState, setBookingState] = useState({
+    serviceId: null as string | null,
+    serviceName: null as string | null,
+    date: null as Date | null,
+    timeSlot: null as any,
+  });
 
   useEffect(() => {
     if (receptionistId) {
       loadReceptionist();
+      loadServices();
     }
   }, [receptionistId]);
 
@@ -50,22 +70,36 @@ export default function Widget() {
 
     setReceptionist(data);
     
-    // Add greeting message
+    // Add greeting message with quick replies
     if (data.greeting_message) {
       setMessages([{
         role: "assistant",
         content: data.greeting_message,
-        timestamp: new Date()
+        timestamp: new Date(),
+        showQuickReplies: true,
       }]);
     }
   }
 
-  async function sendMessage() {
-    if (!input.trim() || !receptionistId) return;
+  async function loadServices() {
+    const { data, error } = await supabase
+      .from("services")
+      .select("*")
+      .eq("receptionist_id", receptionistId)
+      .eq("active", true);
+
+    if (!error && data) {
+      setServices(data);
+    }
+  }
+
+  async function sendMessage(messageText?: string) {
+    const textToSend = messageText || input.trim();
+    if (!textToSend || !receptionistId) return;
 
     const userMessage: Message = {
       role: "user",
-      content: input.trim(),
+      content: textToSend,
       timestamp: new Date()
     };
 
@@ -76,19 +110,55 @@ export default function Widget() {
     try {
       const { data, error } = await supabase.functions.invoke("widget-chat", {
         body: {
-          message: userMessage.content,
+          message: textToSend,
           receptionistId,
-          sessionId
+          sessionId,
+          bookingContext: bookingState,
         }
       });
 
       if (error) throw error;
 
-      const botMessage: Message = {
+      // Detect if we should show special UI
+      const reply = data.reply || "";
+      const lowerReply = reply.toLowerCase();
+      
+      let botMessage: Message = {
         role: "assistant",
-        content: data.reply,
-        timestamp: new Date()
+        content: reply,
+        timestamp: new Date(),
       };
+
+      // Detect booking intent and show services
+      if (data.hasBookingIntent || lowerReply.includes("which service") || lowerReply.includes("what service")) {
+        if (services.length > 0) {
+          botMessage.showServices = true;
+        }
+      }
+
+      // If service selected, show date picker
+      if (bookingState.serviceId && !bookingState.date && (lowerReply.includes("what day") || lowerReply.includes("when would"))) {
+        botMessage.showDatePicker = true;
+      }
+
+      // If date selected, show time slots
+      if (bookingState.date && !bookingState.timeSlot) {
+        const dateStr = format(bookingState.date, "yyyy-MM-dd");
+        const { data: slotsData } = await supabase.functions.invoke("check-availability", {
+          body: {
+            receptionistId,
+            serviceId: bookingState.serviceId,
+            startDate: dateStr,
+            endDate: dateStr,
+            maxSlots: 6,
+          }
+        });
+
+        if (slotsData?.slots && slotsData.slots.length > 0) {
+          botMessage.showTimeSlots = true;
+          botMessage.timeSlots = slotsData.slots;
+        }
+      }
 
       setMessages(prev => [...prev, botMessage]);
     } catch (err: any) {
@@ -103,11 +173,56 @@ export default function Widget() {
     }
   }
 
+  async function handleServiceSelect(serviceId: string, serviceName: string) {
+    setBookingState(prev => ({ ...prev, serviceId, serviceName }));
+    await sendMessage(`I'd like to book ${serviceName}`);
+  }
+
+  async function handleDateSelect(date: Date) {
+    setBookingState(prev => ({ ...prev, date }));
+    await sendMessage(`I'd like an appointment on ${format(date, "MMMM d, yyyy")}`);
+  }
+
+  async function handleTimeSlotSelect(slot: any) {
+    setBookingState(prev => ({ ...prev, timeSlot: slot }));
+    setLoading(true);
+
+    try {
+      // Ask for customer name if we don't have it yet
+      const botMessage: Message = {
+        role: "assistant",
+        content: "Perfect! Who should I book the appointment under? Please share your name.",
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, botMessage]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleQuickReply(value: string) {
+    if (value === "book_appointment") {
+      await sendMessage("I'd like to book an appointment");
+    } else if (value === "view_services") {
+      await sendMessage("What services do you offer?");
+    } else if (value === "view_prices") {
+      await sendMessage("What are your prices?");
+    } else if (value === "contact") {
+      await sendMessage("How can I contact you?");
+    } else {
+      await sendMessage(value);
+    }
+  }
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
+  };
+
+  const handleSendClick = () => {
+    sendMessage();
   };
 
   if (!receptionistId) {
@@ -151,22 +266,89 @@ export default function Widget() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-muted/30">
           {messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-            >
+            <div key={idx} className="space-y-2">
               <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-card border border-border"
-                }`}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
               >
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                <p className="text-xs opacity-70 mt-1">
-                  {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                    msg.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-card border border-border"
+                  }`}
+                >
+                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  <p className="text-xs opacity-70 mt-1">
+                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
               </div>
+
+              {/* Interactive UI Components */}
+              {msg.role === "assistant" && (
+                <>
+                  {msg.showQuickReplies && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%]">
+                        <QuickReplyButtons
+                          buttons={[
+                            { label: "📅 Book Appointment", value: "book_appointment" },
+                            { label: "💼 View Services", value: "view_services" },
+                            { label: "📞 Contact", value: "contact" },
+                          ]}
+                          onSelect={handleQuickReply}
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {msg.showServices && services.length > 0 && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%]">
+                        <ServiceSelector
+                          services={services}
+                          onSelect={handleServiceSelect}
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {msg.showDatePicker && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%]">
+                        <DateSelector
+                          onSelect={handleDateSelect}
+                          disabled={loading}
+                          minDate={new Date()}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {msg.showTimeSlots && msg.timeSlots && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%]">
+                        <TimeSlotSelector
+                          slots={msg.timeSlots}
+                          onSelect={handleTimeSlotSelect}
+                          disabled={loading}
+                          showMore={false}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {msg.bookingConfirmation && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%]">
+                        <BookingConfirmation {...msg.bookingConfirmation} />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           ))}
           {loading && (
@@ -190,7 +372,7 @@ export default function Widget() {
               disabled={loading}
               className="flex-1"
             />
-            <Button onClick={sendMessage} disabled={loading || !input.trim()}>
+            <Button onClick={handleSendClick} disabled={loading || !input.trim()}>
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
