@@ -3,15 +3,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { AppointmentCalendar } from "@/components/appointments/AppointmentCalendar";
+import { AppointmentModal } from "@/components/appointments/AppointmentModal";
 import type { Appointment } from "@/types/appointments";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MessageCircle, RefreshCw } from "lucide-react";
+import { MessageCircle, RefreshCw, Plus } from "lucide-react";
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [receptionists, setReceptionists] = useState<any[]>([]);
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("all");
   const [loading, setLoading] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   useEffect(() => {
     loadReceptionists();
@@ -81,7 +83,11 @@ export default function Appointments() {
                 ))}
               </select>
             )}
-            <Button onClick={() => loadAppointments()} disabled={loading}>
+            <Button onClick={() => setCreateModalOpen(true)} variant="default">
+              <Plus className="mr-2 h-4 w-4" />
+              Create Appointment
+            </Button>
+            <Button onClick={() => loadAppointments()} disabled={loading} variant="outline">
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
@@ -106,6 +112,13 @@ export default function Appointments() {
         ) : (
           <AppointmentCalendar appointments={appointments} />
         )}
+
+        <AppointmentModal
+          open={createModalOpen}
+          onOpenChange={setCreateModalOpen}
+          onSuccess={loadAppointments}
+          receptionistId={selectedReceptionist !== "all" ? selectedReceptionist : undefined}
+        />
       </div>
     </>
   );
