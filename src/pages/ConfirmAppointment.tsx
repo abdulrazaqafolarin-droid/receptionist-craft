@@ -26,19 +26,33 @@ export default function ConfirmAppointment() {
 
   async function loadAppointment() {
     try {
-      const { data, error: fetchErr } = await supabase
+      // Try new column first, fall back to metadata
+      let query = supabase
+        .from("appointments")
+        .select("*");
+      
+      const { data: byColumn } = await query.eq("confirmation_token", token).maybeSingle();
+      
+      if (byColumn) {
+        setAppointment(byColumn);
+        return;
+      }
+
+      // Fallback to metadata check
+      const { data: byMetadata } = await supabase
         .from("appointments")
         .select("*")
         .eq("metadata->>confirmation_token", token)
         .maybeSingle();
 
-      if (fetchErr || !data) {
-        setError("Appointment not found");
+      if (byMetadata) {
+        setAppointment(byMetadata);
         return;
       }
 
-      setAppointment(data);
+      setError("Appointment not found or token expired");
     } catch (err: any) {
+      console.error("Load appointment error:", err);
       setError("Failed to load appointment");
     } finally {
       setLoading(false);
@@ -50,18 +64,24 @@ export default function ConfirmAppointment() {
     
     setConfirming(true);
     try {
-      const { error: confirmErr } = await supabase.functions.invoke("appointment-action", {
+      const { data, error: confirmErr } = await supabase.functions.invoke("appointment-action", {
         body: {
           appointmentId: appointment.id,
           action: "confirm",
-          token
+          token,
+          confirmationToken: token
         }
       });
 
       if (confirmErr) throw confirmErr;
+      
+      if (!data?.success) {
+        throw new Error(data?.error || "Confirmation failed");
+      }
 
       setSuccess(true);
     } catch (err: any) {
+      console.error("Confirm error:", err);
       setError(err.message || "Failed to confirm appointment");
     } finally {
       setConfirming(false);

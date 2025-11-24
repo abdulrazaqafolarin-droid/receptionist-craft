@@ -29,24 +29,41 @@ export default function CancelAppointment() {
 
   async function loadAppointment() {
     try {
-      const { data, error: fetchErr } = await supabase
+      // Try new column first, fall back to metadata
+      let query = supabase
+        .from("appointments")
+        .select("*");
+      
+      const { data: byColumn } = await query.eq("cancellation_token", token).maybeSingle();
+      
+      if (byColumn) {
+        if (byColumn.status === "cancelled") {
+          setError("This appointment has already been cancelled");
+          return;
+        }
+        setAppointment(byColumn);
+        return;
+      }
+
+      // Fallback to metadata check
+      const { data: byMetadata } = await supabase
         .from("appointments")
         .select("*")
         .eq("metadata->>cancellation_token", token)
         .maybeSingle();
 
-      if (fetchErr || !data) {
-        setError("Appointment not found");
+      if (byMetadata) {
+        if (byMetadata.status === "cancelled") {
+          setError("This appointment has already been cancelled");
+          return;
+        }
+        setAppointment(byMetadata);
         return;
       }
 
-      if (data.status === "cancelled") {
-        setError("This appointment has already been cancelled");
-        return;
-      }
-
-      setAppointment(data);
+      setError("Appointment not found or token expired");
     } catch (err: any) {
+      console.error("Load appointment error:", err);
       setError("Failed to load appointment");
     } finally {
       setLoading(false);
@@ -58,19 +75,25 @@ export default function CancelAppointment() {
     
     setCancelling(true);
     try {
-      const { error: cancelErr } = await supabase.functions.invoke("appointment-action", {
+      const { data, error: cancelErr } = await supabase.functions.invoke("appointment-action", {
         body: {
           appointmentId: appointment.id,
           action: "cancel",
           token,
+          cancellationToken: token,
           reason: reason || "Customer cancelled via link"
         }
       });
 
       if (cancelErr) throw cancelErr;
+      
+      if (!data?.success) {
+        throw new Error(data?.error || "Cancellation failed");
+      }
 
       setSuccess(true);
     } catch (err: any) {
+      console.error("Cancel error:", err);
       setError(err.message || "Failed to cancel appointment");
     } finally {
       setCancelling(false);
