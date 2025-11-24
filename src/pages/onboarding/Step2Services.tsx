@@ -5,38 +5,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowRight, Plus, Trash2, Clock, DollarSign } from "lucide-react";
+import { ArrowLeft, ArrowRight, Plus, Trash2, Clock, Package } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Textarea } from "@/components/ui/textarea";
-
-const SERVICE_TEMPLATES = {
-  "Dental Clinic": [
-    { name: "Dental Cleaning", duration_minutes: 60, description: "Regular teeth cleaning and checkup" },
-    { name: "Dental Exam", duration_minutes: 30, description: "Comprehensive dental examination" },
-    { name: "Teeth Whitening", duration_minutes: 90, description: "Professional teeth whitening treatment" },
-  ],
-  "Spa & Wellness": [
-    { name: "Swedish Massage", duration_minutes: 60, description: "Relaxing full-body massage" },
-    { name: "Facial Treatment", duration_minutes: 60, description: "Deep cleansing facial" },
-    { name: "Manicure & Pedicure", duration_minutes: 90, description: "Complete nail care service" },
-  ],
-  "Barber Shop": [
-    { name: "Men's Haircut", duration_minutes: 30, description: "Classic men's haircut and styling" },
-    { name: "Beard Trim", duration_minutes: 15, description: "Professional beard trimming and shaping" },
-    { name: "Hot Towel Shave", duration_minutes: 30, description: "Traditional hot towel shave" },
-  ],
-  "Hair Salon": [
-    { name: "Women's Cut & Style", duration_minutes: 60, description: "Haircut with wash and styling" },
-    { name: "Hair Coloring", duration_minutes: 120, description: "Professional hair coloring service" },
-    { name: "Blowout", duration_minutes: 45, description: "Professional hair blowout" },
-  ],
-  "Gym & Fitness": [
-    { name: "Personal Training Session", duration_minutes: 60, description: "One-on-one fitness training" },
-    { name: "Group Fitness Class", duration_minutes: 45, description: "Group workout session" },
-    { name: "Nutrition Consultation", duration_minutes: 30, description: "Personalized nutrition planning" },
-  ],
-};
+import { SERVICE_TEMPLATES, getTemplateByBusinessType } from "@/data/serviceTemplates";
+import { ServiceTemplateCard } from "@/components/services/ServiceTemplateCard";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function Step2Services() {
   const { receptionist, services, addService, removeService, setServices, setStep, receptionistId } = useOnboardingStore();
@@ -47,14 +31,26 @@ export default function Step2Services() {
     description: "",
   });
   const [loading, setLoading] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
-  const templateServices = SERVICE_TEMPLATES[receptionist.business_type as keyof typeof SERVICE_TEMPLATES] || [];
+  const handleImportTemplate = (templateKey: string) => {
+    const template = SERVICE_TEMPLATES[templateKey];
+    if (!template) return;
+    
+    setSelectedTemplate(templateKey);
+    setShowImportDialog(true);
+  };
 
-  const handleImportTemplate = () => {
-    const servicesWithActive = templateServices.map(s => ({ ...s, active: true }));
+  const confirmImportTemplate = () => {
+    if (!selectedTemplate) return;
+    
+    const template = SERVICE_TEMPLATES[selectedTemplate];
+    const servicesWithActive = template.services.map(s => ({ ...s, active: true }));
     setServices([...services, ...servicesWithActive]);
-    toast.success(`${templateServices.length} template services added`);
-    setShowTemplates(false);
+    toast.success(`Successfully imported ${template.services.length} services from ${template.name}`);
+    setShowImportDialog(false);
+    setSelectedTemplate(null);
   };
 
   const handleAddCustomService = () => {
@@ -105,27 +101,41 @@ export default function Step2Services() {
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Template Import */}
-        {showTemplates && templateServices.length > 0 && (
-          <div className="p-4 border rounded-lg bg-primary/5">
-            <h4 className="font-semibold mb-2">Quick Start: Import Template Services</h4>
-            <p className="text-sm text-muted-foreground mb-4">
-              We've prepared {templateServices.length} common services for {receptionist.business_type}
-            </p>
-            <div className="space-y-2 mb-4">
-              {templateServices.map((service, idx) => (
-                <div key={idx} className="flex items-center justify-between p-2 bg-background rounded">
-                  <span className="text-sm font-medium">{service.name}</span>
-                  <Badge variant="secondary">
-                    <Clock className="h-3 w-3 mr-1" />
-                    {service.duration_minutes}min
-                  </Badge>
-                </div>
+        {showTemplates && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Import Ready-Made Templates
+                </h4>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Choose from pre-built service packages or add your own
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowTemplates(false)}>
+                Hide Templates
+              </Button>
+            </div>
+            
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.values(SERVICE_TEMPLATES).map((template) => (
+                <ServiceTemplateCard
+                  key={template.key}
+                  template={template}
+                  onImport={() => handleImportTemplate(template.key)}
+                  disabled={loading}
+                />
               ))}
             </div>
-            <Button onClick={handleImportTemplate} variant="default">
-              Import All Template Services
-            </Button>
           </div>
+        )}
+
+        {!showTemplates && (
+          <Button variant="outline" onClick={() => setShowTemplates(true)} className="w-full">
+            <Package className="mr-2 h-4 w-4" />
+            Show Service Templates
+          </Button>
         )}
 
         {/* Current Services */}
@@ -204,6 +214,37 @@ export default function Step2Services() {
             {loading ? "Saving..." : "Continue"} <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
+
+        {/* Import Confirmation Dialog */}
+        <AlertDialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Import Template Services?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {selectedTemplate && (
+                  <>
+                    This will import <strong>{SERVICE_TEMPLATES[selectedTemplate].services.length} services</strong> from the{" "}
+                    <strong>{SERVICE_TEMPLATES[selectedTemplate].name}</strong> template.
+                    <div className="mt-4 p-3 bg-muted rounded-md space-y-1">
+                      {SERVICE_TEMPLATES[selectedTemplate].services.map((service, idx) => (
+                        <div key={idx} className="text-sm flex items-center gap-2">
+                          <Clock className="h-3 w-3" />
+                          {service.name} ({service.duration_minutes}min)
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmImportTemplate}>
+                Import Services
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
