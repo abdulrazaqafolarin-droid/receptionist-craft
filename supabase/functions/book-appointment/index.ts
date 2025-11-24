@@ -268,6 +268,23 @@ serve(async (req) => {
 
     console.log(`[book-appointment] Notification sent`);
 
+    // Send booking confirmation email
+    if (customerEmail) {
+      try {
+        await supabase.functions.invoke("send-booking-confirmation", {
+          body: {
+            appointmentId: appointment.id,
+            recipientEmail: customerEmail,
+            type: "confirmation",
+          },
+        });
+        console.log(`[book-appointment] Confirmation email queued`);
+      } catch (emailErr) {
+        console.error("[book-appointment] Email send failed:", emailErr);
+        // Don't fail the booking if email fails
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
