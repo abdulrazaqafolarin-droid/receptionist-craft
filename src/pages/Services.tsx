@@ -6,8 +6,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, RefreshCw } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { SERVICE_TEMPLATES } from "@/data/serviceTemplates";
+import { ServiceTemplateCard } from "@/components/services/ServiceTemplateCard";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Service {
   id: string;
@@ -26,6 +38,10 @@ export default function Services() {
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const { toast } = useToast();
 
   const [newService, setNewService] = useState({
@@ -165,6 +181,54 @@ export default function Services() {
     }
   }
 
+  const handleImportTemplate = (templateKey: string) => {
+    setSelectedTemplate(templateKey);
+    setShowImportDialog(true);
+  };
+
+  const confirmImportTemplate = async () => {
+    if (!selectedTemplate || !selectedReceptionist) return;
+
+    setImporting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const template = SERVICE_TEMPLATES[selectedTemplate];
+      const servicesToInsert = template.services.map(service => ({
+        user_id: user.id,
+        receptionist_id: selectedReceptionist,
+        name: service.name,
+        description: service.description,
+        duration_minutes: service.duration_minutes,
+        buffer_before_minutes: 5,
+        buffer_after_minutes: 5,
+        active: true,
+      }));
+
+      const { error } = await supabase.from("services").insert(servicesToInsert);
+      if (error) throw error;
+
+      toast({ 
+        title: "Success", 
+        description: `Successfully imported ${template.services.length} services from ${template.name}` 
+      });
+      
+      loadServices();
+      setShowImportDialog(false);
+      setSelectedTemplate(null);
+    } catch (err: any) {
+      console.error("importTemplate error", err);
+      toast({ 
+        title: "Error", 
+        description: err.message || "Failed to import services", 
+        variant: "destructive" 
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <>
       <Navbar />
@@ -216,6 +280,42 @@ export default function Services() {
 
         {selectedReceptionist && (
           <>
+        {/* Template Import Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Import Service Templates
+                </CardTitle>
+                <CardDescription>
+                  Quickly add pre-built service packages for your business
+                </CardDescription>
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowTemplates(!showTemplates)}
+              >
+                {showTemplates ? "Hide Templates" : "Show Templates"}
+              </Button>
+            </div>
+          </CardHeader>
+          {showTemplates && (
+            <CardContent>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.values(SERVICE_TEMPLATES).map((template) => (
+                  <ServiceTemplateCard
+                    key={template.key}
+                    template={template}
+                    onImport={() => handleImportTemplate(template.key)}
+                    disabled={importing}
+                  />
+                ))}
+              </div>
+            </CardContent>
+          )}
+        </Card>
 
         {/* Create Service Form */}
         <Card className="mb-6">
@@ -333,6 +433,39 @@ export default function Services() {
             ))
           )}
         </div>
+
+        {/* Import Confirmation Dialog */}
+        <AlertDialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Import Template Services?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {selectedTemplate && (
+                  <>
+                    This will import <strong>{SERVICE_TEMPLATES[selectedTemplate].services.length} services</strong> from the{" "}
+                    <strong>{SERVICE_TEMPLATES[selectedTemplate].name}</strong> template to your receptionist.
+                    <div className="mt-4 p-3 bg-muted rounded-md max-h-60 overflow-y-auto space-y-1">
+                      {SERVICE_TEMPLATES[selectedTemplate].services.map((service, idx) => (
+                        <div key={idx} className="text-sm">
+                          <div className="font-medium">{service.name}</div>
+                          <div className="text-muted-foreground text-xs">
+                            {service.duration_minutes} minutes - {service.description}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={importing}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmImportTemplate} disabled={importing}>
+                {importing ? "Importing..." : "Import Services"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
           </>
         )}
       </div>
