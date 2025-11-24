@@ -16,38 +16,92 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const schema = z.object({
       action: z.enum(["confirm", "cancel", "reschedule"]),
-      appointment_id: z.string().uuid(),
+      appointment_id: z.string().uuid().optional().nullable(),
+      appointmentId: z.string().uuid().optional().nullable(),
+      token: z.string().optional().nullable(),
+      cancellationToken: z.string().optional().nullable(),
+      confirmationToken: z.string().optional().nullable(),
       reason: z.string().optional().nullable(),
       new_start_time: z.string().optional().nullable(),
       userId: z.string().uuid().optional().nullable(),
     });
     const parsed = schema.parse(body);
+    
+    const appointmentId = parsed.appointment_id || parsed.appointmentId;
+    const token = parsed.token || parsed.cancellationToken || parsed.confirmationToken;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { action, appointment_id, reason, new_start_time, userId } = parsed;
+    const { action, reason, new_start_time, userId } = parsed;
 
-    console.log(`[appointment-action] ${action} for ${appointment_id}`);
+    if (!appointmentId) {
+      throw new Error("appointmentId is required");
+    }
 
-    // Get appointment details for notifications
-    const { data: appt } = await supabase
+    console.log(`[appointment-action] ${action} for ${appointmentId}`);
+
+    // Get appointment details
+    const { data: appt, error: fetchErr } = await supabase
       .from("appointments")
       .select("*, receptionists(user_id)")
-      .eq("id", appointment_id)
-      .single();
+      .eq("id", appointmentId)
+      .maybeSingle();
+
+    if (fetchErr) throw fetchErr;
 
     if (!appt) {
-      throw new Error("Appointment not found");
+      return new Response(
+        JSON.stringify({ error: "Appointment not found" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // TOKEN VALIDATION for confirm/cancel actions (if token provided)
+    if (token && (action === "confirm" || action === "cancel")) {
+      const storedCancellationToken = appt.cancellation_token || appt.metadata?.cancellation_token;
+      const storedConfirmationToken = appt.confirmation_token || appt.metadata?.confirmation_token;
+      
+      const isValidToken = 
+        (action === "cancel" && token === storedCancellationToken) ||
+        (action === "confirm" && token === storedConfirmationToken);
+
+      if (!isValidToken) {
+        console.log(`[appointment-action] Invalid token for ${action}`);
+        return new Response(
+          JSON.stringify({ error: "Invalid or expired token" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      console.log(`[appointment-action] Token validated successfully`);
     }
 
     if (action === "confirm") {
+      // Check if already confirmed
+      if (appt.status === "confirmed") {
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: "Appointment was already confirmed",
+            appointment: appt 
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       const { data, error } = await supabase
         .from("appointments")
-        .update({ status: "confirmed" })
-        .eq("id", appointment_id)
+        .update({ 
+          status: "confirmed",
+          metadata: {
+            ...appt.metadata,
+            confirmed_at: new Date().toISOString(),
+          }
+        })
+        .eq("id", appointmentId)
         .select()
         .single();
 
@@ -56,10 +110,14 @@ serve(async (req) => {
       // Log action
       try {
         await supabase.from("appointment_logs").insert({
-          appointment_id,
+          appointment_id: appointmentId,
           action: "confirmed",
           actor_id: userId || null,
-          payload: { reason },
+          payload: { 
+            reason,
+            confirmed_at: new Date().toISOString(),
+            via_token: !!token,
+          },
         });
       } catch (logErr) {
         console.error("[appointment-action] log error:", logErr);
@@ -75,7 +133,7 @@ serve(async (req) => {
             message: `Appointment confirmed`,
             receptionist_id: appt.receptionist_id,
             user_id: appt.receptionists.user_id,
-            metadata: { appointment_id },
+            metadata: { appointment_id: appointmentId },
             severity: "info",
             category: "appointments",
             priority: "normal",
@@ -92,17 +150,30 @@ serve(async (req) => {
     } 
     
     if (action === "cancel") {
+      // Check if already cancelled
+      if (appt.status === "cancelled") {
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: "Appointment was already cancelled",
+            appointment: appt 
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       const { data, error } = await supabase
         .from("appointments")
         .update({ 
           status: "cancelled",
           metadata: { 
             ...appt.metadata,
-            cancelled_reason: reason,
-            cancelled_at: new Date().toISOString()
+            cancelled_reason: reason || "Customer cancelled",
+            cancelled_at: new Date().toISOString(),
+            via_token: !!token,
           }
         })
-        .eq("id", appointment_id)
+        .eq("id", appointmentId)
         .select()
         .single();
 
@@ -111,10 +182,14 @@ serve(async (req) => {
       // Log action
       try {
         await supabase.from("appointment_logs").insert({
-          appointment_id,
+          appointment_id: appointmentId,
           action: "cancelled",
           actor_id: userId || null,
-          payload: { reason },
+          payload: { 
+            reason: reason || "Customer cancelled",
+            cancelled_at: new Date().toISOString(),
+            via_token: !!token,
+          },
         });
       } catch (logErr) {
         console.error("[appointment-action] log error:", logErr);
@@ -130,7 +205,7 @@ serve(async (req) => {
             message: `Appointment cancelled`,
             receptionist_id: appt.receptionist_id,
             user_id: appt.receptionists.user_id,
-            metadata: { appointment_id, reason },
+            metadata: { appointment_id: appointmentId, reason },
             severity: "warning",
             category: "appointments",
             priority: "high",
@@ -173,7 +248,7 @@ serve(async (req) => {
             rescheduled_at: new Date().toISOString()
           }
         })
-        .eq("id", appointment_id)
+        .eq("id", appointmentId)
         .select()
         .single();
 
@@ -182,13 +257,14 @@ serve(async (req) => {
       // Log action
       try {
         await supabase.from("appointment_logs").insert({
-          appointment_id,
+          appointment_id: appointmentId,
           action: "rescheduled",
           actor_id: userId || null,
           payload: { 
             old_time: appt.start_time,
             new_time: newStart.toISOString(),
-            reason 
+            reason,
+            via_token: !!token,
           },
         });
       } catch (logErr) {
@@ -205,7 +281,7 @@ serve(async (req) => {
             message: `Appointment rescheduled`,
             receptionist_id: appt.receptionist_id,
             user_id: appt.receptionists.user_id,
-            metadata: { appointment_id, new_time: newStart.toISOString() },
+            metadata: { appointment_id: appointmentId, new_time: newStart.toISOString() },
             severity: "info",
             category: "appointments",
             priority: "normal",

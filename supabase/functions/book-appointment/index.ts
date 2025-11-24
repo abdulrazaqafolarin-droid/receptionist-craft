@@ -26,7 +26,12 @@ serve(async (req) => {
       customerPhone,
       userId,
       bookingSource = "ai_receptionist",
+      metadata = {},
+      notes,
     } = body;
+
+    // Extract idempotency key from metadata if provided
+    const idempotencyKey = metadata?.idempotency_key || null;
 
     console.log(`[book-appointment] Request:`, {
       receptionistId,
@@ -76,16 +81,41 @@ serve(async (req) => {
 
     console.log(`[book-appointment] Slot: ${start.toISOString()} - ${end.toISOString()}`);
 
-    // Check for duplicate/idempotent bookings (same contact, same time +/- 15min)
+    // IDEMPOTENCY CHECK: Check by idempotency_key first (if provided)
+    if (idempotencyKey) {
+      const { data: existingByKey } = await supabase
+        .from("appointments")
+        .select("*")
+        .eq("idempotency_key", idempotencyKey)
+        .maybeSingle();
+
+      if (existingByKey) {
+        console.log(`[book-appointment] Found existing by idempotency_key: ${existingByKey.id}`);
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            appointment: existingByKey, 
+            existed: true 
+          }),
+          { 
+            status: 200, 
+            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          }
+        );
+      }
+    }
+
+    // Check for duplicate bookings (same contact, same time +/- 15min)
     const windowBefore = new Date(start.getTime() - 15 * 60000).toISOString();
     const windowAfter = new Date(start.getTime() + 15 * 60000).toISOString();
 
     let duplicateQuery = supabase
       .from("appointments")
-      .select("id, start_time, end_time, status, customer_name")
+      .select("id, start_time, end_time, status, customer_name, customer_email, customer_phone")
       .eq("receptionist_id", receptionistId)
       .gte("start_time", windowBefore)
-      .lte("start_time", windowAfter);
+      .lte("start_time", windowAfter)
+      .neq("status", "cancelled");
 
     if (customerEmail) duplicateQuery = duplicateQuery.eq("customer_email", customerEmail);
     if (customerPhone) duplicateQuery = duplicateQuery.eq("customer_phone", customerPhone);
@@ -146,12 +176,13 @@ serve(async (req) => {
     const cancellationToken = crypto.randomUUID();
     const confirmationToken = crypto.randomUUID();
 
-    // Create appointment with source metadata
+    // Create appointment with all new columns
     const { data: appointment, error: insertErr } = await supabase
       .from("appointments")
       .insert({
         receptionist_id: receptionistId,
         service_id: serviceId,
+        service: service.name,
         customer_name: customerName,
         customer_email: customerEmail || null,
         customer_phone: customerPhone || null,
@@ -160,12 +191,17 @@ serve(async (req) => {
         status: "booked",
         booking_source: bookingSource,
         created_by: userId || null,
+        notes: notes || null,
+        idempotency_key: idempotencyKey,
+        cancellation_token: cancellationToken,
+        confirmation_token: confirmationToken,
         metadata: {
           source: bookingSource,
           booked_via_chat: bookingSource === "ai_receptionist",
           created_at: new Date().toISOString(),
           cancellation_token: cancellationToken,
           confirmation_token: confirmationToken,
+          ...(metadata || {}),
         },
       })
       .select()
