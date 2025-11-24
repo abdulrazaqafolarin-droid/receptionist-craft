@@ -364,6 +364,8 @@ export type Database = {
       appointments: {
         Row: {
           booking_source: string | null
+          cancellation_token: string | null
+          confirmation_token: string | null
           created_at: string
           created_by: string | null
           customer_email: string | null
@@ -371,6 +373,7 @@ export type Database = {
           customer_phone: string | null
           end_time: string
           id: string
+          idempotency_key: string | null
           metadata: Json | null
           notes: string | null
           receptionist_id: string
@@ -381,6 +384,8 @@ export type Database = {
         }
         Insert: {
           booking_source?: string | null
+          cancellation_token?: string | null
+          confirmation_token?: string | null
           created_at?: string
           created_by?: string | null
           customer_email?: string | null
@@ -388,6 +393,7 @@ export type Database = {
           customer_phone?: string | null
           end_time: string
           id?: string
+          idempotency_key?: string | null
           metadata?: Json | null
           notes?: string | null
           receptionist_id: string
@@ -398,6 +404,8 @@ export type Database = {
         }
         Update: {
           booking_source?: string | null
+          cancellation_token?: string | null
+          confirmation_token?: string | null
           created_at?: string
           created_by?: string | null
           customer_email?: string | null
@@ -405,6 +413,7 @@ export type Database = {
           customer_phone?: string | null
           end_time?: string
           id?: string
+          idempotency_key?: string | null
           metadata?: Json | null
           notes?: string | null
           receptionist_id?: string
