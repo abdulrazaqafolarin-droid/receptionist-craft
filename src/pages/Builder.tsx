@@ -555,6 +555,77 @@ export default function BuilderPage() {
     setReceptionist((p) => ({ ...p, [key]: val }));
   }
 
+  // Generate knowledge base using AI
+  const [generatingKB, setGeneratingKB] = useState(false);
+  async function generateKnowledgeBase() {
+    try {
+      setGeneratingKB(true);
+      
+      // Fetch services and FAQs for this receptionist
+      let services = [];
+      let faqs = [];
+      
+      if (receptionistId) {
+        const { data: servicesData } = await supabase
+          .from('services')
+          .select('*')
+          .eq('receptionist_id', receptionistId);
+        services = servicesData || [];
+
+        const { data: faqsData } = await supabase
+          .from('receptionist_faqs')
+          .select('*')
+          .eq('receptionist_id', receptionistId)
+          .order('priority', { ascending: false });
+        faqs = faqsData || [];
+      }
+
+      // Build structured data
+      const receptionistData = {
+        business_name: receptionist.business_name,
+        business_type: receptionist.business_type,
+        phone: receptionist.phone,
+        language: receptionist.language,
+        greeting_message: receptionist.greeting_message,
+        tone: receptionist.tone,
+        goal: receptionist.goal,
+        services: services.map(s => ({
+          name: s.name,
+          description: s.description,
+          duration: `${s.duration_minutes} minutes`,
+          buffer_before: `${s.buffer_before_minutes} min`,
+          buffer_after: `${s.buffer_after_minutes} min`,
+        })),
+        faqs: faqs.map(f => ({
+          question: f.question,
+          answer: f.answer,
+        })),
+      };
+
+      const { data, error } = await supabase.functions.invoke('generate-knowledge-base', {
+        body: { receptionistData }
+      });
+
+      if (error) throw error;
+      if (!data?.knowledge_base) throw new Error('No knowledge base generated');
+
+      setReceptionist(p => ({ ...p, knowledge_base: data.knowledge_base }));
+      toast({ 
+        title: "Success", 
+        description: "Knowledge base generated! Review and edit as needed." 
+      });
+    } catch (err: any) {
+      console.error('Generate KB error:', err);
+      toast({ 
+        title: "Error", 
+        description: err.message || "Failed to generate knowledge base",
+        variant: "destructive" 
+      });
+    } finally {
+      setGeneratingKB(false);
+    }
+  }
+
   // Show loading or auth error state
   if (!currentUserId && !error) {
     return (
@@ -637,7 +708,17 @@ export default function BuilderPage() {
           <label className="block text-xs mt-2">Default Response</label>
           <textarea className="w-full border rounded p-2" rows={2} value={receptionist.default_response || ""} onChange={(e) => onFieldChange("default_response", e.target.value)} />
 
-          <label className="block text-xs mt-2">Knowledge Base</label>
+          <div className="flex items-center justify-between mt-2">
+            <label className="block text-xs">Knowledge Base</label>
+            <button
+              type="button"
+              onClick={generateKnowledgeBase}
+              disabled={generatingKB || !receptionist.business_name}
+              className="text-xs px-3 py-1 bg-primary text-primary-foreground rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {generatingKB ? "Generating..." : "🪄 AI Generate"}
+            </button>
+          </div>
           <textarea className="w-full border rounded p-2" rows={4} placeholder="Add your business knowledge here..." value={receptionist.knowledge_base || ""} onChange={(e) => onFieldChange("knowledge_base", e.target.value)} />
 
           <label className="block text-xs mt-2">Temperature (AI Creativity)</label>
