@@ -585,38 +585,78 @@ export default function BuilderPage() {
           )}
           
           <div className="bg-white rounded-lg shadow-sm p-4">
-          <h2 className="font-semibold mb-2">Create AI Receptionist</h2>
+          <h2 className="font-semibold mb-2">Edit AI Receptionist</h2>
 
-          <label className="block text-xs mt-2">Receptionist Name</label>
+          <label className="block text-xs mt-2">Receptionist Name *</label>
           <input className="w-full border rounded p-2" value={receptionist.name || ""} onChange={(e) => onFieldChange("name", e.target.value)} />
 
-          <label className="block text-xs mt-2">Business Name</label>
+          <label className="block text-xs mt-2">Business Name *</label>
           <input className="w-full border rounded p-2" value={receptionist.business_name || ""} onChange={(e) => onFieldChange("business_name", e.target.value)} />
 
-          <label className="block text-xs mt-2">Business Type</label>
-          <input className="w-full border rounded p-2" value={receptionist.business_type || ""} onChange={(e) => onFieldChange("business_type", e.target.value)} />
+          <label className="block text-xs mt-2">Business Type *</label>
+          <select className="w-full border rounded p-2" value={receptionist.business_type || ""} onChange={(e) => onFieldChange("business_type", e.target.value)}>
+            <option value="">Select business type</option>
+            <option value="Dental Clinic">Dental Clinic</option>
+            <option value="Spa & Wellness">Spa & Wellness</option>
+            <option value="Barber Shop">Barber Shop</option>
+            <option value="Restaurant">Restaurant</option>
+            <option value="Real Estate">Real Estate</option>
+            <option value="Medical Clinic">Medical Clinic</option>
+            <option value="Law Office">Law Office</option>
+            <option value="Hair Salon">Hair Salon</option>
+            <option value="Gym & Fitness">Gym & Fitness</option>
+            <option value="General Business">General Business</option>
+          </select>
 
           <label className="block text-xs mt-2">Business Phone</label>
-          <input className="w-full border rounded p-2" value={receptionist.phone || ""} onChange={(e) => onFieldChange("phone", e.target.value)} />
+          <input className="w-full border rounded p-2" type="tel" placeholder="+1 (555) 000-0000" value={receptionist.phone || ""} onChange={(e) => onFieldChange("phone", e.target.value)} />
 
-          <label className="block text-xs mt-2">Tone of Voice</label>
+          <label className="block text-xs mt-2">Tone of Voice *</label>
           <select className="w-full border rounded p-2" value={receptionist.tone} onChange={(e) => onFieldChange("tone", e.target.value as "friendly" | "professional" | "playful")}>
-            <option value="friendly">Friendly</option>
-            <option value="professional">Professional</option>
-            <option value="playful">Playful</option>
+            <option value="friendly">Friendly - Warm, welcoming, conversational</option>
+            <option value="professional">Professional - Polished, formal, efficient</option>
+            <option value="playful">Playful - Fun, energetic, engaging</option>
+          </select>
+
+          <label className="block text-xs mt-2">Primary Language</label>
+          <select className="w-full border rounded p-2" value={receptionist.language || "English"} onChange={(e) => onFieldChange("language", e.target.value)}>
+            <option value="English">English</option>
+            <option value="Spanish">Spanish</option>
+            <option value="French">French</option>
+            <option value="German">German</option>
+            <option value="Italian">Italian</option>
+            <option value="Portuguese">Portuguese</option>
           </select>
 
           <label className="block text-xs mt-2">Greeting Message</label>
-          <textarea className="w-full border rounded p-2" rows={2} value={receptionist.greeting_message || ""} onChange={(e) => onFieldChange("greeting_message", e.target.value)} />
+          <textarea className="w-full border rounded p-2" rows={2} placeholder="Hi! Thanks for reaching out..." value={receptionist.greeting_message || ""} onChange={(e) => onFieldChange("greeting_message", e.target.value)} />
+
+          <label className="block text-xs mt-2">Goal (optional)</label>
+          <textarea className="w-full border rounded p-2" rows={2} placeholder="e.g., Book appointments, answer FAQs, collect leads" value={receptionist.goal || ""} onChange={(e) => onFieldChange("goal", e.target.value)} />
 
           <label className="block text-xs mt-2">Default Response</label>
           <textarea className="w-full border rounded p-2" rows={2} value={receptionist.default_response || ""} onChange={(e) => onFieldChange("default_response", e.target.value)} />
 
-          <label className="block text-xs mt-2">Knowledge Base (short)</label>
-          <textarea className="w-full border rounded p-2" rows={4} value={receptionist.knowledge_base || ""} onChange={(e) => onFieldChange("knowledge_base", e.target.value)} />
+          <label className="block text-xs mt-2">Knowledge Base</label>
+          <textarea className="w-full border rounded p-2" rows={4} placeholder="Add your business knowledge here..." value={receptionist.knowledge_base || ""} onChange={(e) => onFieldChange("knowledge_base", e.target.value)} />
 
-          <label className="block text-xs mt-2">System Prompt (optional)</label>
-          <textarea className="w-full border rounded p-2" rows={4} value={receptionist.system_prompt || ""} onChange={(e) => onFieldChange("system_prompt", e.target.value)} />
+          <label className="block text-xs mt-2">Temperature (AI Creativity)</label>
+          <div className="flex items-center gap-2">
+            <input 
+              type="range" 
+              min="0" 
+              max="1" 
+              step="0.1" 
+              className="flex-1" 
+              value={receptionist.temperature || 0.7} 
+              onChange={(e) => onFieldChange("temperature", parseFloat(e.target.value))} 
+            />
+            <span className="text-xs font-mono w-8">{(receptionist.temperature || 0.7).toFixed(1)}</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">Higher = more creative, Lower = more focused</p>
+
+          <label className="block text-xs mt-2">System Prompt (Advanced)</label>
+          <textarea className="w-full border rounded p-2" rows={3} placeholder="Optional custom system instructions..." value={receptionist.system_prompt || ""} onChange={(e) => onFieldChange("system_prompt", e.target.value)} />
 
           <div className="flex gap-2 mt-4">
             <button className="px-4 py-2 bg-yellow-500 text-white rounded" onClick={saveReceptionist} disabled={saving}>
