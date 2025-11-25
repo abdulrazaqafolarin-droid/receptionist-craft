@@ -775,9 +775,6 @@ export default function BuilderPage() {
           <label className="block text-xs mt-2">Greeting Message</label>
           <textarea className="w-full border rounded p-2" rows={2} placeholder="Hi! Thanks for reaching out..." value={receptionist.greeting_message || ""} onChange={(e) => onFieldChange("greeting_message", e.target.value)} />
 
-          <label className="block text-xs mt-2">Goal (optional)</label>
-          <textarea className="w-full border rounded p-2" rows={2} placeholder="e.g., Book appointments, answer FAQs, collect leads" value={receptionist.goal || ""} onChange={(e) => onFieldChange("goal", e.target.value)} />
-
           <label className="block text-xs mt-2">Default Response</label>
           <textarea className="w-full border rounded p-2" rows={2} value={receptionist.default_response || ""} onChange={(e) => onFieldChange("default_response", e.target.value)} />
 
