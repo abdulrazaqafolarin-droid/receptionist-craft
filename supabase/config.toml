@@ -3,6 +3,18 @@ project_id = "xhihzexkqezhpwsryxqv"
 [functions.analytics]
 verify_jwt = false
 
+[functions.widget-chat]
+verify_jwt = false
+
+[functions.send-booking-confirmation]
+verify_jwt = false
+
+[functions.send-reminder]
+verify_jwt = false
+
+[functions.appointment-action]
+verify_jwt = false
+
 [functions.analytics-export]
 verify_jwt = false
 
