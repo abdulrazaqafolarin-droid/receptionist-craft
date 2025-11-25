@@ -32,6 +32,7 @@ import Widget from "./pages/Widget";
 import ConfirmAppointment from "./pages/ConfirmAppointment";
 import CancelAppointment from "./pages/CancelAppointment";
 import ManageBooking from "./pages/ManageBooking";
+import WidgetInstall from "./pages/WidgetInstall";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -99,7 +100,8 @@ const App = () => {
                       <Route path="/diagnostics" element={<ProtectedRoute session={session}><Diagnostics /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute session={session}><Notifications /></ProtectedRoute>} />
           <Route path="/realtime-logs" element={<ProtectedRoute session={session}><RealtimeLogs /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute session={session}><Settings /></ProtectedRoute>} />
+                      <Route path="/settings" element={<ProtectedRoute session={session}><Settings /></ProtectedRoute>} />
+                      <Route path="/widget-install/:id" element={<ProtectedRoute session={session}><WidgetInstall /></ProtectedRoute>} />
                       <Route path="/help" element={<Help />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
