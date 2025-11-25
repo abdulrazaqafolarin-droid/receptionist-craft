@@ -557,6 +557,8 @@ export default function BuilderPage() {
 
   // Generate knowledge base using AI
   const [generatingKB, setGeneratingKB] = useState(false);
+  const [generatingPrompt, setGeneratingPrompt] = useState(false);
+  
   async function generateKnowledgeBase() {
     try {
       setGeneratingKB(true);
@@ -623,6 +625,77 @@ export default function BuilderPage() {
       });
     } finally {
       setGeneratingKB(false);
+    }
+  }
+
+  // Generate system prompt using AI
+  async function generateSystemPrompt() {
+    try {
+      setGeneratingPrompt(true);
+      
+      // Fetch services and FAQs for this receptionist
+      let services = [];
+      let faqs = [];
+      
+      if (receptionistId) {
+        const { data: servicesData } = await supabase
+          .from('services')
+          .select('*')
+          .eq('receptionist_id', receptionistId);
+        services = servicesData || [];
+
+        const { data: faqsData } = await supabase
+          .from('receptionist_faqs')
+          .select('*')
+          .eq('receptionist_id', receptionistId)
+          .order('priority', { ascending: false });
+        faqs = faqsData || [];
+      }
+
+      // Build structured data
+      const receptionistData = {
+        business_name: receptionist.business_name,
+        business_type: receptionist.business_type,
+        phone: receptionist.phone,
+        language: receptionist.language,
+        greeting_message: receptionist.greeting_message,
+        tone: receptionist.tone,
+        goal: receptionist.goal,
+        temperature: receptionist.temperature,
+        services: services.map(s => ({
+          name: s.name,
+          description: s.description,
+          duration: `${s.duration_minutes} minutes`,
+          buffer_before: `${s.buffer_before_minutes} min`,
+          buffer_after: `${s.buffer_after_minutes} min`,
+        })),
+        faqs: faqs.map(f => ({
+          question: f.question,
+          answer: f.answer,
+        })),
+      };
+
+      const { data, error } = await supabase.functions.invoke('generate-system-prompt', {
+        body: { receptionistData }
+      });
+
+      if (error) throw error;
+      if (!data?.system_prompt) throw new Error('No system prompt generated');
+
+      setReceptionist(p => ({ ...p, system_prompt: data.system_prompt }));
+      toast({ 
+        title: "Success", 
+        description: "System prompt generated! Review and customize as needed." 
+      });
+    } catch (err: any) {
+      console.error('Generate system prompt error:', err);
+      toast({ 
+        title: "Error", 
+        description: err.message || "Failed to generate system prompt",
+        variant: "destructive" 
+      });
+    } finally {
+      setGeneratingPrompt(false);
     }
   }
 
@@ -736,7 +809,17 @@ export default function BuilderPage() {
           </div>
           <p className="text-xs text-gray-500 mt-1">Higher = more creative, Lower = more focused</p>
 
-          <label className="block text-xs mt-2">System Prompt (Advanced)</label>
+          <div className="flex items-center justify-between mt-2">
+            <label className="block text-xs">System Prompt (Advanced)</label>
+            <button
+              type="button"
+              onClick={generateSystemPrompt}
+              disabled={generatingPrompt || !receptionist.business_name}
+              className="text-xs px-3 py-1 bg-primary text-primary-foreground rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {generatingPrompt ? "Generating..." : "🪄 AI Generate"}
+            </button>
+          </div>
           <textarea className="w-full border rounded p-2" rows={3} placeholder="Optional custom system instructions..." value={receptionist.system_prompt || ""} onChange={(e) => onFieldChange("system_prompt", e.target.value)} />
 
           <div className="flex gap-2 mt-4">
