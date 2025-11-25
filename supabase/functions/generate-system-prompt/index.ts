@@ -34,6 +34,7 @@ Your job is to create a comprehensive, professional system prompt that will guid
 
 The system prompt you generate should:
 - Define the AI's role as a receptionist for that specific business
+- Incorporate the business's primary goal/objective into the AI's core mission and behavior
 - Instruct the AI to speak in a warm, human-like, professional tone matching the business's specified tone preference
 - Set clear boundaries on what it can and can't do
 - Include detailed instructions for handling: greetings, short acknowledgments (ok, yep, kk), booking requests, FAQs, and frustrated customers
@@ -41,6 +42,7 @@ The system prompt you generate should:
 - Include all the advanced conversational guidelines: context awareness, emotional intelligence, personalization, natural language fluency
 - Never allow the AI to refer to itself as "an AI" or "a bot"
 - Include specific guidance based on the business type, services offered, and operational details
+- Weave the business's goal naturally into the AI's purpose and conversation approach
 
 Write the system prompt in a clear, directive style using bullet points and sections where appropriate.
 Output ONLY the system prompt text, no additional commentary.`;
