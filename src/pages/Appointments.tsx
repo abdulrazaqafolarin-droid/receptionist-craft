@@ -7,8 +7,10 @@ import { AppointmentModal } from "@/components/appointments/AppointmentModal";
 import { AppointmentFilters, type FilterState } from "@/components/appointments/AppointmentFilters";
 import type { Appointment } from "@/types/appointments";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MessageCircle, RefreshCw, Plus, Download } from "lucide-react";
+import { MessageCircle, RefreshCw, Plus, Download, Calendar } from "lucide-react";
 import { toast } from "sonner";
+import { EmptyState } from "@/components/EmptyState";
+import { LoadingState } from "@/components/LoadingState";
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -198,12 +200,21 @@ export default function Appointments() {
         </div>
 
         {loading && appointments.length === 0 ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-              <p className="text-muted-foreground">Loading appointments...</p>
-            </div>
-          </div>
+          <LoadingState message="Loading appointments..." />
+        ) : filteredAppointments.length === 0 && appointments.length === 0 ? (
+          <EmptyState
+            icon={Calendar}
+            title="No appointments yet"
+            description="Appointments booked through your AI receptionist will appear here. Test your widget to create your first appointment!"
+            actionLabel="Create Appointment"
+            onAction={() => setCreateModalOpen(true)}
+          />
+        ) : filteredAppointments.length === 0 ? (
+          <EmptyState
+            icon={Calendar}
+            title="No appointments match your filters"
+            description="Try adjusting your search or filter criteria to see more results."
+          />
         ) : (
           <AppointmentCalendar appointments={filteredAppointments} />
         )}
