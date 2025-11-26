@@ -53,6 +53,7 @@ export default function Step1CreateReceptionist() {
           tone: receptionist.tone,
           language: receptionist.language,
           greeting_message: greetingMessage,
+          goal: receptionist.goal || null,
           persona_description: `${receptionist.tone.charAt(0).toUpperCase() + receptionist.tone.slice(1)}, professional AI receptionist for ${receptionist.business_name}.`,
         })
         .select()
@@ -184,6 +185,20 @@ export default function Step1CreateReceptionist() {
             onChange={(e) => setReceptionist({ greeting_message: e.target.value })}
             rows={3}
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="goal">Main Goal & Custom Instructions (Optional)</Label>
+          <Textarea
+            id="goal"
+            placeholder="Describe how you want your AI receptionist to behave, what information it should prioritize, and any specific business details it should know. Example: 'Focus on booking appointments quickly. Always mention our 20% new patient discount.'"
+            value={receptionist.goal}
+            onChange={(e) => setReceptionist({ goal: e.target.value })}
+            rows={4}
+          />
+          <p className="text-xs text-muted-foreground">
+            This information will be refined and integrated into the AI's behavior
+          </p>
         </div>
 
         <Button onClick={handleContinue} disabled={loading} size="lg" className="w-full">

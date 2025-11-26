@@ -778,6 +778,16 @@ export default function BuilderPage() {
           <label className="block text-xs mt-2">Default Response</label>
           <textarea className="w-full border rounded p-2" rows={2} value={receptionist.default_response || ""} onChange={(e) => onFieldChange("default_response", e.target.value)} />
 
+          <label className="block text-xs mt-2">Main Goal & Custom Instructions</label>
+          <textarea 
+            className="w-full border rounded p-2" 
+            rows={4} 
+            placeholder="Describe how you want your AI receptionist to behave, what information it should prioritize, and any specific business details it should know. Example: 'Focus on booking appointments quickly. Always mention our 20% new patient discount. We specialize in cosmetic dentistry.'" 
+            value={receptionist.goal || ""} 
+            onChange={(e) => onFieldChange("goal", e.target.value)} 
+          />
+          <p className="text-xs text-gray-500 mt-1">This information will be refined and integrated into the AI's system prompt</p>
+
           <div className="flex items-center justify-between mt-2">
             <label className="block text-xs">Knowledge Base</label>
             <button

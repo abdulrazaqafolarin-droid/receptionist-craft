@@ -35,7 +35,7 @@ Use the following template to create a personalized system prompt for the AI rec
 Follow this format exactly:
 
 # Personality
-[Describe the receptionist's role, name (if given), industry, tone, and personality traits. Incorporate the business's primary goal/objective here as part of the AI's core mission.]
+[Describe the receptionist's role, name (if given), industry, tone, and personality traits. If the business owner provided a "goal" or custom instructions, incorporate those directives here as part of the AI's core mission and behavioral foundation.]
 
 # Environment
 [Describe the context where the AI works — e.g. a spa website, a law office portal, a dentist's booking platform, etc.]
@@ -44,7 +44,7 @@ Follow this format exactly:
 [Define how the AI should speak — e.g. friendly, professional, energetic, warm, luxurious, casual, etc. Match the business's specified tone preference.]
 
 # Goal
-[Explain the AI's goals — helping users, booking, answering questions, guiding to services. Weave in the business's stated goal naturally.]
+[Explain the AI's primary objectives — helping users, booking appointments, answering questions, guiding to services. If the business owner provided specific goals or priorities in the "goal" field, integrate them naturally here as the AI's core behavioral directives.]
 
 # Core Actions
 1. **Greet Users:** [How the AI should greet warmly and professionally]
