@@ -74,3 +74,48 @@ verify_jwt = false
 
 [functions.generate-system-prompt]
 verify_jwt = false
+
+[functions.analytics]
+verify_jwt = true
+
+[functions.appointment-action]
+verify_jwt = false
+
+[functions.book-appointment]
+verify_jwt = false
+
+[functions.kb-rewrite]
+verify_jwt = true
+
+[functions.optimizer]
+verify_jwt = true
+
+[functions.check-availability]
+verify_jwt = false
+
+[functions.confirm-appointment]
+verify_jwt = false
+
+[functions.cancel-appointment]
+verify_jwt = false
+
+[functions.send-booking-confirmation]
+verify_jwt = true
+
+[functions.appointment-reminder-runner]
+verify_jwt = true
+
+[functions.send-reminder]
+verify_jwt = true
+
+[functions.text-to-speech]
+verify_jwt = false
+
+[functions.voice-to-text]
+verify_jwt = false
+
+[functions.analytics-export]
+verify_jwt = true
+
+[functions.create-notification]
+verify_jwt = true
