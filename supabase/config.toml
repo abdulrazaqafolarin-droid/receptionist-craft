@@ -105,6 +105,12 @@ verify_jwt = true
 [functions.appointment-reminder-runner]
 verify_jwt = true
 
+[functions.send-booking-email]
+verify_jwt = false
+
+[functions.activate-reminders]
+verify_jwt = false
+
 [functions.send-reminder]
 verify_jwt = true
 
