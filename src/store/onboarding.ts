@@ -30,6 +30,7 @@ type OnboardingState = {
     business_type: string;
     phone: string;
     greeting_message: string;
+    goal: string;
     tone: 'friendly' | 'professional' | 'playful';
     language: string;
   };
@@ -59,6 +60,7 @@ const initialState = {
     business_type: '',
     phone: '',
     greeting_message: '',
+    goal: '',
     tone: 'friendly' as const,
     language: 'English',
   },
