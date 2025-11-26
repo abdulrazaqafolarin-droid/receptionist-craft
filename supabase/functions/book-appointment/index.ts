@@ -268,17 +268,13 @@ serve(async (req) => {
 
     console.log(`[book-appointment] Notification sent`);
 
-    // Send booking confirmation email
+    // Send booking confirmation email using new edge function
     if (customerEmail) {
       try {
-        await supabase.functions.invoke("send-booking-confirmation", {
-          body: {
-            appointmentId: appointment.id,
-            recipientEmail: customerEmail,
-            type: "confirmation",
-          },
+        await supabase.functions.invoke("send-booking-email", {
+          body: { appointmentId: appointment.id },
         });
-        console.log(`[book-appointment] Confirmation email queued`);
+        console.log(`[book-appointment] Confirmation email sent`);
       } catch (emailErr) {
         console.error("[book-appointment] Email send failed:", emailErr);
         // Don't fail the booking if email fails
