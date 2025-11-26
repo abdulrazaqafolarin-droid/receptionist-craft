@@ -101,6 +101,13 @@ Time mentioned: ${context.timeMentioned || "Not yet specified"}
 Urgency level: ${urgencyLevel}
 `;
 
+    // Check if this is the first message in the conversation
+    const isFirstMessage = !history || history.length === 0;
+    
+    const greetingInstruction = isFirstMessage && receptionist.greeting_message
+      ? `- **FIRST MESSAGE ONLY:** Greet the visitor warmly: "${receptionist.greeting_message}"\n- **IMPORTANT:** Do NOT greet again in subsequent messages - you've already introduced yourself`
+      : `- **CRITICAL:** You have ALREADY greeted this visitor. Do NOT greet them again. Continue the conversation naturally from where you left off`;
+
     const systemPrompt = `You are ${receptionist.name}, the AI receptionist for ${receptionist.business_name}${
       receptionist.business_type ? ` (a ${receptionist.business_type})` : ''
     }.
@@ -120,7 +127,7 @@ You are trained to communicate with clarity, warmth, and professional efficiency
 ---
 
 ## 2. CORE BEHAVIOR
-${receptionist.greeting_message ? `- Greet visitors warmly: "${receptionist.greeting_message}"` : '- Greet visitors with warmth and purpose'}
+${greetingInstruction}
 ${receptionist.persona_description ? `- Your personality: ${receptionist.persona_description}` : ''}
 - Offer help proactively and respond promptly
 - Ask clarifying questions if input is vague or incomplete

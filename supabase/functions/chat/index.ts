@@ -136,6 +136,12 @@ serve(async (req) => {
         ? receptionistConfig.business_info
         : JSON.stringify(receptionistConfig.business_info || {}, null, 2));
 
+    // Check if this is the first message in the conversation
+    const isFirstMessage = history.length === 0;
+    const greetingNote = isFirstMessage 
+      ? "- This is your FIRST interaction with this visitor. Greet them warmly and introduce yourself."
+      : "- **CRITICAL:** You have ALREADY greeted this visitor in this conversation. Do NOT greet them again. Continue naturally from the previous context.";
+
     const systemPrompt = receptionistConfig.system_prompt || `You are ${receptionistConfig.name}, the friendly AI receptionist for ${receptionistConfig.business_name}.
 
 Your tone: ${receptionistConfig.tone || "warm and professional"}
@@ -147,6 +153,7 @@ FAQs:
 ${faqText}
 
 Core Instructions:
+${greetingNote}
 - Speak naturally like a human receptionist—warm, conversational, empathetic
 - Use contractions (I'm, you're, can't) and varied sentence structures
 - Remember context from earlier in the conversation
