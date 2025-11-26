@@ -9,6 +9,7 @@ import { Code, Copy, ExternalLink, CheckCircle, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { WidgetSettings } from "@/components/WidgetSettings";
+import { WidgetCustomization } from "@/components/WidgetCustomization";
 
 export default function WidgetInstall() {
   const { id: receptionistId } = useParams();
@@ -193,11 +194,6 @@ export function AIReceptionistWidget() {
           </Card>
         </div>
 
-        {/* Widget Customization */}
-        <div className="mb-6">
-          <WidgetSettings receptionistId={receptionistId!} />
-        </div>
-
         {/* Installation Code */}
         <Card>
           <CardHeader>
@@ -210,13 +206,21 @@ export function AIReceptionistWidget() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="embed">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="embed">Embed</TabsTrigger>
-                <TabsTrigger value="floating">Floating Button</TabsTrigger>
-                <TabsTrigger value="react">React</TabsTrigger>
-                <TabsTrigger value="wordpress">WordPress</TabsTrigger>
+            <Tabs defaultValue="install">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="install">Installation</TabsTrigger>
+                <TabsTrigger value="customization">Customization</TabsTrigger>
+                <TabsTrigger value="settings">Settings</TabsTrigger>
               </TabsList>
+              
+              <TabsContent value="install">
+                <Tabs defaultValue="embed">
+                  <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="embed">Embed</TabsTrigger>
+                    <TabsTrigger value="floating">Floating Button</TabsTrigger>
+                    <TabsTrigger value="react">React</TabsTrigger>
+                    <TabsTrigger value="wordpress">WordPress</TabsTrigger>
+                  </TabsList>
 
               <TabsContent value="embed" className="space-y-4">
                 <div className="space-y-2">
@@ -300,6 +304,16 @@ export function AIReceptionistWidget() {
                     Add to WordPress using a Custom HTML block or HTML widget. Works with any theme.
                   </p>
                 </div>
+                </TabsContent>
+                </Tabs>
+              </TabsContent>
+
+              <TabsContent value="customization" className="space-y-4">
+                <WidgetCustomization receptionistId={receptionistId!} />
+              </TabsContent>
+
+              <TabsContent value="settings" className="space-y-4">
+                <WidgetSettings receptionistId={receptionistId!} />
               </TabsContent>
             </Tabs>
           </CardContent>
