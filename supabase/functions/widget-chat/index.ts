@@ -43,6 +43,41 @@ serve(async (req) => {
       throw new Error("Receptionist not found or inactive");
     }
 
+    // Check if this is the first message (for proactive greeting)
+    const { data: messageCount } = await supabase
+      .from("chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("receptionist_id", receptionistId)
+      .eq("user_id", sessionId || "anonymous");
+
+    const isFirstMessage = !messageCount || messageCount.length === 0;
+
+    // If first visit and no message provided, send proactive greeting
+    if (isFirstMessage && (!message || message.trim() === "")) {
+      const proactiveGreeting = receptionist.greeting_message || 
+        `Hi! I'm ${receptionist.name}, the AI receptionist for ${receptionist.business_name}. How can I help you today?`;
+      
+      // Store greeting as bot message
+      await supabase.from("chat_messages").insert({
+        receptionist_id: receptionistId,
+        session_id: sessionId || "default",
+        user_id: sessionId || "anonymous",
+        sender: "bot",
+        message: proactiveGreeting,
+        metadata: { timestamp: new Date().toISOString(), proactive: true }
+      });
+
+      return new Response(
+        JSON.stringify({ 
+          reply: proactiveGreeting,
+          hasBookingIntent: false,
+          receptionistName: receptionist.name,
+          businessName: receptionist.business_name
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Fetch conversation history (last 20 messages for better context)
     const { data: history } = await supabase
       .from("chat_messages")
@@ -101,8 +136,6 @@ Time mentioned: ${context.timeMentioned || "Not yet specified"}
 Urgency level: ${urgencyLevel}
 `;
 
-    // Check if this is the first message in the conversation
-    const isFirstMessage = !history || history.length === 0;
     
     const greetingInstruction = isFirstMessage && receptionist.greeting_message
       ? `- **FIRST MESSAGE ONLY:** Greet the visitor warmly: "${receptionist.greeting_message}"\n- **IMPORTANT:** Do NOT greet again in subsequent messages - you've already introduced yourself`
