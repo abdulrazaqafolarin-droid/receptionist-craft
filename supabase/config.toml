@@ -125,3 +125,6 @@ verify_jwt = true
 
 [functions.create-notification]
 verify_jwt = true
+
+[functions.setup-reminder-cron]
+verify_jwt = true
