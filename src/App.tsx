@@ -34,6 +34,7 @@ import ConfirmAppointment from "./pages/ConfirmAppointment";
 import CancelAppointment from "./pages/CancelAppointment";
 import ManageBooking from "./pages/ManageBooking";
 import WidgetInstall from "./pages/WidgetInstall";
+import FAQManagement from "./pages/FAQManagement";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -96,6 +97,7 @@ const App = () => {
                       <Route path="/appointments" element={<ProtectedRoute session={session}><Appointments /></ProtectedRoute>} />
                       <Route path="/services" element={<ProtectedRoute session={session}><Services /></ProtectedRoute>} />
                       <Route path="/availability" element={<ProtectedRoute session={session}><Availability /></ProtectedRoute>} />
+                      <Route path="/faqs" element={<ProtectedRoute session={session}><FAQManagement /></ProtectedRoute>} />
                       <Route path="/analytics" element={<ProtectedRoute session={session}><Analytics /></ProtectedRoute>} />
                       <Route path="/quality-review" element={<ProtectedRoute session={session}><QualityReview /></ProtectedRoute>} />
                       <Route path="/kb-rewrite" element={<ProtectedRoute session={session}><KBRewrite /></ProtectedRoute>} />
