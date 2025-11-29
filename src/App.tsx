@@ -10,6 +10,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Navbar } from "@/components/Navbar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
@@ -49,6 +50,7 @@ const ProtectedRoute = ({ children, session }: { children: React.ReactNode; sess
 
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
+  useKeyboardShortcuts();
 
   useEffect(() => {
     // Set up auth state listener
