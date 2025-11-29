@@ -19,6 +19,7 @@ export default function Appointments() {
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     status: [],
@@ -137,10 +138,50 @@ export default function Appointments() {
 
       if (error) throw error;
       setAppointments((data || []) as Appointment[]);
+      setSelected({});
     } catch (err) {
       console.error("loadAppointments error", err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelected((s) => ({ ...s, [id]: !s[id] }));
+  }
+
+  function selectAll() {
+    const map: Record<string, boolean> = {};
+    filteredAppointments.forEach((a) => (map[a.id] = true));
+    setSelected(map);
+  }
+
+  function clearSelection() {
+    setSelected({});
+  }
+
+  const selectedIds = Object.keys(selected).filter((id) => selected[id]);
+
+  async function bulkCancel() {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Cancel ${selectedIds.length} appointments?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from("appointments")
+        .update({ status: "cancelled" })
+        .in("id", selectedIds);
+
+      if (!error) {
+        toast.success(`${selectedIds.length} appointments cancelled`);
+        clearSelection();
+        loadAppointments();
+      } else {
+        toast.error("Failed to cancel appointments");
+      }
+    } catch (e) {
+      console.error("bulkCancel failed", e);
+      toast.error("Error cancelling appointments");
     }
   }
 
@@ -154,6 +195,15 @@ export default function Appointments() {
             <p className="text-muted-foreground">View all appointments booked via AI chat</p>
           </div>
           <div className="flex gap-2 items-center">
+            {selectedIds.length > 0 && (
+              <>
+                <span className="text-sm text-muted-foreground">{selectedIds.length} selected</span>
+                <Button onClick={clearSelection} variant="ghost" size="sm">Clear</Button>
+                <Button onClick={bulkCancel} variant="destructive" size="sm">
+                  Cancel Selected
+                </Button>
+              </>
+            )}
             {receptionists.length > 0 && (
               <select 
                 className="px-4 py-2 border rounded-md bg-background"
