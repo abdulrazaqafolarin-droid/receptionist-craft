@@ -34,7 +34,7 @@ export default function Widget() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [receptionist, setReceptionist] = useState<any>(null);
-  const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).substring(7)}`);
+  const [sessionId, setSessionId] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [services, setServices] = useState<any[]>([]);
   const [bookingState, setBookingState] = useState({
@@ -42,6 +42,10 @@ export default function Widget() {
     serviceName: null as string | null,
     date: null as Date | null,
     timeSlot: null as any,
+    customerName: null as string | null,
+    customerEmail: null as string | null,
+    customerPhone: null as string | null,
+    collectingInfo: null as 'name' | 'contact' | null,
   });
   const [widgetColors, setWidgetColors] = useState({
     primaryColor: "#8B5CF6",
@@ -50,12 +54,24 @@ export default function Widget() {
   });
   const [greetingStored, setGreetingStored] = useState(false);
 
+  // Initialize persistent session ID
   useEffect(() => {
-    if (receptionistId) {
+    if (!receptionistId) return;
+    
+    let sid = localStorage.getItem(`widget_session_${receptionistId}`);
+    if (!sid) {
+      sid = crypto.randomUUID();
+      localStorage.setItem(`widget_session_${receptionistId}`, sid);
+    }
+    setSessionId(sid);
+  }, [receptionistId]);
+
+  useEffect(() {
+    if (receptionistId && sessionId) {
       loadReceptionist();
       loadServices();
     }
-  }, [receptionistId]);
+  }, [receptionistId, sessionId]);
 
   // Store initial greeting in database to prevent re-greeting
   useEffect(() => {
@@ -149,6 +165,92 @@ export default function Widget() {
     setLoading(true);
 
     try {
+      // Handle booking info collection
+      if (bookingState.collectingInfo === 'name') {
+        // User provided their name
+        setBookingState(prev => ({ ...prev, customerName: textToSend, collectingInfo: 'contact' }));
+        
+        const botMessage: Message = {
+          role: "assistant",
+          content: `Thanks, ${textToSend}! Please provide your email or phone number so we can send you a confirmation.`,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, botMessage]);
+        setLoading(false);
+        return;
+      }
+
+      if (bookingState.collectingInfo === 'contact') {
+        // User provided contact info - complete the booking
+        const contactInfo = textToSend.trim();
+        const isEmail = contactInfo.includes('@');
+        
+        setBookingState(prev => ({
+          ...prev,
+          customerEmail: isEmail ? contactInfo : null,
+          customerPhone: !isEmail ? contactInfo : null,
+          collectingInfo: null,
+        }));
+
+        // Book the appointment
+        try {
+          const { data: bookingData, error: bookingError } = await supabase.functions.invoke("book-appointment", {
+            body: {
+              receptionistId,
+              serviceId: bookingState.serviceId,
+              startTime: bookingState.timeSlot.startTime,
+              customerName: bookingState.customerName,
+              customerEmail: isEmail ? contactInfo : null,
+              customerPhone: !isEmail ? contactInfo : null,
+              source: "widget",
+            }
+          });
+
+          if (bookingError) throw bookingError;
+
+          // Show confirmation
+          const confirmationMessage: Message = {
+            role: "assistant",
+            content: `Perfect! Your appointment has been confirmed for ${format(new Date(bookingState.timeSlot.startTime), "MMMM d, yyyy 'at' h:mm a")}. You'll receive a confirmation ${isEmail ? 'email' : 'text'} shortly.`,
+            timestamp: new Date(),
+            bookingConfirmation: {
+              serviceName: bookingState.serviceName,
+              dateTime: bookingState.timeSlot.startTime,
+              customerName: bookingState.customerName,
+              contactInfo: contactInfo,
+            }
+          };
+          
+          setMessages(prev => [...prev, confirmationMessage]);
+          
+          // Reset booking state
+          setBookingState({
+            serviceId: null,
+            serviceName: null,
+            date: null,
+            timeSlot: null,
+            customerName: null,
+            customerEmail: null,
+            customerPhone: null,
+            collectingInfo: null,
+          });
+          
+          setLoading(false);
+          return;
+        } catch (bookErr: any) {
+          console.error("Booking error:", bookErr);
+          const errorMessage: Message = {
+            role: "assistant",
+            content: "I'm sorry, there was an issue completing your booking. Please try again or contact us directly.",
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, errorMessage]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Normal conversation flow
       const { data, error } = await supabase.functions.invoke("widget-chat", {
         body: {
           message: textToSend,
@@ -225,20 +327,14 @@ export default function Widget() {
   }
 
   async function handleTimeSlotSelect(slot: any) {
-    setBookingState(prev => ({ ...prev, timeSlot: slot }));
-    setLoading(true);
-
-    try {
-      // Ask for customer name if we don't have it yet
-      const botMessage: Message = {
-        role: "assistant",
-        content: "Perfect! Who should I book the appointment under? Please share your name.",
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, botMessage]);
-    } finally {
-      setLoading(false);
-    }
+    setBookingState(prev => ({ ...prev, timeSlot: slot, collectingInfo: 'name' }));
+    
+    const botMessage: Message = {
+      role: "assistant",
+      content: "Perfect! What's your name?",
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, botMessage]);
   }
 
   async function handleQuickReply(value: string) {
@@ -422,7 +518,13 @@ export default function Widget() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message..."
+              placeholder={
+                bookingState.collectingInfo === 'name' 
+                  ? "Enter your name..." 
+                  : bookingState.collectingInfo === 'contact'
+                  ? "Enter your email or phone..."
+                  : "Type your message..."
+              }
               disabled={loading}
               className="flex-1"
             />
