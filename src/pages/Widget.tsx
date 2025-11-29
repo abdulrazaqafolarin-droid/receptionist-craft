@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Send, Loader2, MessageCircle } from "lucide-react";
+import { Send, Loader2, MessageCircle, Phone, Mail, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
 import { ServiceSelector } from "@/components/widget/ServiceSelector";
@@ -12,6 +12,7 @@ import { DateSelector } from "@/components/widget/DateSelector";
 import { TimeSlotSelector } from "@/components/widget/TimeSlotSelector";
 import { BookingConfirmation } from "@/components/widget/BookingConfirmation";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 type Message = {
   role: "user" | "assistant";
@@ -365,11 +366,13 @@ export default function Widget() {
 
   if (!receptionistId) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background">
-        <Card className="p-8 max-w-md text-center">
-          <MessageCircle className="h-16 w-16 mx-auto mb-4 text-primary" />
-          <h2 className="text-2xl font-bold mb-2">Invalid Widget Link</h2>
-          <p className="text-muted-foreground">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background p-4">
+        <Card className="p-8 sm:p-12 max-w-md text-center shadow-2xl animate-in fade-in-0 zoom-in-95 duration-300">
+          <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+            <MessageCircle className="h-10 w-10 text-primary" />
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-bold mb-3">Invalid Widget Link</h2>
+          <p className="text-muted-foreground leading-relaxed">
             This chat widget link is not properly configured. Please contact the business owner.
           </p>
         </Card>
@@ -379,57 +382,82 @@ export default function Widget() {
 
   if (!receptionist) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground animate-pulse">Loading chat...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background p-4">
-      <Card className="w-full max-w-2xl h-[600px] flex flex-col shadow-2xl">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-2 sm:p-4">
+      <Card className="w-full max-w-3xl h-[90vh] sm:h-[700px] flex flex-col shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-300">
         {/* Header */}
         <div 
-          className="text-primary-foreground p-6 rounded-t-lg"
+          className="text-primary-foreground p-4 sm:p-6 relative overflow-hidden"
           style={{
-            background: `linear-gradient(to right, ${widgetColors.primaryColor}, ${widgetColors.secondaryColor})`
+            background: `linear-gradient(135deg, ${widgetColors.primaryColor}, ${widgetColors.secondaryColor})`
           }}
         >
-          <div className="flex items-center gap-3">
+          <div className="absolute inset-0 bg-black/10"></div>
+          <div className="relative flex items-center gap-3">
             {widgetColors.logoUrl ? (
-              <img 
-                src={widgetColors.logoUrl} 
-                alt="Logo" 
-                className="h-12 w-12 rounded-full object-cover"
-              />
+              <div className="h-14 w-14 rounded-full overflow-hidden ring-2 ring-white/30 shadow-lg">
+                <img 
+                  src={widgetColors.logoUrl} 
+                  alt="Logo" 
+                  className="h-full w-full object-cover"
+                />
+              </div>
             ) : (
-              <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
-                <MessageCircle className="h-6 w-6" />
+              <div className="h-14 w-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center ring-2 ring-white/30 shadow-lg">
+                <MessageCircle className="h-7 w-7" />
               </div>
             )}
-            <div>
-              <h2 className="text-xl font-bold">{receptionist.name}</h2>
-              <p className="text-sm opacity-90">{receptionist.business_name}</p>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl sm:text-2xl font-bold truncate">{receptionist.name}</h2>
+              <p className="text-sm opacity-90 truncate">{receptionist.business_name}</p>
+              <div className="flex items-center gap-1 mt-1">
+                <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse"></div>
+                <span className="text-xs opacity-80">Online</span>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-muted/30">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-gradient-to-b from-muted/20 to-background scroll-smooth">
           {messages.map((msg, idx) => (
-            <div key={idx} className="space-y-2">
+            <div 
+              key={idx} 
+              className={cn(
+                "space-y-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
+                `animation-delay-${idx % 3}`
+              )}
+            >
               <div
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
               >
+                {msg.role === "assistant" && (
+                  <div 
+                    className="h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center mt-1"
+                    style={{
+                      background: `linear-gradient(135deg, ${widgetColors.primaryColor}, ${widgetColors.secondaryColor})`
+                    }}
+                  >
+                    <MessageCircle className="h-4 w-4 text-white" />
+                  </div>
+                )}
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                  className={cn(
+                    "max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 shadow-sm transition-all duration-200 hover:shadow-md",
                     msg.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card border border-border"
-                  }`}
+                      ? "bg-primary text-primary-foreground rounded-br-md"
+                      : "bg-card border border-border/50 rounded-bl-md"
+                  )}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                  <p className="text-xs opacity-70 mt-1">
+                  <p className="text-sm sm:text-base whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  <p className="text-xs opacity-60 mt-2 flex items-center gap-1">
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
@@ -503,9 +531,21 @@ export default function Widget() {
             </div>
           ))}
           {loading && (
-            <div className="flex justify-start">
-              <div className="bg-card border border-border rounded-2xl px-4 py-3">
-                <Loader2 className="h-4 w-4 animate-spin" />
+            <div className="flex gap-2 justify-start animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+              <div 
+                className="h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center"
+                style={{
+                  background: `linear-gradient(135deg, ${widgetColors.primaryColor}, ${widgetColors.secondaryColor})`
+                }}
+              >
+                <MessageCircle className="h-4 w-4 text-white" />
+              </div>
+              <div className="bg-card border border-border rounded-2xl rounded-bl-md px-5 py-3 shadow-sm">
+                <div className="flex gap-1">
+                  <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce"></div>
+                  <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:0.2s]"></div>
+                  <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:0.4s]"></div>
+                </div>
               </div>
             </div>
           )}
@@ -513,8 +553,8 @@ export default function Widget() {
         </div>
 
         {/* Input */}
-        <div className="p-4 border-t border-border bg-card">
-          <div className="flex gap-2">
+        <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
+          <div className="flex gap-2 items-end">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -527,19 +567,33 @@ export default function Widget() {
                   : "Type your message..."
               }
               disabled={loading}
-              className="flex-1"
+              className="flex-1 min-h-[44px] text-base rounded-xl border-border/50 focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
+              autoFocus
             />
-            <Button onClick={handleSendClick} disabled={loading || !input.trim()}>
+            <Button 
+              onClick={handleSendClick} 
+              disabled={loading || !input.trim()}
+              className="h-11 w-11 rounded-xl shadow-md hover:shadow-lg transition-all disabled:opacity-50"
+              style={{
+                background: input.trim() ? `linear-gradient(135deg, ${widgetColors.primaryColor}, ${widgetColors.secondaryColor})` : undefined
+              }}
+            >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
-                <Send className="h-4 w-4" />
+                <Send className="h-5 w-5" />
               )}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-2 text-center">
-            Powered by AI Receptionist
-          </p>
+          <div className="flex items-center justify-between mt-3 px-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
+              Typically replies instantly
+            </p>
+            <p className="text-xs text-muted-foreground/70">
+              Powered by AI
+            </p>
+          </div>
         </div>
       </Card>
     </div>
