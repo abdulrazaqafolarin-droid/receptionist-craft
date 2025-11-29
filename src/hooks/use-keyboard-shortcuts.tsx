@@ -1,9 +1,6 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 
 export function useKeyboardShortcuts() {
-  const navigate = useNavigate();
-
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       // Ctrl+K - Command palette (placeholder for future implementation)
@@ -13,21 +10,19 @@ export function useKeyboardShortcuts() {
         // Future: Open command palette modal
       }
 
-      // Ctrl+N - New appointment
+      // Ctrl+N - New appointment (navigates via full page load to avoid router hook issues)
       if ((e.ctrlKey || e.metaKey) && e.key === "n") {
         e.preventDefault();
-        navigate("/appointments");
+        window.location.assign("/appointments");
       }
 
       // Escape - Close modals/dialogs
       if (e.key === "Escape") {
-        // This will be handled by individual modal components
-        // Just log for now to confirm it's working
         console.log("Escape key pressed");
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate]);
+  }, []);
 }
