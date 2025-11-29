@@ -13,10 +13,20 @@ serve(async (req) => {
   }
 
   try {
-    const { message, receptionistId, sessionId } = await req.json();
+    const payload = await req.json().catch(() => ({}));
+    const {
+      message = null,
+      receptionistId,
+      sessionId = null,
+      displayedGreeting = null,
+      source = "widget",
+    } = payload;
 
-    if (!message || !receptionistId) {
-      throw new Error("Message and receptionistId are required");
+    if (!receptionistId || !sessionId) {
+      return new Response(
+        JSON.stringify({ error: "receptionistId and sessionId are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -56,6 +66,51 @@ serve(async (req) => {
     }
 
     const isFirstMessage = !existingMessages || existingMessages.length === 0;
+
+    // If message is empty (widget greeting storage), store greeting as bot message
+    if (message === "") {
+      const { data: existing, error: existErr } = await supabase
+        .from("chat_messages")
+        .select("id")
+        .eq("receptionist_id", receptionistId)
+        .eq("session_id", sessionId || "default")
+        .eq("sender", "bot")
+        .eq("metadata->>greeting", displayedGreeting || "")
+        .limit(1);
+
+      if (existErr) {
+        console.error("[widget-chat] error checking existing greeting", existErr);
+      } else if (existing && existing.length > 0) {
+        return new Response(JSON.stringify({ ok: true, message: "greeting already stored" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { error: insertErr } = await supabase.from("chat_messages").insert({
+        receptionist_id: receptionistId,
+        session_id: sessionId || "default",
+        user_id: sessionId || "anonymous",
+        sender: "bot",
+        message: displayedGreeting || "Hello, how can I help you today?",
+        metadata: {
+          greeting: displayedGreeting || "default",
+          source,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      if (insertErr) {
+        console.error("[widget-chat] failed to insert greeting", insertErr);
+        return new Response(JSON.stringify({ error: "failed to persist greeting" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true, stored: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // If first visit and no message provided, send proactive greeting
     if (isFirstMessage && (!message || message.trim() === "")) {
