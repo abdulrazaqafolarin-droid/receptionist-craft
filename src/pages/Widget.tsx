@@ -43,6 +43,12 @@ export default function Widget() {
     date: null as Date | null,
     timeSlot: null as any,
   });
+  const [widgetColors, setWidgetColors] = useState({
+    primaryColor: "#8B5CF6",
+    secondaryColor: "#A78BFA",
+    logoUrl: "",
+  });
+  const [greetingStored, setGreetingStored] = useState(false);
 
   useEffect(() => {
     if (receptionistId) {
@@ -51,6 +57,13 @@ export default function Widget() {
     }
   }, [receptionistId]);
 
+  // Store initial greeting in database to prevent re-greeting
+  useEffect(() => {
+    if (receptionist && receptionist.greeting_message && !greetingStored) {
+      storeInitialGreeting();
+    }
+  }, [receptionist, greetingStored]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -58,7 +71,7 @@ export default function Widget() {
   async function loadReceptionist() {
     const { data, error } = await supabase
       .from("receptionists")
-      .select("name, business_name, greeting_message, active")
+      .select("name, business_name, greeting_message, active, business_info")
       .eq("id", receptionistId)
       .eq("active", true)
       .maybeSingle();
@@ -70,7 +83,18 @@ export default function Widget() {
 
     setReceptionist(data);
     
-    // Add greeting message with quick replies
+    // Apply widget customization colors if available
+    const businessInfo = data.business_info as any;
+    if (businessInfo?.widget_customization) {
+      const customization = businessInfo.widget_customization;
+      setWidgetColors({
+        primaryColor: customization.primaryColor || "#8B5CF6",
+        secondaryColor: customization.secondaryColor || "#A78BFA",
+        logoUrl: customization.logoUrl || "",
+      });
+    }
+    
+    // Display greeting message with quick replies (will be stored in DB via storeInitialGreeting)
     if (data.greeting_message) {
       setMessages([{
         role: "assistant",
@@ -78,6 +102,23 @@ export default function Widget() {
         timestamp: new Date(),
         showQuickReplies: true,
       }]);
+    }
+  }
+
+  async function storeInitialGreeting() {
+    try {
+      // Call widget-chat with empty message to store the greeting in database
+      await supabase.functions.invoke("widget-chat", {
+        body: {
+          message: "",
+          receptionistId,
+          sessionId,
+          bookingContext: bookingState,
+        }
+      });
+      setGreetingStored(true);
+    } catch (err) {
+      console.error("Failed to store initial greeting:", err);
     }
   }
 
@@ -251,11 +292,24 @@ export default function Widget() {
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background p-4">
       <Card className="w-full max-w-2xl h-[600px] flex flex-col shadow-2xl">
         {/* Header */}
-        <div className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground p-6 rounded-t-lg">
+        <div 
+          className="text-primary-foreground p-6 rounded-t-lg"
+          style={{
+            background: `linear-gradient(to right, ${widgetColors.primaryColor}, ${widgetColors.secondaryColor})`
+          }}
+        >
           <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
-              <MessageCircle className="h-6 w-6" />
-            </div>
+            {widgetColors.logoUrl ? (
+              <img 
+                src={widgetColors.logoUrl} 
+                alt="Logo" 
+                className="h-12 w-12 rounded-full object-cover"
+              />
+            ) : (
+              <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
+                <MessageCircle className="h-6 w-6" />
+              </div>
+            )}
             <div>
               <h2 className="text-xl font-bold">{receptionist.name}</h2>
               <p className="text-sm opacity-90">{receptionist.business_name}</p>

@@ -12,9 +12,11 @@ import { notify } from "@/lib/notify";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useTheme } from "next-themes";
 
 export default function Settings() {
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const [sendingTest, setSendingTest] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -209,6 +211,29 @@ export default function Settings() {
                 </CardHeader>
                 <CardContent>
                   <Button variant="outline" disabled>Upgrade Plan (Coming Soon)</Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Appearance</CardTitle>
+                  <CardDescription>
+                    Customize the look and feel of the application
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Dark Mode</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Toggle between light and dark themes
+                      </p>
+                    </div>
+                    <Switch
+                      checked={theme === "dark"}
+                      onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
