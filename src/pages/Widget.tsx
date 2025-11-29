@@ -200,7 +200,7 @@ export default function Widget() {
             body: {
               receptionistId,
               serviceId: bookingState.serviceId,
-              startTime: bookingState.timeSlot.start,
+              startTime: bookingState.timeSlot.startTime,
               customerName: bookingState.customerName,
               customerEmail: isEmail ? contactInfo : null,
               customerPhone: !isEmail ? contactInfo : null,
@@ -210,21 +210,14 @@ export default function Widget() {
 
           if (bookingError) throw bookingError;
 
-          // Show success toast
-          toast({
-            title: "✅ Booking Confirmed!",
-            description: `Your appointment is set for ${format(new Date(bookingState.timeSlot.start), "MMMM d 'at' h:mm a")}`,
-            duration: 6000,
-          });
-
-          // Show confirmation message with booking details
+          // Show confirmation
           const confirmationMessage: Message = {
             role: "assistant",
-            content: `🎉 Perfect! Your appointment has been confirmed!\n\n📅 ${format(new Date(bookingState.timeSlot.start), "EEEE, MMMM d, yyyy")}\n⏰ ${format(new Date(bookingState.timeSlot.start), "h:mm a")}\n💼 ${bookingState.serviceName}\n\nYou'll receive a confirmation ${isEmail ? 'email' : 'text message'} shortly with all the details. Looking forward to seeing you!`,
+            content: `Perfect! Your appointment has been confirmed for ${format(new Date(bookingState.timeSlot.startTime), "MMMM d, yyyy 'at' h:mm a")}. You'll receive a confirmation ${isEmail ? 'email' : 'text'} shortly.`,
             timestamp: new Date(),
             bookingConfirmation: {
               serviceName: bookingState.serviceName,
-              dateTime: bookingState.timeSlot.start,
+              dateTime: bookingState.timeSlot.startTime,
               customerName: bookingState.customerName,
               contactInfo: contactInfo,
             }
@@ -248,13 +241,6 @@ export default function Widget() {
           return;
         } catch (bookErr: any) {
           console.error("Booking error:", bookErr);
-          
-          toast({
-            title: "Booking Failed",
-            description: bookErr.message || "Unable to complete your booking. Please try again.",
-            variant: "destructive"
-          });
-          
           const errorMessage: Message = {
             role: "assistant",
             content: "I'm sorry, there was an issue completing your booking. Please try again or contact us directly.",
@@ -272,14 +258,7 @@ export default function Widget() {
           message: textToSend,
           receptionistId,
           sessionId,
-          bookingContext: {
-            hasService: !!bookingState.serviceId,
-            serviceName: bookingState.serviceName,
-            hasDate: !!bookingState.date,
-            dateString: bookingState.date ? format(bookingState.date, "MMMM d, yyyy") : null,
-            hasTimeSlot: !!bookingState.timeSlot,
-            collectingInfo: bookingState.collectingInfo,
-          },
+          bookingContext: bookingState,
         }
       });
 
@@ -295,10 +274,34 @@ export default function Widget() {
         timestamp: new Date(),
       };
 
-      // Detect booking intent and show services if not already selected
-      if (!bookingState.serviceId && (data.hasBookingIntent || lowerReply.includes("which service") || lowerReply.includes("what service") || lowerReply.includes("book"))) {
+      // Detect booking intent and show services
+      if (data.hasBookingIntent || lowerReply.includes("which service") || lowerReply.includes("what service")) {
         if (services.length > 0) {
           botMessage.showServices = true;
+        }
+      }
+
+      // If service selected, show date picker
+      if (bookingState.serviceId && !bookingState.date && (lowerReply.includes("what day") || lowerReply.includes("when would"))) {
+        botMessage.showDatePicker = true;
+      }
+
+      // If date selected, show time slots
+      if (bookingState.date && !bookingState.timeSlot) {
+        const dateStr = format(bookingState.date, "yyyy-MM-dd");
+        const { data: slotsData } = await supabase.functions.invoke("check-availability", {
+          body: {
+            receptionistId,
+            serviceId: bookingState.serviceId,
+            startDate: dateStr,
+            endDate: dateStr,
+            maxSlots: 6,
+          }
+        });
+
+        if (slotsData?.slots && slotsData.slots.length > 0) {
+          botMessage.showTimeSlots = true;
+          botMessage.timeSlots = slotsData.slots;
         }
       }
 
@@ -317,97 +320,20 @@ export default function Widget() {
 
   async function handleServiceSelect(serviceId: string, serviceName: string) {
     setBookingState(prev => ({ ...prev, serviceId, serviceName }));
-    
-    // Add user message showing selection
-    const userMessage: Message = {
-      role: "user",
-      content: `I'd like to book ${serviceName}`,
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, userMessage]);
-    
-    // Show date picker immediately
-    const botMessage: Message = {
-      role: "assistant",
-      content: `Great choice! ${serviceName} is a popular service. What day works best for you?`,
-      timestamp: new Date(),
-      showDatePicker: true,
-    };
-    setMessages(prev => [...prev, botMessage]);
+    await sendMessage(`I'd like to book ${serviceName}`);
   }
 
   async function handleDateSelect(date: Date) {
     setBookingState(prev => ({ ...prev, date }));
-    
-    // Add user message showing date selection
-    const userMessage: Message = {
-      role: "user",
-      content: `I'd like an appointment on ${format(date, "MMMM d, yyyy")}`,
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, userMessage]);
-    
-    // Check availability and show time slots immediately
-    setLoading(true);
-    try {
-      const dateStr = format(date, "yyyy-MM-dd");
-      const { data: slotsData, error: slotsError } = await supabase.functions.invoke("check-availability", {
-        body: {
-          receptionistId,
-          serviceId: bookingState.serviceId,
-          startDate: dateStr,
-          endDate: dateStr,
-          maxSlots: 8,
-        }
-      });
-
-      if (slotsError) throw slotsError;
-
-      if (slotsData?.slots && slotsData.slots.length > 0) {
-        const botMessage: Message = {
-          role: "assistant",
-          content: `Perfect! I have ${slotsData.slots.length} available time${slotsData.slots.length > 1 ? 's' : ''} on ${format(date, "MMMM d")}. Which time works best for you?`,
-          timestamp: new Date(),
-          showTimeSlots: true,
-          timeSlots: slotsData.slots,
-        };
-        setMessages(prev => [...prev, botMessage]);
-      } else {
-        const botMessage: Message = {
-          role: "assistant",
-          content: `I'm sorry, but ${format(date, "MMMM d")} is fully booked. Would you like to try a different day?`,
-          timestamp: new Date(),
-          showDatePicker: true,
-        };
-        setMessages(prev => [...prev, botMessage]);
-      }
-    } catch (err) {
-      console.error("Availability check error:", err);
-      toast({
-        title: "Error",
-        description: "Failed to check availability. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
+    await sendMessage(`I'd like an appointment on ${format(date, "MMMM d, yyyy")}`);
   }
 
   async function handleTimeSlotSelect(slot: any) {
     setBookingState(prev => ({ ...prev, timeSlot: slot, collectingInfo: 'name' }));
     
-    // Add user message showing time selection
-    const userMessage: Message = {
-      role: "user",
-      content: `${slot.display || format(new Date(slot.start), "h:mm a")}`,
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, userMessage]);
-    
-    // Ask for name
     const botMessage: Message = {
       role: "assistant",
-      content: `Excellent! I have you scheduled for ${format(new Date(slot.start), "h:mm a")} on ${format(bookingState.date!, "MMMM d, yyyy")}. To confirm your booking, what's your name?`,
+      content: "Perfect! What's your name?",
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, botMessage]);

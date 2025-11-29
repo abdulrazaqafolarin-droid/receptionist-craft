@@ -20,7 +20,6 @@ serve(async (req) => {
       sessionId = null,
       displayedGreeting = null,
       source = "widget",
-      bookingContext = null,
     } = payload;
 
     if (!receptionistId || !sessionId) {
@@ -180,52 +179,22 @@ serve(async (req) => {
     const hasUrgency = urgencyKeywords.some(k => message.toLowerCase().includes(k));
     const urgencyLevel = hasUrgency ? "HIGH - Customer needs immediate attention" : "NORMAL";
 
-    // Build booking progress context from UI state
-    let bookingProgressBlock = "";
-    if (bookingContext) {
-      const progress = [];
-      if (bookingContext.hasService) {
-        progress.push(`✅ Service Selected: ${bookingContext.serviceName}`);
-      } else {
-        progress.push(`⏳ Service: Not selected yet`);
-      }
-      
-      if (bookingContext.hasDate) {
-        progress.push(`✅ Date Selected: ${bookingContext.dateString}`);
-      } else if (bookingContext.hasService) {
-        progress.push(`⏳ Date: Waiting for customer to choose`);
-      }
-      
-      if (bookingContext.hasTimeSlot) {
-        progress.push(`✅ Time Slot: Selected`);
-      } else if (bookingContext.hasDate) {
-        progress.push(`⏳ Time Slot: Waiting for customer to choose`);
-      }
-      
-      if (bookingContext.collectingInfo === 'name') {
-        progress.push(`⏳ Collecting: Customer name`);
-      } else if (bookingContext.collectingInfo === 'contact') {
-        progress.push(`⏳ Collecting: Contact information (email or phone)`);
-      }
+    // Extract context from conversation
+    const extractContext = (text: string) => {
+      const serviceMentioned = text.match(/(?:need|want|book|schedule|appointment for)\s+(?:a\s+)?([a-z\s]+)/i)?.[1]?.trim() || null;
+      const dateMentioned = text.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|next week)/i)?.[0] || null;
+      const timeMentioned = text.match(/(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm))/i)?.[0] || null;
+      return { serviceMentioned, dateMentioned, timeMentioned };
+    };
 
-      bookingProgressBlock = `
-# 🎯 BOOKING PROGRESS
-${progress.join('\n')}
-
-**CRITICAL INSTRUCTIONS:**
-${bookingContext.hasService ? '- DO NOT ask "which service" - customer already selected it via button click' : ''}
-${bookingContext.hasDate ? '- DO NOT ask "what day" - customer already selected date via calendar' : ''}
-${bookingContext.hasTimeSlot ? '- DO NOT ask "what time" - customer already selected time slot' : ''}
-${bookingContext.collectingInfo ? `- You are currently collecting: ${bookingContext.collectingInfo}` : ''}
-
-**NEXT STEP:**
-${!bookingContext.hasService ? 'Ask customer to choose a service from the list shown below their message.' : ''}
-${bookingContext.hasService && !bookingContext.hasDate ? 'Customer should choose date from calendar picker shown below.' : ''}
-${bookingContext.hasDate && !bookingContext.hasTimeSlot ? 'Customer should choose time slot from available times shown below.' : ''}
-${bookingContext.hasTimeSlot && bookingContext.collectingInfo === 'name' ? 'Ask for customer name to proceed with booking.' : ''}
-${bookingContext.collectingInfo === 'contact' ? 'Ask for email or phone number to complete the booking.' : ''}
+    const context = extractContext(message);
+    const contextBlock = `
+# CURRENT CONTEXT
+Service mentioned: ${context.serviceMentioned || "Not yet specified"}
+Date mentioned: ${context.dateMentioned || "Not yet specified"}
+Time mentioned: ${context.timeMentioned || "Not yet specified"}
+Urgency level: ${urgencyLevel}
 `;
-    }
 
     
     const greetingInstruction = isFirstMessage && receptionist.greeting_message
@@ -354,7 +323,7 @@ If uncertain about a query:
 ---
 
 ## 12. URGENCY DETECTION
-Urgency level: ${urgencyLevel}
+${contextBlock}
 
 Watch for urgent keywords: **pain, bleeding, emergency, urgent, broken, swollen, ASAP, immediately, severe, now**
 
@@ -365,24 +334,15 @@ If detected:
 
 ---
 
-## 13. BOOKING FLOW (ENFORCED - STATE-AWARE)
-${bookingProgressBlock}
+## 13. BOOKING FLOW (NATURAL & CONVERSATIONAL)
+When customer wants to book:
+1. Guide naturally: "What service can I help you with today?"
+2. Ask about timing: "When would work best for you?"
+3. Suggest time slots: "Which time works better for you?"
+4. Collect contact: "Can I get your name and contact info to confirm?"
 
-**BOOKING STEPS (DO NOT SKIP OR REPEAT):**
-1. **Service Selection** - Customer clicks service card (you'll see "✅ Service Selected" above)
-2. **Date Selection** - Customer uses calendar picker (you'll see "✅ Date Selected" above)  
-3. **Time Selection** - Customer clicks time slot button (you'll see "✅ Time Slot: Selected" above)
-4. **Name Collection** - Ask: "What's your name?" (only if time slot selected)
-5. **Contact Collection** - Ask: "Can I get your email or phone number?" (only after name provided)
-
-**CRITICAL RULES:**
-- **NEVER re-ask questions for steps already completed** (marked with ✅)
-- If customer selected via button/picker, acknowledge and move to NEXT step only
-- DO NOT say "which service" if service already selected
-- DO NOT say "what day" if date already selected  
-- DO NOT say "what time" if time slot already selected
-- Progress linearly through steps - no jumping back
-- Be encouraging: "Great choice!", "Perfect!", "Excellent!"
+- If slot unavailable: "That time is taken, but I have [alternative] available. Would that work?"
+- **NEVER use technical commands** like "accept_alternative:1" - always speak naturally
 
 ---
 
