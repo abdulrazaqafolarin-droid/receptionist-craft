@@ -66,20 +66,6 @@ export default function Widget() {
     setSessionId(sid);
   }, [receptionistId]);
 
-  useEffect(() {
-    if (receptionistId && sessionId) {
-      loadReceptionist();
-      loadServices();
-    }
-  }, [receptionistId, sessionId]);
-
-  // Store initial greeting in database to prevent re-greeting
-  useEffect(() => {
-    if (receptionist && receptionist.greeting_message && !greetingStored) {
-      storeInitialGreeting();
-    }
-  }, [receptionist, greetingStored]);
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -149,6 +135,21 @@ export default function Widget() {
       setServices(data);
     }
   }
+
+  // Load receptionist and services when sessionId is ready
+  useEffect(() => {
+    if (receptionistId && sessionId) {
+      loadReceptionist();
+      loadServices();
+    }
+  }, [receptionistId, sessionId]);
+
+  // Store initial greeting in database to prevent re-greeting
+  useEffect(() => {
+    if (receptionist && receptionist.greeting_message && !greetingStored && sessionId) {
+      storeInitialGreeting();
+    }
+  }, [receptionist, greetingStored, sessionId]);
 
   async function sendMessage(messageText?: string) {
     const textToSend = messageText || input.trim();
