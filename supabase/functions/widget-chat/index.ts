@@ -44,13 +44,18 @@ serve(async (req) => {
     }
 
     // Check if this is the first message (for proactive greeting)
-    const { data: messageCount } = await supabase
+    const { data: existingMessages, error: historyErr } = await supabase
       .from("chat_messages")
-      .select("id", { count: "exact", head: true })
+      .select("id")
       .eq("receptionist_id", receptionistId)
-      .eq("user_id", sessionId || "anonymous");
+      .eq("user_id", sessionId || "anonymous")
+      .limit(1);
 
-    const isFirstMessage = !messageCount || messageCount.length === 0;
+    if (historyErr) {
+      console.error("[Widget Chat] Error checking message history:", historyErr);
+    }
+
+    const isFirstMessage = !existingMessages || existingMessages.length === 0;
 
     // If first visit and no message provided, send proactive greeting
     if (isFirstMessage && (!message || message.trim() === "")) {
