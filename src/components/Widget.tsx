@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { v4 as uuidv4 } from "uuid";
 
 type Props = {
   receptionistId: string;
@@ -14,7 +13,7 @@ export default function Widget({ receptionistId }: Props) {
   useEffect(() => {
     let sid = localStorage.getItem(`widget_session_${receptionistId}`);
     if (!sid) {
-      sid = uuidv4();
+      sid = crypto.randomUUID();
       localStorage.setItem(`widget_session_${receptionistId}`, sid);
     }
     setSessionId(sid);
