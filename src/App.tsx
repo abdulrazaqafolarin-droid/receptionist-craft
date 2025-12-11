@@ -75,60 +75,76 @@ const App = () => {
           <Sonner />
           <BrowserRouter>
             <KeyboardShortcutsProvider>
-          {session ? (
-            <SidebarProvider>
-              <div className="flex min-h-screen w-full">
-                <AppSidebar />
-                <div className="flex-1 flex flex-col">
-                  <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
-                    <div className="container mx-auto px-4 flex h-16 items-center gap-4">
-                      <SidebarTrigger />
-                      <div className="flex-1" />
-                      <Navbar user={session?.user} />
-                    </div>
-                  </header>
-                  <main className="flex-1">
-                    <Routes>
-                      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                      <Route path="/dashboard" element={<ProtectedRoute session={session}><Dashboard /></ProtectedRoute>} />
-                      <Route path="/onboarding" element={<ProtectedRoute session={session}><Onboarding /></ProtectedRoute>} />
-                      <Route path="/onboarding-wizard" element={<ProtectedRoute session={session}><OnboardingWizard /></ProtectedRoute>} />
-                      <Route path="/builder" element={<ProtectedRoute session={session}><Builder /></ProtectedRoute>} />
-                      <Route path="/builder/:id" element={<ProtectedRoute session={session}><Builder /></ProtectedRoute>} />
-                      <Route path="/conversations" element={<ProtectedRoute session={session}><Conversations /></ProtectedRoute>} />
-                      <Route path="/appointments" element={<ProtectedRoute session={session}><Appointments /></ProtectedRoute>} />
-                      <Route path="/services" element={<ProtectedRoute session={session}><Services /></ProtectedRoute>} />
-                      <Route path="/availability" element={<ProtectedRoute session={session}><Availability /></ProtectedRoute>} />
-                      <Route path="/faqs" element={<ProtectedRoute session={session}><FAQManagement /></ProtectedRoute>} />
-                      <Route path="/analytics" element={<ProtectedRoute session={session}><Analytics /></ProtectedRoute>} />
-                      <Route path="/quality-review" element={<ProtectedRoute session={session}><QualityReview /></ProtectedRoute>} />
-                      <Route path="/kb-rewrite" element={<ProtectedRoute session={session}><KBRewrite /></ProtectedRoute>} />
-                      <Route path="/diagnostics" element={<ProtectedRoute session={session}><Diagnostics /></ProtectedRoute>} />
-          <Route path="/notifications" element={<ProtectedRoute session={session}><Notifications /></ProtectedRoute>} />
-          <Route path="/realtime-logs" element={<ProtectedRoute session={session}><RealtimeLogs /></ProtectedRoute>} />
-                      <Route path="/settings" element={<ProtectedRoute session={session}><Settings /></ProtectedRoute>} />
-                      <Route path="/widget-install/:id" element={<ProtectedRoute session={session}><WidgetInstall /></ProtectedRoute>} />
-                      <Route path="/help" element={<Help />} />
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </main>
-                </div>
-              </div>
-            </SidebarProvider>
-          ) : (
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/help" element={<Help />} />
-              <Route path="/widget" element={<Widget />} />
-              <Route path="/appointments/confirm" element={<ConfirmAppointment />} />
-              <Route path="/appointments/cancel" element={<CancelAppointment />} />
-              <Route path="/booking/:id" element={<ManageBooking />} />
-              <Route path="/cancel/:id" element={<CancelAppointment />} />
-              <Route path="/confirm/:id" element={<ConfirmAppointment />} />
-              <Route path="*" element={<Navigate to="/auth" replace />} />
-            </Routes>
-          )}
+          {/* Public routes - accessible to everyone */}
+          <Routes>
+            {/* Widget and public appointment actions - always accessible */}
+            <Route path="/widget" element={<Widget />} />
+            <Route path="/appointments/confirm" element={<ConfirmAppointment />} />
+            <Route path="/appointments/cancel" element={<CancelAppointment />} />
+            <Route path="/booking/:id" element={<ManageBooking />} />
+            <Route path="/cancel/:id" element={<CancelAppointment />} />
+            <Route path="/confirm/:id" element={<ConfirmAppointment />} />
+            <Route path="/help" element={<Help />} />
+            
+            {/* Auth routes - for non-authenticated users */}
+            {!session && (
+              <>
+                <Route path="/" element={<Landing />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="*" element={<Navigate to="/auth" replace />} />
+              </>
+            )}
+            
+            {/* Protected routes - wrapped in sidebar for authenticated users */}
+            {session && (
+              <>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/auth" element={<Navigate to="/dashboard" replace />} />
+                <Route
+                  path="*"
+                  element={
+                    <SidebarProvider>
+                      <div className="flex min-h-screen w-full">
+                        <AppSidebar />
+                        <div className="flex-1 flex flex-col">
+                          <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+                            <div className="container mx-auto px-4 flex h-16 items-center gap-4">
+                              <SidebarTrigger />
+                              <div className="flex-1" />
+                              <Navbar user={session?.user} />
+                            </div>
+                          </header>
+                          <main className="flex-1">
+                            <Routes>
+                              <Route path="/dashboard" element={<Dashboard />} />
+                              <Route path="/onboarding" element={<Onboarding />} />
+                              <Route path="/onboarding-wizard" element={<OnboardingWizard />} />
+                              <Route path="/builder" element={<Builder />} />
+                              <Route path="/builder/:id" element={<Builder />} />
+                              <Route path="/conversations" element={<Conversations />} />
+                              <Route path="/appointments" element={<Appointments />} />
+                              <Route path="/services" element={<Services />} />
+                              <Route path="/availability" element={<Availability />} />
+                              <Route path="/faqs" element={<FAQManagement />} />
+                              <Route path="/analytics" element={<Analytics />} />
+                              <Route path="/quality-review" element={<QualityReview />} />
+                              <Route path="/kb-rewrite" element={<KBRewrite />} />
+                              <Route path="/diagnostics" element={<Diagnostics />} />
+                              <Route path="/notifications" element={<Notifications />} />
+                              <Route path="/realtime-logs" element={<RealtimeLogs />} />
+                              <Route path="/settings" element={<Settings />} />
+                              <Route path="/widget-install/:id" element={<WidgetInstall />} />
+                              <Route path="*" element={<NotFound />} />
+                            </Routes>
+                          </main>
+                        </div>
+                      </div>
+                    </SidebarProvider>
+                  }
+                />
+              </>
+            )}
+          </Routes>
             </KeyboardShortcutsProvider>
         </BrowserRouter>
       </TooltipProvider>
