@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { User, LogOut, Settings, LayoutDashboard, HelpCircle, Bell } from "lucide-react";
+import { User, LogOut, Settings, LayoutDashboard, HelpCircle, Bell, Sparkles } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +29,6 @@ export const Navbar = ({ user }: NavbarProps) => {
 
     loadNotifications();
 
-    // Setup realtime listener
     const channel = supabase
       .channel("navbar-notifications")
       .on(
@@ -57,7 +56,7 @@ export const Navbar = ({ user }: NavbarProps) => {
           setNotifications((prev) =>
             prev.map((n) => (n.id === payload.new.id ? payload.new : n))
           );
-          loadNotifications(); // Refresh count
+          loadNotifications();
         }
       )
       .subscribe();
@@ -108,15 +107,15 @@ export const Navbar = ({ user }: NavbarProps) => {
   };
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
+    <nav className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div 
-            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all duration-200"
+            className="flex items-center gap-3 cursor-pointer group"
             onClick={() => navigate(user ? "/dashboard" : "/")}
           >
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-md">
-              <span className="text-lg font-bold text-primary-foreground">R</span>
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-md group-hover:shadow-elevated transition-all duration-300">
+              <Sparkles className="h-5 w-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
               Rutex FrontDesk
@@ -128,33 +127,35 @@ export const Navbar = ({ user }: NavbarProps) => {
               {/* Notifications Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative">
+                  <Button variant="ghost" size="icon" className="relative hover:bg-primary/10">
                     <Bell className="h-5 w-5" />
                     {unreadCount > 0 && (
                       <Badge
                         variant="destructive"
-                        className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+                        className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs animate-pulse"
                       >
                         {unreadCount > 9 ? "9+" : unreadCount}
                       </Badge>
                     )}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80">
-                  <div className="flex items-center justify-between p-2 border-b">
+                <DropdownMenuContent align="end" className="w-80 shadow-elevated">
+                  <div className="flex items-center justify-between p-3 border-b">
                     <h3 className="font-semibold">Notifications</h3>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => navigate("/notifications")}
+                      className="text-primary hover:text-primary"
                     >
                       View All
                     </Button>
                   </div>
                   <ScrollArea className="h-[400px]">
                     {notifications.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-muted-foreground">
-                        No notifications
+                      <div className="p-6 text-center">
+                        <Bell className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm text-muted-foreground">No notifications</p>
                       </div>
                     ) : (
                       notifications.map((notif) => (
@@ -168,19 +169,17 @@ export const Navbar = ({ user }: NavbarProps) => {
                             navigate("/notifications");
                           }}
                         >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">{notif.title}</p>
-                              <p className="text-xs text-muted-foreground mt-1">
+                          <div className="flex items-start gap-3">
+                            <div className={`h-2 w-2 rounded-full mt-2 flex-shrink-0 ${!notif.read ? "bg-primary" : "bg-muted"}`} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{notif.title}</p>
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                                 {notif.message || notif.body}
                               </p>
                               <p className="text-xs text-muted-foreground mt-1">
                                 {new Date(notif.created_at).toLocaleDateString()}
                               </p>
                             </div>
-                            {!notif.read && (
-                              <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0 mt-1"></div>
-                            )}
                           </div>
                         </div>
                       ))
@@ -192,56 +191,62 @@ export const Navbar = ({ user }: NavbarProps) => {
               {/* User Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                  <Button variant="ghost" className="relative h-10 w-10 rounded-full hover:ring-2 hover:ring-primary/20 transition-all">
                     <Avatar className="h-10 w-10 border-2 border-primary/20">
-                      <AvatarFallback className="bg-gradient-to-br from-primary to-primary-glow text-primary-foreground">
+                      <AvatarFallback className="bg-gradient-to-br from-primary to-primary-glow text-primary-foreground font-semibold">
                         {user.email?.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <div className="flex items-center justify-start gap-2 p-2">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium">{user.email}</p>
+                <DropdownMenuContent align="end" className="w-56 shadow-elevated">
+                  <div className="flex items-center gap-3 p-3">
+                    <Avatar className="h-10 w-10">
+                      <AvatarFallback className="bg-gradient-to-br from-primary to-primary-glow text-primary-foreground">
+                        {user.email?.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col min-w-0">
+                      <p className="text-sm font-medium truncate">{user.email}</p>
+                      <p className="text-xs text-muted-foreground">Pro Plan</p>
+                    </div>
                   </div>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/dashboard")}>
-                  <LayoutDashboard className="mr-2 h-4 w-4" />
-                  Dashboard
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/notifications")}>
-                  <Bell className="mr-2 h-4 w-4" />
-                  Notifications
-                  {unreadCount > 0 && (
-                    <Badge variant="destructive" className="ml-auto">
-                      {unreadCount}
-                    </Badge>
-                  )}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/settings")}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/help")}>
-                  <HelpCircle className="mr-2 h-4 w-4" />
-                  Help
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate("/dashboard")} className="cursor-pointer">
+                    <LayoutDashboard className="mr-2 h-4 w-4 text-muted-foreground" />
+                    Dashboard
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/notifications")} className="cursor-pointer">
+                    <Bell className="mr-2 h-4 w-4 text-muted-foreground" />
+                    Notifications
+                    {unreadCount > 0 && (
+                      <Badge variant="destructive" className="ml-auto text-xs">
+                        {unreadCount}
+                      </Badge>
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer">
+                    <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
+                    Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/help")} className="cursor-pointer">
+                    <HelpCircle className="mr-2 h-4 w-4 text-muted-foreground" />
+                    Help
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive focus:text-destructive">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           ) : (
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => navigate("/auth")}>
+              <Button variant="ghost" onClick={() => navigate("/auth")} className="hover:bg-primary/10">
                 Sign In
               </Button>
-              <Button onClick={() => navigate("/auth")}>
+              <Button onClick={() => navigate("/auth")} className="bg-gradient-to-r from-primary to-primary-glow hover:shadow-elevated transition-all">
                 Start Free
               </Button>
             </div>

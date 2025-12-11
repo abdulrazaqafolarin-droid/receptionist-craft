@@ -2648,14 +2648,14 @@ serve(async (req) => {
     const messageAnalysis = detectMessageType(message);
     console.log(`[Analysis] Intent: ${messageAnalysis.detectedIntent}, Ack: ${messageAnalysis.isAcknowledgment}, Correction: ${messageAnalysis.isCorrection}`);
 
-    // Fetch conversation history (last 25 messages for comprehensive context)
+    // Fetch conversation history (last 30 messages for comprehensive context - S-tier memory)
     const { data: history } = await supabase
       .from("chat_messages")
       .select("sender, message, metadata, created_at")
       .eq("receptionist_id", receptionistId)
       .eq("user_id", sessionId || "anonymous")
       .order("created_at", { ascending: true })
-      .limit(25);
+      .limit(30);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 3: CONTEXT EXTRACTION & MEMORY
