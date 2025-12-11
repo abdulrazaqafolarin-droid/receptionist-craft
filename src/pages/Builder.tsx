@@ -711,266 +711,345 @@ export default function BuilderPage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold">Rutex FrontDesk Builder</h1>
-        <p className="text-sm text-gray-600">Create an AI receptionist and preview how it will talk to your customers.</p>
-      </header>
-
-      <main className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left panel: form */}
-        <section className="md:col-span-1 space-y-4">
-          {/* Analytics Panel */}
-          {receptionistId && currentUserId && (
-            <BuilderAnalyticsPanel 
-              receptionistId={receptionistId} 
-              userId={currentUserId}
-            />
-          )}
-          
-          <div className="bg-white rounded-lg shadow-sm p-4">
-          <h2 className="font-semibold mb-2">Edit AI Receptionist</h2>
-
-          <label className="block text-xs mt-2">Receptionist Name *</label>
-          <input className="w-full border rounded p-2" value={receptionist.name || ""} onChange={(e) => onFieldChange("name", e.target.value)} />
-
-          <label className="block text-xs mt-2">Business Name *</label>
-          <input className="w-full border rounded p-2" value={receptionist.business_name || ""} onChange={(e) => onFieldChange("business_name", e.target.value)} />
-
-          <label className="block text-xs mt-2">Business Type *</label>
-          <select className="w-full border rounded p-2" value={receptionist.business_type || ""} onChange={(e) => onFieldChange("business_type", e.target.value)}>
-            <option value="">Select business type</option>
-            <option value="Dental Clinic">Dental Clinic</option>
-            <option value="Spa & Wellness">Spa & Wellness</option>
-            <option value="Barber Shop">Barber Shop</option>
-            <option value="Restaurant">Restaurant</option>
-            <option value="Real Estate">Real Estate</option>
-            <option value="Medical Clinic">Medical Clinic</option>
-            <option value="Law Office">Law Office</option>
-            <option value="Hair Salon">Hair Salon</option>
-            <option value="Gym & Fitness">Gym & Fitness</option>
-            <option value="General Business">General Business</option>
-          </select>
-
-          <label className="block text-xs mt-2">Business Phone</label>
-          <input className="w-full border rounded p-2" type="tel" placeholder="+1 (555) 000-0000" value={receptionist.phone || ""} onChange={(e) => onFieldChange("phone", e.target.value)} />
-
-          <label className="block text-xs mt-2">Tone of Voice *</label>
-          <select className="w-full border rounded p-2" value={receptionist.tone} onChange={(e) => onFieldChange("tone", e.target.value as "friendly" | "professional" | "playful")}>
-            <option value="friendly">Friendly - Warm, welcoming, conversational</option>
-            <option value="professional">Professional - Polished, formal, efficient</option>
-            <option value="playful">Playful - Fun, energetic, engaging</option>
-          </select>
-
-          <label className="block text-xs mt-2">Primary Language</label>
-          <select className="w-full border rounded p-2" value={receptionist.language || "English"} onChange={(e) => onFieldChange("language", e.target.value)}>
-            <option value="English">English</option>
-            <option value="Spanish">Spanish</option>
-            <option value="French">French</option>
-            <option value="German">German</option>
-            <option value="Italian">Italian</option>
-            <option value="Portuguese">Portuguese</option>
-          </select>
-
-          <label className="block text-xs mt-2">Greeting Message</label>
-          <textarea className="w-full border rounded p-2" rows={2} placeholder="Hi! Thanks for reaching out..." value={receptionist.greeting_message || ""} onChange={(e) => onFieldChange("greeting_message", e.target.value)} />
-
-          <label className="block text-xs mt-2">Default Response</label>
-          <textarea className="w-full border rounded p-2" rows={2} value={receptionist.default_response || ""} onChange={(e) => onFieldChange("default_response", e.target.value)} />
-
-          <label className="block text-xs mt-2">Main Goal & Custom Instructions</label>
-          <textarea 
-            className="w-full border rounded p-2" 
-            rows={4} 
-            placeholder="Describe how you want your AI receptionist to behave, what information it should prioritize, and any specific business details it should know. Example: 'Focus on booking appointments quickly. Always mention our 20% new patient discount. We specialize in cosmetic dentistry.'" 
-            value={receptionist.goal || ""} 
-            onChange={(e) => onFieldChange("goal", e.target.value)} 
-          />
-          <p className="text-xs text-gray-500 mt-1">This information will be refined and integrated into the AI's system prompt</p>
-
-          <div className="flex items-center justify-between mt-2">
-            <label className="block text-xs">Knowledge Base</label>
-            <button
-              type="button"
-              onClick={generateKnowledgeBase}
-              disabled={generatingKB || !receptionist.business_name}
-              className="text-xs px-3 py-1 bg-primary text-primary-foreground rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {generatingKB ? "Generating..." : "🪄 AI Generate"}
-            </button>
-          </div>
-          <textarea className="w-full border rounded p-2" rows={4} placeholder="Add your business knowledge here..." value={receptionist.knowledge_base || ""} onChange={(e) => onFieldChange("knowledge_base", e.target.value)} />
-
-          <label className="block text-xs mt-2">Temperature (AI Creativity)</label>
-          <div className="flex items-center gap-2">
-            <input 
-              type="range" 
-              min="0" 
-              max="1" 
-              step="0.1" 
-              className="flex-1" 
-              value={receptionist.temperature || 0.7} 
-              onChange={(e) => onFieldChange("temperature", parseFloat(e.target.value))} 
-            />
-            <span className="text-xs font-mono w-8">{(receptionist.temperature || 0.7).toFixed(1)}</span>
-          </div>
-          <p className="text-xs text-gray-500 mt-1">Higher = more creative, Lower = more focused</p>
-
-          <div className="flex items-center justify-between mt-2">
-            <label className="block text-xs">System Prompt (Advanced)</label>
-            <button
-              type="button"
-              onClick={generateSystemPrompt}
-              disabled={generatingPrompt || !receptionist.business_name}
-              className="text-xs px-3 py-1 bg-primary text-primary-foreground rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {generatingPrompt ? "Generating..." : "🪄 AI Generate"}
-            </button>
-          </div>
-          <textarea className="w-full border rounded p-2" rows={3} placeholder="Optional custom system instructions..." value={receptionist.system_prompt || ""} onChange={(e) => onFieldChange("system_prompt", e.target.value)} />
-
-          <div className="flex gap-2 mt-4">
-            <button className="px-4 py-2 bg-yellow-500 text-white rounded" onClick={saveReceptionist} disabled={saving}>
-              {saving ? "Saving..." : receptionistId ? "Save & Update" : "Save & Generate AI Receptionist"}
-            </button>
-            {receptionistId && (
-              <button 
-                className="px-4 py-2 bg-blue-500 text-white rounded" 
-                onClick={() => navigate(`/builder/${receptionistId}#test`)}
-              >
-                Test Your AI Receptionist
-              </button>
-            )}
-            <button className="px-4 py-2 border rounded" onClick={() => { setReceptionistId(undefined); setReceptionist({ name: "", business_name: "", business_type: "", phone: "", tone: "friendly", greeting_message: "", default_response: "I'm sorry — I don't have that info yet.", knowledge_base: "", system_prompt: "", temperature: 0.7, language: "English", goal: "" }); navigate("/builder"); }}>
-              New Receptionist
-            </button>
-            {receptionistId && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <button className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
-                    Delete Receptionist
-                  </button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will permanently delete the receptionist "{receptionist.name || 'this receptionist'}" and all associated data including FAQs, conversations, and appointments. This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction 
-                      onClick={handleDeleteReceptionist}
-                      disabled={deleting}
-                      className="bg-red-500 hover:bg-red-600"
-                    >
-                      {deleting ? "Deleting..." : "Yes, Delete Receptionist"}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-          </div>
-
-          {error && <div className="mt-3 text-red-600">{error}</div>}
-          <div className="mt-4 text-xs text-gray-500">Tip: Save the receptionist before testing voice or live calls.</div>
-          </div>
-
-          {/* FAQ Manager */}
-          {receptionistId && (
-            <FAQManager receptionistId={receptionistId} />
-          )}
-
-          {/* Widget Embed Code */}
-          {receptionistId && receptionist.name && (
-            <WidgetEmbedCode 
-              receptionistId={receptionistId} 
-              receptionistName={receptionist.name}
-            />
-          )}
-        </section>
-
-        {/* Right panel: chat preview */}
-        <section className="md:col-span-2 bg-white rounded-lg shadow-sm p-4 flex flex-col">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <div className="text-lg font-semibold">{previewHeader}</div>
-              <div className="text-sm text-gray-500">{receptionist.business_name || "No business set yet"}</div>
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Modern Header */}
+        <header className="mb-8 animate-fade-in">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg glow-sm">
+              <span className="text-lg font-bold text-primary-foreground">R</span>
             </div>
-            <div className="flex items-center gap-2">
-              <button className="px-3 py-1 border rounded" onClick={() => setPreviewMode((p) => !p)}>{previewMode ? "Preview: ON" : "Preview: OFF"}</button>
-              <button className="px-3 py-1 border rounded" onClick={handleRefresh}>Refresh</button>
-            </div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              Rutex FrontDesk Builder
+            </h1>
           </div>
+          <p className="text-muted-foreground ml-13">Create an AI receptionist and preview how it will talk to your customers.</p>
+        </header>
 
-          {/* chat window */}
-          <div ref={messagesRef} className="flex-1 overflow-auto border rounded p-4 mb-3" style={{ minHeight: 300 }}>
-            {messages.length === 0 && <div className="text-gray-400">No conversation yet — try saying "Hi" or ask about services.</div>}
-            {messages.map((m, idx) => (
-              <div key={idx} className={`mb-3 max-w-[80%] ${m.sender === "user" ? "ml-auto text-right" : "mr-auto text-left"}`}>
-                <div className={`inline-block px-4 py-2 rounded ${m.sender === "user" ? "bg-gray-200" : "bg-yellow-50"}`}>
-                  <div className="text-sm whitespace-pre-wrap">{m.message}</div>
-                  <div className="text-xs text-gray-400 mt-1">{m.sender === "user" ? "You" : (receptionist.name || "Receptionist")}</div>
+        <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left panel: form */}
+          <section className="lg:col-span-1 space-y-6">
+            {/* Analytics Panel */}
+            {receptionistId && currentUserId && (
+              <BuilderAnalyticsPanel 
+                receptionistId={receptionistId} 
+                userId={currentUserId}
+              />
+            )}
+            
+            <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6 animate-scale-in">
+              <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
+                Edit AI Receptionist
+              </h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Receptionist Name *</label>
+                  <input className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" value={receptionist.name || ""} onChange={(e) => onFieldChange("name", e.target.value)} />
                 </div>
-              </div>
-            ))}
-          </div>
 
-          {/* alternatives panel */}
-          {alternatives && alternatives.length > 0 && (
-            <div className="mb-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="text-sm font-semibold mb-3">📅 Available Alternative Times</div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {alternatives.map((alt, idx) => (
-                  <div key={idx} className="p-3 bg-white border rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                    <div className="text-sm font-medium">
-                      {new Date(alt.start).toLocaleDateString('en-US', { 
-                        weekday: 'short', 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
-                    </div>
-                    <div className="text-lg font-bold text-blue-600">
-                      {new Date(alt.start).toLocaleTimeString('en-US', { 
-                        hour: 'numeric', 
-                        minute: '2-digit' 
-                      })}
-                    </div>
-                    {alt.reason && (
-                      <div className="text-xs text-gray-500 mt-1">{alt.reason}</div>
-                    )}
-                    {alt.score && (
-                      <div className="text-xs text-gray-400 mt-1">Match: {(alt.score * 100).toFixed(0)}%</div>
-                    )}
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Business Name *</label>
+                  <input className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" value={receptionist.business_name || ""} onChange={(e) => onFieldChange("business_name", e.target.value)} />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Business Type *</label>
+                  <select className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" value={receptionist.business_type || ""} onChange={(e) => onFieldChange("business_type", e.target.value)}>
+                    <option value="">Select business type</option>
+                    <option value="Dental Clinic">Dental Clinic</option>
+                    <option value="Spa & Wellness">Spa & Wellness</option>
+                    <option value="Barber Shop">Barber Shop</option>
+                    <option value="Restaurant">Restaurant</option>
+                    <option value="Real Estate">Real Estate</option>
+                    <option value="Medical Clinic">Medical Clinic</option>
+                    <option value="Law Office">Law Office</option>
+                    <option value="Hair Salon">Hair Salon</option>
+                    <option value="Gym & Fitness">Gym & Fitness</option>
+                    <option value="General Business">General Business</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Business Phone</label>
+                  <input className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" type="tel" placeholder="+1 (555) 000-0000" value={receptionist.phone || ""} onChange={(e) => onFieldChange("phone", e.target.value)} />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Tone of Voice *</label>
+                  <select className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" value={receptionist.tone} onChange={(e) => onFieldChange("tone", e.target.value as "friendly" | "professional" | "playful")}>
+                    <option value="friendly">Friendly - Warm, welcoming, conversational</option>
+                    <option value="professional">Professional - Polished, formal, efficient</option>
+                    <option value="playful">Playful - Fun, energetic, engaging</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Primary Language</label>
+                  <select className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" value={receptionist.language || "English"} onChange={(e) => onFieldChange("language", e.target.value)}>
+                    <option value="English">English</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="French">French</option>
+                    <option value="German">German</option>
+                    <option value="Italian">Italian</option>
+                    <option value="Portuguese">Portuguese</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Greeting Message</label>
+                  <textarea className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none" rows={2} placeholder="Hi! Thanks for reaching out..." value={receptionist.greeting_message || ""} onChange={(e) => onFieldChange("greeting_message", e.target.value)} />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Default Response</label>
+                  <textarea className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none" rows={2} value={receptionist.default_response || ""} onChange={(e) => onFieldChange("default_response", e.target.value)} />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Main Goal & Custom Instructions</label>
+                  <textarea 
+                    className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none" 
+                    rows={4} 
+                    placeholder="Describe how you want your AI receptionist to behave..." 
+                    value={receptionist.goal || ""} 
+                    onChange={(e) => onFieldChange("goal", e.target.value)} 
+                  />
+                  <p className="text-xs text-muted-foreground mt-1.5">This information will be refined and integrated into the AI's system prompt</p>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-medium text-muted-foreground">Knowledge Base</label>
                     <button
-                      className="mt-2 w-full px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                      onClick={() => handleBookAlternative(alt.start, alt.end)}
-                      disabled={bookingLoading}
+                      type="button"
+                      onClick={generateKnowledgeBase}
+                      disabled={generatingKB || !receptionist.business_name}
+                      className="text-xs px-3 py-1.5 bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-lg hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                     >
-                      {bookingLoading ? "Booking..." : "Book This Time"}
+                      {generatingKB ? "Generating..." : "✨ AI Generate"}
                     </button>
                   </div>
-                ))}
-              </div>
-              <button
-                className="mt-3 text-sm text-gray-600 hover:text-gray-900 underline"
-                onClick={() => setAlternatives(null)}
-              >
-                Close alternatives
-              </button>
-            </div>
-          )}
+                  <textarea className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none" rows={4} placeholder="Add your business knowledge here..." value={receptionist.knowledge_base || ""} onChange={(e) => onFieldChange("knowledge_base", e.target.value)} />
+                </div>
 
-          {/* input */}
-          <div className="flex gap-2 items-center">
-            <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} className="flex-1 border rounded p-2" placeholder='Try: "Hi", "How much is a cleaning?"' />
-            <button className="px-4 py-2 bg-black text-white rounded" onClick={handleSendMessage}>Send</button>
-            <button className="px-3 py-2 border rounded" title="Voice (coming soon)">🎙️</button>
-            <button className="px-3 py-2 border rounded" title="Play reply (coming soon)">🔊</button>
-          </div>
-        </section>
-      </main>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Temperature (AI Creativity)</label>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.1" 
+                      className="flex-1 accent-primary" 
+                      value={receptionist.temperature || 0.7} 
+                      onChange={(e) => onFieldChange("temperature", parseFloat(e.target.value))} 
+                    />
+                    <span className="text-sm font-mono bg-secondary px-2 py-1 rounded-md w-12 text-center">{(receptionist.temperature || 0.7).toFixed(1)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Higher = more creative, Lower = more focused</p>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-medium text-muted-foreground">System Prompt (Advanced)</label>
+                    <button
+                      type="button"
+                      onClick={generateSystemPrompt}
+                      disabled={generatingPrompt || !receptionist.business_name}
+                      className="text-xs px-3 py-1.5 bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-lg hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    >
+                      {generatingPrompt ? "Generating..." : "✨ AI Generate"}
+                    </button>
+                  </div>
+                  <textarea className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none" rows={3} placeholder="Optional custom system instructions..." value={receptionist.system_prompt || ""} onChange={(e) => onFieldChange("system_prompt", e.target.value)} />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3 mt-6 pt-6 border-t border-border">
+                <button 
+                  className="px-5 py-2.5 bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-xl font-medium shadow-lg hover:shadow-glow hover:-translate-y-0.5 transition-all disabled:opacity-50" 
+                  onClick={saveReceptionist} 
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : receptionistId ? "💾 Save Changes" : "🚀 Create Receptionist"}
+                </button>
+                {receptionistId && (
+                  <button 
+                    className="px-5 py-2.5 bg-secondary text-secondary-foreground rounded-xl font-medium hover:bg-secondary/80 transition-all" 
+                    onClick={() => navigate(`/builder/${receptionistId}#test`)}
+                  >
+                    🧪 Test AI
+                  </button>
+                )}
+                <button 
+                  className="px-5 py-2.5 border border-border rounded-xl font-medium hover:bg-muted transition-all" 
+                  onClick={() => { setReceptionistId(undefined); setReceptionist({ name: "", business_name: "", business_type: "", phone: "", tone: "friendly", greeting_message: "", default_response: "I'm sorry — I don't have that info yet.", knowledge_base: "", system_prompt: "", temperature: 0.7, language: "English", goal: "" }); navigate("/builder"); }}
+                >
+                  + New
+                </button>
+                {receptionistId && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button className="px-5 py-2.5 bg-destructive/10 text-destructive border border-destructive/20 rounded-xl font-medium hover:bg-destructive hover:text-destructive-foreground transition-all">
+                        🗑️ Delete
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-card border-border">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will permanently delete the receptionist "{receptionist.name || 'this receptionist'}" and all associated data. This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="border-border">Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={handleDeleteReceptionist}
+                          disabled={deleting}
+                          className="bg-destructive hover:bg-destructive/90"
+                        >
+                          {deleting ? "Deleting..." : "Yes, Delete"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+
+              {error && <div className="mt-4 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">{error}</div>}
+              <div className="mt-4 text-xs text-muted-foreground">💡 Tip: Save the receptionist before testing voice or live calls.</div>
+            </div>
+
+            {/* FAQ Manager */}
+            {receptionistId && (
+              <FAQManager receptionistId={receptionistId} />
+            )}
+
+            {/* Widget Embed Code */}
+            {receptionistId && receptionist.name && (
+              <WidgetEmbedCode 
+                receptionistId={receptionistId} 
+                receptionistName={receptionist.name}
+              />
+            )}
+          </section>
+
+          {/* Right panel: chat preview */}
+          <section className="lg:col-span-2 bg-card rounded-2xl shadow-card border border-border/50 p-6 flex flex-col animate-slide-in-right">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-border">
+              <div>
+                <div className="text-xl font-semibold flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-success animate-pulse"></div>
+                  {previewHeader}
+                </div>
+                <div className="text-sm text-muted-foreground">{receptionist.business_name || "No business set yet"}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${previewMode ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`} 
+                  onClick={() => setPreviewMode((p) => !p)}
+                >
+                  {previewMode ? "Preview: ON" : "Preview: OFF"}
+                </button>
+                <button className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-all" onClick={handleRefresh}>↻ Refresh</button>
+              </div>
+            </div>
+
+            {/* chat window */}
+            <div ref={messagesRef} className="flex-1 overflow-auto bg-muted/30 rounded-xl p-4 mb-4" style={{ minHeight: 400 }}>
+              {messages.length === 0 && (
+                <div className="text-muted-foreground text-center py-12">
+                  <div className="text-4xl mb-3">💬</div>
+                  <p>No conversation yet — try saying "Hi" or ask about services.</p>
+                </div>
+              )}
+              {messages.map((m, idx) => (
+                <div key={idx} className={`mb-4 max-w-[80%] animate-fade-in ${m.sender === "user" ? "ml-auto" : "mr-auto"}`}>
+                  <div className={`inline-block px-4 py-3 rounded-2xl ${
+                    m.sender === "user" 
+                      ? "bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-br-md" 
+                      : "bg-card border border-border shadow-sm rounded-bl-md"
+                  }`}>
+                    <div className="text-sm whitespace-pre-wrap">{m.message}</div>
+                  </div>
+                  <div className={`text-xs text-muted-foreground mt-1 ${m.sender === "user" ? "text-right" : ""}`}>
+                    {m.sender === "user" ? "You" : (receptionist.name || "Receptionist")}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* alternatives panel */}
+            {alternatives && alternatives.length > 0 && (
+              <div className="mb-4 p-5 bg-primary/5 border border-primary/20 rounded-xl">
+                <div className="text-sm font-semibold mb-4 flex items-center gap-2">
+                  <span className="text-lg">📅</span> Available Alternative Times
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {alternatives.map((alt, idx) => (
+                    <div key={idx} className="p-4 bg-card border border-border rounded-xl shadow-sm hover:shadow-md hover:border-primary/30 transition-all">
+                      <div className="text-sm font-medium text-muted-foreground">
+                        {new Date(alt.start).toLocaleDateString('en-US', { 
+                          weekday: 'short', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </div>
+                      <div className="text-xl font-bold text-primary">
+                        {new Date(alt.start).toLocaleTimeString('en-US', { 
+                          hour: 'numeric', 
+                          minute: '2-digit' 
+                        })}
+                      </div>
+                      {alt.reason && (
+                        <div className="text-xs text-muted-foreground mt-1">{alt.reason}</div>
+                      )}
+                      {alt.score && (
+                        <div className="text-xs text-muted-foreground mt-1">Match: {(alt.score * 100).toFixed(0)}%</div>
+                      )}
+                      <button
+                        className="mt-3 w-full px-4 py-2.5 bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-lg hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-all"
+                        onClick={() => handleBookAlternative(alt.start, alt.end)}
+                        disabled={bookingLoading}
+                      >
+                        {bookingLoading ? "Booking..." : "Book This Time"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="mt-4 text-sm text-muted-foreground hover:text-foreground underline"
+                  onClick={() => setAlternatives(null)}
+                >
+                  Close alternatives
+                </button>
+              </div>
+            )}
+
+            {/* input */}
+            <div className="flex gap-3 items-center">
+              <input 
+                value={input} 
+                onChange={(e) => setInput(e.target.value)} 
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} 
+                className="flex-1 border border-border bg-background rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" 
+                placeholder='Try: "Hi", "How much is a cleaning?"' 
+              />
+              <button 
+                className="px-6 py-3 bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-xl font-medium shadow-lg hover:shadow-glow hover:-translate-y-0.5 transition-all" 
+                onClick={handleSendMessage}
+              >
+                Send
+              </button>
+              <button className="px-4 py-3 border border-border rounded-xl hover:bg-muted transition-all" title="Voice (coming soon)">🎙️</button>
+              <button className="px-4 py-3 border border-border rounded-xl hover:bg-muted transition-all" title="Play reply (coming soon)">🔊</button>
+            </div>
+          </section>
+        </main>
+      </div>
     </div>
   );
 }
