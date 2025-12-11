@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Mail, Lock, User, ArrowRight } from "lucide-react";
 import { z } from "zod";
 
 const emailSchema = z.string().email("Invalid email address");
@@ -21,7 +21,6 @@ export default function Auth() {
   const [name, setName] = useState("");
 
   useEffect(() => {
-    // Check if user is already logged in
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         navigate("/dashboard");
@@ -97,57 +96,80 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background decorations */}
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full bg-primary/5 blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-secondary/5 blur-3xl" />
+      </div>
+
       <div className="w-full max-w-md">
         <div className="text-center mb-8 animate-fade-in">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center">
-              <Sparkles className="h-6 w-6 text-primary-foreground" />
+          <div className="inline-flex items-center justify-center mb-6">
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-lg shadow-primary/30">
+              <Sparkles className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold mb-2">Welcome to Aisha AI</h1>
+          <h1 className="text-3xl font-bold mb-2 text-foreground">Welcome to Aisha AI</h1>
           <p className="text-muted-foreground">Your AI receptionist awaits</p>
         </div>
 
-        <Card className="border-2 border-primary/10 shadow-xl animate-scale-in">
+        <Card className="border-2 border-primary/10 shadow-2xl shadow-primary/5 animate-scale-in backdrop-blur-sm bg-card/95">
           <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 m-1 mb-0">
+              <TabsTrigger value="signin" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                Sign In
+              </TabsTrigger>
+              <TabsTrigger value="signup" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                Sign Up
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="signin">
               <form onSubmit={handleSignIn}>
-                <CardHeader>
-                  <CardTitle>Sign in to your account</CardTitle>
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-xl">Sign in to your account</CardTitle>
                   <CardDescription>
                     Enter your credentials to access your dashboard
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-5">
                   <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
-                    <Input
-                      id="signin-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
+                    <Label htmlFor="signin-email" className="text-sm font-medium">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="signin-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10 h-12"
+                        required
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signin-password">Password</Label>
-                    <Input
-                      id="signin-password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
+                    <Label htmlFor="signin-password" className="text-sm font-medium">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="signin-password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 h-12"
+                        required
+                      />
+                    </div>
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Signing in..." : "Sign In"}
+                  <Button type="submit" className="w-full h-12 text-base font-medium group" disabled={isLoading}>
+                    {isLoading ? "Signing in..." : (
+                      <>
+                        Sign In
+                        <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
                   </Button>
                 </CardContent>
               </form>
@@ -155,48 +177,65 @@ export default function Auth() {
 
             <TabsContent value="signup">
               <form onSubmit={handleSignUp}>
-                <CardHeader>
-                  <CardTitle>Create an account</CardTitle>
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-xl">Create an account</CardTitle>
                   <CardDescription>
                     Get started with your AI receptionist in minutes
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-5">
                   <div className="space-y-2">
-                    <Label htmlFor="signup-name">Full Name</Label>
-                    <Input
-                      id="signup-name"
-                      type="text"
-                      placeholder="John Doe"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
+                    <Label htmlFor="signup-name" className="text-sm font-medium">Full Name</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="signup-name"
+                        type="text"
+                        placeholder="John Doe"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="pl-10 h-12"
+                        required
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
+                    <Label htmlFor="signup-email" className="text-sm font-medium">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="signup-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10 h-12"
+                        required
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      placeholder="Minimum 6 characters"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
+                    <Label htmlFor="signup-password" className="text-sm font-medium">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="signup-password"
+                        type="password"
+                        placeholder="Minimum 6 characters"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 h-12"
+                        required
+                      />
+                    </div>
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Creating account..." : "Create Account"}
+                  <Button type="submit" className="w-full h-12 text-base font-medium group" disabled={isLoading}>
+                    {isLoading ? "Creating account..." : (
+                      <>
+                        Create Account
+                        <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
                   </Button>
                 </CardContent>
               </form>
@@ -204,7 +243,7 @@ export default function Auth() {
           </Tabs>
         </Card>
 
-        <p className="text-center text-sm text-muted-foreground mt-4">
+        <p className="text-center text-sm text-muted-foreground mt-6">
           By signing up, you agree to our Terms and Privacy Policy
         </p>
       </div>

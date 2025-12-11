@@ -7,10 +7,11 @@ import { AppointmentModal } from "@/components/appointments/AppointmentModal";
 import { AppointmentFilters, type FilterState } from "@/components/appointments/AppointmentFilters";
 import type { Appointment } from "@/types/appointments";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MessageCircle, RefreshCw, Plus, Download, Calendar } from "lucide-react";
+import { MessageCircle, RefreshCw, Plus, Download, Calendar, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingState } from "@/components/LoadingState";
+import { Badge } from "@/components/ui/badge";
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -44,7 +45,6 @@ export default function Appointments() {
   function applyFilters() {
     let filtered = [...appointments];
 
-    // Search filter
     if (filters.search) {
       const search = filters.search.toLowerCase();
       filtered = filtered.filter(apt =>
@@ -55,18 +55,15 @@ export default function Appointments() {
       );
     }
 
-    // Status filter
     if (filters.status.length > 0) {
       filtered = filtered.filter(apt => filters.status.includes(apt.status || "booked"));
     }
 
-    // Service filter
     if (filters.service) {
       const service = filters.service.toLowerCase();
       filtered = filtered.filter(apt => apt.service?.toLowerCase().includes(service));
     }
 
-    // Date range filter
     if (filters.startDate) {
       filtered = filtered.filter(apt => 
         new Date(apt.start_time) >= new Date(filters.startDate)
@@ -188,25 +185,35 @@ export default function Appointments() {
   return (
     <>
       <Navbar />
-      <div className="container mx-auto p-6 max-w-7xl">
-        <div className="flex items-center justify-between mb-6">
+      <div className="container mx-auto p-4 lg:p-8 max-w-7xl">
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Appointments Calendar</h1>
-            <p className="text-muted-foreground">View all appointments booked via AI chat</p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <Calendar className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-2xl lg:text-3xl font-bold">Appointments Calendar</h1>
+                <p className="text-muted-foreground text-sm lg:text-base">View all appointments booked via AI chat</p>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-2 items-center">
+          
+          <div className="flex flex-wrap gap-3 items-center">
             {selectedIds.length > 0 && (
-              <>
-                <span className="text-sm text-muted-foreground">{selectedIds.length} selected</span>
-                <Button onClick={clearSelection} variant="ghost" size="sm">Clear</Button>
-                <Button onClick={bulkCancel} variant="destructive" size="sm">
+              <div className="flex items-center gap-2 bg-destructive/10 px-3 py-2 rounded-lg">
+                <span className="text-sm font-medium text-destructive">{selectedIds.length} selected</span>
+                <Button onClick={clearSelection} variant="ghost" size="sm" className="h-8">Clear</Button>
+                <Button onClick={bulkCancel} variant="destructive" size="sm" className="h-8">
                   Cancel Selected
                 </Button>
-              </>
+              </div>
             )}
+            
             {receptionists.length > 0 && (
               <select 
-                className="px-4 py-2 border rounded-md bg-background"
+                className="px-4 py-2.5 border-2 border-border rounded-xl bg-background text-sm font-medium focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 value={selectedReceptionist} 
                 onChange={(e) => setSelectedReceptionist(e.target.value)}
               >
@@ -218,27 +225,32 @@ export default function Appointments() {
                 ))}
               </select>
             )}
-            <Button onClick={() => setCreateModalOpen(true)} variant="default">
+            
+            <Button onClick={() => setCreateModalOpen(true)} className="h-11 shadow-lg shadow-primary/20">
               <Plus className="mr-2 h-4 w-4" />
               Create Appointment
             </Button>
-            <Button onClick={exportToCSV} variant="outline">
+            <Button onClick={exportToCSV} variant="outline" className="h-11">
               <Download className="mr-2 h-4 w-4" />
               Export CSV
             </Button>
-            <Button onClick={() => loadAppointments()} disabled={loading} variant="outline">
+            <Button onClick={() => loadAppointments()} disabled={loading} variant="outline" className="h-11">
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
         </div>
 
-        <Alert className="mb-6 border-primary/20 bg-primary/5">
-          <MessageCircle className="h-4 w-4" />
-          <AlertDescription>
-            Appointments are booked automatically when customers chat with your AI receptionist. 
-            Go to the Builder page to test the booking flow.
-          </AlertDescription>
+        <Alert className="mb-6 border-2 border-primary/20 bg-primary/5">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Sparkles className="h-5 w-5 text-primary" />
+            </div>
+            <AlertDescription className="text-sm">
+              Appointments are booked automatically when customers chat with your AI receptionist. 
+              Go to the Builder page to test the booking flow.
+            </AlertDescription>
+          </div>
         </Alert>
 
         <div className="mb-6">
