@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, Plus, Trash2, Calendar, AlertCircle } from "lucide-react";
+import { Clock, Plus, Trash2, Calendar, AlertCircle, Zap } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,13 +55,11 @@ export default function Availability() {
   const [exceptions, setExceptions] = useState<AvailabilityException[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // New rule form
   const [newDay, setNewDay] = useState<number>(1);
   const [newStart, setNewStart] = useState("09:00");
   const [newEnd, setNewEnd] = useState("17:00");
   const [timezone, setTimezone] = useState("Africa/Lagos");
 
-  // New exception form
   const [exceptionStart, setExceptionStart] = useState("");
   const [exceptionEnd, setExceptionEnd] = useState("");
   const [exceptionReason, setExceptionReason] = useState("");
@@ -100,7 +98,6 @@ export default function Availability() {
   async function loadAvailability(receptionistId: string) {
     setLoading(true);
     try {
-      // Load rules
       const { data: rulesData, error: rulesError } = await supabase
         .from("availability_rules")
         .select("*")
@@ -111,7 +108,6 @@ export default function Availability() {
       if (rulesError) throw rulesError;
       setRules(rulesData || []);
 
-      // Load exceptions
       const { data: exceptionsData, error: exceptionsError } = await supabase
         .from("availability_exceptions")
         .select("*")
@@ -121,7 +117,6 @@ export default function Availability() {
       if (exceptionsError) throw exceptionsError;
       setExceptions(exceptionsData || []);
 
-      // Get timezone from first rule or use default
       if (rulesData && rulesData.length > 0) {
         setTimezone(rulesData[0].timezone || "Africa/Lagos");
       }
@@ -240,24 +235,29 @@ export default function Availability() {
   return (
     <>
       <Navbar />
-      <div className="container mx-auto p-6 max-w-7xl">
+      <div className="container mx-auto p-4 lg:p-8 max-w-6xl">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Business Hours & Availability</h1>
-          <p className="text-muted-foreground">
-            Set when your AI receptionist can book appointments
-          </p>
+        <div className="flex items-center gap-4 mb-8">
+          <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <Clock className="h-7 w-7 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl lg:text-4xl font-bold">Business Hours & Availability</h1>
+            <p className="text-muted-foreground">
+              Set when your AI receptionist can book appointments
+            </p>
+          </div>
         </div>
 
         {/* Receptionist Selector */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Select Receptionist</CardTitle>
+        <Card className="mb-6 border-2 border-border/50">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg">Select Receptionist</CardTitle>
             <CardDescription>Choose which receptionist to configure</CardDescription>
           </CardHeader>
           <CardContent>
             <Select value={selectedReceptionist} onValueChange={setSelectedReceptionist}>
-              <SelectTrigger>
+              <SelectTrigger className="h-12 border-2">
                 <SelectValue placeholder="Select a receptionist" />
               </SelectTrigger>
               <SelectContent>
@@ -275,18 +275,22 @@ export default function Availability() {
           <>
             {/* Quick Setup */}
             {rules.length === 0 && (
-              <Card className="mb-6 border-primary/20 bg-primary/5">
+              <Card className="mb-6 border-2 border-primary/20 bg-primary/5">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5" />
-                    Quick Setup
-                  </CardTitle>
-                  <CardDescription>
-                    No availability rules set. Start with default business hours?
-                  </CardDescription>
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <Zap className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">Quick Setup</CardTitle>
+                      <CardDescription>
+                        No availability rules set. Start with default business hours?
+                      </CardDescription>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <Button onClick={setDefaultHours}>
+                  <Button onClick={setDefaultHours} className="h-11">
                     Set Default Hours (Mon-Fri, 9am-5pm)
                   </Button>
                 </CardContent>
@@ -294,45 +298,54 @@ export default function Availability() {
             )}
 
             {/* Current Rules */}
-            <Card className="mb-6">
+            <Card className="mb-6 border-2 border-border/50">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Weekly Schedule
-                </CardTitle>
-                <CardDescription>Define your regular business hours</CardDescription>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Clock className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Weekly Schedule</CardTitle>
+                    <CardDescription>Define your regular business hours</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {loading ? (
-                  <p className="text-muted-foreground">Loading...</p>
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
                 ) : rules.length === 0 ? (
-                  <p className="text-muted-foreground py-8 text-center">
-                    No availability rules set. Add your first rule below.
-                  </p>
+                  <div className="text-center py-12">
+                    <p className="text-muted-foreground">
+                      No availability rules set. Add your first rule below.
+                    </p>
+                  </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {rules.map((rule) => (
                       <div
                         key={rule.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-2 border-border/50 rounded-xl hover:border-primary/20 hover:bg-primary/5 transition-all"
                       >
-                        <div className="flex items-center gap-4">
-                          <Badge variant="outline" className="min-w-[100px]">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Badge variant="outline" className="min-w-[100px] justify-center font-medium">
                             {DAYS.find((d) => d.value === rule.day_of_week)?.label}
                           </Badge>
-                          <div className="text-sm">
-                            <span className="font-medium">{rule.start_time}</span>
-                            <span className="text-muted-foreground"> - </span>
-                            <span className="font-medium">{rule.end_time}</span>
+                          <div className="text-sm font-medium">
+                            <span>{rule.start_time}</span>
+                            <span className="text-muted-foreground mx-2">→</span>
+                            <span>{rule.end_time}</span>
                           </div>
-                          <Badge variant="secondary">{rule.timezone}</Badge>
+                          <Badge variant="secondary" className="text-xs">{rule.timezone}</Badge>
                         </div>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => rule.id && deleteRule(rule.id)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     ))}
@@ -340,13 +353,13 @@ export default function Availability() {
                 )}
 
                 {/* Add New Rule Form */}
-                <div className="mt-6 pt-6 border-t space-y-4">
-                  <h4 className="font-semibold">Add New Rule</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
+                <div className="mt-8 pt-6 border-t-2 border-border/50 space-y-5">
+                  <h4 className="font-semibold text-lg">Add New Rule</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="space-y-2">
                       <Label>Day</Label>
                       <Select value={newDay.toString()} onValueChange={(v) => setNewDay(parseInt(v))}>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-11 border-2">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -358,18 +371,18 @@ export default function Availability() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div>
+                    <div className="space-y-2">
                       <Label>Start Time</Label>
-                      <Input type="time" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
+                      <Input type="time" value={newStart} onChange={(e) => setNewStart(e.target.value)} className="h-11" />
                     </div>
-                    <div>
+                    <div className="space-y-2">
                       <Label>End Time</Label>
-                      <Input type="time" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} />
+                      <Input type="time" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} className="h-11" />
                     </div>
-                    <div>
+                    <div className="space-y-2">
                       <Label>Timezone</Label>
                       <Select value={timezone} onValueChange={setTimezone}>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-11 border-2">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -382,7 +395,7 @@ export default function Availability() {
                       </Select>
                     </div>
                   </div>
-                  <Button onClick={addRule}>
+                  <Button onClick={addRule} className="h-11">
                     <Plus className="mr-2 h-4 w-4" /> Add Rule
                   </Button>
                 </div>
@@ -390,43 +403,48 @@ export default function Availability() {
             </Card>
 
             {/* Exceptions */}
-            <Card>
+            <Card className="border-2 border-border/50">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Time-Off & Exceptions
-                </CardTitle>
-                <CardDescription>
-                  Block specific dates/times (holidays, vacations, etc.)
-                </CardDescription>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-secondary/10 flex items-center justify-center">
+                    <Calendar className="h-5 w-5 text-secondary" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Time-Off & Exceptions</CardTitle>
+                    <CardDescription>
+                      Block specific dates/times (holidays, vacations, etc.)
+                    </CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {exceptions.length === 0 ? (
-                  <p className="text-muted-foreground py-4 text-center">
-                    No exceptions set
-                  </p>
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No exceptions set</p>
+                  </div>
                 ) : (
-                  <div className="space-y-2 mb-6">
+                  <div className="space-y-3 mb-8">
                     {exceptions.map((exc) => (
                       <div
                         key={exc.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-2 border-border/50 rounded-xl hover:border-secondary/20 hover:bg-secondary/5 transition-all"
                       >
                         <div>
-                          <div className="font-medium">
-                            {new Date(exc.start_timestamptz).toLocaleString()} -{" "}
+                          <div className="font-medium text-sm">
+                            {new Date(exc.start_timestamptz).toLocaleString()} →{" "}
                             {new Date(exc.end_timestamptz).toLocaleString()}
                           </div>
                           {exc.reason && (
-                            <div className="text-sm text-muted-foreground">{exc.reason}</div>
+                            <div className="text-sm text-muted-foreground mt-1">{exc.reason}</div>
                           )}
                         </div>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => exc.id && deleteException(exc.id)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     ))}
@@ -434,35 +452,38 @@ export default function Availability() {
                 )}
 
                 {/* Add Exception Form */}
-                <div className="pt-6 border-t space-y-4">
-                  <h4 className="font-semibold">Add Exception</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
+                <div className="pt-6 border-t-2 border-border/50 space-y-5">
+                  <h4 className="font-semibold text-lg">Add Exception</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-2">
                       <Label>Start Date & Time</Label>
                       <Input
                         type="datetime-local"
                         value={exceptionStart}
                         onChange={(e) => setExceptionStart(e.target.value)}
+                        className="h-11"
                       />
                     </div>
-                    <div>
+                    <div className="space-y-2">
                       <Label>End Date & Time</Label>
                       <Input
                         type="datetime-local"
                         value={exceptionEnd}
                         onChange={(e) => setExceptionEnd(e.target.value)}
+                        className="h-11"
                       />
                     </div>
-                    <div>
+                    <div className="space-y-2">
                       <Label>Reason (Optional)</Label>
                       <Input
                         placeholder="Holiday, vacation, etc."
                         value={exceptionReason}
                         onChange={(e) => setExceptionReason(e.target.value)}
+                        className="h-11"
                       />
                     </div>
                   </div>
-                  <Button onClick={addException}>
+                  <Button onClick={addException} variant="secondary" className="h-11">
                     <Plus className="mr-2 h-4 w-4" /> Add Exception
                   </Button>
                 </div>
