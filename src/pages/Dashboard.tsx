@@ -73,102 +73,75 @@ export default function Dashboard() {
 
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-10 animate-fade-in">
           <div>
-            <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
-            <p className="text-muted-foreground">Your AI-powered appointment booking system</p>
+            <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
+              Dashboard
+            </h1>
+            <p className="text-muted-foreground text-lg">Your AI-powered appointment booking system</p>
           </div>
-          <Button onClick={() => navigate("/onboarding-wizard")} size="lg">
-            <Plus className="mr-2 h-4 w-4" /> Create Receptionist
+          <Button onClick={() => navigate("/onboarding-wizard")} size="lg" variant="gradient" className="shadow-lg">
+            <Plus className="mr-2 h-5 w-5" /> Create Receptionist
           </Button>
         </div>
 
         {/* Getting Started Guide - Only show if no receptionists */}
         {receptionists.length === 0 && (
-          <Card className="mb-8 border-primary/20 bg-gradient-to-br from-primary/5 to-background">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-primary" />
+          <Card className="mb-10 border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background animate-scale-in overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-primary/10 to-transparent rounded-full blur-3xl" />
+            <CardHeader className="relative">
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-md">
+                  <CheckCircle2 className="h-5 w-5 text-primary-foreground" />
+                </div>
                 Getting Started
               </CardTitle>
-              <CardDescription>Follow these steps to set up your AI receptionist</CardDescription>
+              <CardDescription className="text-base">Follow these steps to set up your AI receptionist</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">1</div>
-                  <div>
-                    <h4 className="font-semibold mb-1">Create Your AI Receptionist</h4>
-                    <p className="text-sm text-muted-foreground">Set up your receptionist's name, business details, and personality</p>
+            <CardContent className="relative">
+              <div className="space-y-5">
+                {[
+                  { num: 1, title: "Create Your AI Receptionist", desc: "Set up your receptionist's name, business details, and personality" },
+                  { num: 2, title: "Add Services", desc: "Define the services you offer (haircut, massage, consultation, etc.)" },
+                  { num: 3, title: "Set Availability", desc: "Configure your business hours so the AI knows when to book appointments" },
+                  { num: 4, title: "Test the AI Chat", desc: "Go to Builder and chat with your AI to book test appointments" },
+                  { num: 5, title: "View in Calendar", desc: "Check the Appointments page to see all booked appointments in calendar view" },
+                ].map((step, idx) => (
+                  <div key={step.num} className={`flex items-start gap-4 animate-slide-up`} style={{ animationDelay: `${idx * 100}ms` }}>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-glow text-primary-foreground font-bold shadow-md flex-shrink-0">
+                      {step.num}
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-1 text-base">{step.title}</h4>
+                      <p className="text-sm text-muted-foreground">{step.desc}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">2</div>
-                  <div>
-                    <h4 className="font-semibold mb-1">Add Services</h4>
-                    <p className="text-sm text-muted-foreground">Define the services you offer (haircut, massage, consultation, etc.)</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">3</div>
-                  <div>
-                    <h4 className="font-semibold mb-1">Set Availability</h4>
-                    <p className="text-sm text-muted-foreground">Configure your business hours so the AI knows when to book appointments</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">4</div>
-                  <div>
-                    <h4 className="font-semibold mb-1">Test the AI Chat</h4>
-                    <p className="text-sm text-muted-foreground">Go to Builder and chat with your AI to book test appointments</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">5</div>
-                  <div>
-                    <h4 className="font-semibold mb-1">View in Calendar</h4>
-                    <p className="text-sm text-muted-foreground">Check the Appointments page to see all booked appointments in calendar view</p>
-                  </div>
-                </div>
+                ))}
               </div>
             </CardContent>
           </Card>
         )}
 
         {/* Stats Grid */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Conversations</CardTitle>
-              <MessageCircle className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.conversations}</div>
-              <p className="text-xs text-muted-foreground">All time</p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Appointments Booked</CardTitle>
-              <Calendar className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.appointments}</div>
-              <p className="text-xs text-muted-foreground">All time</p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Receptionists</CardTitle>
-              <Phone className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.activeReceptionists}</div>
-              <p className="text-xs text-muted-foreground">Ready to handle calls</p>
-            </CardContent>
-          </Card>
+        <div className="grid md:grid-cols-3 gap-6 mb-10">
+          {[
+            { title: "Total Conversations", value: stats.conversations, icon: MessageCircle, desc: "All time" },
+            { title: "Appointments Booked", value: stats.appointments, icon: Calendar, desc: "All time" },
+            { title: "Active Receptionists", value: stats.activeReceptionists, icon: Phone, desc: "Ready to handle calls" },
+          ].map((stat, idx) => (
+            <Card key={stat.title} className="card-hover group animate-fade-in" style={{ animationDelay: `${idx * 100}ms` }}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
+                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                  <stat.icon className="h-5 w-5 text-primary" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold mb-1">{stat.value}</div>
+                <p className="text-sm text-muted-foreground">{stat.desc}</p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Receptionists List */}

@@ -108,15 +108,15 @@ export const Navbar = ({ user }: NavbarProps) => {
   };
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+    <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div 
-            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all duration-200"
             onClick={() => navigate(user ? "/dashboard" : "/")}
           >
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center">
-              <span className="text-xl font-bold text-primary-foreground">R</span>
+            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-md">
+              <span className="text-lg font-bold text-primary-foreground">R</span>
             </div>
             <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
               Rutex FrontDesk
