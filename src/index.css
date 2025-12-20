@@ -383,6 +383,41 @@
     box-shadow: var(--shadow-lg);
   }
 
+  /* Consistent interactive card */
+  .card-interactive {
+    @apply bg-card rounded-xl border border-border/50 shadow-sm transition-all duration-300;
+    @apply hover:shadow-lg hover:border-primary/20 hover:-translate-y-0.5;
+    @apply focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+
+  /* Button consistent base */
+  .btn-base {
+    @apply inline-flex items-center justify-center gap-2;
+    @apply font-medium transition-all duration-200;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  /* Icon button */
+  .icon-btn {
+    @apply h-10 w-10 rounded-lg flex items-center justify-center;
+    @apply bg-primary/10 text-primary hover:bg-primary/20;
+    @apply transition-colors duration-200;
+  }
+
+  /* Skip to main content link for accessibility */
+  .skip-link {
+    @apply sr-only focus:not-sr-only;
+    @apply focus:absolute focus:top-4 focus:left-4 focus:z-[100];
+    @apply focus:bg-primary focus:text-primary-foreground;
+    @apply focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg;
+  }
+
+  /* Visually hidden but accessible */
+  .sr-only-focusable {
+    @apply sr-only focus:not-sr-only focus:absolute;
+  }
+
   /* Scrollbar styles */
   .scrollbar-premium {
     scrollbar-width: thin;
@@ -404,6 +439,45 @@
   
   .scrollbar-premium::-webkit-scrollbar-thumb:hover {
     @apply bg-primary/50;
+  }
+
+  /* Responsive text utilities */
+  .text-responsive-sm {
+    @apply text-xs sm:text-sm;
+  }
+  
+  .text-responsive-base {
+    @apply text-sm sm:text-base;
+  }
+  
+  .text-responsive-lg {
+    @apply text-base sm:text-lg lg:text-xl;
+  }
+  
+  .text-responsive-xl {
+    @apply text-lg sm:text-xl lg:text-2xl;
+  }
+  
+  .text-responsive-2xl {
+    @apply text-xl sm:text-2xl lg:text-3xl;
+  }
+  
+  .text-responsive-3xl {
+    @apply text-2xl sm:text-3xl lg:text-4xl;
+  }
+
+  /* Consistent spacing utilities */
+  .section-padding {
+    @apply py-8 sm:py-12 lg:py-16;
+  }
+  
+  .section-padding-lg {
+    @apply py-12 sm:py-16 lg:py-24;
+  }
+
+  /* Touch-friendly targets for mobile */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
   }
 }
 
