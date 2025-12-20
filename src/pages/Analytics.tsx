@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { MessageCircle, Calendar, TrendingUp, Clock, Target, Award, BarChart3 } from "lucide-react";
+import { MessageCircle, Calendar, TrendingUp, Clock, Target, Award, BarChart3, RefreshCw, Download } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { toast } from "sonner";
 
 type Analytics = {
   conversation_metrics: {
@@ -46,15 +51,24 @@ type Analytics = {
   computed_at: string;
 };
 
+const DATE_PRESETS = [
+  { label: "Last 7 days", days: 7 },
+  { label: "Last 30 days", days: 30 },
+  { label: "Last 90 days", days: 90 },
+];
+
 export default function Analytics() {
   const [user, setUser] = useState<any>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [cached, setCached] = useState(false);
+  const [dateRange, setDateRange] = useState({ days: 30, label: "Last 30 days" });
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [dateRange]);
 
   const loadData = async () => {
     setLoading(true);
@@ -69,7 +83,10 @@ export default function Analytics() {
 
     try {
       const { data, error } = await supabase.functions.invoke("analytics/compute", {
-        body: { userId: user.id }
+        body: { 
+          userId: user.id,
+          days: dateRange.days
+        }
       });
 
       if (error) throw error;
@@ -78,8 +95,18 @@ export default function Analytics() {
       setCached(data.cached);
     } catch (err) {
       console.error("Error loading analytics:", err);
+      toast.error("Failed to load analytics");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const applyCustomRange = () => {
+    if (customStart && customEnd) {
+      const start = new Date(customStart);
+      const end = new Date(customEnd);
+      const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      setDateRange({ days, label: `${customStart} to ${customEnd}` });
     }
   };
 
@@ -129,22 +156,76 @@ export default function Analytics() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar user={user} />
-
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <BarChart3 className="h-7 w-7 text-primary" />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <BarChart3 className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl lg:text-4xl font-bold">Analytics Dashboard</h1>
+              <p className="text-muted-foreground">
+                {dateRange.label}
+                {cached && <Badge variant="outline" className="ml-2 text-xs">Cached</Badge>}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl lg:text-4xl font-bold">
-              Analytics Dashboard
-            </h1>
-            <p className="text-muted-foreground">
-              Comprehensive insights into your AI receptionist performance
-              {cached && <Badge variant="outline" className="ml-2 text-xs">Cached</Badge>}
-            </p>
+
+          {/* Date Range Controls */}
+          <div className="flex flex-wrap items-center gap-2">
+            {DATE_PRESETS.map((preset) => (
+              <Button
+                key={preset.days}
+                variant={dateRange.days === preset.days ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateRange({ days: preset.days, label: preset.label })}
+                className="h-9"
+              >
+                {preset.label}
+              </Button>
+            ))}
+            
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9">
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Custom
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80">
+                <div className="space-y-4">
+                  <h4 className="font-medium">Custom Date Range</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Start</Label>
+                      <Input
+                        type="date"
+                        value={customStart}
+                        onChange={(e) => setCustomStart(e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">End</Label>
+                      <Input
+                        type="date"
+                        value={customEnd}
+                        onChange={(e) => setCustomEnd(e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={applyCustomRange} size="sm" className="w-full">
+                    Apply Range
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <Button onClick={loadData} variant="outline" size="sm" disabled={loading} className="h-9">
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
           </div>
         </div>
 
