@@ -153,6 +153,13 @@ export type Database = {
             referencedRelation: "receptionists"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ai_booking_suggestions_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
         ]
       }
       ai_response_reviews: {
@@ -247,6 +254,13 @@ export type Database = {
             referencedRelation: "receptionists"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ai_responses_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
         ]
       }
       analytics_cache: {
@@ -277,6 +291,13 @@ export type Database = {
             columns: ["receptionist_id"]
             isOneToOne: false
             referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analytics_cache_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
             referencedColumns: ["id"]
           },
           {
@@ -359,6 +380,13 @@ export type Database = {
             referencedRelation: "receptionists"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "appointment_slots_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
         ]
       }
       appointments: {
@@ -434,6 +462,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "appointments_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "appointments_service_id_fkey"
             columns: ["service_id"]
             isOneToOne: false
@@ -475,6 +510,13 @@ export type Database = {
             referencedRelation: "receptionists"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "availability_exceptions_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
         ]
       }
       availability_rules: {
@@ -514,6 +556,13 @@ export type Database = {
             columns: ["receptionist_id"]
             isOneToOne: false
             referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "availability_rules_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
             referencedColumns: ["id"]
           },
         ]
@@ -585,6 +634,13 @@ export type Database = {
             columns: ["receptionist_id"]
             isOneToOne: false
             referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
             referencedColumns: ["id"]
           },
         ]
@@ -666,6 +722,13 @@ export type Database = {
             referencedRelation: "receptionists"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "kb_rewrite_log_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
         ]
       }
       notifications: {
@@ -725,6 +788,13 @@ export type Database = {
             referencedRelation: "receptionists"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "notifications_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
         ]
       }
       optimization_log: {
@@ -770,6 +840,13 @@ export type Database = {
             columns: ["receptionist_id"]
             isOneToOne: false
             referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "optimization_log_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
             referencedColumns: ["id"]
           },
           {
@@ -845,6 +922,13 @@ export type Database = {
             columns: ["receptionist_id"]
             isOneToOne: false
             referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receptionist_faqs_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
             referencedColumns: ["id"]
           },
         ]
@@ -998,6 +1082,13 @@ export type Database = {
             referencedRelation: "receptionists"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "services_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
         ]
       }
       usage_logs: {
@@ -1049,7 +1140,33 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      widget_receptionists: {
+        Row: {
+          business_name: string | null
+          greeting_message: string | null
+          id: string | null
+          name: string | null
+          timezone: string | null
+          tone: Database["public"]["Enums"]["receptionist_tone"] | null
+        }
+        Insert: {
+          business_name?: string | null
+          greeting_message?: string | null
+          id?: string | null
+          name?: string | null
+          timezone?: string | null
+          tone?: Database["public"]["Enums"]["receptionist_tone"] | null
+        }
+        Update: {
+          business_name?: string | null
+          greeting_message?: string | null
+          id?: string | null
+          name?: string | null
+          timezone?: string | null
+          tone?: Database["public"]["Enums"]["receptionist_tone"] | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_public_receptionist: {
