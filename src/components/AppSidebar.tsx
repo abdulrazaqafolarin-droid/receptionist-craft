@@ -1,6 +1,7 @@
-import { BarChart, Home, Calendar, MessageSquare, Settings, HelpCircle, ClipboardCheck, Lightbulb, Activity, Bell, Radio, Clock, Briefcase, MessageCircleQuestion, Sparkles } from "lucide-react";
+import { BarChart, Home, Calendar, MessageSquare, Settings, HelpCircle, ClipboardCheck, Lightbulb, Activity, Bell, Radio, Clock, Briefcase, MessageCircleQuestion } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import rutexLogo from "@/assets/rutex-logo.jpg";
 
 import {
   Sidebar,
@@ -56,9 +57,11 @@ export function AppSidebar() {
               onClick={() => navigate("/dashboard")}
               aria-label="Go to dashboard"
             >
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-md">
-                <Sparkles className="h-5 w-5 text-primary-foreground" aria-hidden="true" />
-              </div>
+              <img 
+                src={rutexLogo} 
+                alt="Rutex Logo" 
+                className="h-10 w-10 rounded-xl shadow-md object-cover"
+              />
               <span className="text-lg font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
                 Rutex
               </span>
