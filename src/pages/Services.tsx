@@ -39,9 +39,11 @@ export default function Services() {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<Service | null>(null);
   const { toast } = useToast();
 
   const [newService, setNewService] = useState({
@@ -149,11 +151,10 @@ export default function Services() {
     }
   }
 
-  async function deleteService(id: string) {
-    if (!confirm("Are you sure you want to delete this service?")) return;
-
+  async function deleteService(service: Service) {
+    setDeleting(service.id);
     try {
-      const { error } = await supabase.from("services").delete().eq("id", id);
+      const { error } = await supabase.from("services").delete().eq("id", service.id);
       if (error) throw error;
 
       toast({ title: "Success", description: "Service deleted" });
@@ -161,6 +162,9 @@ export default function Services() {
     } catch (err: any) {
       console.error("deleteService error", err);
       toast({ title: "Error", description: err.message || "Failed to delete service", variant: "destructive" });
+    } finally {
+      setDeleting(null);
+      setDeleteConfirm(null);
     }
   }
 
@@ -451,10 +455,15 @@ export default function Services() {
                         <Button
                           variant="destructive"
                           size="icon"
-                          onClick={() => deleteService(service.id)}
+                          onClick={() => setDeleteConfirm(service)}
+                          disabled={deleting === service.id}
                           className="h-10 w-10"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {deleting === service.id ? (
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
                         </Button>
                       </div>
                     </CardContent>
@@ -491,6 +500,28 @@ export default function Services() {
                   <AlertDialogCancel disabled={importing}>Cancel</AlertDialogCancel>
                   <AlertDialogAction onClick={confirmImportTemplate} disabled={importing}>
                     {importing ? "Importing..." : "Import Services"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+              <AlertDialogContent className="border-2">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Service?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete <strong>{deleteConfirm?.name}</strong>?
+                    This action cannot be undone. Existing appointments using this service will not be affected.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={!!deleting}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={() => deleteConfirm && deleteService(deleteConfirm)} 
+                    disabled={!!deleting}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {deleting ? "Deleting..." : "Delete Service"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

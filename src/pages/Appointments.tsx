@@ -20,6 +20,7 @@ export default function Appointments() {
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [filters, setFilters] = useState<FilterState>({
     search: "",
@@ -278,7 +279,11 @@ export default function Appointments() {
             description="Try adjusting your search or filter criteria to see more results."
           />
         ) : (
-          <AppointmentCalendar appointments={filteredAppointments} />
+          <AppointmentCalendar 
+            appointments={filteredAppointments} 
+            onEdit={(apt) => setEditingAppointment(apt)}
+            onRefresh={loadAppointments}
+          />
         )}
 
         <AppointmentModal
@@ -286,6 +291,14 @@ export default function Appointments() {
           onOpenChange={setCreateModalOpen}
           onSuccess={loadAppointments}
           receptionistId={selectedReceptionist !== "all" ? selectedReceptionist : undefined}
+        />
+
+        {/* Edit Modal */}
+        <AppointmentModal
+          open={!!editingAppointment}
+          onOpenChange={(open) => !open && setEditingAppointment(null)}
+          onSuccess={loadAppointments}
+          appointment={editingAppointment}
         />
       </div>
     </>

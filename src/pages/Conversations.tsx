@@ -1,13 +1,13 @@
-import { Navbar } from "@/components/Navbar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, MessageSquare, User, Bot, Clock } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Input } from "@/components/ui/input";
+import { MessageSquare, User, Bot, Clock, Search, X, RefreshCw, Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 
 interface Conversation {
   id: string;
@@ -15,15 +15,19 @@ interface Conversation {
   bot_message: string;
   created_at: string;
   direction: string | null;
+  receptionists?: { name: string; business_name: string };
 }
 
 export default function Conversations() {
-  const navigate = useNavigate();
   const { toast } = useToast();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [filteredConversations, setFilteredConversations] = useState<Conversation[]>([]);
   const [receptionists, setReceptionists] = useState<any[]>([]);
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     loadReceptionists();
@@ -33,6 +37,10 @@ export default function Conversations() {
   useEffect(() => {
     fetchConversations();
   }, [selectedReceptionist]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [conversations, searchTerm, startDate, endDate]);
 
   const loadReceptionists = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -53,7 +61,7 @@ export default function Conversations() {
         .from('conversations')
         .select('*, receptionists(name, business_name)')
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(100);
 
       if (selectedReceptionist !== "all") {
         query = query.eq('receptionist_id', selectedReceptionist);
@@ -75,43 +83,152 @@ export default function Conversations() {
     }
   };
 
+  const applyFilters = () => {
+    let filtered = [...conversations];
+
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(conv =>
+        conv.user_message.toLowerCase().includes(search) ||
+        conv.bot_message.toLowerCase().includes(search)
+      );
+    }
+
+    if (startDate) {
+      filtered = filtered.filter(conv => 
+        new Date(conv.created_at) >= new Date(startDate)
+      );
+    }
+
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(conv => 
+        new Date(conv.created_at) <= end
+      );
+    }
+
+    setFilteredConversations(filtered);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStartDate("");
+    setEndDate("");
+  };
+
+  const exportToCSV = () => {
+    const headers = ["Date", "Customer Message", "AI Response", "Direction"];
+    const rows = filteredConversations.map(conv => [
+      new Date(conv.created_at).toLocaleString(),
+      conv.user_message,
+      conv.bot_message,
+      conv.direction || ""
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `conversations_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    
+    toast({ title: "Success", description: "Conversations exported" });
+  };
+
+  const hasActiveFilters = searchTerm || startDate || endDate;
+
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
-      
       <div className="container mx-auto px-4 py-8 max-w-5xl">
-        <Button variant="ghost" onClick={() => navigate("/dashboard")} className="mb-6 hover:bg-primary/5">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
-        </Button>
-
         <Card className="border-2 border-border/50 shadow-xl">
           <div className="p-6 lg:p-8">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-              <div className="flex items-center gap-4">
-                <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center">
-                  <MessageSquare className="h-7 w-7 text-primary" />
+            <div className="flex flex-col gap-4 mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+                    <MessageSquare className="h-7 w-7 text-primary" />
+                  </div>
+                  <div>
+                    <h1 className="text-2xl lg:text-3xl font-bold">Conversation History</h1>
+                    <p className="text-muted-foreground">
+                      {filteredConversations.length} of {conversations.length} conversations
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold">Conversation History</h1>
-                  <p className="text-muted-foreground">View all receptionist conversations</p>
+                
+                <div className="flex flex-wrap gap-2">
+                  {receptionists.length > 0 && (
+                    <select 
+                      className="px-4 py-2.5 border-2 border-border rounded-xl bg-background text-sm font-medium focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                      value={selectedReceptionist} 
+                      onChange={(e) => setSelectedReceptionist(e.target.value)}
+                    >
+                      <option value="all">All Receptionists</option>
+                      {receptionists.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} - {r.business_name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <Button onClick={exportToCSV} variant="outline" size="sm" className="h-10">
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                  </Button>
+                  <Button onClick={fetchConversations} variant="outline" size="sm" disabled={loading} className="h-10">
+                    <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
                 </div>
               </div>
-              
-              {receptionists.length > 0 && (
-                <select 
-                  className="px-4 py-2.5 border-2 border-border rounded-xl bg-background text-sm font-medium focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                  value={selectedReceptionist} 
-                  onChange={(e) => setSelectedReceptionist(e.target.value)}
-                >
-                  <option value="all">All Receptionists</option>
-                  {receptionists.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} - {r.business_name}
-                    </option>
-                  ))}
-                </select>
-              )}
+
+              {/* Filters */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 bg-muted/30 rounded-xl border border-border/50">
+                <div className="sm:col-span-2 space-y-1.5">
+                  <Label className="text-xs">Search</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search messages..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-9 h-10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">From</Label>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="h-10"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">To</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="h-10 flex-1"
+                    />
+                    {hasActiveFilters && (
+                      <Button variant="ghost" size="icon" onClick={clearFilters} className="h-10 w-10">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             {loading ? (
@@ -123,17 +240,29 @@ export default function Conversations() {
                   </Card>
                 ))}
               </div>
-            ) : conversations.length === 0 ? (
+            ) : filteredConversations.length === 0 ? (
               <div className="text-center py-16">
                 <div className="h-20 w-20 rounded-3xl bg-muted/50 flex items-center justify-center mx-auto mb-6">
                   <MessageSquare className="h-10 w-10 text-muted-foreground" />
                 </div>
-                <h3 className="text-xl font-semibold mb-2">No conversations yet</h3>
-                <p className="text-muted-foreground">Conversations with your AI receptionist will appear here</p>
+                <h3 className="text-xl font-semibold mb-2">
+                  {hasActiveFilters ? "No matching conversations" : "No conversations yet"}
+                </h3>
+                <p className="text-muted-foreground">
+                  {hasActiveFilters 
+                    ? "Try adjusting your search or date filters" 
+                    : "Conversations with your AI receptionist will appear here"
+                  }
+                </p>
+                {hasActiveFilters && (
+                  <Button variant="outline" onClick={clearFilters} className="mt-4">
+                    Clear Filters
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
-                {conversations.map((conv: any) => (
+                {filteredConversations.map((conv: Conversation) => (
                   <Card key={conv.id} className="p-5 border-2 border-border/50 hover:border-primary/20 hover:shadow-lg transition-all">
                     <div className="space-y-4">
                       {conv.receptionists && (
