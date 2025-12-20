@@ -87,55 +87,55 @@ export default function Landing() {
       <Navbar />
       
       {/* Hero Section */}
-      <section className="relative overflow-hidden">
+      <section className="relative overflow-hidden" aria-labelledby="hero-title">
         {/* Background decoration */}
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full bg-primary/5 blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full bg-secondary/5 blur-3xl" />
+        <div className="absolute inset-0 -z-10" aria-hidden="true">
+          <div className="absolute top-0 right-0 w-[300px] sm:w-[450px] lg:w-[600px] h-[300px] sm:h-[450px] lg:h-[600px] rounded-full bg-primary/5 blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-[200px] sm:w-[300px] lg:w-[400px] h-[200px] sm:h-[300px] lg:h-[400px] rounded-full bg-secondary/5 blur-3xl" />
         </div>
         
-        <div className="container mx-auto px-4 py-16 lg:py-24">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            <div className="space-y-8 animate-fade-in">
-              <Badge className="inline-flex gap-2 px-4 py-2 text-sm font-medium bg-primary/10 text-primary border-primary/20 hover:bg-primary/15 transition-colors">
-                <Sparkles className="h-4 w-4" />
+        <div className="container mx-auto px-4 py-12 sm:py-16 lg:py-24">
+          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 lg:gap-16 items-center">
+            <div className="space-y-6 sm:space-y-8 animate-fade-in">
+              <Badge className="inline-flex gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium bg-primary/10 text-primary border-primary/20 hover:bg-primary/15 transition-colors">
+                <Sparkles className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
                 No-code • Instant Preview • 24/7 Support
               </Badge>
               
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight tracking-tight">
+              <h1 id="hero-title" className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight tracking-tight">
                 Create your AI receptionist in{" "}
                 <span className="bg-gradient-to-r from-primary via-primary-glow to-secondary bg-clip-text text-transparent">
                   5 minutes
                 </span>
               </h1>
               
-              <p className="text-lg lg:text-xl text-muted-foreground max-w-xl leading-relaxed">
+              <p className="text-base sm:text-lg lg:text-xl text-muted-foreground max-w-xl leading-relaxed">
                 No tech skills needed. Build, preview, and manage your AI receptionist that handles calls, books appointments, and captures leads — all in demo mode until you're ready.
               </p>
 
               {/* Benefits list */}
-              <ul className="space-y-3">
+              <ul className="space-y-2 sm:space-y-3" aria-label="Key benefits">
                 {benefits.map((benefit, idx) => (
-                  <li key={idx} className="flex items-center gap-3 text-muted-foreground">
-                    <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                  <li key={idx} className="flex items-center gap-2 sm:gap-3 text-sm sm:text-base text-muted-foreground">
+                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" aria-hidden="true" />
                     <span>{benefit}</span>
                   </li>
                 ))}
               </ul>
               
-              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2 sm:pt-4">
                 <Button 
                   size="lg" 
-                  className="text-lg px-8 h-14 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all group"
+                  className="text-base sm:text-lg px-6 sm:px-8 h-12 sm:h-14 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all group touch-target w-full sm:w-auto"
                   onClick={() => navigate("/auth")}
                 >
                   Start Free — Build My Receptionist
-                  <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
                 </Button>
                 <Button 
                   size="lg" 
                   variant="outline" 
-                  className="text-lg h-14 border-2 hover:bg-primary/5"
+                  className="text-base sm:text-lg h-12 sm:h-14 border-2 hover:bg-primary/5 touch-target w-full sm:w-auto"
                   onClick={() => navigate("/help")}
                 >
                   Watch Demo
@@ -144,15 +144,15 @@ export default function Landing() {
             </div>
 
             {/* Animated Chat Preview */}
-            <div className="animate-float lg:pl-8">
-              <Card className="p-6 shadow-2xl shadow-primary/10 border-2 border-primary/10 bg-card/80 backdrop-blur-sm">
-                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-border">
-                  <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse shadow-lg shadow-green-500/50" />
-                  <span className="font-semibold text-foreground">Live Demo Preview</span>
+            <div className="animate-float lg:pl-8 hidden sm:block" aria-hidden="true">
+              <Card className="p-4 sm:p-6 shadow-2xl shadow-primary/10 border-2 border-primary/10 bg-card/80 backdrop-blur-sm">
+                <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-border">
+                  <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-green-500 animate-pulse shadow-lg shadow-green-500/50" />
+                  <span className="font-semibold text-sm sm:text-base text-foreground">Live Demo Preview</span>
                   <Badge variant="secondary" className="ml-auto text-xs">AI Powered</Badge>
                 </div>
                 
-                <div className="h-[380px] overflow-y-auto pr-2">
+                <div className="h-[280px] sm:h-[380px] overflow-y-auto pr-2 scrollbar-premium">
                   {mockConversation.slice(0, displayedMessages).map((msg, idx) => (
                     <ChatBubble 
                       key={idx} 
@@ -178,59 +178,60 @@ export default function Landing() {
       </section>
 
       {/* Features Grid */}
-      <section className="container mx-auto px-4 py-20 lg:py-28">
-        <div className="text-center mb-16">
-          <Badge className="mb-4 bg-secondary/10 text-secondary border-secondary/20">Features</Badge>
-          <h2 className="text-3xl lg:text-4xl font-bold mb-4">Everything you need to succeed</h2>
-          <p className="text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto">
+      <section className="container mx-auto px-4 py-12 sm:py-16 lg:py-24" aria-labelledby="features-title">
+        <div className="text-center mb-10 sm:mb-16">
+          <Badge className="mb-3 sm:mb-4 bg-secondary/10 text-secondary border-secondary/20">Features</Badge>
+          <h2 id="features-title" className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">Everything you need to succeed</h2>
+          <p className="text-base sm:text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto">
             Built for small businesses who want professional customer service without the overhead
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
           {features.map((feature, idx) => (
             <Card 
               key={idx} 
-              className="group p-6 lg:p-8 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 border-2 border-transparent hover:border-primary/20 bg-card/50 backdrop-blur-sm"
+              className="group p-5 sm:p-6 lg:p-8 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 border-2 border-transparent hover:border-primary/20 bg-card/50 backdrop-blur-sm focus-within:ring-2 focus-within:ring-ring"
+              tabIndex={0}
             >
-              <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-6 group-hover:bg-primary/15 transition-colors">
-                <feature.icon className="h-7 w-7 text-primary" />
+              <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-primary/15 transition-colors" aria-hidden="true">
+                <feature.icon className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
-              <p className="text-muted-foreground leading-relaxed">{feature.description}</p>
+              <h3 className="text-lg sm:text-xl font-semibold mb-2 sm:mb-3">{feature.title}</h3>
+              <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">{feature.description}</p>
             </Card>
           ))}
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="container mx-auto px-4 py-20 lg:py-28">
-        <Card className="relative overflow-hidden p-8 lg:p-16 text-center border-2 border-primary/10">
+      <section className="container mx-auto px-4 py-12 sm:py-16 lg:py-24" aria-labelledby="cta-title">
+        <Card className="relative overflow-hidden p-6 sm:p-8 lg:p-16 text-center border-2 border-primary/10">
           {/* Background gradient */}
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" aria-hidden="true" />
           
           <div className="relative z-10">
-            <Badge className="mb-6 bg-primary/10 text-primary border-primary/20">Get Started Today</Badge>
-            <h2 className="text-3xl lg:text-4xl font-bold mb-4">Ready to transform your business?</h2>
-            <p className="text-lg lg:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
+            <Badge className="mb-4 sm:mb-6 bg-primary/10 text-primary border-primary/20">Get Started Today</Badge>
+            <h2 id="cta-title" className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">Ready to transform your business?</h2>
+            <p className="text-base sm:text-lg lg:text-xl text-muted-foreground mb-6 sm:mb-10 max-w-2xl mx-auto">
               Join hundreds of small businesses using AI receptionists to never miss a customer call again
             </p>
             <Button 
               size="lg" 
-              className="text-lg px-10 h-14 shadow-lg shadow-primary/25 hover:shadow-xl transition-all group"
+              className="text-base sm:text-lg px-6 sm:px-10 h-12 sm:h-14 shadow-lg shadow-primary/25 hover:shadow-xl transition-all group touch-target w-full sm:w-auto"
               onClick={() => navigate("/auth")}
             >
               Get Started for Free
-              <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
             </Button>
           </div>
         </Card>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border py-10 bg-muted/30">
+      <footer className="border-t border-border py-8 sm:py-10 bg-muted/30">
         <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <p className="text-sm">© 2025 Rutex FrontDesk Builder. Built with ❤️ for small businesses.</p>
+          <p className="text-xs sm:text-sm">© 2025 Rutex FrontDesk Builder. Built with ❤️ for small businesses.</p>
         </div>
       </footer>
     </div>

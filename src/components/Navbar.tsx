@@ -107,32 +107,49 @@ export const Navbar = ({ user }: NavbarProps) => {
   };
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
+    <nav 
+      className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60"
+      role="navigation"
+      aria-label="Main navigation"
+    >
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
-          <div 
-            className="flex items-center gap-3 cursor-pointer group"
-            onClick={() => navigate(user ? "/dashboard" : "/")}
+          <a 
+            href="#main-content"
+            className="skip-link"
           >
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-md group-hover:shadow-elevated transition-all duration-300">
-              <Sparkles className="h-5 w-5 text-primary-foreground" />
+            Skip to main content
+          </a>
+          <button 
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer group touch-target"
+            onClick={() => navigate(user ? "/dashboard" : "/")}
+            aria-label="Go to home page"
+          >
+            <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-md group-hover:shadow-elevated transition-all duration-300">
+              <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary-foreground" aria-hidden="true" />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
+            <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
               Rutex FrontDesk
             </span>
-          </div>
+          </button>
 
           {user ? (
             <div className="flex items-center gap-2">
               {/* Notifications Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative hover:bg-primary/10">
-                    <Bell className="h-5 w-5" />
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="relative hover:bg-primary/10 touch-target"
+                    aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+                  >
+                    <Bell className="h-5 w-5" aria-hidden="true" />
                     {unreadCount > 0 && (
                       <Badge
                         variant="destructive"
                         className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs animate-pulse"
+                        aria-hidden="true"
                       >
                         {unreadCount > 9 ? "9+" : unreadCount}
                       </Badge>
@@ -191,7 +208,11 @@ export const Navbar = ({ user }: NavbarProps) => {
               {/* User Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-10 w-10 rounded-full hover:ring-2 hover:ring-primary/20 transition-all">
+                  <Button 
+                    variant="ghost" 
+                    className="relative h-10 w-10 rounded-full hover:ring-2 hover:ring-primary/20 transition-all touch-target"
+                    aria-label="User menu"
+                  >
                     <Avatar className="h-10 w-10 border-2 border-primary/20">
                       <AvatarFallback className="bg-gradient-to-br from-primary to-primary-glow text-primary-foreground font-semibold">
                         {user.email?.charAt(0).toUpperCase()}
@@ -243,11 +264,19 @@ export const Navbar = ({ user }: NavbarProps) => {
             </div>
           ) : (
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => navigate("/auth")} className="hover:bg-primary/10">
+              <Button 
+                variant="ghost" 
+                onClick={() => navigate("/auth")} 
+                className="hover:bg-primary/10 touch-target hidden sm:inline-flex"
+              >
                 Sign In
               </Button>
-              <Button onClick={() => navigate("/auth")} className="bg-gradient-to-r from-primary to-primary-glow hover:shadow-elevated transition-all">
-                Start Free
+              <Button 
+                onClick={() => navigate("/auth")} 
+                className="bg-gradient-to-r from-primary to-primary-glow hover:shadow-elevated transition-all touch-target"
+              >
+                <span className="sm:hidden">Sign In</span>
+                <span className="hidden sm:inline">Start Free</span>
               </Button>
             </div>
           )}

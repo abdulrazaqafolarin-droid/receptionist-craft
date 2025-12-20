@@ -51,17 +51,18 @@ export function AppSidebar() {
         {/* Logo Section */}
         {state !== "collapsed" && (
           <div className="px-4 mb-6">
-            <div 
-              className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+            <button 
+              className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity touch-target w-full text-left"
               onClick={() => navigate("/dashboard")}
+              aria-label="Go to dashboard"
             >
               <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-md">
-                <Sparkles className="h-5 w-5 text-primary-foreground" />
+                <Sparkles className="h-5 w-5 text-primary-foreground" aria-hidden="true" />
               </div>
               <span className="text-lg font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
                 Rutex
               </span>
-            </div>
+            </button>
           </div>
         )}
 
@@ -70,24 +71,29 @@ export function AppSidebar() {
             Navigation
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="space-y-1 px-2">
+            <SidebarMenu className="space-y-1 px-2" role="navigation" aria-label="Main menu">
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     onClick={() => navigate(item.url)}
                     className={cn(
-                      "w-full rounded-lg transition-all duration-200 hover:bg-sidebar-accent group",
+                      "w-full rounded-lg transition-all duration-200 hover:bg-sidebar-accent group touch-target",
                       isActive(item.url) 
                         ? "bg-gradient-to-r from-primary/10 to-primary/5 text-primary font-medium border-l-2 border-primary" 
                         : "text-sidebar-foreground hover:text-primary"
                     )}
+                    aria-current={isActive(item.url) ? "page" : undefined}
+                    aria-label={item.title}
                   >
-                    <item.icon className={cn(
-                      "h-4 w-4 transition-colors",
-                      isActive(item.url) ? "text-primary" : "text-muted-foreground group-hover:text-primary"
-                    )} />
+                    <item.icon 
+                      className={cn(
+                        "h-4 w-4 transition-colors flex-shrink-0",
+                        isActive(item.url) ? "text-primary" : "text-muted-foreground group-hover:text-primary"
+                      )} 
+                      aria-hidden="true"
+                    />
                     {state !== "collapsed" && (
-                      <span className="ml-3 text-sm">{item.title}</span>
+                      <span className="ml-3 text-sm truncate">{item.title}</span>
                     )}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
