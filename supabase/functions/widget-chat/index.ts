@@ -2616,11 +2616,12 @@ serve(async (req) => {
     }
 
     // Check if this is the first message (for proactive greeting)
+    // CRITICAL: Use session_id consistently (not user_id) to prevent re-greeting bug
     const { data: existingMessages, error: historyErr } = await supabase
       .from("chat_messages")
       .select("id")
       .eq("receptionist_id", receptionistId)
-      .eq("user_id", sessionId || "anonymous")
+      .eq("session_id", sessionId || "default")
       .limit(1);
 
     if (historyErr) {
@@ -2628,6 +2629,7 @@ serve(async (req) => {
     }
 
     const isFirstMessage = !existingMessages || existingMessages.length === 0;
+    console.log(`[Widget Chat] Is first message: ${isFirstMessage}, session: ${sessionId}`);
 
     // If message is empty (widget greeting storage), store greeting as bot message
     if (message === "") {
@@ -2715,14 +2717,17 @@ serve(async (req) => {
     const messageAnalysis = detectMessageType(message);
     console.log(`[Analysis] Intent: ${messageAnalysis.detectedIntent}, Ack: ${messageAnalysis.isAcknowledgment}, Correction: ${messageAnalysis.isCorrection}`);
 
-    // Fetch conversation history (last 30 messages for comprehensive context - S-tier memory)
+    // Fetch conversation history (last 50 messages for comprehensive context - S-tier memory)
+    // CRITICAL: Use session_id consistently for proper session isolation
     const { data: history } = await supabase
       .from("chat_messages")
       .select("sender, message, metadata, created_at")
       .eq("receptionist_id", receptionistId)
-      .eq("user_id", sessionId || "anonymous")
+      .eq("session_id", sessionId || "default")
       .order("created_at", { ascending: true })
-      .limit(30);
+      .limit(50);
+    
+    console.log(`[Widget Chat] Loaded ${history?.length || 0} messages from session ${sessionId}`);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 3: CONTEXT EXTRACTION & MEMORY
