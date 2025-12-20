@@ -7,6 +7,49 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// RATE LIMITER (In-memory sliding window)
+// ═══════════════════════════════════════════════════════════════════════════
+interface RateLimitEntry { count: number; windowStart: number; }
+const rateLimitStore = new Map<string, RateLimitEntry>();
+const RATE_LIMIT = { windowMs: 60_000, maxRequests: 30 }; // 30 messages/minute
+
+function checkRateLimit(sessionId: string): { allowed: boolean; retryAfterMs?: number } {
+  const now = Date.now();
+  const key = `widget:${sessionId}`;
+  const entry = rateLimitStore.get(key);
+
+  // Cleanup old entries periodically
+  if (rateLimitStore.size > 5000) {
+    for (const [k, v] of rateLimitStore.entries()) {
+      if (now - v.windowStart > RATE_LIMIT.windowMs * 2) rateLimitStore.delete(k);
+    }
+  }
+
+  if (!entry || now - entry.windowStart > RATE_LIMIT.windowMs) {
+    rateLimitStore.set(key, { count: 1, windowStart: now });
+    return { allowed: true };
+  }
+
+  if (entry.count >= RATE_LIMIT.maxRequests) {
+    return { allowed: false, retryAfterMs: RATE_LIMIT.windowMs - (now - entry.windowStart) };
+  }
+
+  entry.count++;
+  return { allowed: true };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INPUT SANITIZATION
+// ═══════════════════════════════════════════════════════════════════════════
+function sanitizeInput(input: string, maxLength: number = 2000): string {
+  if (!input || typeof input !== 'string') return '';
+  return input
+    .slice(0, maxLength)
+    .replace(/[<>]/g, '') // Remove potential HTML
+    .trim();
+}
+
 // ============================================================================
 // 7-LAYER S-TIER CONVERSATIONAL AI TRAINING SYSTEM
 // ============================================================================
@@ -2509,20 +2552,44 @@ serve(async (req) => {
 
   try {
     const payload = await req.json().catch(() => ({}));
-    const {
-      message = null,
-      receptionistId,
-      sessionId = null,
-      displayedGreeting = null,
-      source = "widget",
-    } = payload;
+    const rawMessage = payload.message ?? null;
+    const receptionistId = payload.receptionistId;
+    const sessionId = payload.sessionId ?? null;
+    const displayedGreeting = payload.displayedGreeting ?? null;
+    const source = payload.source ?? "widget";
 
+    // Validate required fields
     if (!receptionistId || !sessionId) {
       return new Response(
         JSON.stringify({ error: "receptionistId and sessionId are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // RATE LIMITING CHECK
+    // ═══════════════════════════════════════════════════════════════════════
+    const rateCheck = checkRateLimit(sessionId);
+    if (!rateCheck.allowed) {
+      console.log(`[Widget Chat] Rate limited: session ${sessionId}`);
+      return new Response(
+        JSON.stringify({ 
+          error: "Too many messages. Please slow down and try again.",
+          retryAfterSeconds: Math.ceil((rateCheck.retryAfterMs || 60000) / 1000)
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil((rateCheck.retryAfterMs || 60000) / 1000))
+          } 
+        }
+      );
+    }
+
+    // Sanitize inputs - default to empty string for greeting flow
+    const message = rawMessage ? sanitizeInput(rawMessage, 2000) : "";
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {

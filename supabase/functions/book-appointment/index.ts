@@ -7,6 +7,47 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// RATE LIMITER & INPUT SANITIZATION
+// ═══════════════════════════════════════════════════════════════════════════
+interface RateLimitEntry { count: number; windowStart: number; }
+const rateLimitStore = new Map<string, RateLimitEntry>();
+const RATE_LIMIT = { windowMs: 60_000, maxRequests: 10 }; // 10 bookings/minute
+
+function checkRateLimit(key: string): { allowed: boolean; retryAfterMs?: number } {
+  const now = Date.now();
+  const entry = rateLimitStore.get(key);
+  if (rateLimitStore.size > 5000) {
+    for (const [k, v] of rateLimitStore.entries()) {
+      if (now - v.windowStart > RATE_LIMIT.windowMs * 2) rateLimitStore.delete(k);
+    }
+  }
+  if (!entry || now - entry.windowStart > RATE_LIMIT.windowMs) {
+    rateLimitStore.set(key, { count: 1, windowStart: now });
+    return { allowed: true };
+  }
+  if (entry.count >= RATE_LIMIT.maxRequests) {
+    return { allowed: false, retryAfterMs: RATE_LIMIT.windowMs - (now - entry.windowStart) };
+  }
+  entry.count++;
+  return { allowed: true };
+}
+
+function sanitize(input: string | null | undefined, maxLen = 500): string {
+  if (!input || typeof input !== 'string') return '';
+  return input.slice(0, maxLen).replace(/[<>]/g, '').trim();
+}
+
+// Email validation
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// Phone validation (basic - allows digits, spaces, dashes, plus, parens)
+function isValidPhone(phone: string): boolean {
+  return /^[\d\s\-+()]{7,20}$/.test(phone);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -17,18 +58,37 @@ serve(async (req) => {
     );
 
     const body = await req.json().catch(() => ({}));
-    const {
-      receptionistId,
-      serviceId,
-      startTime,
-      customerName,
-      customerEmail,
-      customerPhone,
-      userId,
-      bookingSource = "ai_receptionist",
-      metadata = {},
-      notes,
-    } = body;
+    const receptionistId = body.receptionistId;
+    const serviceId = body.serviceId;
+    const startTime = body.startTime;
+    const rawCustomerName = body.customerName;
+    const rawCustomerEmail = body.customerEmail;
+    const rawCustomerPhone = body.customerPhone;
+    const userId = body.userId;
+    const bookingSource = body.bookingSource || "ai_receptionist";
+    const metadata = body.metadata || {};
+    const rawNotes = body.notes;
+
+    // Rate limiting by receptionistId (or IP if available)
+    const rateLimitKey = `booking:${receptionistId}:${userId || 'anon'}`;
+    const rateCheck = checkRateLimit(rateLimitKey);
+    if (!rateCheck.allowed) {
+      console.log(`[book-appointment] Rate limited: ${rateLimitKey}`);
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: "Too many booking attempts. Please try again later.",
+          retryAfterSeconds: Math.ceil((rateCheck.retryAfterMs || 60000) / 1000)
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Sanitize inputs
+    const customerName = sanitize(rawCustomerName, 100);
+    const customerEmail = sanitize(rawCustomerEmail, 255);
+    const customerPhone = sanitize(rawCustomerPhone, 30);
+    const notes = sanitize(rawNotes, 1000);
 
     // Extract idempotency key from metadata if provided
     const idempotencyKey = metadata?.idempotency_key || null;
@@ -37,13 +97,29 @@ serve(async (req) => {
       receptionistId,
       serviceId,
       startTime,
-      customerName,
+      customerName: customerName.slice(0, 20) + '...',
       bookingSource,
     });
 
     // Validate required fields
     if (!receptionistId || !serviceId || !startTime || !customerName) {
       throw new Error("Missing required fields: receptionistId, serviceId, startTime, customerName");
+    }
+
+    // Validate email format if provided
+    if (customerEmail && !isValidEmail(customerEmail)) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid email format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate phone format if provided
+    if (customerPhone && !isValidPhone(customerPhone)) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid phone format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Require contact info (phone or email)
