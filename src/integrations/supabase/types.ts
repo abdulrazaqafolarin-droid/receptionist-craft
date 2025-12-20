@@ -1052,7 +1052,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_public_receptionist: {
+        Args: { p_receptionist_id: string }
+        Returns: {
+          active: boolean
+          business_name: string
+          greeting_message: string
+          id: string
+          name: string
+          timezone: string
+          tone: string
+        }[]
+      }
     }
     Enums: {
       appointment_status: "booked" | "cancelled" | "completed"

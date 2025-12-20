@@ -24,13 +24,27 @@ export default function Widget({ receptionistId }: Props) {
     let mounted = true;
     (async () => {
       try {
-        const { data } = await supabase
-          .from("receptionists")
-          .select("id, greeting_message, business_name, name, business_info")
-          .eq("id", receptionistId)
-          .maybeSingle();
+        // Use secure RPC function to get only public fields
+        const { data, error } = await supabase
+          .rpc('get_public_receptionist', { p_receptionist_id: receptionistId });
+        
+        if (error) {
+          console.warn("Widget: RPC error, falling back to direct query", error);
+          // Fallback to direct query with limited fields
+          const { data: fallbackData } = await supabase
+            .from("receptionists")
+            .select("id, greeting_message, business_name, name, timezone")
+            .eq("id", receptionistId)
+            .eq("active", true)
+            .maybeSingle();
+          if (!mounted) return;
+          setReceptionist(fallbackData);
+          return;
+        }
+        
         if (!mounted) return;
-        setReceptionist(data);
+        // RPC returns array, get first item
+        setReceptionist(data && data.length > 0 ? data[0] : null);
       } catch (e) {
         console.warn("Widget: failed to load receptionist", e);
       }
