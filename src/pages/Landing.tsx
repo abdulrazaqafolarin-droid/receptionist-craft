@@ -3,8 +3,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/Navbar";
 import { useNavigate } from "react-router-dom";
-import { Sparkles, Clock, Shield, Zap, MessageCircle, Calendar, BarChart3, ArrowRight, CheckCircle } from "lucide-react";
+import { Clock, Shield, Zap, MessageCircle, Calendar, BarChart3, ArrowRight, CheckCircle } from "lucide-react";
 import { useState, useEffect } from "react";
+import rutexLogo from "@/assets/rutex-logo.jpg";
 
 const mockConversation = [
   { type: "user", text: "Hi, I'd like to book a haircut" },
@@ -98,7 +99,7 @@ export default function Landing() {
           <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 lg:gap-16 items-center">
             <div className="space-y-6 sm:space-y-8 animate-fade-in">
               <Badge className="inline-flex gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium bg-primary/10 text-primary border-primary/20 hover:bg-primary/15 transition-colors">
-                <Sparkles className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />
+                <img src={rutexLogo} alt="Rutex" className="h-4 w-4 sm:h-5 sm:w-5 rounded object-cover" aria-hidden="true" />
                 No-code • Instant Preview • 24/7 Support
               </Badge>
               

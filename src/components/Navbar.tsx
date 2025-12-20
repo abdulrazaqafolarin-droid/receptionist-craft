@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { User, LogOut, Settings, LayoutDashboard, HelpCircle, Bell, Sparkles } from "lucide-react";
+import { User, LogOut, Settings, LayoutDashboard, HelpCircle, Bell } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import rutexLogo from "@/assets/rutex-logo.jpg";
 
 interface NavbarProps {
   user?: any;
@@ -125,9 +126,11 @@ export const Navbar = ({ user }: NavbarProps) => {
             onClick={() => navigate(user ? "/dashboard" : "/")}
             aria-label="Go to home page"
           >
-            <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-md group-hover:shadow-elevated transition-all duration-300">
-              <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary-foreground" aria-hidden="true" />
-            </div>
+            <img 
+              src={rutexLogo} 
+              alt="Rutex Logo" 
+              className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl shadow-md group-hover:shadow-elevated transition-all duration-300 object-cover"
+            />
             <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
               Rutex FrontDesk
             </span>
