@@ -7,11 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Sparkles, Mail, Lock, User, ArrowRight } from "lucide-react";
-import { z } from "zod";
-
-const emailSchema = z.string().email("Invalid email address");
-const passwordSchema = z.string().min(6, "Password must be at least 6 characters");
+import { Mail, Lock, User, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { signUpSchema, signInSchema } from "@/lib/validation";
+import rutexLogo from "@/assets/rutex-logo.jpg";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -19,79 +17,109 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
+    // Set up auth state listener first
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (session) {
+          navigate("/dashboard");
+        }
+      }
+    );
+
+    // Then check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         navigate("/dashboard");
       }
     });
+
+    return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const validateForm = (isSignUp: boolean) => {
-    try {
-      emailSchema.parse(email);
-      passwordSchema.parse(password);
-      if (isSignUp && !name.trim()) {
-        toast.error("Name is required");
-        return false;
-      }
-      return true;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        toast.error(error.issues[0].message);
-      }
+  const validateSignUpForm = () => {
+    const result = signUpSchema.safeParse({ name, email, password });
+    if (!result.success) {
+      toast.error(result.error.issues[0].message);
       return false;
     }
+    return true;
+  };
+
+  const validateSignInForm = () => {
+    const result = signInSchema.safeParse({ email, password });
+    if (!result.success) {
+      toast.error(result.error.issues[0].message);
+      return false;
+    }
+    return true;
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm(true)) return;
+    if (!validateSignUpForm()) return;
 
     setIsLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { name },
-        emailRedirectTo: `${window.location.origin}/`,
-      },
-    });
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          data: { name: name.trim() },
+          emailRedirectTo: `${window.location.origin}/`,
+        },
+      });
 
-    setIsLoading(false);
+      if (error) {
+        if (error.message.includes("already registered")) {
+          toast.error("This email is already registered. Please sign in instead.");
+        } else {
+          toast.error(error.message);
+        }
+        return;
+      }
 
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-
-    if (data.user) {
-      toast.success("Account created! Redirecting to onboarding...");
-      navigate("/onboarding");
+      if (data.user) {
+        toast.success("Account created! Redirecting to onboarding...");
+        navigate("/onboarding");
+      }
+    } catch (err) {
+      toast.error("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm(false)) return;
+    if (!validateSignInForm()) return;
 
     setIsLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
 
-    setIsLoading(false);
+      if (error) {
+        if (error.message.includes("Invalid login credentials")) {
+          toast.error("Invalid email or password. Please try again.");
+        } else {
+          toast.error(error.message);
+        }
+        return;
+      }
 
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-
-    if (data.user) {
-      toast.success("Welcome back!");
-      navigate("/dashboard");
+      if (data.user) {
+        toast.success("Welcome back!");
+        navigate("/dashboard");
+      }
+    } catch (err) {
+      toast.error("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -106,11 +134,11 @@ export default function Auth() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8 animate-fade-in">
           <div className="inline-flex items-center justify-center mb-6">
-            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-lg shadow-primary/30">
-              <Sparkles className="h-8 w-8 text-primary-foreground" />
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-lg shadow-primary/30 overflow-hidden">
+              <img src={rutexLogo} alt="Rutex Frontdesk" className="h-full w-full object-cover" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold mb-2 text-foreground">Welcome to Aisha AI</h1>
+          <h1 className="text-3xl font-bold mb-2 text-foreground">Welcome to Rutex Frontdesk</h1>
           <p className="text-muted-foreground">Your AI receptionist awaits</p>
         </div>
 
