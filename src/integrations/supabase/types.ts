@@ -1181,6 +1181,17 @@ export type Database = {
           tone: string
         }[]
       }
+      get_safe_receptionist_for_widget: {
+        Args: { p_receptionist_id: string }
+        Returns: {
+          business_name: string
+          greeting_message: string
+          id: string
+          name: string
+          timezone: string
+          tone: string
+        }[]
+      }
     }
     Enums: {
       appointment_status: "booked" | "cancelled" | "completed"
