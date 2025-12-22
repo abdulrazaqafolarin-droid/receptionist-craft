@@ -1169,6 +1169,18 @@ export type Database = {
       }
     }
     Functions: {
+      cleanup_old_booking_suggestions: {
+        Args: { retention_days?: number }
+        Returns: number
+      }
+      cleanup_old_chat_messages: {
+        Args: { retention_days?: number }
+        Returns: number
+      }
+      cleanup_old_conversations: {
+        Args: { retention_days?: number }
+        Returns: number
+      }
       get_public_receptionist: {
         Args: { p_receptionist_id: string }
         Returns: {
