@@ -3,91 +3,78 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/Navbar";
 import { useNavigate } from "react-router-dom";
-import { Clock, Shield, Zap, MessageCircle, Calendar, BarChart3, ArrowRight, Headphones, Phone, CheckSquare, Award } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Clock, Shield, Zap, MessageCircle, Calendar, BarChart3, ArrowRight, Headphones, Phone, CheckSquare, Award, Wrench } from "lucide-react";
 import rutexLogo from "@/assets/rutex-logo.jpg";
+import aiReceptionistHero from "@/assets/ai-receptionist-hero.png";
 
-const mockConversation = [
-  { type: "user", text: "Hi, I'd like to book a haircut" },
-  { type: "bot", text: "Hello! I'd be happy to help you book a haircut. What day works best for you?" },
-  { type: "user", text: "Tomorrow at 2pm?" },
-  { type: "bot", text: "Perfect! I have a slot available at 2pm tomorrow. May I have your name?" },
-];
-
-const ChatBubble = ({ message, isBot }: { message: string; isBot: boolean }) => (
-  <div className={`flex ${isBot ? 'justify-start' : 'justify-end'} mb-4 animate-slide-up`}>
-    <div className={`max-w-[85%] rounded-2xl px-5 py-3 shadow-md ${
-      isBot 
-        ? 'bg-card border border-border text-card-foreground' 
-        : 'bg-gradient-to-br from-primary to-primary-glow text-primary-foreground'
-    }`}>
-      <p className="text-sm leading-relaxed">{message}</p>
-    </div>
-  </div>
-);
-
-// Benefit card data
+// Benefit card data with icons
 const benefitCards = [
   {
-    icon: Headphones,
+    icon: Wrench,
     title: "24/7 Customer Support",
     description: "Never leave customers waiting, even after hours.",
-    floatClass: "animate-float-slow-1",
-    delay: "0ms",
+    floatDelay: "0s",
   },
   {
     icon: Phone,
     title: "Never Miss a Booking",
     description: "Every call, chat, and inquiry handled instantly.",
-    floatClass: "animate-float-slow-2",
-    delay: "120ms",
+    floatDelay: "0.5s",
   },
   {
     icon: CheckSquare,
     title: "Reduce No-Shows",
     description: "Automated reminders that keep customers committed.",
-    floatClass: "animate-float-slow-3",
-    delay: "240ms",
+    floatDelay: "1s",
   },
   {
     icon: Award,
     title: "Professional Every Time",
     description: "Consistent, polite, business-ready responses.",
-    floatClass: "animate-float-slow-4",
-    delay: "360ms",
+    floatDelay: "1.5s",
   },
 ];
 
-// Liquid Glass Benefit Card Component
-const BenefitCard = ({ 
+// Hero Benefit Card Component
+const HeroBenefitCard = ({ 
   icon: Icon, 
   title, 
   description, 
-  floatClass, 
-  delay 
+  index,
+  floatDelay,
 }: { 
   icon: React.ElementType; 
   title: string; 
   description: string;
-  floatClass: string;
-  delay: string;
+  index: number;
+  floatDelay: string;
 }) => (
   <div 
-    className={`
-      liquid-glass rounded-2xl sm:rounded-3xl p-4 sm:p-5 
+    className="
+      relative rounded-2xl sm:rounded-3xl p-4 sm:p-5 
+      bg-white/60 backdrop-blur-lg border border-primary/10
+      shadow-md hover:shadow-lg
       flex items-start gap-3 sm:gap-4
-      opacity-0 animate-benefit-enter
-      ${floatClass}
-      cursor-default
+      opacity-0 animate-hero-fade-up
       transition-all duration-300 ease-out
-    `}
-    style={{ animationDelay: delay }}
+      hover:-translate-y-1 hover:bg-white/80 hover:border-primary/20
+      cursor-default
+    "
+    style={{ 
+      animationDelay: `${0.3 + index * 0.12}s`,
+      animationFillMode: 'forwards',
+    }}
   >
-    <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center">
-      <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
+    {/* Continuous floating animation wrapper */}
+    <div 
+      className="absolute inset-0 rounded-2xl sm:rounded-3xl animate-float-card pointer-events-none"
+      style={{ animationDelay: floatDelay }}
+    />
+    <div className="relative flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center">
+      <Icon className="w-5 h-5 sm:w-5 sm:h-5 text-primary" />
     </div>
-    <div className="flex-1 min-w-0">
-      <h3 className="font-semibold text-sm sm:text-base text-foreground mb-0.5 sm:mb-1">{title}</h3>
+    <div className="relative flex-1 min-w-0">
+      <h3 className="font-semibold text-sm sm:text-base text-foreground mb-0.5">{title}</h3>
       <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{description}</p>
     </div>
   </div>
@@ -95,20 +82,6 @@ const BenefitCard = ({
 
 export default function Landing() {
   const navigate = useNavigate();
-  const [displayedMessages, setDisplayedMessages] = useState<number>(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setDisplayedMessages((prev) => {
-        if (prev < mockConversation.length) {
-          return prev + 1;
-        }
-        return prev;
-      });
-    }, 1500);
-
-    return () => clearInterval(timer);
-  }, []);
 
   const features = [
     {
@@ -147,96 +120,105 @@ export default function Landing() {
     <div className="min-h-screen bg-background">
       <Navbar />
       
-      {/* Hero Section */}
-      <section className="relative overflow-hidden" aria-labelledby="hero-title">
-        {/* Background decoration */}
-        <div className="absolute inset-0 -z-10" aria-hidden="true">
-          <div className="absolute top-0 right-0 w-[300px] sm:w-[450px] lg:w-[600px] h-[300px] sm:h-[450px] lg:h-[600px] rounded-full bg-primary/5 blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-[200px] sm:w-[300px] lg:w-[400px] h-[200px] sm:h-[300px] lg:h-[400px] rounded-full bg-secondary/5 blur-3xl" />
-        </div>
+      {/* Hero Section - Premium SaaS Design */}
+      <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 via-background to-background" aria-labelledby="hero-title">
+        {/* Ambient floating glows */}
+        <div className="absolute -top-32 -right-32 w-72 sm:w-96 h-72 sm:h-96 bg-primary/20 rounded-full blur-3xl animate-float-ambient-1" aria-hidden="true" />
+        <div className="absolute top-1/3 -left-40 w-64 sm:w-80 h-64 sm:h-80 bg-primary/15 rounded-full blur-3xl animate-float-ambient-2" aria-hidden="true" />
         
-        <div className="container mx-auto px-4 py-12 sm:py-16 lg:py-24">
-          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 lg:gap-16 items-center">
-            <div className="space-y-6 sm:space-y-8 animate-fade-in">
-              <Badge className="inline-flex gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium bg-primary/10 text-primary border-primary/20 hover:bg-primary/15 transition-colors">
-                <img src={rutexLogo} alt="Rutex" className="h-4 w-4 sm:h-5 sm:w-5 rounded object-cover" aria-hidden="true" />
-                No-code • Instant Preview • 24/7 Support
-              </Badge>
+        <div className="container mx-auto px-4 pt-12 sm:pt-16 lg:pt-20 pb-16 sm:pb-20 lg:pb-28">
+          <div className="relative max-w-6xl mx-auto">
+            {/* Mobile layout: stacked */}
+            <div className="lg:grid lg:grid-cols-2 lg:gap-12 lg:items-start">
               
-              <h1 id="hero-title" className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight tracking-tight">
-                Create your AI receptionist in{" "}
-                <span className="bg-gradient-to-r from-primary via-primary-glow to-secondary bg-clip-text text-transparent">
-                  5 minutes
-                </span>
-              </h1>
-              
-              <p className="text-base sm:text-lg lg:text-xl text-muted-foreground max-w-xl leading-relaxed">
-                No tech skills needed. Build, preview, and manage your AI receptionist that handles calls, books appointments, and captures leads — all in demo mode until you're ready.
-              </p>
-
-              {/* Liquid Glass Benefits Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-2" aria-label="Key benefits">
-                {benefitCards.map((benefit, idx) => (
-                  <BenefitCard 
-                    key={idx}
-                    icon={benefit.icon}
-                    title={benefit.title}
-                    description={benefit.description}
-                    floatClass={benefit.floatClass}
-                    delay={benefit.delay}
-                  />
-                ))}
-              </div>
-              
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2 sm:pt-4">
-                <Button 
-                  size="lg" 
-                  className="text-base sm:text-lg px-6 sm:px-8 h-12 sm:h-14 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all group touch-target w-full sm:w-auto"
-                  onClick={() => navigate("/auth")}
+              {/* Left column: Text content */}
+              <div className="text-center lg:text-left space-y-5 sm:space-y-6">
+                {/* Badge */}
+                <div 
+                  className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full bg-white/70 backdrop-blur-md border border-primary/20 text-primary text-xs sm:text-sm font-medium shadow-sm opacity-0 animate-hero-fade-up"
+                  style={{ animationDelay: '0s', animationFillMode: 'forwards' }}
                 >
-                  Start Free — Build My Receptionist
-                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
-                </Button>
-                <Button 
-                  size="lg" 
-                  variant="outline" 
-                  className="text-base sm:text-lg h-12 sm:h-14 border-2 hover:bg-primary/5 touch-target w-full sm:w-auto"
-                  onClick={() => navigate("/help")}
-                >
-                  Watch Demo
-                </Button>
-              </div>
-            </div>
-
-            {/* Animated Chat Preview */}
-            <div className="animate-float lg:pl-8 hidden sm:block" aria-hidden="true">
-              <Card className="p-4 sm:p-6 shadow-2xl shadow-primary/10 border-2 border-primary/10 bg-card/80 backdrop-blur-sm">
-                <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-border">
-                  <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-green-500 animate-pulse shadow-lg shadow-green-500/50" />
-                  <span className="font-semibold text-sm sm:text-base text-foreground">Live Demo Preview</span>
-                  <Badge variant="secondary" className="ml-auto text-xs">AI Powered</Badge>
+                  <img src={rutexLogo} alt="" className="h-4 w-4 rounded object-cover" aria-hidden="true" />
+                  No-code • Instant Preview • 24/7 Support
                 </div>
-                
-                <div className="h-[280px] sm:h-[380px] overflow-y-auto pr-2 scrollbar-premium">
-                  {mockConversation.slice(0, displayedMessages).map((msg, idx) => (
-                    <ChatBubble 
-                      key={idx} 
-                      message={msg.text} 
-                      isBot={msg.type === 'bot'} 
+
+                {/* Headline */}
+                <h1 
+                  id="hero-title" 
+                  className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-extrabold tracking-tight text-foreground opacity-0 animate-hero-fade-up"
+                  style={{ animationDelay: '0.1s', animationFillMode: 'forwards' }}
+                >
+                  Create your AI receptionist in{" "}
+                  <span className="text-primary">5 minutes</span>
+                </h1>
+
+                {/* Description */}
+                <p 
+                  className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto lg:mx-0 leading-relaxed opacity-0 animate-hero-fade-up"
+                  style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}
+                >
+                  No tech skills needed. Build, preview, and manage your AI receptionist that handles calls, books appointments, and captures leads — all in demo mode until you're ready.
+                </p>
+
+                {/* AI Receptionist Hero Image - Mobile only */}
+                <div className="lg:hidden relative w-full max-w-sm mx-auto py-4" aria-hidden="true">
+                  <div className="relative">
+                    <img 
+                      src={aiReceptionistHero} 
+                      alt="AI Receptionist" 
+                      className="w-full h-auto rounded-2xl"
+                    />
+                  </div>
+                </div>
+
+                {/* Benefits Cards Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-2" aria-label="Key benefits">
+                  {benefitCards.map((benefit, idx) => (
+                    <HeroBenefitCard 
+                      key={idx}
+                      icon={benefit.icon}
+                      title={benefit.title}
+                      description={benefit.description}
+                      index={idx}
+                      floatDelay={benefit.floatDelay}
                     />
                   ))}
-                  {displayedMessages < mockConversation.length && (
-                    <div className="flex items-center gap-2 text-muted-foreground text-sm pl-2">
-                      <div className="flex gap-1">
-                        <span className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <span className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <span className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
-                      </div>
-                      <span>Typing...</span>
-                    </div>
-                  )}
                 </div>
-              </Card>
+                
+                {/* CTA Buttons */}
+                <div 
+                  className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 sm:pt-6 opacity-0 animate-hero-fade-up"
+                  style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}
+                >
+                  <Button 
+                    size="lg" 
+                    className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-2xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all group"
+                    onClick={() => navigate("/auth")}
+                  >
+                    Start Free — Build My Receptionist
+                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
+                  </Button>
+                  <Button 
+                    size="lg" 
+                    variant="outline" 
+                    className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-2xl border-2 border-primary/20 bg-white/70 backdrop-blur hover:bg-white text-primary hover:text-primary transition-all"
+                    onClick={() => navigate("/help")}
+                  >
+                    Watch Demo
+                  </Button>
+                </div>
+              </div>
+
+              {/* Right column: AI Receptionist Illustration - Desktop only */}
+              <div className="hidden lg:block relative" aria-hidden="true">
+                <div className="relative">
+                  <img 
+                    src={aiReceptionistHero} 
+                    alt="AI Receptionist" 
+                    className="w-full max-w-md mx-auto h-auto rounded-3xl animate-float"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
