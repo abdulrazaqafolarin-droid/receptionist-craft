@@ -184,6 +184,22 @@ export default {
           "0%": { opacity: "0", transform: "translateY(12px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        "hero-fade-up": {
+          "0%": { opacity: "0", transform: "translateY(20px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "float-ambient-1": {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-25px)" },
+        },
+        "float-ambient-2": {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-35px)" },
+        },
+        "float-card": {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-10px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -206,6 +222,10 @@ export default {
         "float-slow-3": "float-slow-3 9s ease-in-out infinite",
         "float-slow-4": "float-slow-4 6s ease-in-out infinite",
         "benefit-enter": "benefit-enter 0.5s ease-out forwards",
+        "hero-fade-up": "hero-fade-up 0.8s ease-out forwards",
+        "float-ambient-1": "float-ambient-1 10s ease-in-out infinite",
+        "float-ambient-2": "float-ambient-2 14s ease-in-out infinite",
+        "float-card": "float-card 8s ease-in-out infinite",
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
