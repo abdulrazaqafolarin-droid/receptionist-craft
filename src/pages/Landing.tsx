@@ -120,104 +120,113 @@ export default function Landing() {
     <div className="min-h-screen bg-background">
       <Navbar />
       
-      {/* Hero Section - Premium SaaS Design */}
+      {/* Hero Section - Premium SaaS Design matching reference */}
       <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 via-background to-background" aria-labelledby="hero-title">
         {/* Ambient floating glows */}
-        <div className="absolute -top-32 -right-32 w-72 sm:w-96 h-72 sm:h-96 bg-primary/20 rounded-full blur-3xl animate-float-ambient-1" aria-hidden="true" />
-        <div className="absolute top-1/3 -left-40 w-64 sm:w-80 h-64 sm:h-80 bg-primary/15 rounded-full blur-3xl animate-float-ambient-2" aria-hidden="true" />
+        <div className="absolute -top-32 right-0 w-72 sm:w-96 h-72 sm:h-96 bg-primary/20 rounded-full blur-3xl animate-float-ambient-1" aria-hidden="true" />
+        <div className="absolute top-1/2 -left-40 w-64 sm:w-80 h-64 sm:h-80 bg-primary/15 rounded-full blur-3xl animate-float-ambient-2" aria-hidden="true" />
         
-        <div className="container mx-auto px-4 pt-12 sm:pt-16 lg:pt-20 pb-16 sm:pb-20 lg:pb-28">
+        <div className="container mx-auto px-4 pt-8 sm:pt-12 lg:pt-16 pb-8 sm:pb-12 lg:pb-16">
           <div className="relative max-w-6xl mx-auto">
-            {/* Mobile layout: stacked */}
-            <div className="lg:grid lg:grid-cols-2 lg:gap-12 lg:items-start">
+            
+            {/* Main layout container */}
+            <div className="relative">
               
-              {/* Left column: Text content */}
-              <div className="text-center lg:text-left space-y-5 sm:space-y-6">
-                {/* Badge */}
-                <div 
-                  className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full bg-white/70 backdrop-blur-md border border-primary/20 text-primary text-xs sm:text-sm font-medium shadow-sm opacity-0 animate-hero-fade-up"
-                  style={{ animationDelay: '0s', animationFillMode: 'forwards' }}
-                >
-                  <img src={rutexLogo} alt="" className="h-4 w-4 rounded object-cover" aria-hidden="true" />
-                  No-code • Instant Preview • 24/7 Support
-                </div>
+              {/* Badge - top left */}
+              <div 
+                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full bg-white/70 backdrop-blur-md border border-primary/20 text-primary text-xs sm:text-sm font-medium shadow-sm opacity-0 animate-hero-fade-up mb-4 sm:mb-6"
+                style={{ animationDelay: '0s', animationFillMode: 'forwards' }}
+              >
+                <img src={rutexLogo} alt="" className="h-4 w-4 rounded object-cover" aria-hidden="true" />
+                No-code • Instant Preview • 24/7 Support
+              </div>
 
-                {/* Headline */}
-                <h1 
-                  id="hero-title" 
-                  className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-extrabold tracking-tight text-foreground opacity-0 animate-hero-fade-up"
-                  style={{ animationDelay: '0.1s', animationFillMode: 'forwards' }}
-                >
-                  Create your AI receptionist in{" "}
-                  <span className="text-primary">5 minutes</span>
-                </h1>
+              {/* Headline */}
+              <h1 
+                id="hero-title" 
+                className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-extrabold tracking-tight text-foreground opacity-0 animate-hero-fade-up mb-4 sm:mb-6"
+                style={{ animationDelay: '0.1s', animationFillMode: 'forwards' }}
+              >
+                Create your AI receptionist in{" "}
+                <br className="hidden sm:block" />
+                <span className="text-primary">5 minutes</span>
+              </h1>
 
-                {/* Description */}
-                <p 
-                  className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto lg:mx-0 leading-relaxed opacity-0 animate-hero-fade-up"
-                  style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}
-                >
-                  No tech skills needed. Build, preview, and manage your AI receptionist that handles calls, books appointments, and captures leads — all in demo mode until you're ready.
-                </p>
+              {/* Two column layout for description + image */}
+              <div className="relative lg:grid lg:grid-cols-2 lg:gap-8">
+                
+                {/* Left column: Description + First 2 benefits */}
+                <div className="relative z-10">
+                  {/* Description */}
+                  <p 
+                    className="text-base sm:text-lg text-muted-foreground max-w-md leading-relaxed opacity-0 animate-hero-fade-up mb-6 sm:mb-8"
+                    style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}
+                  >
+                    No tech skills needed. Build, preview, and manage your AI receptionist that handles calls, books appointments, and captures leads — all in demo mode until you're ready.
+                  </p>
 
-                {/* AI Receptionist Hero Image - Mobile only */}
-                <div className="lg:hidden relative w-full max-w-sm mx-auto py-4" aria-hidden="true">
-                  <div className="relative">
-                    <img 
-                      src={aiReceptionistHero} 
-                      alt="AI Receptionist" 
-                      className="w-full h-auto rounded-2xl"
-                    />
+                  {/* First 2 benefit cards - stacked on left */}
+                  <div className="space-y-3 sm:space-y-4 max-w-md">
+                    {benefitCards.slice(0, 2).map((benefit, idx) => (
+                      <HeroBenefitCard 
+                        key={idx}
+                        icon={benefit.icon}
+                        title={benefit.title}
+                        description={benefit.description}
+                        index={idx}
+                        floatDelay={benefit.floatDelay}
+                      />
+                    ))}
                   </div>
                 </div>
 
-                {/* Benefits Cards Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-2" aria-label="Key benefits">
-                  {benefitCards.map((benefit, idx) => (
-                    <HeroBenefitCard 
-                      key={idx}
-                      icon={benefit.icon}
-                      title={benefit.title}
-                      description={benefit.description}
-                      index={idx}
-                      floatDelay={benefit.floatDelay}
+                {/* Right column: AI Receptionist Image */}
+                <div className="relative lg:absolute lg:right-0 lg:top-0 lg:w-1/2 flex justify-center lg:justify-end my-6 lg:my-0" aria-hidden="true">
+                  <div className="relative w-full max-w-sm lg:max-w-md">
+                    <img 
+                      src={aiReceptionistHero} 
+                      alt="AI Receptionist" 
+                      className="w-full h-auto object-contain"
                     />
-                  ))}
-                </div>
-                
-                {/* CTA Buttons */}
-                <div 
-                  className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 sm:pt-6 opacity-0 animate-hero-fade-up"
-                  style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}
-                >
-                  <Button 
-                    size="lg" 
-                    className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-2xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all group"
-                    onClick={() => navigate("/auth")}
-                  >
-                    Start Free — Build My Receptionist
-                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
-                  </Button>
-                  <Button 
-                    size="lg" 
-                    variant="outline" 
-                    className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-2xl border-2 border-primary/20 bg-white/70 backdrop-blur hover:bg-white text-primary hover:text-primary transition-all"
-                    onClick={() => navigate("/help")}
-                  >
-                    Watch Demo
-                  </Button>
+                  </div>
                 </div>
               </div>
 
-              {/* Right column: AI Receptionist Illustration - Desktop only */}
-              <div className="hidden lg:block relative" aria-hidden="true">
-                <div className="relative">
-                  <img 
-                    src={aiReceptionistHero} 
-                    alt="AI Receptionist" 
-                    className="w-full max-w-md mx-auto h-auto rounded-3xl animate-float"
+              {/* Bottom 2 benefit cards - side by side */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-4 sm:mt-6 max-w-2xl">
+                {benefitCards.slice(2, 4).map((benefit, idx) => (
+                  <HeroBenefitCard 
+                    key={idx + 2}
+                    icon={benefit.icon}
+                    title={benefit.title}
+                    description={benefit.description}
+                    index={idx + 2}
+                    floatDelay={benefit.floatDelay}
                   />
-                </div>
+                ))}
+              </div>
+              
+              {/* CTA Buttons */}
+              <div 
+                className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 sm:pt-8 max-w-xl opacity-0 animate-hero-fade-up"
+                style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}
+              >
+                <Button 
+                  size="lg" 
+                  className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-full shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all group"
+                  onClick={() => navigate("/auth")}
+                >
+                  Start Free — Build My Receptionist
+                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
+                </Button>
+                <Button 
+                  size="lg" 
+                  variant="outline" 
+                  className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-full border-2 border-primary/20 bg-white/70 backdrop-blur hover:bg-white text-primary hover:text-primary transition-all"
+                  onClick={() => navigate("/help")}
+                >
+                  Watch Demo
+                </Button>
               </div>
             </div>
           </div>
