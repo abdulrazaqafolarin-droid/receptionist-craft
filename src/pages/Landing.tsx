@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/Navbar";
 import { useNavigate } from "react-router-dom";
-import { Clock, Shield, Zap, MessageCircle, Calendar, BarChart3, ArrowRight, CheckCircle } from "lucide-react";
+import { Clock, Shield, Zap, MessageCircle, Calendar, BarChart3, ArrowRight, Headphones, Phone, CheckSquare, Award } from "lucide-react";
 import { useState, useEffect } from "react";
 import rutexLogo from "@/assets/rutex-logo.jpg";
 
@@ -22,6 +22,73 @@ const ChatBubble = ({ message, isBot }: { message: string; isBot: boolean }) => 
         : 'bg-gradient-to-br from-primary to-primary-glow text-primary-foreground'
     }`}>
       <p className="text-sm leading-relaxed">{message}</p>
+    </div>
+  </div>
+);
+
+// Benefit card data
+const benefitCards = [
+  {
+    icon: Headphones,
+    title: "24/7 Customer Support",
+    description: "Never leave customers waiting, even after hours.",
+    floatClass: "animate-float-slow-1",
+    delay: "0ms",
+  },
+  {
+    icon: Phone,
+    title: "Never Miss a Booking",
+    description: "Every call, chat, and inquiry handled instantly.",
+    floatClass: "animate-float-slow-2",
+    delay: "120ms",
+  },
+  {
+    icon: CheckSquare,
+    title: "Reduce No-Shows",
+    description: "Automated reminders that keep customers committed.",
+    floatClass: "animate-float-slow-3",
+    delay: "240ms",
+  },
+  {
+    icon: Award,
+    title: "Professional Every Time",
+    description: "Consistent, polite, business-ready responses.",
+    floatClass: "animate-float-slow-4",
+    delay: "360ms",
+  },
+];
+
+// Liquid Glass Benefit Card Component
+const BenefitCard = ({ 
+  icon: Icon, 
+  title, 
+  description, 
+  floatClass, 
+  delay 
+}: { 
+  icon: React.ElementType; 
+  title: string; 
+  description: string;
+  floatClass: string;
+  delay: string;
+}) => (
+  <div 
+    className={`
+      liquid-glass rounded-2xl sm:rounded-3xl p-4 sm:p-5 
+      flex items-start gap-3 sm:gap-4
+      opacity-0 animate-benefit-enter
+      ${floatClass}
+      cursor-default
+      transition-all duration-300 ease-out
+    `}
+    style={{ animationDelay: delay }}
+  >
+    <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center">
+      <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
+    </div>
+    <div className="flex-1 min-w-0">
+      <h3 className="font-semibold text-sm sm:text-base text-foreground mb-0.5 sm:mb-1">{title}</h3>
+      <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{description}</p>
     </div>
   </div>
 );
@@ -76,13 +143,6 @@ export default function Landing() {
     }
   ];
 
-  const benefits = [
-    "24/7 customer support without hiring staff",
-    "Never miss a booking or inquiry",
-    "Reduce no-shows with automated reminders",
-    "Professional response to every customer"
-  ];
-
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -114,15 +174,19 @@ export default function Landing() {
                 No tech skills needed. Build, preview, and manage your AI receptionist that handles calls, books appointments, and captures leads — all in demo mode until you're ready.
               </p>
 
-              {/* Benefits list */}
-              <ul className="space-y-2 sm:space-y-3" aria-label="Key benefits">
-                {benefits.map((benefit, idx) => (
-                  <li key={idx} className="flex items-center gap-2 sm:gap-3 text-sm sm:text-base text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" aria-hidden="true" />
-                    <span>{benefit}</span>
-                  </li>
+              {/* Liquid Glass Benefits Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-2" aria-label="Key benefits">
+                {benefitCards.map((benefit, idx) => (
+                  <BenefitCard 
+                    key={idx}
+                    icon={benefit.icon}
+                    title={benefit.title}
+                    description={benefit.description}
+                    floatClass={benefit.floatClass}
+                    delay={benefit.delay}
+                  />
                 ))}
-              </ul>
+              </div>
               
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2 sm:pt-4">
                 <Button 
