@@ -35,7 +35,7 @@ const benefitCards = [
   },
 ];
 
-// Hero Benefit Card Component
+// Hero Benefit Card Component - Compact version matching reference
 const HeroBenefitCard = ({ 
   icon: Icon, 
   title, 
@@ -51,13 +51,13 @@ const HeroBenefitCard = ({
 }) => (
   <div 
     className="
-      relative rounded-2xl sm:rounded-3xl p-4 sm:p-5 
+      relative rounded-xl p-3
       bg-white/60 backdrop-blur-lg border border-primary/10
-      shadow-md hover:shadow-lg
-      flex items-start gap-3 sm:gap-4
+      shadow-sm hover:shadow-md
+      flex items-center gap-3
       opacity-0 animate-hero-fade-up
       transition-all duration-300 ease-out
-      hover:-translate-y-1 hover:bg-white/80 hover:border-primary/20
+      hover:-translate-y-0.5 hover:bg-white/80 hover:border-primary/20
       cursor-default
     "
     style={{ 
@@ -67,15 +67,15 @@ const HeroBenefitCard = ({
   >
     {/* Continuous floating animation wrapper */}
     <div 
-      className="absolute inset-0 rounded-2xl sm:rounded-3xl animate-float-card pointer-events-none"
+      className="absolute inset-0 rounded-xl animate-float-card pointer-events-none"
       style={{ animationDelay: floatDelay }}
     />
-    <div className="relative flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center">
-      <Icon className="w-5 h-5 sm:w-5 sm:h-5 text-primary" />
+    <div className="relative flex-shrink-0 w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+      <Icon className="w-4 h-4 text-primary" />
     </div>
     <div className="relative flex-1 min-w-0">
-      <h3 className="font-semibold text-sm sm:text-base text-foreground mb-0.5">{title}</h3>
-      <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{description}</p>
+      <h3 className="font-semibold text-xs sm:text-sm text-foreground leading-tight">{title}</h3>
+      <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{description}</p>
     </div>
   </div>
 );
@@ -153,20 +153,20 @@ export default function Landing() {
               </h1>
 
               {/* Two column layout for description + image */}
-              <div className="relative lg:grid lg:grid-cols-2 lg:gap-8">
+              <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
                 
                 {/* Left column: Description + First 2 benefits */}
-                <div className="relative z-10">
+                <div className="relative z-10 order-2 lg:order-1">
                   {/* Description */}
                   <p 
-                    className="text-base sm:text-lg text-muted-foreground max-w-md leading-relaxed opacity-0 animate-hero-fade-up mb-6 sm:mb-8"
+                    className="text-sm sm:text-base text-muted-foreground max-w-sm leading-relaxed opacity-0 animate-hero-fade-up mb-4 sm:mb-6"
                     style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}
                   >
                     No tech skills needed. Build, preview, and manage your AI receptionist that handles calls, books appointments, and captures leads — all in demo mode until you're ready.
                   </p>
 
                   {/* First 2 benefit cards - stacked on left */}
-                  <div className="space-y-3 sm:space-y-4 max-w-md">
+                  <div className="space-y-2 sm:space-y-3 max-w-sm">
                     {benefitCards.slice(0, 2).map((benefit, idx) => (
                       <HeroBenefitCard 
                         key={idx}
@@ -181,19 +181,19 @@ export default function Landing() {
                 </div>
 
                 {/* Right column: AI Receptionist Image */}
-                <div className="relative lg:absolute lg:right-0 lg:top-0 lg:w-1/2 flex justify-center lg:justify-end my-6 lg:my-0" aria-hidden="true">
-                  <div className="relative w-full max-w-sm lg:max-w-md">
+                <div className="relative order-1 lg:order-2 flex justify-center lg:justify-end" aria-hidden="true">
+                  <div className="relative w-64 sm:w-72 lg:w-80 xl:w-96">
                     <img 
                       src={aiReceptionistHero} 
                       alt="AI Receptionist" 
-                      className="w-full h-auto object-contain"
+                      className="w-full h-auto object-contain drop-shadow-xl"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Bottom 2 benefit cards - side by side */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-4 sm:mt-6 max-w-2xl">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-4 max-w-md">
                 {benefitCards.slice(2, 4).map((benefit, idx) => (
                   <HeroBenefitCard 
                     key={idx + 2}
