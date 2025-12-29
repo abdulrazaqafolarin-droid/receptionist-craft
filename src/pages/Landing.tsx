@@ -152,21 +152,86 @@ export default function Landing() {
                 <span className="text-primary">5 minutes</span>
               </h1>
 
-              {/* Two column layout for description + image */}
-              <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+              {/* Desktop/Tablet: Side-by-side layout | Mobile: Stacked */}
+              <div className="relative">
                 
-                {/* Left column: Description + First 2 benefits */}
-                <div className="relative z-10 order-2 lg:order-1">
+                {/* Desktop/Tablet Layout (md and up) */}
+                <div className="hidden md:grid md:grid-cols-5 lg:grid-cols-2 gap-6 lg:gap-10 items-start">
+                  
+                  {/* Left side: Description + 2 benefit cards */}
+                  <div className="md:col-span-3 lg:col-span-1 space-y-5">
+                    {/* Description */}
+                    <p 
+                      className="text-base lg:text-lg text-muted-foreground max-w-md leading-relaxed opacity-0 animate-hero-fade-up"
+                      style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}
+                    >
+                      No tech skills needed. Build, preview, and manage your AI receptionist that handles calls, books appointments, and captures leads — all in demo mode until you're ready.
+                    </p>
+
+                    {/* First 2 benefit cards - stacked */}
+                    <div className="space-y-3 max-w-sm">
+                      {benefitCards.slice(0, 2).map((benefit, idx) => (
+                        <HeroBenefitCard 
+                          key={idx}
+                          icon={benefit.icon}
+                          title={benefit.title}
+                          description={benefit.description}
+                          index={idx}
+                          floatDelay={benefit.floatDelay}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Right side: AI Receptionist Image */}
+                  <div className="md:col-span-2 lg:col-span-1 flex justify-center lg:justify-end" aria-hidden="true">
+                    <div className="relative w-72 lg:w-80 xl:w-[380px]">
+                      <img 
+                        src={aiReceptionistHero} 
+                        alt="AI Receptionist" 
+                        className="w-full h-auto object-contain drop-shadow-2xl"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom 2 benefit cards - side by side (Desktop/Tablet) */}
+                <div className="hidden md:grid md:grid-cols-2 gap-3 mt-5 max-w-md">
+                  {benefitCards.slice(2, 4).map((benefit, idx) => (
+                    <HeroBenefitCard 
+                      key={idx + 2}
+                      icon={benefit.icon}
+                      title={benefit.title}
+                      description={benefit.description}
+                      index={idx + 2}
+                      floatDelay={benefit.floatDelay}
+                    />
+                  ))}
+                </div>
+
+                {/* Mobile Layout (below md) - Keep as is */}
+                <div className="md:hidden">
+                  {/* Image first on mobile */}
+                  <div className="flex justify-center mb-4" aria-hidden="true">
+                    <div className="relative w-64">
+                      <img 
+                        src={aiReceptionistHero} 
+                        alt="AI Receptionist" 
+                        className="w-full h-auto object-contain drop-shadow-xl"
+                      />
+                    </div>
+                  </div>
+
                   {/* Description */}
                   <p 
-                    className="text-sm sm:text-base text-muted-foreground max-w-sm leading-relaxed opacity-0 animate-hero-fade-up mb-4 sm:mb-6"
+                    className="text-sm text-muted-foreground leading-relaxed opacity-0 animate-hero-fade-up mb-4"
                     style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}
                   >
                     No tech skills needed. Build, preview, and manage your AI receptionist that handles calls, books appointments, and captures leads — all in demo mode until you're ready.
                   </p>
 
-                  {/* First 2 benefit cards - stacked on left */}
-                  <div className="space-y-2 sm:space-y-3 max-w-sm">
+                  {/* First 2 benefit cards - stacked */}
+                  <div className="space-y-2 max-w-sm">
                     {benefitCards.slice(0, 2).map((benefit, idx) => (
                       <HeroBenefitCard 
                         key={idx}
@@ -178,32 +243,21 @@ export default function Landing() {
                       />
                     ))}
                   </div>
-                </div>
 
-                {/* Right column: AI Receptionist Image */}
-                <div className="relative order-1 lg:order-2 flex justify-center lg:justify-end" aria-hidden="true">
-                  <div className="relative w-64 sm:w-72 lg:w-80 xl:w-96">
-                    <img 
-                      src={aiReceptionistHero} 
-                      alt="AI Receptionist" 
-                      className="w-full h-auto object-contain drop-shadow-xl"
-                    />
+                  {/* Bottom 2 benefit cards - side by side */}
+                  <div className="grid grid-cols-2 gap-2 mt-4">
+                    {benefitCards.slice(2, 4).map((benefit, idx) => (
+                      <HeroBenefitCard 
+                        key={idx + 2}
+                        icon={benefit.icon}
+                        title={benefit.title}
+                        description={benefit.description}
+                        index={idx + 2}
+                        floatDelay={benefit.floatDelay}
+                      />
+                    ))}
                   </div>
                 </div>
-              </div>
-
-              {/* Bottom 2 benefit cards - side by side */}
-              <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-4 max-w-md">
-                {benefitCards.slice(2, 4).map((benefit, idx) => (
-                  <HeroBenefitCard 
-                    key={idx + 2}
-                    icon={benefit.icon}
-                    title={benefit.title}
-                    description={benefit.description}
-                    index={idx + 2}
-                    floatDelay={benefit.floatDelay}
-                  />
-                ))}
               </div>
               
               {/* CTA Buttons */}
