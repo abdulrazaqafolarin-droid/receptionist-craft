@@ -1,11 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-type Service = {
+export type ItemType = 'service' | 'product';
+
+type ServiceOrProduct = {
   name: string;
   duration_minutes: number;
   description?: string;
   active: boolean;
+  type: ItemType;
+  price?: number;
 };
 
 type AvailabilityRule = {
@@ -28,21 +32,22 @@ type OnboardingState = {
     name: string;
     business_name: string;
     business_type: string;
+    business_model: 'services' | 'products' | 'both';
     phone: string;
     greeting_message: string;
     goal: string;
     tone: 'friendly' | 'professional' | 'playful';
     language: string;
   };
-  services: Service[];
+  services: ServiceOrProduct[];
   availabilityRules: AvailabilityRule[];
   faqs: FAQ[];
   setStep: (step: number) => void;
   setReceptionistId: (id: string) => void;
   setReceptionist: (data: Partial<OnboardingState['receptionist']>) => void;
-  addService: (service: Service) => void;
+  addService: (service: ServiceOrProduct) => void;
   removeService: (index: number) => void;
-  setServices: (services: Service[]) => void;
+  setServices: (services: ServiceOrProduct[]) => void;
   addAvailabilityRule: (rule: AvailabilityRule) => void;
   setAvailabilityRules: (rules: AvailabilityRule[]) => void;
   addFAQ: (faq: FAQ) => void;
@@ -58,6 +63,7 @@ const initialState = {
     name: '',
     business_name: '',
     business_type: '',
+    business_model: 'services' as const,
     phone: '',
     greeting_message: '',
     goal: '',
