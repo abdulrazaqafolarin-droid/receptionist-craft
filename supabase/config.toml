@@ -128,3 +128,6 @@ verify_jwt = true
 
 [functions.setup-reminder-cron]
 verify_jwt = true
+
+[functions.parse-services]
+verify_jwt = false

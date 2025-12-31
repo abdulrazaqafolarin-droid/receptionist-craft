@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Textarea } from "@/components/ui/textarea";
 import { SERVICE_TEMPLATES, getServiceTemplates, getProductTemplates } from "@/data/serviceTemplates";
 import { ServiceTemplateCard } from "@/components/services/ServiceTemplateCard";
+import { AIServiceParser } from "@/components/onboarding/AIServiceParser";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -146,6 +147,24 @@ export default function Step2Services() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* AI Quick Add - Always visible at top */}
+        <AIServiceParser
+          businessType={receptionist.business_type}
+          onAddItems={(items) => {
+            items.forEach((item) => addService(item));
+          }}
+          disabled={loading}
+        />
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-card px-2 text-muted-foreground">Or add manually</span>
+          </div>
+        </div>
+
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="services" className="flex items-center gap-2">
