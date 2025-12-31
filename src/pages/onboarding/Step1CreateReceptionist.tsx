@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 const BUSINESS_TYPES = [
+  // Service-based
   "Dental Clinic",
   "Spa & Wellness",
   "Barber Shop",
@@ -21,6 +22,17 @@ const BUSINESS_TYPES = [
   "Law Office",
   "Hair Salon",
   "Gym & Fitness",
+  "Car Wash",
+  // Product-based
+  "Retail Store",
+  "Electronics Store",
+  "Bakery",
+  "Florist",
+  "Grocery Store",
+  "Auto Parts",
+  // Both
+  "Pharmacy",
+  "Pet Shop",
   "General Business",
 ];
 
