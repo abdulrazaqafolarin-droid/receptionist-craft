@@ -88,8 +88,15 @@ export default function Step2Services() {
 
     setLoading(true);
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("You must be logged in to save services");
+      }
+
       const servicesToInsert = services.map((service) => ({
         receptionist_id: receptionistId,
+        user_id: user.id,
         name: service.name,
         duration_minutes: service.duration_minutes,
         description: service.description || null,
