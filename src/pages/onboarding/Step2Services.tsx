@@ -19,6 +19,7 @@ export default function Step2Services() {
     duration_minutes: 60,
     description: "",
     noTime: false,
+    price: 0,
   });
   const [newProduct, setNewProduct] = useState({
     name: "",
@@ -48,9 +49,10 @@ export default function Step2Services() {
       duration_minutes: newService.noTime ? 0 : newService.duration_minutes,
       description: newService.description,
       type: 'service',
+      price: newService.price > 0 ? newService.price : undefined,
       active: true,
     });
-    setNewService({ name: "", duration_minutes: 60, description: "", noTime: false });
+    setNewService({ name: "", duration_minutes: 60, description: "", noTime: false, price: 0 });
     setShowServiceForm(false);
     toast.success("Service added");
   };
@@ -100,6 +102,7 @@ export default function Step2Services() {
         name: service.name,
         duration_minutes: service.duration_minutes,
         description: service.description || null,
+        price: service.price || null, // Save price to DB
         active: service.active,
       }));
 
@@ -213,6 +216,19 @@ export default function Step2Services() {
                 </div>
               )}
               <div>
+                <Label htmlFor="service_price">Price ($ - Optional)</Label>
+                <Input
+                  id="service_price"
+                  type="number"
+                  placeholder="0.00"
+                  step="0.01"
+                  value={newService.price}
+                  onChange={(e) =>
+                    setNewService({ ...newService, price: parseFloat(e.target.value) || 0 })
+                  }
+                />
+              </div>
+              <div>
                 <Label htmlFor="service_description">Description (Optional)</Label>
                 <Textarea
                   id="service_description"
@@ -317,19 +333,28 @@ export default function Step2Services() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-2">
-                    {item.type === 'product' ? (
+                    {/* Duration badge for services */}
+                    {item.type === 'service' && (
+                      item.duration_minutes === 0 ? (
+                        <Badge variant="outline" className="text-xs">
+                          No set time
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {item.duration_minutes}m
+                        </Badge>
+                      )
+                    )}
+                    {/* Price badge - for both services and products */}
+                    {item.price && item.price > 0 ? (
                       <Badge variant="outline" className="flex items-center gap-1 text-xs">
                         <DollarSign className="h-3 w-3" />
-                        {item.price || 0}
-                      </Badge>
-                    ) : item.duration_minutes === 0 ? (
-                      <Badge variant="outline" className="text-xs">
-                        No set time
+                        {item.price}
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-xs">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {item.duration_minutes}m
+                      <Badge variant="secondary" className="text-xs">
+                        No price
                       </Badge>
                     )}
                     <Button variant="ghost" size="sm" onClick={() => removeService(idx)} className="h-8 w-8 p-0">

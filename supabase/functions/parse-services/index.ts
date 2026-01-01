@@ -47,18 +47,21 @@ Your task is to parse the user's input and identify:
 For each item, extract:
 - name: A clear, concise name
 - type: Either "service" or "product"
-- duration_minutes: For services only, estimate a reasonable duration (15, 30, 45, 60, 90, 120 minutes typical)
-- price: For products, extract the price if mentioned, otherwise estimate a reasonable price
+- duration_minutes: For services only, estimate a reasonable duration (15, 30, 45, 60, 90, 120 minutes typical). Set to 0 if not specified.
+- price: Extract the price if mentioned, for BOTH services AND products. If price is NOT mentioned, set to null (not 0).
 - description: A brief description if context is provided
 
 Be smart about categorization:
-- "Haircut $25" → service with 30min duration
+- "Haircut $25" → service with 30min duration and price 25
 - "T-shirts $15 each" → product with price 15
-- "1 hour massage" → service with 60min duration
-- "Phone repair" → service with 60min duration
+- "1 hour massage $80" → service with 60min duration and price 80
+- "Phone repair" → service with 60min duration and price null (not specified)
 - "Coffee $5" → product with price 5
+- "Manicure" → service with price null (not specified)
 
-${businessType ? `The business type is: ${businessType}. Use this context to make better estimates.` : ''}
+IMPORTANT: If a price is NOT explicitly written in the text, set price to null. Do NOT guess or estimate prices.
+
+${businessType ? `The business type is: ${businessType}. Use this context to make better estimates for duration.` : ''}
 
 Return ONLY valid JSON in this exact format:
 {
@@ -66,8 +69,8 @@ Return ONLY valid JSON in this exact format:
     {
       "name": "string",
       "type": "service" | "product",
-      "duration_minutes": number (only for services),
-      "price": number (only for products),
+      "duration_minutes": number (for services, 0 if not specified),
+      "price": number | null (null if not specified in input),
       "description": "string"
     }
   ]
@@ -94,8 +97,8 @@ Return ONLY valid JSON in this exact format:
                       properties: {
                         name: { type: "string", description: "Name of the service or product" },
                         type: { type: "string", enum: ["service", "product"], description: "Whether this is a service or product" },
-                        duration_minutes: { type: "number", description: "Duration in minutes (for services only)" },
-                        price: { type: "number", description: "Price in dollars (for products only)" },
+                        duration_minutes: { type: "number", description: "Duration in minutes (for services only, 0 if not specified)" },
+                        price: { type: ["number", "null"], description: "Price in dollars. null if not specified in input." },
                         description: { type: "string", description: "Brief description" }
                       },
                       required: ["name", "type"]
@@ -143,11 +146,13 @@ Return ONLY valid JSON in this exact format:
     const parsed = JSON.parse(toolCall.function.arguments);
     
     // Validate and clean up the items
+    // price is null if not specified, allowing UI to show "add price" prompt
     const items = (parsed.items || []).map((item: any) => ({
       name: item.name?.trim() || "Unknown Item",
       type: item.type === "product" ? "product" : "service",
-      duration_minutes: item.type === "service" ? (item.duration_minutes || 60) : 0,
-      price: item.type === "product" ? (item.price || 0) : undefined,
+      duration_minutes: item.type === "service" ? (item.duration_minutes || 0) : 0,
+      price: item.price != null ? item.price : null, // Keep null if not specified
+      priceSpecified: item.price != null, // Track if price was in original input
       description: item.description?.trim() || "",
       active: true
     }));

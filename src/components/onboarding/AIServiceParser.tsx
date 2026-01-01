@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Sparkles, Loader2, Plus, Trash2, Clock, ShoppingBag, DollarSign, CheckCircle2, MessageSquare, Pencil, Check, X } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Sparkles, Loader2, Plus, Trash2, Clock, ShoppingBag, DollarSign, CheckCircle2, MessageSquare, Pencil, Check, X, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ItemType } from "@/store/onboarding";
@@ -15,10 +16,12 @@ type ParsedItem = {
   name: string;
   type: ItemType;
   duration_minutes: number;
-  price?: number;
+  price?: number | null;
+  priceSpecified?: boolean;
   description: string;
   active: boolean;
   noTime?: boolean;
+  addPriceChoice?: 'now' | 'later' | null;
 };
 
 type AIServiceParserProps = {
@@ -59,12 +62,14 @@ export function AIServiceParser({ businessType, onAddItems, disabled }: AIServic
         return;
       }
 
-      const itemsWithNoTime = data.items.map((item: ParsedItem) => ({
+      const itemsProcessed = data.items.map((item: ParsedItem) => ({
         ...item,
         noTime: item.type === 'service' && item.duration_minutes === 0,
+        priceSpecified: item.price != null,
+        addPriceChoice: item.price == null ? null : undefined, // null means needs to choose
       }));
 
-      setParsedItems(itemsWithNoTime);
+      setParsedItems(itemsProcessed);
       setShowResults(true);
       toast.success(`Found ${data.items.length} items!`);
     } catch (error: any) {
@@ -99,8 +104,10 @@ export function AIServiceParser({ businessType, onAddItems, disabled }: AIServic
           ? {
               ...item,
               duration_minutes: editValues.noTime ? 0 : editValues.duration,
-              price: item.type === 'product' ? editValues.price : item.price,
+              price: editValues.price > 0 ? editValues.price : null,
               noTime: editValues.noTime,
+              priceSpecified: editValues.price > 0,
+              addPriceChoice: editValues.price > 0 ? undefined : item.addPriceChoice,
             }
           : item
       )
@@ -112,11 +119,23 @@ export function AIServiceParser({ businessType, onAddItems, disabled }: AIServic
     setEditingIndex(null);
   };
 
+  const handlePriceChoice = (index: number, choice: 'now' | 'later') => {
+    setParsedItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, addPriceChoice: choice } : item
+      )
+    );
+    if (choice === 'now') {
+      handleStartEdit(index);
+    }
+  };
+
   const handleAddAll = () => {
     if (parsedItems.length === 0) return;
     const itemsToAdd = parsedItems.map(item => ({
       ...item,
       duration_minutes: item.noTime ? 0 : item.duration_minutes,
+      price: item.price ?? undefined, // Convert null to undefined for consistency
     }));
     onAddItems(itemsToAdd);
     toast.success(`Added ${parsedItems.length} items!`);
@@ -133,6 +152,7 @@ export function AIServiceParser({ businessType, onAddItems, disabled }: AIServic
 
   const servicesCount = parsedItems.filter((i) => i.type === "service").length;
   const productsCount = parsedItems.filter((i) => i.type === "product").length;
+  const itemsNeedingPriceDecision = parsedItems.filter(i => !i.priceSpecified && i.addPriceChoice === null).length;
 
   return (
     <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
@@ -151,7 +171,7 @@ export function AIServiceParser({ businessType, onAddItems, disabled }: AIServic
             <div className="relative">
               <MessageSquare className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Textarea
-                placeholder={`Example:\n• Haircut - 30 mins\n• Hair coloring - 2 hours\n• Shampoo $12\n• Hair spray $18\n• Deep conditioning 45 min\n• Premium hair oil $25\n\nOr simply list them:\nMen's haircut, women's haircut, kids cut, beard trim, hair gel, combs...`}
+                placeholder={`Example:\n• Haircut $25 - 30 mins\n• Hair coloring $80 - 2 hours\n• Shampoo $12\n• Hair spray $18\n• Deep conditioning 45 min\n• Premium hair oil $25\n\nOr simply list them:\nMen's haircut, women's haircut, kids cut, beard trim, hair gel, combs...`}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 rows={8}
@@ -199,6 +219,14 @@ export function AIServiceParser({ businessType, onAddItems, disabled }: AIServic
                 </Badge>
               )}
             </div>
+
+            {/* Warning for items needing price decision */}
+            {itemsNeedingPriceDecision > 0 && (
+              <div className="flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-xs sm:text-sm text-amber-700 dark:text-amber-300">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{itemsNeedingPriceDecision} item(s) need pricing decision below</span>
+              </div>
+            )}
 
             {/* Parsed Items List */}
             <div className="space-y-2 max-h-80 sm:max-h-96 overflow-y-auto pr-1">
@@ -255,7 +283,7 @@ export function AIServiceParser({ businessType, onAddItems, disabled }: AIServic
                   {/* Edit Mode */}
                   {editingIndex === idx ? (
                     <div className="ml-6 space-y-3 pt-2 border-t">
-                      {item.type === "service" ? (
+                      {item.type === "service" && (
                         <div className="space-y-3">
                           <div className="flex items-center gap-3">
                             <Switch
@@ -291,30 +319,33 @@ export function AIServiceParser({ businessType, onAddItems, disabled }: AIServic
                             </div>
                           )}
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor={`price-${idx}`} className="text-sm whitespace-nowrap">
-                            Price:
-                          </Label>
-                          <div className="relative">
-                            <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                            <Input
-                              id={`price-${idx}`}
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              value={editValues.price}
-                              onChange={(e) =>
-                                setEditValues((prev) => ({
-                                  ...prev,
-                                  price: parseFloat(e.target.value) || 0,
-                                }))
-                              }
-                              className="w-24 h-8 text-sm pl-7"
-                            />
-                          </div>
-                        </div>
                       )}
+                      
+                      {/* Price editing for both services and products */}
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor={`price-${idx}`} className="text-sm whitespace-nowrap">
+                          Price:
+                        </Label>
+                        <div className="relative">
+                          <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          <Input
+                            id={`price-${idx}`}
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={editValues.price}
+                            onChange={(e) =>
+                              setEditValues((prev) => ({
+                                ...prev,
+                                price: parseFloat(e.target.value) || 0,
+                              }))
+                            }
+                            className="w-24 h-8 text-sm pl-7"
+                          />
+                        </div>
+                        <span className="text-xs text-muted-foreground">(optional)</span>
+                      </div>
+                      
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
@@ -337,20 +368,62 @@ export function AIServiceParser({ businessType, onAddItems, disabled }: AIServic
                     </div>
                   ) : (
                     /* Display Mode */
-                    <div className="ml-6 flex items-center gap-2 flex-wrap">
-                      {item.type === "product" ? (
-                        <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                          <DollarSign className="h-3 w-3" />
-                          {item.price || 0}
-                        </Badge>
-                      ) : item.noTime ? (
-                        <Badge variant="outline" className="text-xs">
-                          No set duration
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs">
-                          <Clock className="h-3 w-3 mr-1" />
-                          {item.duration_minutes}m
+                    <div className="ml-6 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Duration badge for services */}
+                        {item.type === "service" && (
+                          item.noTime ? (
+                            <Badge variant="outline" className="text-xs">
+                              No set duration
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs">
+                              <Clock className="h-3 w-3 mr-1" />
+                              {item.duration_minutes}m
+                            </Badge>
+                          )
+                        )}
+                        
+                        {/* Price badge - for both services and products */}
+                        {item.priceSpecified && item.price != null ? (
+                          <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                            <DollarSign className="h-3 w-3" />
+                            {item.price}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      
+                      {/* Price not specified - show add now/later option */}
+                      {!item.priceSpecified && item.addPriceChoice === null && (
+                        <div className="p-2 bg-muted/50 rounded-lg space-y-2">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            No price specified
+                          </p>
+                          <RadioGroup
+                            className="flex flex-wrap gap-4"
+                            onValueChange={(value) => handlePriceChoice(idx, value as 'now' | 'later')}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="now" id={`price-now-${idx}`} />
+                              <Label htmlFor={`price-now-${idx}`} className="text-xs cursor-pointer">
+                                Add price now
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="later" id={`price-later-${idx}`} />
+                              <Label htmlFor={`price-later-${idx}`} className="text-xs cursor-pointer">
+                                Add later
+                              </Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                      )}
+                      
+                      {/* User chose to add later */}
+                      {!item.priceSpecified && item.addPriceChoice === 'later' && (
+                        <Badge variant="secondary" className="text-xs">
+                          Price: Add later
                         </Badge>
                       )}
                     </div>
