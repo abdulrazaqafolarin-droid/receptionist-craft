@@ -1047,6 +1047,7 @@ export type Database = {
           duration_minutes: number
           id: string
           name: string
+          price: number | null
           receptionist_id: string | null
           user_id: string | null
         }
@@ -1059,6 +1060,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           name: string
+          price?: number | null
           receptionist_id?: string | null
           user_id?: string | null
         }
@@ -1071,6 +1073,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           name?: string
+          price?: number | null
           receptionist_id?: string | null
           user_id?: string | null
         }
