@@ -82,11 +82,11 @@ export default function Step2Services() {
       return;
     }
 
-    // Update business model based on what was added
-    const hasServices = services.some(s => s.type === 'service');
-    const hasProducts = services.some(s => s.type === 'product');
-    const businessModel = hasServices && hasProducts ? 'both' : hasProducts ? 'products' : 'services';
-    setReceptionist({ business_model: businessModel });
+    // Validate receptionistId exists
+    if (!receptionistId) {
+      toast.error("No receptionist found. Please go back to Step 1 and create your AI receptionist first.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -96,13 +96,33 @@ export default function Step2Services() {
         throw new Error("You must be logged in to save services");
       }
 
+      // Verify the receptionist exists in the database
+      const { data: existingReceptionist, error: checkError } = await supabase
+        .from("receptionists")
+        .select("id")
+        .eq("id", receptionistId)
+        .eq("user_id", user.id)
+        .single();
+
+      if (checkError || !existingReceptionist) {
+        toast.error("The AI receptionist was not found. Please go back to Step 1 and create it again.");
+        setStep(1);
+        return;
+      }
+
+      // Update business model based on what was added
+      const hasServices = services.some(s => s.type === 'service');
+      const hasProducts = services.some(s => s.type === 'product');
+      const businessModel = hasServices && hasProducts ? 'both' : hasProducts ? 'products' : 'services';
+      setReceptionist({ business_model: businessModel });
+
       const servicesToInsert = services.map((service) => ({
         receptionist_id: receptionistId,
         user_id: user.id,
         name: service.name,
         duration_minutes: service.duration_minutes,
         description: service.description || null,
-        price: service.price || null, // Save price to DB
+        price: service.price || null,
         active: service.active,
       }));
 
@@ -112,7 +132,8 @@ export default function Step2Services() {
       toast.success("Services & products saved successfully!");
       setStep(3);
     } catch (error: any) {
-      toast.error(error.message || "Failed to save");
+      console.error("Error saving services:", error);
+      toast.error(error.message || "Failed to save services");
     } finally {
       setLoading(false);
     }
