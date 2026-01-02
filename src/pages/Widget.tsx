@@ -38,6 +38,8 @@ export default function Widget() {
   const [sessionId, setSessionId] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [services, setServices] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [businessModel, setBusinessModel] = useState<'services' | 'products' | 'both'>('services');
   const [bookingState, setBookingState] = useState({
     serviceId: null as string | null,
     serviceName: null as string | null,
@@ -74,7 +76,7 @@ export default function Widget() {
   async function loadReceptionist() {
     const { data, error } = await supabase
       .from("receptionists")
-      .select("name, business_name, greeting_message, active, business_info")
+      .select("name, business_name, greeting_message, active, business_info, business_model")
       .eq("id", receptionistId)
       .eq("active", true)
       .maybeSingle();
@@ -85,6 +87,9 @@ export default function Widget() {
     }
 
     setReceptionist(data);
+    
+    // Set business model
+    setBusinessModel((data as any).business_model || 'services');
     
     // Apply widget customization colors if available
     const businessInfo = data.business_info as any;
@@ -125,7 +130,7 @@ export default function Widget() {
     }
   }
 
-  async function loadServices() {
+  async function loadServicesAndProducts() {
     const { data, error } = await supabase
       .from("services")
       .select("*")
@@ -133,7 +138,12 @@ export default function Widget() {
       .eq("active", true);
 
     if (!error && data) {
-      setServices(data);
+      // Separate services and products based on duration_minutes
+      // Products have duration_minutes = 0, Services have duration_minutes > 0
+      const serviceItems = data.filter(item => item.duration_minutes > 0);
+      const productItems = data.filter(item => item.duration_minutes === 0);
+      setServices(serviceItems);
+      setProducts(productItems);
     }
   }
 
@@ -141,7 +151,7 @@ export default function Widget() {
   useEffect(() => {
     if (receptionistId && sessionId) {
       loadReceptionist();
-      loadServices();
+      loadServicesAndProducts();
     }
   }, [receptionistId, sessionId]);
 
@@ -344,6 +354,8 @@ export default function Widget() {
       await sendMessage("I'd like to book an appointment");
     } else if (value === "view_services") {
       await sendMessage("What services do you offer?");
+    } else if (value === "view_products") {
+      await sendMessage("What products do you have?");
     } else if (value === "view_prices") {
       await sendMessage("What are your prices?");
     } else if (value === "contact") {
@@ -471,8 +483,9 @@ export default function Widget() {
                       <div className="max-w-[80%]">
                         <QuickReplyButtons
                           buttons={[
-                            { label: "📅 Book Appointment", value: "book_appointment" },
-                            { label: "💼 View Services", value: "view_services" },
+                            ...(businessModel === 'services' || businessModel === 'both' ? [{ label: "📅 Book Appointment", value: "book_appointment" }] : []),
+                            ...(businessModel === 'services' || businessModel === 'both' ? [{ label: "💼 View Services", value: "view_services" }] : []),
+                            ...(businessModel === 'products' || businessModel === 'both' ? [{ label: "🛍️ View Products", value: "view_products" }] : []),
                             { label: "📞 Contact", value: "contact" },
                           ]}
                           onSelect={handleQuickReply}

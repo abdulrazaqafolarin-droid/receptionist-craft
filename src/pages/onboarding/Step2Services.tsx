@@ -116,6 +116,16 @@ export default function Step2Services() {
       const businessModel = hasServices && hasProducts ? 'both' : hasProducts ? 'products' : 'services';
       setReceptionist({ business_model: businessModel });
 
+      // Update receptionist with business_model in database
+      const { error: updateError } = await supabase
+        .from("receptionists")
+        .update({ business_model: businessModel })
+        .eq("id", receptionistId);
+
+      if (updateError) {
+        console.error("Error updating business model:", updateError);
+      }
+
       const servicesToInsert = services.map((service) => ({
         receptionist_id: receptionistId,
         user_id: user.id,

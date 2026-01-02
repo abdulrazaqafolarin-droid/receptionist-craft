@@ -940,6 +940,7 @@ export type Database = {
           address: string | null
           allow_interruptions: boolean | null
           business_info: Json | null
+          business_model: string | null
           business_name: string
           business_phone: string | null
           business_type: string | null
@@ -971,6 +972,7 @@ export type Database = {
           address?: string | null
           allow_interruptions?: boolean | null
           business_info?: Json | null
+          business_model?: string | null
           business_name: string
           business_phone?: string | null
           business_type?: string | null
@@ -1002,6 +1004,7 @@ export type Database = {
           address?: string | null
           allow_interruptions?: boolean | null
           business_info?: Json | null
+          business_model?: string | null
           business_name?: string
           business_phone?: string | null
           business_type?: string | null
