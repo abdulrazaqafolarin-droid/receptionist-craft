@@ -553,86 +553,33 @@ export default function BuilderPage() {
   // UI small helpers
   function onFieldChange<K extends keyof Receptionist>(key: K, val: Receptionist[K]) {
     setReceptionist((p) => ({ ...p, [key]: val }));
+    // Mark as having unsaved changes when user edits
+    setHasUnsavedChanges(true);
   }
 
-  // Generate knowledge base using AI
+  // Track unsaved changes and auto-generation state
   const [generatingKB, setGeneratingKB] = useState(false);
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [autoGenerateTriggered, setAutoGenerateTriggered] = useState(false);
   
-  async function generateKnowledgeBase() {
-    try {
-      setGeneratingKB(true);
+  // Auto-generate KB and System Prompt when receptionist loads
+  useEffect(() => {
+    if (receptionistId && receptionist.business_name && !autoGenerateTriggered && !loading) {
+      // Only auto-generate if KB or System Prompt is empty
+      const needsKB = !receptionist.knowledge_base || receptionist.knowledge_base.trim() === '';
+      const needsPrompt = !receptionist.system_prompt || receptionist.system_prompt.trim() === '';
       
-      // Fetch services and FAQs for this receptionist
-      let services = [];
-      let faqs = [];
-      
-      if (receptionistId) {
-        const { data: servicesData } = await supabase
-          .from('services')
-          .select('*')
-          .eq('receptionist_id', receptionistId);
-        services = servicesData || [];
-
-        const { data: faqsData } = await supabase
-          .from('receptionist_faqs')
-          .select('*')
-          .eq('receptionist_id', receptionistId)
-          .order('priority', { ascending: false });
-        faqs = faqsData || [];
+      if (needsKB || needsPrompt) {
+        setAutoGenerateTriggered(true);
+        autoGenerateContent(needsKB, needsPrompt);
       }
-
-      // Build structured data
-      const receptionistData = {
-        business_name: receptionist.business_name,
-        business_type: receptionist.business_type,
-        phone: receptionist.phone,
-        language: receptionist.language,
-        greeting_message: receptionist.greeting_message,
-        tone: receptionist.tone,
-        goal: receptionist.goal,
-        services: services.map(s => ({
-          name: s.name,
-          description: s.description,
-          duration: `${s.duration_minutes} minutes`,
-          buffer_before: `${s.buffer_before_minutes} min`,
-          buffer_after: `${s.buffer_after_minutes} min`,
-        })),
-        faqs: faqs.map(f => ({
-          question: f.question,
-          answer: f.answer,
-        })),
-      };
-
-      const { data, error } = await supabase.functions.invoke('generate-knowledge-base', {
-        body: { receptionistData }
-      });
-
-      if (error) throw error;
-      if (!data?.knowledge_base) throw new Error('No knowledge base generated');
-
-      setReceptionist(p => ({ ...p, knowledge_base: data.knowledge_base }));
-      toast({ 
-        title: "Success", 
-        description: "Knowledge base generated! Review and edit as needed." 
-      });
-    } catch (err: any) {
-      console.error('Generate KB error:', err);
-      toast({ 
-        title: "Error", 
-        description: err.message || "Failed to generate knowledge base",
-        variant: "destructive" 
-      });
-    } finally {
-      setGeneratingKB(false);
     }
-  }
-
-  // Generate system prompt using AI
-  async function generateSystemPrompt() {
+  }, [receptionistId, receptionist.business_name, loading, autoGenerateTriggered]);
+  
+  // Auto-generate and auto-save content
+  async function autoGenerateContent(generateKB: boolean, generatePrompt: boolean) {
     try {
-      setGeneratingPrompt(true);
-      
       // Fetch services and FAQs for this receptionist
       let services = [];
       let faqs = [];
@@ -666,8 +613,7 @@ export default function BuilderPage() {
           name: s.name,
           description: s.description,
           duration: `${s.duration_minutes} minutes`,
-          buffer_before: `${s.buffer_before_minutes} min`,
-          buffer_after: `${s.buffer_after_minutes} min`,
+          price: s.price,
         })),
         faqs: faqs.map(f => ({
           question: f.question,
@@ -675,28 +621,65 @@ export default function BuilderPage() {
         })),
       };
 
-      const { data, error } = await supabase.functions.invoke('generate-system-prompt', {
-        body: { receptionistData }
-      });
+      let newKB = receptionist.knowledge_base;
+      let newPrompt = receptionist.system_prompt;
 
-      if (error) throw error;
-      if (!data?.system_prompt) throw new Error('No system prompt generated');
+      // Generate KB if needed
+      if (generateKB) {
+        setGeneratingKB(true);
+        const { data: kbData, error: kbError } = await supabase.functions.invoke('generate-knowledge-base', {
+          body: { receptionistData }
+        });
+        if (!kbError && kbData?.knowledge_base) {
+          newKB = kbData.knowledge_base;
+        }
+        setGeneratingKB(false);
+      }
 
-      setReceptionist(p => ({ ...p, system_prompt: data.system_prompt }));
-      toast({ 
-        title: "Success", 
-        description: "System prompt generated! Review and customize as needed." 
-      });
+      // Generate System Prompt if needed
+      if (generatePrompt) {
+        setGeneratingPrompt(true);
+        const { data: promptData, error: promptError } = await supabase.functions.invoke('generate-system-prompt', {
+          body: { receptionistData }
+        });
+        if (!promptError && promptData?.system_prompt) {
+          newPrompt = promptData.system_prompt;
+        }
+        setGeneratingPrompt(false);
+      }
+
+      // Auto-save the generated content
+      if ((generateKB && newKB) || (generatePrompt && newPrompt)) {
+        const updates: any = {};
+        if (generateKB && newKB) updates.knowledge_base = newKB;
+        if (generatePrompt && newPrompt) updates.system_prompt = newPrompt;
+
+        const { error: updateError } = await supabase
+          .from('receptionists')
+          .update(updates)
+          .eq('id', receptionistId);
+
+        if (!updateError) {
+          setReceptionist(p => ({
+            ...p,
+            ...(generateKB && newKB ? { knowledge_base: newKB } : {}),
+            ...(generatePrompt && newPrompt ? { system_prompt: newPrompt } : {}),
+          }));
+          toast({ 
+            title: "Auto-Generated", 
+            description: "Knowledge base and system prompt have been automatically generated and saved." 
+          });
+        }
+      }
     } catch (err: any) {
-      console.error('Generate system prompt error:', err);
-      toast({ 
-        title: "Error", 
-        description: err.message || "Failed to generate system prompt",
-        variant: "destructive" 
-      });
-    } finally {
-      setGeneratingPrompt(false);
+      console.error('Auto-generate error:', err);
     }
+  }
+  
+  // Manual regenerate function (for button if user wants to regenerate)
+  async function regenerateContent() {
+    setAutoGenerateTriggered(true);
+    await autoGenerateContent(true, true);
   }
 
   // Show loading or auth error state
@@ -822,16 +805,12 @@ export default function BuilderPage() {
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-medium text-muted-foreground">Knowledge Base</label>
-                    <button
-                      type="button"
-                      onClick={generateKnowledgeBase}
-                      disabled={generatingKB || !receptionist.business_name}
-                      className="text-xs px-3 py-1.5 bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-lg hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                    >
-                      {generatingKB ? "Generating..." : "✨ AI Generate"}
-                    </button>
+                    {generatingKB && (
+                      <span className="text-xs text-primary animate-pulse">✨ Auto-generating...</span>
+                    )}
                   </div>
-                  <textarea className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none" rows={4} placeholder="Add your business knowledge here..." value={receptionist.knowledge_base || ""} onChange={(e) => onFieldChange("knowledge_base", e.target.value)} />
+                  <textarea className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none" rows={4} placeholder="Knowledge base will be auto-generated..." value={receptionist.knowledge_base || ""} onChange={(e) => onFieldChange("knowledge_base", e.target.value)} />
+                  <p className="text-xs text-muted-foreground mt-1">Auto-generated from your business info. Edit as needed, then save.</p>
                 </div>
 
                 <div>
@@ -854,16 +833,12 @@ export default function BuilderPage() {
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-medium text-muted-foreground">System Prompt (Advanced)</label>
-                    <button
-                      type="button"
-                      onClick={generateSystemPrompt}
-                      disabled={generatingPrompt || !receptionist.business_name}
-                      className="text-xs px-3 py-1.5 bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-lg hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                    >
-                      {generatingPrompt ? "Generating..." : "✨ AI Generate"}
-                    </button>
+                    {generatingPrompt && (
+                      <span className="text-xs text-primary animate-pulse">✨ Auto-generating...</span>
+                    )}
                   </div>
-                  <textarea className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none" rows={3} placeholder="Optional custom system instructions..." value={receptionist.system_prompt || ""} onChange={(e) => onFieldChange("system_prompt", e.target.value)} />
+                  <textarea className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none" rows={3} placeholder="System prompt will be auto-generated..." value={receptionist.system_prompt || ""} onChange={(e) => onFieldChange("system_prompt", e.target.value)} />
+                  <p className="text-xs text-muted-foreground mt-1">Auto-generated from your business info. Edit as needed, then save.</p>
                 </div>
               </div>
 
