@@ -1,27 +1,46 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, User, Phone, CheckCircle, Download } from "lucide-react";
+import { Calendar, Clock, User, Phone, Mail, CheckCircle, Download } from "lucide-react";
 import { format } from "date-fns";
 
 interface BookingConfirmationProps {
-  service: string;
-  date: string;
-  time: string;
+  serviceName?: string;
+  service?: string;
+  dateTime?: string;
+  date?: string;
+  time?: string;
   customerName: string;
-  customerPhone: string;
-  confirmationId: string;
+  customerPhone?: string;
+  contactInfo?: string;
+  confirmationId?: string;
 }
 
 export function BookingConfirmation({
+  serviceName,
   service,
+  dateTime,
   date,
   time,
   customerName,
   customerPhone,
+  contactInfo,
   confirmationId,
 }: BookingConfirmationProps) {
+  // Normalize the data - handle both old and new prop formats
+  const displayService = serviceName || service || "Appointment";
+  const displayDateTime = dateTime || date;
+  const displayContact = contactInfo || customerPhone || "";
+  const isEmail = displayContact?.includes('@');
+  const displayId = confirmationId || crypto.randomUUID();
+
+  const formattedDateTime = displayDateTime 
+    ? format(new Date(displayDateTime), "MMMM d, yyyy 'at' h:mm a")
+    : time || "TBD";
+
   const generateICS = () => {
-    const startDate = new Date(date);
+    if (!displayDateTime) return;
+    
+    const startDate = new Date(displayDateTime);
     const formattedDate = format(startDate, "yyyyMMdd'T'HHmmss");
     
     const icsContent = [
@@ -29,9 +48,9 @@ export function BookingConfirmation({
       "VERSION:2.0",
       "BEGIN:VEVENT",
       `DTSTART:${formattedDate}`,
-      `SUMMARY:${service} Appointment`,
+      `SUMMARY:${displayService} Appointment`,
       `DESCRIPTION:Appointment for ${customerName}`,
-      `UID:${confirmationId}`,
+      `UID:${displayId}`,
       "END:VEVENT",
       "END:VCALENDAR",
     ].join("\n");
@@ -55,38 +74,46 @@ export function BookingConfirmation({
           <div>
             <h4 className="font-semibold text-sm">Booking Confirmed!</h4>
             <p className="text-xs text-muted-foreground mt-1">
-              Confirmation ID: {confirmationId.slice(0, 8)}
+              Confirmation ID: {displayId.slice(0, 8)}
             </p>
           </div>
 
           <div className="space-y-2 text-sm">
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span>{service}</span>
+              <span>{displayService}</span>
             </div>
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
-              <span>{time}</span>
+              <span>{formattedDateTime}</span>
             </div>
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-muted-foreground" />
               <span>{customerName}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              <span>{customerPhone}</span>
-            </div>
+            {displayContact && (
+              <div className="flex items-center gap-2">
+                {isEmail ? (
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span>{displayContact}</span>
+              </div>
+            )}
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={generateICS}
-            className="w-full"
-          >
-            <Download className="h-3 w-3 mr-2" />
-            Add to Calendar
-          </Button>
+          {displayDateTime && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={generateICS}
+              className="w-full"
+            >
+              <Download className="h-3 w-3 mr-2" />
+              Add to Calendar
+            </Button>
+          )}
         </div>
       </div>
     </Card>
