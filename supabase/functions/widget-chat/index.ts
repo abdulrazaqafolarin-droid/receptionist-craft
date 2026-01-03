@@ -111,11 +111,11 @@ function runSafetyClassifier(message: string): { safe: boolean; violation?: stri
 // ─────────────────────────────────────────────────────────────────────────────
 type IntentType = 
   | 'book_appointment' | 'cancel_appointment' | 'reschedule'
-  | 'ask_info' | 'ask_price' | 'ask_hours' | 'ask_location'
+  | 'order_product' | 'ask_info' | 'ask_price' | 'ask_hours' | 'ask_location'
   | 'complaint' | 'compliment' | 'small_talk'
   | 'confirm' | 'deny' | 'correct_previous_info'
   | 'follow_up' | 'acknowledgment' | 'greeting' | 'farewell'
-  | 'escalation_request' | 'general_query';
+  | 'escalation_request' | 'conversation_end' | 'general_query';
 
 function detectIntent(message: string, historyLength: number): IntentType {
   const lowerMsg = message.toLowerCase().trim();
@@ -123,6 +123,10 @@ function detectIntent(message: string, historyLength: number): IntentType {
   if (historyLength === 0 && /^(hi|hello|hey|good (morning|afternoon|evening))/i.test(lowerMsg)) {
     return 'greeting';
   }
+  
+  // Detect conversation ending signals
+  if (/^(bye|goodbye|thanks? bye|see you|take care|that's all|no thanks?|nothing else|i'm good|all set|done|no more)/i.test(lowerMsg)) return 'conversation_end';
+  if (/^(no|nope)$/i.test(lowerMsg)) return 'conversation_end'; // Short "no" after asking if they need more help
   
   if (/^(bye|goodbye|thanks? bye|see you|take care)/i.test(lowerMsg)) return 'farewell';
   
@@ -132,6 +136,11 @@ function detectIntent(message: string, historyLength: number): IntentType {
   if (/^(yes|yep|yeah|correct|right|exactly|confirmed?|that's right)/i.test(lowerMsg)) return 'confirm';
   if (/^(no|nope|not really|that's wrong|incorrect)/i.test(lowerMsg)) return 'deny';
   if (/actually|i meant|i said .+ not|correction|change that to|switch (it|that) to/i.test(lowerMsg)) return 'correct_previous_info';
+  
+  // Product ordering detection
+  if (/buy|purchase|order|get|want to get|i'd like|i want/i.test(lowerMsg) && !/appointment|book|schedule/i.test(lowerMsg)) return 'order_product';
+  if (/add to cart|checkout|shop|shopping/i.test(lowerMsg)) return 'order_product';
+  
   if (/book|schedule|appointment|reserve|sign (me )?up|make a booking/i.test(lowerMsg)) return 'book_appointment';
   if (/cancel|delete|remove|don't want/i.test(lowerMsg) && /appointment|booking/i.test(lowerMsg)) return 'cancel_appointment';
   if (/reschedule|change (the |my )?(date|time|appointment)|move (it|my appointment)/i.test(lowerMsg)) return 'reschedule';
@@ -184,9 +193,15 @@ interface ConversationContext {
   pendingAction: string | null;
   emotionalState: 'neutral' | 'positive' | 'negative' | 'urgent' | 'frustrated';
   urgencyLevel: 'low' | 'normal' | 'high' | 'critical';
-  conversationPhase: 'greeting' | 'discovery' | 'booking' | 'confirmation' | 'followup' | 'closing';
+  conversationPhase: 'greeting' | 'discovery' | 'booking' | 'ordering' | 'confirmation' | 'followup' | 'closing';
   correctionsMade: string[];
   topicsDiscussed: string[];
+  // Product ordering context
+  productMentioned: string | null;
+  quantity: number | null;
+  orderConfirmed: boolean;
+  bookingConfirmed: boolean;
+  askedIfNeedMoreHelp: boolean;
 }
 
 function extractContextFromHistory(history: any[]): ConversationContext {
@@ -196,12 +211,15 @@ function extractContextFromHistory(history: any[]): ConversationContext {
     currentTopic: null, pendingAction: null,
     emotionalState: 'neutral', urgencyLevel: 'normal',
     conversationPhase: history.length === 0 ? 'greeting' : 'discovery',
-    correctionsMade: [], topicsDiscussed: []
+    correctionsMade: [], topicsDiscussed: [],
+    productMentioned: null, quantity: null,
+    orderConfirmed: false, bookingConfirmed: false, askedIfNeedMoreHelp: false
   };
   
   if (history.length === 0) return context;
   
   const fullText = history.map(h => h.message).join(' ');
+  const botMessages = history.filter(h => h.sender === 'bot').map(h => h.message.toLowerCase()).join(' ');
   
   const serviceMatch = fullText.match(/(?:need|want|book|schedule|appointment for|interested in)\s+(?:a\s+)?([a-z\s]+?)(?:\s+on|\s+at|\s+for|\.|\?|$)/i);
   if (serviceMatch) context.serviceMentioned = serviceMatch[1].trim();
@@ -221,6 +239,26 @@ function extractContextFromHistory(history: any[]): ConversationContext {
   const emailMatch = fullText.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
   if (emailMatch) context.customerEmail = emailMatch[1];
   
+  // Product ordering detection
+  const productMatch = fullText.match(/(?:buy|purchase|order|want|get)\s+(?:\d+\s+)?(?:a\s+)?([a-z\s]+?)(?:\s+please|\s+now|\.|\?|$)/i);
+  if (productMatch) context.productMentioned = productMatch[1].trim();
+  
+  const quantityMatch = fullText.match(/(\d+)\s+(?:pieces?|items?|units?|of)/i);
+  if (quantityMatch) context.quantity = parseInt(quantityMatch[1]);
+  
+  // Check if booking/order has been confirmed (look for confirmation messages)
+  if (/(?:confirmed|booked|scheduled|your appointment is set)/i.test(botMessages)) {
+    context.bookingConfirmed = true;
+  }
+  if (/(?:order confirmed|order is placed|purchase confirmed)/i.test(botMessages)) {
+    context.orderConfirmed = true;
+  }
+  
+  // Check if bot already asked if customer needs more help
+  if (/(?:anything else|is there anything else|can i help you with anything else|need anything else)/i.test(botMessages)) {
+    context.askedIfNeedMoreHelp = true;
+  }
+  
   const recentMessages = history.slice(-3).map(h => h.message.toLowerCase()).join(' ');
   if (/frustrated|angry|upset|terrible|awful|hate|worst/i.test(recentMessages)) {
     context.emotionalState = 'frustrated';
@@ -233,7 +271,12 @@ function extractContextFromHistory(history: any[]): ConversationContext {
     context.emotionalState = 'negative';
   }
   
-  if (context.serviceMentioned && context.dateMentioned && context.timeMentioned) {
+  // Determine conversation phase
+  if (context.bookingConfirmed || context.orderConfirmed) {
+    context.conversationPhase = context.askedIfNeedMoreHelp ? 'closing' : 'followup';
+  } else if (context.productMentioned) {
+    context.conversationPhase = 'ordering';
+  } else if (context.serviceMentioned && context.dateMentioned && context.timeMentioned) {
     context.conversationPhase = context.customerName ? 'confirmation' : 'booking';
   } else if (context.serviceMentioned || context.dateMentioned) {
     context.conversationPhase = 'booking';
@@ -548,36 +591,59 @@ Is correction: ${messageAnalysis.isCorrection}
 - For complaints: Show empathy, apologize, offer solutions
 - For escalation requests: Connect to human immediately`;
 
-  // BLOCK 5: BOOKING INTELLIGENCE
-  const bookingBlock = `# 📌 BLOCK 5 — BOOKING INTELLIGENCE
+  // BLOCK 5: BOOKING & ORDERING INTELLIGENCE
+  const bookingBlock = `# 📌 BLOCK 5 — BOOKING & ORDERING INTELLIGENCE
 
-Booking requires ALL of: Service, Date, Time, Contact (email or phone)
+## APPOINTMENT BOOKING
+Booking requires ALL of: Service, Date, Time, Contact (email or phone), Name
 
-Current status:
+Current booking status:
 - Service: ${context.serviceMentioned ? '✓' : '✗'} ${context.serviceMentioned || 'Missing'}
 - Date: ${context.dateMentioned ? '✓' : '✗'} ${context.dateMentioned || 'Missing'}
 - Time: ${context.timeMentioned ? '✓' : '✗'} ${context.timeMentioned || 'Missing'}
+- Name: ${context.customerName ? '✓' : '✗'} ${context.customerName || 'Missing'}
 - Contact: ${context.customerEmail || context.customerPhone ? '✓' : '✗'} ${context.customerEmail || context.customerPhone || 'Missing'}
 
-If any are missing: Ask ONLY for the missing item.
-If time unavailable: Offer up to 3 alternatives.
-NEVER book without explicit confirmation.
+Booking already confirmed: ${context.bookingConfirmed ? 'YES ✓' : 'NO'}
+
+## PRODUCT ORDERING
+Product orders require: Product name, Quantity (default 1), Contact info
+
+Current order status:
+- Product: ${context.productMentioned ? '✓' : '✗'} ${context.productMentioned || 'Not selected'}
+- Quantity: ${context.quantity ? '✓ ' + context.quantity : 'Default 1'}
+- Name: ${context.customerName ? '✓' : '✗'} ${context.customerName || 'Missing'}
+- Contact: ${context.customerEmail || context.customerPhone ? '✓' : '✗'} ${context.customerEmail || context.customerPhone || 'Missing'}
+
+Order already confirmed: ${context.orderConfirmed ? 'YES ✓' : 'NO'}
+
+## COLLECTION RULES
+- If any field is missing: Ask ONLY for the missing item
+- Ask ONE question at a time - never combine questions
+- If time/product unavailable: Offer up to 3 alternatives
+- NEVER complete booking/order without explicit confirmation
+
+## CONFIRMATION RULES (CRITICAL - READ CAREFULLY)
+1. When confirming an appointment: State service, date, time, name and contact info ONCE
+2. When confirming a product order: State product, quantity, name and contact info ONCE  
+3. Confirmation should be a SINGLE clear message
+4. **NEVER** repeat confirmation details after initial confirmation
+5. After confirmation message, immediately ask ONCE: "Is there anything else I can help you with today?"
 
 ## CONVERSATION ENDING RULES (CRITICAL)
-After a booking is confirmed or a purchase is complete:
-1. Confirm the booking/purchase ONLY ONCE - never repeat confirmation details
-2. Ask ONCE: "Is there anything else I can help you with today?"
-3. If user says "no", "that's all", "thanks", "bye", or similar:
-   - End warmly: "Thank you for choosing ${receptionist.business_name}! Have a wonderful day!"
-   - Do NOT ask if they need more help again
-   - Do NOT restate booking details
-4. If user says "yes" or asks another question, continue helping naturally
+Current phase: ${context.conversationPhase}
+Already asked if need more help: ${context.askedIfNeedMoreHelp ? 'YES' : 'NO'}
 
-## CONFIRMATION RULES
-- When confirming an appointment: State service, date, time, and contact ONCE
-- When confirming a product order: State product name and relevant details ONCE
-- NEVER repeat confirmation details in follow-up messages
-- After confirmation, ONLY ask if they need anything else`;
+After a booking is confirmed OR purchase is complete:
+1. The confirmation has been given - DO NOT repeat it
+2. If NOT already asked: Ask ONCE "Is there anything else I can help you with today?"
+3. If user responds with "no", "that's all", "thanks", "bye", "nope", "nothing", "I'm good", "all set":
+   → Give a SINGLE warm closing: "Thank you for choosing ${receptionist.business_name}! Have a wonderful day! 😊"
+   → DO NOT ask if they need more help again
+   → DO NOT repeat any booking/order details
+   → The conversation is DONE
+4. If user says "yes" or asks a new question: Continue helping naturally
+5. NEVER give multiple farewell messages - one goodbye is enough`;
 
   // BLOCK 6: SAFETY & QUALITY
   const safetyBlock = `# 📌 BLOCK 6 — SAFETY & QUALITY GUARDRAILS
@@ -598,7 +664,27 @@ After a booking is confirmed or a purchase is complete:
 - Be conversational, not transactional
 - Know when to close the conversation gracefully
 - Never be repetitive or annoying
-- One farewell is enough`;
+- One farewell is enough - do not keep saying goodbye
+- After "goodbye", if user doesn't respond, conversation is over`;
+
+  // BLOCK 5.5: PRODUCT ORDERING FLOW
+  const orderingBlock = `# 📌 BLOCK 5.5 — PRODUCT ORDERING FLOW
+
+When a customer wants to ORDER/BUY/PURCHASE a product:
+
+1. **Product Selection** → "Which product would you like?" (show options if available)
+2. **Quantity** → "How many would you like?" (assume 1 if not specified)
+3. **Contact Collection** → "Can I get your name and phone/email for the order?"
+4. **Confirmation** → Summarize: product, quantity, contact info
+5. **Close** → Ask if they need anything else, then say goodbye
+
+### Product Order Confirmation Format:
+"Perfect! I've placed your order for [quantity] x [product]. We'll contact you at [contact] to arrange [pickup/delivery]. Is there anything else I can help you with?"
+
+### Important:
+- Keep it simple and conversational
+- Don't repeat order details after confirmation
+- One confirmation, one follow-up question, one goodbye`;
 
   // BLOCK 7: FAILURE PREVENTION
   const failureBlock = `# 📌 BLOCK 7 — FAILURE PREVENTION & ESCALATION
@@ -648,6 +734,8 @@ Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and g
     intentBlock,
     '---',
     bookingBlock,
+    '---',
+    orderingBlock,
     '---',
     safetyBlock,
     '---',

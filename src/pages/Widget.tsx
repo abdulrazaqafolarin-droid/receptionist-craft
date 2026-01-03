@@ -8,9 +8,11 @@ import { Send, Loader2, MessageCircle, Phone, Mail, MapPin } from "lucide-react"
 import { useToast } from "@/hooks/use-toast";
 import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
 import { ServiceSelector } from "@/components/widget/ServiceSelector";
+import { ProductSelector } from "@/components/widget/ProductSelector";
 import { DateSelector } from "@/components/widget/DateSelector";
 import { TimeSlotSelector } from "@/components/widget/TimeSlotSelector";
 import { BookingConfirmation } from "@/components/widget/BookingConfirmation";
+import { OrderConfirmation } from "@/components/widget/OrderConfirmation";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -20,10 +22,12 @@ type Message = {
   timestamp: Date;
   showQuickReplies?: boolean;
   showServices?: boolean;
+  showProducts?: boolean;
   showDatePicker?: boolean;
   showTimeSlots?: boolean;
   timeSlots?: any[];
   bookingConfirmation?: any;
+  orderConfirmation?: any;
 };
 
 export default function Widget() {
@@ -49,6 +53,11 @@ export default function Widget() {
     customerEmail: null as string | null,
     customerPhone: null as string | null,
     collectingInfo: null as 'name' | 'contact' | null,
+    // Product ordering state
+    productId: null as string | null,
+    productName: null as string | null,
+    quantity: 1 as number,
+    orderMode: false as boolean,
   });
   const [widgetColors, setWidgetColors] = useState({
     primaryColor: "#8B5CF6",
@@ -193,7 +202,7 @@ export default function Widget() {
       }
 
       if (bookingState.collectingInfo === 'contact') {
-        // User provided contact info - complete the booking
+        // User provided contact info - complete the booking or order
         const contactInfo = textToSend.trim();
         const isEmail = contactInfo.includes('@');
         
@@ -203,6 +212,44 @@ export default function Widget() {
           customerPhone: !isEmail ? contactInfo : null,
           collectingInfo: null,
         }));
+
+        // Check if this is a product order or appointment booking
+        if (bookingState.orderMode && bookingState.productName) {
+          // Product order confirmation
+          const orderConfirmationMessage: Message = {
+            role: "assistant",
+            content: `Perfect! Your order for ${bookingState.quantity || 1}x ${bookingState.productName} has been placed. We'll contact you at ${contactInfo} to confirm the details. Is there anything else I can help you with today?`,
+            timestamp: new Date(),
+            orderConfirmation: {
+              productName: bookingState.productName,
+              quantity: bookingState.quantity || 1,
+              customerName: bookingState.customerName,
+              contactInfo: contactInfo,
+              orderId: crypto.randomUUID(),
+            }
+          };
+          
+          setMessages(prev => [...prev, orderConfirmationMessage]);
+          
+          // Reset booking state
+          setBookingState({
+            serviceId: null,
+            serviceName: null,
+            date: null,
+            timeSlot: null,
+            customerName: null,
+            customerEmail: null,
+            customerPhone: null,
+            collectingInfo: null,
+            productId: null,
+            productName: null,
+            quantity: 1,
+            orderMode: false,
+          });
+          
+          setLoading(false);
+          return;
+        }
 
         // Book the appointment
         try {
@@ -223,7 +270,7 @@ export default function Widget() {
           // Show confirmation
           const confirmationMessage: Message = {
             role: "assistant",
-            content: `Perfect! Your appointment has been confirmed for ${format(new Date(bookingState.timeSlot.startTime), "MMMM d, yyyy 'at' h:mm a")}. You'll receive a confirmation ${isEmail ? 'email' : 'text'} shortly.`,
+            content: `Perfect! Your appointment has been confirmed for ${format(new Date(bookingState.timeSlot.startTime), "MMMM d, yyyy 'at' h:mm a")}. You'll receive a confirmation ${isEmail ? 'email' : 'text'} shortly. Is there anything else I can help you with today?`,
             timestamp: new Date(),
             bookingConfirmation: {
               serviceName: bookingState.serviceName,
@@ -245,6 +292,10 @@ export default function Widget() {
             customerEmail: null,
             customerPhone: null,
             collectingInfo: null,
+            productId: null,
+            productName: null,
+            quantity: 1,
+            orderMode: false,
           });
           
           setLoading(false);
@@ -329,8 +380,25 @@ export default function Widget() {
   }
 
   async function handleServiceSelect(serviceId: string, serviceName: string) {
-    setBookingState(prev => ({ ...prev, serviceId, serviceName }));
+    setBookingState(prev => ({ ...prev, serviceId, serviceName, orderMode: false }));
     await sendMessage(`I'd like to book ${serviceName}`);
+  }
+
+  async function handleProductSelect(productId: string, productName: string) {
+    setBookingState(prev => ({ 
+      ...prev, 
+      productId, 
+      productName, 
+      orderMode: true,
+      collectingInfo: 'name' 
+    }));
+    
+    const botMessage: Message = {
+      role: "assistant",
+      content: `Great choice! You've selected ${productName}. What's your name so I can process your order?`,
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, botMessage]);
   }
 
   async function handleDateSelect(date: Date) {
@@ -355,7 +423,18 @@ export default function Widget() {
     } else if (value === "view_services") {
       await sendMessage("What services do you offer?");
     } else if (value === "view_products") {
-      await sendMessage("What products do you have?");
+      // Show products directly
+      if (products.length > 0) {
+        const botMessage: Message = {
+          role: "assistant",
+          content: "Here are our available products:",
+          timestamp: new Date(),
+          showProducts: true,
+        };
+        setMessages(prev => [...prev, botMessage]);
+      } else {
+        await sendMessage("What products do you have?");
+      }
     } else if (value === "view_prices") {
       await sendMessage("What are your prices?");
     } else if (value === "contact") {
@@ -507,6 +586,18 @@ export default function Widget() {
                     </div>
                   )}
 
+                  {msg.showProducts && products.length > 0 && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%]">
+                        <ProductSelector
+                          products={products}
+                          onSelect={handleProductSelect}
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {msg.showDatePicker && (
                     <div className="flex justify-start">
                       <div className="max-w-[80%]">
@@ -536,6 +627,14 @@ export default function Widget() {
                     <div className="flex justify-start">
                       <div className="max-w-[80%]">
                         <BookingConfirmation {...msg.bookingConfirmation} />
+                      </div>
+                    </div>
+                  )}
+
+                  {msg.orderConfirmation && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%]">
+                        <OrderConfirmation {...msg.orderConfirmation} />
                       </div>
                     </div>
                   )}
