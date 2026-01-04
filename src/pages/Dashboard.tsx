@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { MessageCircle, Calendar, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { FloatingBackground } from "@/components/FloatingBackground";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -64,8 +65,9 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/20">
-      <main id="main-content" className="container mx-auto px-4 py-6 sm:py-8 lg:py-12">
+    <div className="relative min-h-screen bg-gradient-to-br from-background via-background to-accent/20">
+      <FloatingBackground variant="default" />
+      <main id="main-content" className="relative z-10 container mx-auto px-4 py-6 sm:py-8 lg:py-12">
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 sm:mb-10 animate-fade-in">
           <div>
