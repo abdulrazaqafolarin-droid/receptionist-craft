@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +8,7 @@ import { Clock, Plus, Trash2, Calendar, AlertCircle, Zap } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FloatingBackground } from "@/components/FloatingBackground";
 
 type AvailabilityRule = {
   id?: string;
@@ -233,9 +233,9 @@ export default function Availability() {
   }
 
   return (
-    <>
-      <Navbar />
-      <div className="container mx-auto p-4 lg:p-8 max-w-6xl">
+    <div className="relative min-h-screen">
+      <FloatingBackground variant="minimal" />
+      <div className="relative z-10 container mx-auto p-4 lg:p-8 max-w-6xl">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center">
@@ -492,6 +492,6 @@ export default function Availability() {
           </>
         )}
       </div>
-    </>
+    </div>
   );
 }

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { AppointmentCalendar } from "@/components/appointments/AppointmentCalendar";
 import { AppointmentModal } from "@/components/appointments/AppointmentModal";
@@ -12,6 +11,7 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingState } from "@/components/LoadingState";
 import { Badge } from "@/components/ui/badge";
+import { FloatingBackground } from "@/components/FloatingBackground";
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -184,9 +184,9 @@ export default function Appointments() {
   }
 
   return (
-    <>
-      <Navbar />
-      <div className="container mx-auto p-4 lg:p-8 max-w-7xl">
+    <div className="relative min-h-screen">
+      <FloatingBackground variant="minimal" />
+      <div className="relative z-10 container mx-auto p-4 lg:p-8 max-w-7xl">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
           <div>
@@ -301,6 +301,6 @@ export default function Appointments() {
           appointment={editingAppointment}
         />
       </div>
-    </>
+    </div>
   );
 }

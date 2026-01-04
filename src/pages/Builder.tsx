@@ -6,6 +6,7 @@ import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
 import { FAQManager } from "@/components/FAQManager";
 import { WidgetEmbedCode } from "@/components/WidgetEmbedCode";
 import { useToast } from "@/hooks/use-toast";
+import { FloatingBackground } from "@/components/FloatingBackground";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -173,36 +174,13 @@ export default function BuilderPage() {
     }
   }
 
-  // Helper: fetch chat history for given receptionist and current user (if available)
+  // ISOLATED PREVIEW: Don't load live chat messages - use local preview session only
+  // This ensures the preview doesn't show conversations from the live widget
   async function loadMessages(id: string) {
+    // For builder preview, we start with empty messages to keep it isolated
+    // The preview should simulate a fresh conversation, not show production data
+    setMessages([]);
     setError(null);
-    try {
-      const query = supabase
-        .from("chat_messages")
-        .select("id, sender, message, created_at")
-        .eq("receptionist_id", id)
-        .order("created_at", { ascending: true })
-        .limit(200);
-
-      // If you use row-level security and want only messages for the current user, include user filter:
-      if (currentUserId) {
-        query.eq("user_id", currentUserId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      
-      // Type-safe mapping to ensure sender is correctly typed
-      setMessages((data || []).map((m) => ({
-        id: m.id,
-        sender: (m.sender === "bot" || m.sender === "user") ? m.sender : "user",
-        message: m.message,
-        created_at: m.created_at,
-      })));
-    } catch (err: any) {
-      console.error("loadMessages error", err);
-      setError(err.message || String(err));
-    }
   }
 
   // Save or update receptionist
@@ -694,8 +672,9 @@ export default function BuilderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="relative min-h-screen bg-background p-6">
+      <FloatingBackground variant="minimal" />
+      <div className="relative z-10 max-w-7xl mx-auto">
         {/* Modern Header */}
         <header className="mb-8 animate-fade-in">
           <div className="flex items-center gap-3 mb-2">

@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { FloatingBackground } from "@/components/FloatingBackground";
 
 interface Conversation {
   id: string;
@@ -144,8 +145,9 @@ export default function Conversations() {
   const hasActiveFilters = searchTerm || startDate || endDate;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
+    <div className="relative min-h-screen bg-background">
+      <FloatingBackground variant="minimal" />
+      <div className="relative z-10 container mx-auto px-4 py-8 max-w-5xl">
         <Card className="border-2 border-border/50 shadow-xl">
           <div className="p-6 lg:p-8">
             {/* Header */}

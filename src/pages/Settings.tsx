@@ -1,4 +1,3 @@
-import { Navbar } from "@/components/Navbar";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +12,7 @@ import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "next-themes";
+import { FloatingBackground } from "@/components/FloatingBackground";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -116,10 +116,9 @@ export default function Settings() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
+    <div className="relative min-h-screen bg-background">
+      <FloatingBackground variant="minimal" />
+      <div className="relative z-10 container mx-auto px-4 py-8 max-w-5xl">
         <Button variant="ghost" onClick={() => navigate("/dashboard")} className="mb-6 hover:bg-primary/5">
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
         </Button>

@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { Navbar } from "@/components/Navbar";
 import { FAQManager } from "@/components/FAQManager";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/EmptyState";
 import { HelpCircle } from "lucide-react";
+import { FloatingBackground } from "@/components/FloatingBackground";
 
 export default function FAQManagement() {
   const [receptionists, setReceptionists] = useState<any[]>([]);
@@ -30,9 +30,9 @@ export default function FAQManagement() {
   };
 
   return (
-    <>
-      <Navbar />
-      <div className="container mx-auto p-6 max-w-5xl">
+    <div className="relative min-h-screen">
+      <FloatingBackground variant="minimal" />
+      <div className="relative z-10 container mx-auto p-6 max-w-5xl">
         <div className="mb-6">
           <h1 className="text-3xl font-bold mb-2">FAQ Management</h1>
           <p className="text-muted-foreground">
@@ -73,6 +73,6 @@ export default function FAQManagement() {
           />
         )}
       </div>
-    </>
+    </div>
   );
 }

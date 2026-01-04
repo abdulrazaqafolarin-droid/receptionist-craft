@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, RefreshCw, Package, Clock, Sparkles } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Package, Clock, Sparkles, ShoppingBag, DollarSign, Edit2, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SERVICE_TEMPLATES } from "@/data/serviceTemplates";
 import { ServiceTemplateCard } from "@/components/services/ServiceTemplateCard";
+import { FloatingBackground } from "@/components/FloatingBackground";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-interface Service {
+interface ServiceOrProduct {
   id: string;
   name: string;
   description: string | null;
@@ -30,10 +31,11 @@ interface Service {
   buffer_after_minutes: number;
   active: boolean;
   receptionist_id: string | null;
+  price: number | null;
 }
 
 export default function Services() {
-  const [services, setServices] = useState<Service[]>([]);
+  const [items, setItems] = useState<ServiceOrProduct[]>([]);
   const [receptionists, setReceptionists] = useState<any[]>([]);
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -43,16 +45,24 @@ export default function Services() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<Service | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<ServiceOrProduct | null>(null);
+  const [activeTab, setActiveTab] = useState<'services' | 'products'>('services');
+  const [editingItem, setEditingItem] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<ServiceOrProduct>>({});
   const { toast } = useToast();
 
-  const [newService, setNewService] = useState({
+  const [newItem, setNewItem] = useState({
     name: "",
     description: "",
     duration_minutes: 30,
     buffer_before_minutes: 5,
     buffer_after_minutes: 5,
+    price: 0,
   });
+
+  // Separate services and products
+  const services = items.filter(item => item.duration_minutes > 0);
+  const products = items.filter(item => item.duration_minutes === 0);
 
   useEffect(() => {
     loadReceptionists();
@@ -60,7 +70,7 @@ export default function Services() {
 
   useEffect(() => {
     if (selectedReceptionist) {
-      loadServices();
+      loadItems();
     }
   }, [selectedReceptionist]);
 
@@ -84,7 +94,7 @@ export default function Services() {
     }
   }
 
-  async function loadServices() {
+  async function loadItems() {
     if (!selectedReceptionist) return;
     
     setLoading(true);
@@ -96,23 +106,23 @@ export default function Services() {
         .order("name");
 
       if (error) throw error;
-      setServices(data || []);
+      setItems(data || []);
     } catch (err) {
-      console.error("loadServices error", err);
-      toast({ title: "Error", description: "Failed to load services", variant: "destructive" });
+      console.error("loadItems error", err);
+      toast({ title: "Error", description: "Failed to load items", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }
 
-  async function createService() {
+  async function createItem() {
     if (!selectedReceptionist) {
       toast({ title: "Error", description: "Please select a receptionist first", variant: "destructive" });
       return;
     }
     
-    if (!newService.name.trim()) {
-      toast({ title: "Error", description: "Service name is required", variant: "destructive" });
+    if (!newItem.name.trim()) {
+      toast({ title: "Error", description: `${activeTab === 'services' ? 'Service' : 'Product'} name is required`, variant: "destructive" });
       return;
     }
 
@@ -124,51 +134,77 @@ export default function Services() {
       const { error } = await supabase.from("services").insert({
         user_id: user.id,
         receptionist_id: selectedReceptionist,
-        name: newService.name.trim(),
-        description: newService.description.trim() || null,
-        duration_minutes: newService.duration_minutes,
-        buffer_before_minutes: newService.buffer_before_minutes,
-        buffer_after_minutes: newService.buffer_after_minutes,
+        name: newItem.name.trim(),
+        description: newItem.description.trim() || null,
+        duration_minutes: activeTab === 'services' ? newItem.duration_minutes : 0,
+        buffer_before_minutes: activeTab === 'services' ? newItem.buffer_before_minutes : 0,
+        buffer_after_minutes: activeTab === 'services' ? newItem.buffer_after_minutes : 0,
+        price: newItem.price || null,
         active: true,
       });
 
       if (error) throw error;
 
-      toast({ title: "Success", description: "Service created successfully" });
-      setNewService({
+      toast({ title: "Success", description: `${activeTab === 'services' ? 'Service' : 'Product'} created successfully` });
+      setNewItem({
         name: "",
         description: "",
         duration_minutes: 30,
         buffer_before_minutes: 5,
         buffer_after_minutes: 5,
+        price: 0,
       });
-      loadServices();
+      loadItems();
     } catch (err: any) {
-      console.error("createService error", err);
-      toast({ title: "Error", description: err.message || "Failed to create service", variant: "destructive" });
+      console.error("createItem error", err);
+      toast({ title: "Error", description: err.message || "Failed to create item", variant: "destructive" });
     } finally {
       setCreating(false);
     }
   }
 
-  async function deleteService(service: Service) {
-    setDeleting(service.id);
+  async function updateItem(id: string) {
     try {
-      const { error } = await supabase.from("services").delete().eq("id", service.id);
+      const { error } = await supabase
+        .from("services")
+        .update({
+          name: editForm.name,
+          description: editForm.description,
+          duration_minutes: editForm.duration_minutes,
+          price: editForm.price,
+        })
+        .eq("id", id);
+
       if (error) throw error;
 
-      toast({ title: "Success", description: "Service deleted" });
-      loadServices();
+      toast({ title: "Success", description: "Item updated successfully" });
+      setEditingItem(null);
+      setEditForm({});
+      loadItems();
     } catch (err: any) {
-      console.error("deleteService error", err);
-      toast({ title: "Error", description: err.message || "Failed to delete service", variant: "destructive" });
+      console.error("updateItem error", err);
+      toast({ title: "Error", description: err.message || "Failed to update item", variant: "destructive" });
+    }
+  }
+
+  async function deleteItem(item: ServiceOrProduct) {
+    setDeleting(item.id);
+    try {
+      const { error } = await supabase.from("services").delete().eq("id", item.id);
+      if (error) throw error;
+
+      toast({ title: "Success", description: `${item.duration_minutes > 0 ? 'Service' : 'Product'} deleted` });
+      loadItems();
+    } catch (err: any) {
+      console.error("deleteItem error", err);
+      toast({ title: "Error", description: err.message || "Failed to delete item", variant: "destructive" });
     } finally {
       setDeleting(null);
       setDeleteConfirm(null);
     }
   }
 
-  async function toggleServiceActive(id: string, currentActive: boolean) {
+  async function toggleItemActive(id: string, currentActive: boolean) {
     try {
       const { error } = await supabase
         .from("services")
@@ -177,11 +213,11 @@ export default function Services() {
 
       if (error) throw error;
 
-      toast({ title: "Success", description: `Service ${!currentActive ? "activated" : "deactivated"}` });
-      loadServices();
+      toast({ title: "Success", description: `Item ${!currentActive ? "activated" : "deactivated"}` });
+      loadItems();
     } catch (err: any) {
-      console.error("toggleServiceActive error", err);
-      toast({ title: "Error", description: err.message || "Failed to update service", variant: "destructive" });
+      console.error("toggleItemActive error", err);
+      toast({ title: "Error", description: err.message || "Failed to update item", variant: "destructive" });
     }
   }
 
@@ -218,7 +254,7 @@ export default function Services() {
         description: `Successfully imported ${template.services.length} services from ${template.name}` 
       });
       
-      loadServices();
+      loadItems();
       setShowImportDialog(false);
       setSelectedTemplate(null);
     } catch (err: any) {
@@ -233,10 +269,145 @@ export default function Services() {
     }
   };
 
+  const startEditing = (item: ServiceOrProduct) => {
+    setEditingItem(item.id);
+    setEditForm({
+      name: item.name,
+      description: item.description || "",
+      duration_minutes: item.duration_minutes,
+      price: item.price || 0,
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditingItem(null);
+    setEditForm({});
+  };
+
+  const renderItemCard = (item: ServiceOrProduct, isService: boolean) => {
+    const isEditing = editingItem === item.id;
+
+    return (
+      <Card key={item.id} className="border-2 border-border/50 hover:border-primary/20 hover:shadow-lg transition-all">
+        <CardContent className="p-6">
+          {isEditing ? (
+            <div className="space-y-4">
+              <div>
+                <Label>Name</Label>
+                <Input
+                  value={editForm.name || ""}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="h-10"
+                />
+              </div>
+              <div>
+                <Label>Description</Label>
+                <Input
+                  value={editForm.description || ""}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className="h-10"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {isService && (
+                  <div>
+                    <Label>Duration (minutes)</Label>
+                    <Input
+                      type="number"
+                      value={editForm.duration_minutes || 30}
+                      onChange={(e) => setEditForm({ ...editForm, duration_minutes: parseInt(e.target.value) || 30 })}
+                      className="h-10"
+                    />
+                  </div>
+                )}
+                <div>
+                  <Label>Price ($)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editForm.price || 0}
+                    onChange={(e) => setEditForm({ ...editForm, price: parseFloat(e.target.value) || 0 })}
+                    className="h-10"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={() => updateItem(item.id)} size="sm" className="h-9">
+                  <Check className="h-4 w-4 mr-1" /> Save
+                </Button>
+                <Button onClick={cancelEditing} variant="outline" size="sm" className="h-9">
+                  <X className="h-4 w-4 mr-1" /> Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-3 mb-2">
+                  <h3 className="font-semibold text-lg">{item.name}</h3>
+                  <Badge variant={item.active ? "default" : "secondary"}>
+                    {item.active ? "Active" : "Inactive"}
+                  </Badge>
+                  {item.price && item.price > 0 && (
+                    <Badge variant="outline" className="flex items-center gap-1">
+                      <DollarSign className="h-3 w-3" />
+                      {item.price.toFixed(2)}
+                    </Badge>
+                  )}
+                </div>
+                {item.description && (
+                  <p className="text-sm text-muted-foreground mb-2">{item.description}</p>
+                )}
+                {isService && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>Duration: {item.duration_minutes}min</span>
+                    <span className="text-border">•</span>
+                    <span>Buffer: {item.buffer_before_minutes}min / {item.buffer_after_minutes}min</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => startEditing(item)}
+                  className="h-10 w-10"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => toggleItemActive(item.id, item.active)}
+                  className="h-10"
+                >
+                  {item.active ? "Deactivate" : "Activate"}
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => setDeleteConfirm(item)}
+                  disabled={deleting === item.id}
+                  className="h-10 w-10"
+                >
+                  {deleting === item.id ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
-    <>
-      <Navbar />
-      <div className="container mx-auto p-4 lg:p-8 max-w-6xl">
+    <div className="relative min-h-screen">
+      <FloatingBackground variant="minimal" />
+      <div className="relative z-10 container mx-auto p-4 lg:p-8 max-w-6xl">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
           <div className="flex items-center gap-4">
@@ -244,11 +415,11 @@ export default function Services() {
               <Package className="h-7 w-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl lg:text-3xl font-bold">Services Management</h1>
-              <p className="text-muted-foreground">Define services that customers can book via AI chat</p>
+              <h1 className="text-2xl lg:text-3xl font-bold">Services & Products</h1>
+              <p className="text-muted-foreground">Manage services and products for your AI receptionist</p>
             </div>
           </div>
-          <Button onClick={() => loadServices()} disabled={loading} variant="outline" className="h-11">
+          <Button onClick={() => loadItems()} disabled={loading} variant="outline" className="h-11">
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
@@ -259,7 +430,7 @@ export default function Services() {
           <Card className="mb-6 border-2 border-border/50">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg">Select Receptionist</CardTitle>
-              <CardDescription>Manage services for a specific receptionist</CardDescription>
+              <CardDescription>Manage services and products for a specific receptionist</CardDescription>
             </CardHeader>
             <CardContent>
               <select 
@@ -284,7 +455,7 @@ export default function Services() {
                 <Package className="h-10 w-10 text-muted-foreground" />
               </div>
               <h3 className="text-xl font-semibold mb-2">Create a receptionist first</h3>
-              <p className="text-muted-foreground mb-6">You need to create a receptionist before managing services.</p>
+              <p className="text-muted-foreground mb-6">You need to create a receptionist before managing services and products.</p>
               <Button onClick={() => window.location.href = '/onboarding'}>
                 Create Receptionist
               </Button>
@@ -294,183 +465,221 @@ export default function Services() {
 
         {selectedReceptionist && (
           <>
-            {/* Template Import Section */}
-            <Card className="mb-6 border-2 border-border/50">
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-secondary/10 flex items-center justify-center">
-                      <Sparkles className="h-5 w-5 text-secondary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">Import Service Templates</CardTitle>
-                      <CardDescription>
-                        Quickly add pre-built service packages for your business
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setShowTemplates(!showTemplates)}
-                    className="h-11"
-                  >
-                    {showTemplates ? "Hide Templates" : "Show Templates"}
-                  </Button>
-                </div>
-              </CardHeader>
-              {showTemplates && (
-                <CardContent>
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Object.values(SERVICE_TEMPLATES).map((template) => (
-                      <ServiceTemplateCard
-                        key={template.key}
-                        template={template}
-                        onImport={() => handleImportTemplate(template.key)}
-                        disabled={importing}
-                      />
-                    ))}
-                  </div>
-                </CardContent>
-              )}
-            </Card>
+            {/* Tabs for Services / Products */}
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'services' | 'products')} className="mb-6">
+              <TabsList className="grid w-full grid-cols-2 h-12">
+                <TabsTrigger value="services" className="flex items-center gap-2 h-10">
+                  <Clock className="h-4 w-4" />
+                  Services ({services.length})
+                </TabsTrigger>
+                <TabsTrigger value="products" className="flex items-center gap-2 h-10">
+                  <ShoppingBag className="h-4 w-4" />
+                  Products ({products.length})
+                </TabsTrigger>
+              </TabsList>
 
-            {/* Create Service Form */}
-            <Card className="mb-6 border-2 border-border/50">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Plus className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">Create New Service</CardTitle>
-                    <CardDescription>Add a service that your AI receptionist can book</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="grid sm:grid-cols-2 gap-5">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Service Name *</Label>
-                    <Input
-                      id="name"
-                      placeholder="e.g., Haircut, Massage, Consultation"
-                      value={newService.name}
-                      onChange={(e) => setNewService({ ...newService, name: e.target.value })}
-                      className="h-11"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="duration">Duration (minutes)</Label>
-                    <Input
-                      id="duration"
-                      type="number"
-                      value={newService.duration_minutes}
-                      onChange={(e) => setNewService({ ...newService, duration_minutes: parseInt(e.target.value) || 30 })}
-                      className="h-11"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description (Optional)</Label>
-                  <Input
-                    id="description"
-                    placeholder="Brief description of the service"
-                    value={newService.description}
-                    onChange={(e) => setNewService({ ...newService, description: e.target.value })}
-                    className="h-11"
-                  />
-                </div>
-
-                <div className="grid sm:grid-cols-2 gap-5">
-                  <div className="space-y-2">
-                    <Label htmlFor="buffer_before">Buffer Before (minutes)</Label>
-                    <Input
-                      id="buffer_before"
-                      type="number"
-                      value={newService.buffer_before_minutes}
-                      onChange={(e) => setNewService({ ...newService, buffer_before_minutes: parseInt(e.target.value) || 0 })}
-                      className="h-11"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="buffer_after">Buffer After (minutes)</Label>
-                    <Input
-                      id="buffer_after"
-                      type="number"
-                      value={newService.buffer_after_minutes}
-                      onChange={(e) => setNewService({ ...newService, buffer_after_minutes: parseInt(e.target.value) || 0 })}
-                      className="h-11"
-                    />
-                  </div>
-                </div>
-
-                <Button onClick={createService} disabled={creating} className="h-11">
-                  <Plus className="mr-2 h-4 w-4" />
-                  {creating ? "Creating..." : "Create Service"}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Services List */}
-            <div className="space-y-4">
-              {services.length === 0 ? (
+              <TabsContent value="services" className="space-y-6 mt-6">
+                {/* Template Import Section */}
                 <Card className="border-2 border-border/50">
-                  <CardContent className="py-16 text-center">
-                    <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
-                      <Package className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <p className="text-muted-foreground">No services yet. Create your first service above.</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                services.map((service) => (
-                  <Card key={service.id} className="border-2 border-border/50 hover:border-primary/20 hover:shadow-lg transition-all">
-                    <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6">
-                      <div className="flex-1">
-                        <div className="flex flex-wrap items-center gap-3 mb-2">
-                          <h3 className="font-semibold text-lg">{service.name}</h3>
-                          <Badge variant={service.active ? "default" : "secondary"}>
-                            {service.active ? "Active" : "Inactive"}
-                          </Badge>
+                  <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-secondary/10 flex items-center justify-center">
+                          <Sparkles className="h-5 w-5 text-secondary" />
                         </div>
-                        {service.description && (
-                          <p className="text-sm text-muted-foreground mb-2">{service.description}</p>
-                        )}
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Clock className="h-4 w-4" />
-                          <span>Duration: {service.duration_minutes}min</span>
-                          <span className="text-border">•</span>
-                          <span>Buffer: {service.buffer_before_minutes}min / {service.buffer_after_minutes}min</span>
+                        <div>
+                          <CardTitle className="text-lg">Import Service Templates</CardTitle>
+                          <CardDescription>
+                            Quickly add pre-built service packages
+                          </CardDescription>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => toggleServiceActive(service.id, service.active)}
-                          className="h-10"
-                        >
-                          {service.active ? "Deactivate" : "Activate"}
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={() => setDeleteConfirm(service)}
-                          disabled={deleting === service.id}
-                          className="h-10 w-10"
-                        >
-                          {deleting === service.id ? (
-                            <RefreshCw className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setShowTemplates(!showTemplates)}
+                        className="h-11"
+                      >
+                        {showTemplates ? "Hide Templates" : "Show Templates"}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  {showTemplates && (
+                    <CardContent>
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {Object.values(SERVICE_TEMPLATES).map((template) => (
+                          <ServiceTemplateCard
+                            key={template.key}
+                            template={template}
+                            onImport={() => handleImportTemplate(template.key)}
+                            disabled={importing}
+                          />
+                        ))}
                       </div>
                     </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
+                  )}
+                </Card>
+
+                {/* Create Service Form */}
+                <Card className="border-2 border-border/50">
+                  <CardHeader>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                        <Plus className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg">Create New Service</CardTitle>
+                        <CardDescription>Add a service that customers can book</CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    <div className="grid sm:grid-cols-2 gap-5">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Service Name *</Label>
+                        <Input
+                          id="name"
+                          placeholder="e.g., Haircut, Massage, Consultation"
+                          value={newItem.name}
+                          onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                          className="h-11"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="duration">Duration (minutes)</Label>
+                        <Input
+                          id="duration"
+                          type="number"
+                          value={newItem.duration_minutes}
+                          onChange={(e) => setNewItem({ ...newItem, duration_minutes: parseInt(e.target.value) || 30 })}
+                          className="h-11"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-5">
+                      <div className="space-y-2">
+                        <Label htmlFor="description">Description (Optional)</Label>
+                        <Input
+                          id="description"
+                          placeholder="Brief description of the service"
+                          value={newItem.description}
+                          onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                          className="h-11"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="price">Price ($)</Label>
+                        <Input
+                          id="price"
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={newItem.price || ""}
+                          onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) || 0 })}
+                          className="h-11"
+                        />
+                      </div>
+                    </div>
+
+                    <Button onClick={createItem} disabled={creating} className="h-11">
+                      <Plus className="mr-2 h-4 w-4" />
+                      {creating ? "Creating..." : "Create Service"}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Services List */}
+                <div className="space-y-4">
+                  {services.length === 0 ? (
+                    <Card className="border-2 border-border/50">
+                      <CardContent className="py-16 text-center">
+                        <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                          <Clock className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <p className="text-muted-foreground">No services yet. Create your first service above.</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    services.map((service) => renderItemCard(service, true))
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="products" className="space-y-6 mt-6">
+                {/* Create Product Form */}
+                <Card className="border-2 border-border/50">
+                  <CardHeader>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                        <ShoppingBag className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg">Create New Product</CardTitle>
+                        <CardDescription>Add a product that customers can order</CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    <div className="grid sm:grid-cols-2 gap-5">
+                      <div className="space-y-2">
+                        <Label htmlFor="product-name">Product Name *</Label>
+                        <Input
+                          id="product-name"
+                          placeholder="e.g., Shampoo, Gift Card, Supplement"
+                          value={newItem.name}
+                          onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                          className="h-11"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="product-price">Price ($) *</Label>
+                        <Input
+                          id="product-price"
+                          type="number"
+                          step="0.01"
+                          placeholder="29.99"
+                          value={newItem.price || ""}
+                          onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) || 0 })}
+                          className="h-11"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="product-description">Description (Optional)</Label>
+                      <Input
+                        id="product-description"
+                        placeholder="Brief description of the product"
+                        value={newItem.description}
+                        onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                        className="h-11"
+                      />
+                    </div>
+
+                    <Button onClick={createItem} disabled={creating} className="h-11">
+                      <Plus className="mr-2 h-4 w-4" />
+                      {creating ? "Creating..." : "Create Product"}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Products List */}
+                <div className="space-y-4">
+                  {products.length === 0 ? (
+                    <Card className="border-2 border-border/50">
+                      <CardContent className="py-16 text-center">
+                        <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                          <ShoppingBag className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <p className="text-muted-foreground">No products yet. Create your first product above.</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    products.map((product) => renderItemCard(product, false))
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
 
             {/* Import Confirmation Dialog */}
             <AlertDialog open={showImportDialog} onOpenChange={setShowImportDialog}>
@@ -481,7 +690,7 @@ export default function Services() {
                     {selectedTemplate && (
                       <>
                         This will import <strong>{SERVICE_TEMPLATES[selectedTemplate].services.length} services</strong> from the{" "}
-                        <strong>{SERVICE_TEMPLATES[selectedTemplate].name}</strong> template to your receptionist.
+                        <strong>{SERVICE_TEMPLATES[selectedTemplate].name}</strong> template.
                         <div className="mt-4 p-4 bg-muted/50 rounded-xl max-h-60 overflow-y-auto space-y-2">
                           {SERVICE_TEMPLATES[selectedTemplate].services.map((service, idx) => (
                             <div key={idx} className="text-sm">
@@ -504,24 +713,25 @@ export default function Services() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+
             {/* Delete Confirmation Dialog */}
             <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
               <AlertDialogContent className="border-2">
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Service?</AlertDialogTitle>
+                  <AlertDialogTitle>Delete {deleteConfirm?.duration_minutes ? 'Service' : 'Product'}?</AlertDialogTitle>
                   <AlertDialogDescription>
                     Are you sure you want to delete <strong>{deleteConfirm?.name}</strong>?
-                    This action cannot be undone. Existing appointments using this service will not be affected.
+                    This action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel disabled={!!deleting}>Cancel</AlertDialogCancel>
                   <AlertDialogAction 
-                    onClick={() => deleteConfirm && deleteService(deleteConfirm)} 
+                    onClick={() => deleteConfirm && deleteItem(deleteConfirm)} 
                     disabled={!!deleting}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    {deleting ? "Deleting..." : "Delete Service"}
+                    {deleting ? "Deleting..." : "Delete"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -529,6 +739,6 @@ export default function Services() {
           </>
         )}
       </div>
-    </>
+    </div>
   );
 }
