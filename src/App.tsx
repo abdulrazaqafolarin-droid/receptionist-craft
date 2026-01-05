@@ -29,6 +29,7 @@ import Diagnostics from "./pages/Diagnostics";
 import Notifications from "./pages/Notifications";
 import RealtimeLogs from "./pages/RealtimeLogs";
 import Services from "./pages/Services";
+import Orders from "./pages/Orders";
 import Availability from "./pages/Availability";
 import Widget from "./pages/Widget";
 import ConfirmAppointment from "./pages/ConfirmAppointment";
@@ -124,6 +125,7 @@ const App = () => {
                               <Route path="/conversations" element={<Conversations />} />
                               <Route path="/appointments" element={<Appointments />} />
                               <Route path="/services" element={<Services />} />
+                              <Route path="/orders" element={<Orders />} />
                               <Route path="/availability" element={<Availability />} />
                               <Route path="/faqs" element={<FAQManagement />} />
                               <Route path="/analytics" element={<Analytics />} />
