@@ -5,11 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, RefreshCw, Package, Clock, Sparkles, ShoppingBag, DollarSign, Edit2, Check, X } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Package, Clock, ShoppingBag, DollarSign, Edit2, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SERVICE_TEMPLATES } from "@/data/serviceTemplates";
-import { ServiceTemplateCard } from "@/components/services/ServiceTemplateCard";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import {
   AlertDialog,
@@ -40,11 +38,7 @@ export default function Services() {
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
-  const [showImportDialog, setShowImportDialog] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<ServiceOrProduct | null>(null);
   const [activeTab, setActiveTab] = useState<'services' | 'products'>('services');
   const [editingItem, setEditingItem] = useState<string | null>(null);
@@ -221,54 +215,6 @@ export default function Services() {
     }
   }
 
-  const handleImportTemplate = (templateKey: string) => {
-    setSelectedTemplate(templateKey);
-    setShowImportDialog(true);
-  };
-
-  const confirmImportTemplate = async () => {
-    if (!selectedTemplate || !selectedReceptionist) return;
-
-    setImporting(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const template = SERVICE_TEMPLATES[selectedTemplate];
-      const servicesToInsert = template.services.map(service => ({
-        user_id: user.id,
-        receptionist_id: selectedReceptionist,
-        name: service.name,
-        description: service.description,
-        duration_minutes: service.duration_minutes,
-        buffer_before_minutes: 5,
-        buffer_after_minutes: 5,
-        active: true,
-      }));
-
-      const { error } = await supabase.from("services").insert(servicesToInsert);
-      if (error) throw error;
-
-      toast({ 
-        title: "Success", 
-        description: `Successfully imported ${template.services.length} services from ${template.name}` 
-      });
-      
-      loadItems();
-      setShowImportDialog(false);
-      setSelectedTemplate(null);
-    } catch (err: any) {
-      console.error("importTemplate error", err);
-      toast({ 
-        title: "Error", 
-        description: err.message || "Failed to import services", 
-        variant: "destructive" 
-      });
-    } finally {
-      setImporting(false);
-    }
-  };
-
   const startEditing = (item: ServiceOrProduct) => {
     setEditingItem(item.id);
     setEditForm({
@@ -415,8 +361,8 @@ export default function Services() {
               <Package className="h-7 w-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl lg:text-3xl font-bold">Services & Products</h1>
-              <p className="text-muted-foreground">Manage services and products for your AI receptionist</p>
+              <h1 className="text-2xl lg:text-3xl font-bold">Products & Services</h1>
+              <p className="text-muted-foreground">Manage products and services for your AI receptionist</p>
             </div>
           </div>
           <Button onClick={() => loadItems()} disabled={loading} variant="outline" className="h-11">
@@ -479,46 +425,6 @@ export default function Services() {
               </TabsList>
 
               <TabsContent value="services" className="space-y-6 mt-6">
-                {/* Template Import Section */}
-                <Card className="border-2 border-border/50">
-                  <CardHeader>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-secondary/10 flex items-center justify-center">
-                          <Sparkles className="h-5 w-5 text-secondary" />
-                        </div>
-                        <div>
-                          <CardTitle className="text-lg">Import Service Templates</CardTitle>
-                          <CardDescription>
-                            Quickly add pre-built service packages
-                          </CardDescription>
-                        </div>
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setShowTemplates(!showTemplates)}
-                        className="h-11"
-                      >
-                        {showTemplates ? "Hide Templates" : "Show Templates"}
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  {showTemplates && (
-                    <CardContent>
-                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {Object.values(SERVICE_TEMPLATES).map((template) => (
-                          <ServiceTemplateCard
-                            key={template.key}
-                            template={template}
-                            onImport={() => handleImportTemplate(template.key)}
-                            disabled={importing}
-                          />
-                        ))}
-                      </div>
-                    </CardContent>
-                  )}
-                </Card>
-
                 {/* Create Service Form */}
                 <Card className="border-2 border-border/50">
                   <CardHeader>
@@ -680,39 +586,6 @@ export default function Services() {
                 </div>
               </TabsContent>
             </Tabs>
-
-            {/* Import Confirmation Dialog */}
-            <AlertDialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-              <AlertDialogContent className="border-2">
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Import Template Services?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {selectedTemplate && (
-                      <>
-                        This will import <strong>{SERVICE_TEMPLATES[selectedTemplate].services.length} services</strong> from the{" "}
-                        <strong>{SERVICE_TEMPLATES[selectedTemplate].name}</strong> template.
-                        <div className="mt-4 p-4 bg-muted/50 rounded-xl max-h-60 overflow-y-auto space-y-2">
-                          {SERVICE_TEMPLATES[selectedTemplate].services.map((service, idx) => (
-                            <div key={idx} className="text-sm">
-                              <div className="font-medium text-foreground">{service.name}</div>
-                              <div className="text-muted-foreground text-xs">
-                                {service.duration_minutes} minutes - {service.description}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={importing}>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={confirmImportTemplate} disabled={importing}>
-                    {importing ? "Importing..." : "Import Services"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
 
             {/* Delete Confirmation Dialog */}
             <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>

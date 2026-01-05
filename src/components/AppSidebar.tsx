@@ -20,7 +20,7 @@ const items = [
   { title: "Analytics", url: "/analytics", icon: BarChart },
   { title: "Conversations", url: "/conversations", icon: MessageSquare },
   { title: "Appointments", url: "/appointments", icon: Calendar },
-  { title: "Services", url: "/services", icon: Briefcase },
+  { title: "Products & Services", url: "/services", icon: Briefcase },
   { title: "Orders", url: "/orders", icon: ShoppingBag },
   { title: "Availability", url: "/availability", icon: Clock },
   { title: "FAQs", url: "/faqs", icon: MessageCircleQuestion },
