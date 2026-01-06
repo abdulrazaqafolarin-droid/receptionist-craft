@@ -10,7 +10,8 @@ import { ArrowLeft, ArrowRight, Plus, Trash2, Clock, ShoppingBag, DollarSign, Br
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Textarea } from "@/components/ui/textarea";
-import { AIServiceParser } from "@/components/onboarding/AIServiceParser";
+import { AIServicesParser } from "@/components/onboarding/AIServicesParser";
+import { AIProductsParser } from "@/components/onboarding/AIProductsParser";
 
 export default function Step2Services() {
   const { receptionist, services, addService, removeService, setStep, receptionistId, setReceptionist } = useOnboardingStore();
@@ -161,14 +162,23 @@ export default function Step2Services() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 px-4 sm:px-6">
-        {/* AI Quick Add */}
-        <AIServiceParser
-          businessType={receptionist.business_type}
-          onAddItems={(items) => {
-            items.forEach((item) => addService(item));
-          }}
-          disabled={loading}
-        />
+        {/* AI Quick Add - Two parsers side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <AIServicesParser
+            businessType={receptionist.business_type}
+            onAddItems={(items) => {
+              items.forEach((item) => addService(item as any));
+            }}
+            disabled={loading}
+          />
+          <AIProductsParser
+            businessType={receptionist.business_type}
+            onAddItems={(items) => {
+              items.forEach((item) => addService(item as any));
+            }}
+            disabled={loading}
+          />
+        </div>
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">

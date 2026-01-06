@@ -184,6 +184,7 @@ function analyzeMessage(message: string, historyLength: number): MessageAnalysis
 // ─────────────────────────────────────────────────────────────────────────────
 interface ConversationContext {
   serviceMentioned: string | null;
+  serviceId: string | null;
   dateMentioned: string | null;
   timeMentioned: string | null;
   customerName: string | null;
@@ -198,31 +199,65 @@ interface ConversationContext {
   topicsDiscussed: string[];
   // Product ordering context
   productMentioned: string | null;
+  productId: string | null;
   quantity: number | null;
   orderConfirmed: boolean;
   bookingConfirmed: boolean;
   askedIfNeedMoreHelp: boolean;
+  // UI state tracking - prevent button repetition
+  servicesShownInLastMessage: boolean;
+  productsShownInLastMessage: boolean;
+  // Multi-product order tracking
+  selectedProducts: Array<{ productId: string; productName: string; quantity: number; price?: number }>;
 }
 
 function extractContextFromHistory(history: any[]): ConversationContext {
   const context: ConversationContext = {
-    serviceMentioned: null, dateMentioned: null, timeMentioned: null,
+    serviceMentioned: null, serviceId: null, dateMentioned: null, timeMentioned: null,
     customerName: null, customerPhone: null, customerEmail: null,
     currentTopic: null, pendingAction: null,
     emotionalState: 'neutral', urgencyLevel: 'normal',
     conversationPhase: history.length === 0 ? 'greeting' : 'discovery',
     correctionsMade: [], topicsDiscussed: [],
-    productMentioned: null, quantity: null,
-    orderConfirmed: false, bookingConfirmed: false, askedIfNeedMoreHelp: false
+    productMentioned: null, productId: null, quantity: null,
+    orderConfirmed: false, bookingConfirmed: false, askedIfNeedMoreHelp: false,
+    servicesShownInLastMessage: false, productsShownInLastMessage: false,
+    selectedProducts: []
   };
   
   if (history.length === 0) return context;
   
   const fullText = history.map(h => h.message).join(' ');
   const botMessages = history.filter(h => h.sender === 'bot').map(h => h.message.toLowerCase()).join(' ');
+  const lastBotMessage = history.filter(h => h.sender === 'bot').slice(-1)[0];
+  const lastUserMessage = history.filter(h => h.sender === 'user').slice(-1)[0];
+  
+  // Check if services/products were shown in the last bot message
+  if (lastBotMessage?.metadata) {
+    context.servicesShownInLastMessage = lastBotMessage.metadata.showServices === true;
+    context.productsShownInLastMessage = lastBotMessage.metadata.showProducts === true;
+  }
+  
+  // Check if user selected a service/product in the last message
+  if (lastUserMessage?.metadata) {
+    if (lastUserMessage.metadata.selectedServiceId) {
+      context.serviceId = lastUserMessage.metadata.selectedServiceId;
+      context.serviceMentioned = lastUserMessage.metadata.selectedServiceName || null;
+    }
+    if (lastUserMessage.metadata.selectedProductId) {
+      context.productId = lastUserMessage.metadata.selectedProductId;
+      context.productMentioned = lastUserMessage.metadata.selectedProductName || null;
+    }
+    if (lastUserMessage.metadata.selectedProducts) {
+      context.selectedProducts = lastUserMessage.metadata.selectedProducts;
+    }
+    if (lastUserMessage.metadata.quantity) {
+      context.quantity = lastUserMessage.metadata.quantity;
+    }
+  }
   
   const serviceMatch = fullText.match(/(?:need|want|book|schedule|appointment for|interested in)\s+(?:a\s+)?([a-z\s]+?)(?:\s+on|\s+at|\s+for|\.|\?|$)/i);
-  if (serviceMatch) context.serviceMentioned = serviceMatch[1].trim();
+  if (serviceMatch && !context.serviceMentioned) context.serviceMentioned = serviceMatch[1].trim();
   
   const dateMatch = fullText.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|next week|january|february|march|april|may|june|july|august|september|october|november|december|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i);
   if (dateMatch) context.dateMentioned = dateMatch[0];
@@ -241,7 +276,7 @@ function extractContextFromHistory(history: any[]): ConversationContext {
   
   // Product ordering detection
   const productMatch = fullText.match(/(?:buy|purchase|order|want|get)\s+(?:\d+\s+)?(?:a\s+)?([a-z\s]+?)(?:\s+please|\s+now|\.|\?|$)/i);
-  if (productMatch) context.productMentioned = productMatch[1].trim();
+  if (productMatch && !context.productMentioned) context.productMentioned = productMatch[1].trim();
   
   const quantityMatch = fullText.match(/(\d+)\s+(?:pieces?|items?|units?|of)/i);
   if (quantityMatch) context.quantity = parseInt(quantityMatch[1]);
@@ -274,7 +309,7 @@ function extractContextFromHistory(history: any[]): ConversationContext {
   // Determine conversation phase
   if (context.bookingConfirmed || context.orderConfirmed) {
     context.conversationPhase = context.askedIfNeedMoreHelp ? 'closing' : 'followup';
-  } else if (context.productMentioned) {
+  } else if (context.productMentioned || context.selectedProducts.length > 0) {
     context.conversationPhase = 'ordering';
   } else if (context.serviceMentioned && context.dateMentioned && context.timeMentioned) {
     context.conversationPhase = context.customerName ? 'confirmation' : 'booking';
@@ -1089,14 +1124,177 @@ serve(async (req) => {
 
     const hasBookingIntent = messageAnalysis.detectedIntent === 'book_appointment' || 
       /book|appointment|schedule|reserve/i.test(message);
+    
+    const hasOrderIntent = messageAnalysis.detectedIntent === 'order_product' ||
+      /buy|purchase|order|get|want/i.test(message);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: AUTOMATIC BOOKING CREATION
+    // Check if we have all required booking info and should auto-book
+    // ═══════════════════════════════════════════════════════════════════════
+    let bookingResult = null;
+    const hasAllBookingInfo = conversationContext.serviceId && 
+                              conversationContext.dateMentioned && 
+                              conversationContext.timeMentioned &&
+                              conversationContext.customerName &&
+                              (conversationContext.customerPhone || conversationContext.customerEmail);
+    
+    // Only auto-book if AI response indicates confirmation
+    const isBookingConfirmation = /(?:booked|confirmed|scheduled|appointment is set|all set)/i.test(reply) && 
+                                   !conversationContext.bookingConfirmed;
+    
+    if (hasAllBookingInfo && isBookingConfirmation) {
+      try {
+        console.log(`[Widget Chat] Auto-booking appointment for ${conversationContext.customerName}`);
+        
+        // Parse the date/time into ISO format
+        const startTime = parseBookingDateTime(
+          conversationContext.dateMentioned!, 
+          conversationContext.timeMentioned!
+        );
+        
+        if (startTime) {
+          const bookingPayload = {
+            receptionistId,
+            serviceId: conversationContext.serviceId,
+            startTime: startTime.toISOString(),
+            customerName: conversationContext.customerName,
+            customerEmail: conversationContext.customerEmail || null,
+            customerPhone: conversationContext.customerPhone || null,
+            bookingSource: 'ai_receptionist',
+            metadata: {
+              session_id: sessionId,
+              booked_via: 'widget_chat_auto',
+              conversation_phase: conversationContext.conversationPhase
+            }
+          };
+          
+          // Call book-appointment function
+          const bookingRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/book-appointment`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+            },
+            body: JSON.stringify(bookingPayload)
+          });
+          
+          if (bookingRes.ok) {
+            const bookingData = await bookingRes.json();
+            if (bookingData.success) {
+              bookingResult = bookingData.appointment;
+              console.log(`[Widget Chat] Appointment created: ${bookingResult.id}`);
+            }
+          }
+        }
+      } catch (bookingErr) {
+        console.error('[Widget Chat] Auto-booking failed:', bookingErr);
+        // Don't fail the response if booking fails
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: AUTOMATIC ORDER CREATION
+    // Check if we have all required order info and should auto-create order
+    // ═══════════════════════════════════════════════════════════════════════
+    let orderResult = null;
+    const hasOrderInfo = (conversationContext.selectedProducts.length > 0 || conversationContext.productId) &&
+                         conversationContext.customerName &&
+                         (conversationContext.customerPhone || conversationContext.customerEmail);
+    
+    // Only auto-create order if AI response indicates confirmation
+    const isOrderConfirmation = /(?:order confirmed|placed your order|order is set|purchase confirmed)/i.test(reply) && 
+                                 !conversationContext.orderConfirmed;
+    
+    if (hasOrderInfo && isOrderConfirmation) {
+      try {
+        console.log(`[Widget Chat] Auto-creating order for ${conversationContext.customerName}`);
+        
+        // Create order
+        const { data: order, error: orderErr } = await supabase
+          .from('orders')
+          .insert({
+            receptionist_id: receptionistId,
+            customer_name: conversationContext.customerName,
+            customer_email: conversationContext.customerEmail || null,
+            customer_phone: conversationContext.customerPhone || null,
+            status: 'pending',
+            total_amount: conversationContext.selectedProducts.reduce((sum, p) => sum + ((p.price || 0) * p.quantity), 0),
+            metadata: {
+              session_id: sessionId,
+              ordered_via: 'widget_chat_auto',
+              conversation_phase: conversationContext.conversationPhase
+            }
+          })
+          .select()
+          .single();
+        
+        if (!orderErr && order) {
+          // Create order items
+          const productsToInsert = conversationContext.selectedProducts.length > 0 
+            ? conversationContext.selectedProducts 
+            : [{ productId: conversationContext.productId, productName: conversationContext.productMentioned, quantity: conversationContext.quantity || 1 }];
+          
+          const orderItems = productsToInsert.map((p: any) => ({
+            order_id: order.id,
+            product_id: p.productId || null,
+            product_name: p.productName || conversationContext.productMentioned || 'Unknown Product',
+            quantity: p.quantity || 1,
+            unit_price: p.price || null
+          }));
+          
+          await supabase.from('order_items').insert(orderItems);
+          
+          orderResult = order;
+          console.log(`[Widget Chat] Order created: ${order.id}`);
+          
+          // Send notification to receptionist owner
+          const { data: receptionist2 } = await supabase
+            .from('receptionists')
+            .select('user_id')
+            .eq('id', receptionistId)
+            .maybeSingle();
+          
+          if (receptionist2?.user_id) {
+            await supabase.from('notifications').insert({
+              type: 'order.created',
+              title: `New Order: ${conversationContext.customerName}`,
+              body: `Order placed via AI receptionist`,
+              message: `${productsToInsert.length} item(s) ordered`,
+              receptionist_id: receptionistId,
+              user_id: receptionist2.user_id,
+              severity: 'info',
+              category: 'orders',
+              priority: 'normal',
+              metadata: {
+                order_id: order.id,
+                customer_name: conversationContext.customerName,
+                item_count: productsToInsert.length
+              }
+            });
+          }
+        }
+      } catch (orderErr) {
+        console.error('[Widget Chat] Auto-order creation failed:', orderErr);
+        // Don't fail the response if order creation fails
+      }
+    }
 
     return new Response(
       JSON.stringify({ 
         reply, 
         hasBookingIntent,
+        hasOrderIntent,
         receptionistName: receptionist.name,
         businessName: receptionist.business_name,
-        qualityScore: qualityRubric.overall_score
+        qualityScore: qualityRubric.overall_score,
+        bookingCreated: bookingResult ? true : false,
+        bookingId: bookingResult?.id || null,
+        orderCreated: orderResult ? true : false,
+        orderId: orderResult?.id || null,
+        // UI hints to prevent button repetition
+        shouldShowServices: !conversationContext.servicesShownInLastMessage && hasBookingIntent,
+        shouldShowProducts: !conversationContext.productsShownInLastMessage && hasOrderIntent
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -1108,3 +1306,62 @@ serve(async (req) => {
     );
   }
 });
+
+// Helper function to parse natural language date/time into Date object
+function parseBookingDateTime(dateStr: string, timeStr: string): Date | null {
+  try {
+    const now = new Date();
+    let targetDate = new Date(now);
+    
+    // Parse date
+    const dateLower = dateStr.toLowerCase();
+    if (dateLower === 'today') {
+      // Keep current date
+    } else if (dateLower === 'tomorrow') {
+      targetDate.setDate(targetDate.getDate() + 1);
+    } else if (dateLower === 'next week') {
+      targetDate.setDate(targetDate.getDate() + 7);
+    } else if (/monday|tuesday|wednesday|thursday|friday|saturday|sunday/i.test(dateLower)) {
+      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const targetDay = days.findIndex(d => dateLower.includes(d));
+      if (targetDay >= 0) {
+        const currentDay = now.getDay();
+        let daysUntil = targetDay - currentDay;
+        if (daysUntil <= 0) daysUntil += 7; // Next occurrence
+        targetDate.setDate(targetDate.getDate() + daysUntil);
+      }
+    } else if (/\d{1,2}\/\d{1,2}/i.test(dateStr)) {
+      const parts = dateStr.split('/');
+      targetDate.setMonth(parseInt(parts[0]) - 1);
+      targetDate.setDate(parseInt(parts[1]));
+      if (parts[2]) targetDate.setFullYear(parseInt(parts[2]));
+    }
+    
+    // Parse time
+    const timeLower = timeStr.toLowerCase();
+    let hours = 9, minutes = 0;
+    
+    if (timeLower === 'morning') {
+      hours = 9;
+    } else if (timeLower === 'afternoon') {
+      hours = 14;
+    } else if (timeLower === 'evening') {
+      hours = 18;
+    } else {
+      const timeMatch = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+      if (timeMatch) {
+        hours = parseInt(timeMatch[1]);
+        minutes = parseInt(timeMatch[2] || '0');
+        const period = timeMatch[3]?.toLowerCase();
+        if (period === 'pm' && hours < 12) hours += 12;
+        if (period === 'am' && hours === 12) hours = 0;
+      }
+    }
+    
+    targetDate.setHours(hours, minutes, 0, 0);
+    return targetDate;
+  } catch (e) {
+    console.error('Failed to parse date/time:', e);
+    return null;
+  }
+}
