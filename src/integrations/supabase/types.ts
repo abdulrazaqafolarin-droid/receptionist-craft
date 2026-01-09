@@ -1151,9 +1151,12 @@ export type Database = {
           description: string | null
           duration_minutes: number
           id: string
+          is_product: boolean | null
+          low_stock_threshold: number | null
           name: string
           price: number | null
           receptionist_id: string | null
+          stock_quantity: number | null
           user_id: string | null
         }
         Insert: {
@@ -1164,9 +1167,12 @@ export type Database = {
           description?: string | null
           duration_minutes?: number
           id?: string
+          is_product?: boolean | null
+          low_stock_threshold?: number | null
           name: string
           price?: number | null
           receptionist_id?: string | null
+          stock_quantity?: number | null
           user_id?: string | null
         }
         Update: {
@@ -1177,9 +1183,12 @@ export type Database = {
           description?: string | null
           duration_minutes?: number
           id?: string
+          is_product?: boolean | null
+          low_stock_threshold?: number | null
           name?: string
           price?: number | null
           receptionist_id?: string | null
+          stock_quantity?: number | null
           user_id?: string | null
         }
         Relationships: [

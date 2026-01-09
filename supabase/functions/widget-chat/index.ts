@@ -494,10 +494,54 @@ function checkEscalationNeeded(message: string, context: ConversationContext, hi
 // ─────────────────────────────────────────────────────────────────────────────
 // LAYER 2: KNOWLEDGE BASE BUILDER (RAG)
 // ─────────────────────────────────────────────────────────────────────────────
-function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[]): string {
+function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], products: any[] = []): string {
   const sections: string[] = [];
   
-  sections.push(`## VERIFIED BUSINESS INFORMATION [HIGH CONFIDENCE]`);
+  // Add current date/time awareness
+  const timezone = receptionist.timezone || 'UTC';
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+  const currentDateTime = formatter.format(now);
+  const dateOnlyFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  const currentDate = dateOnlyFormatter.format(now);
+  const timeOnlyFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+  const currentTime = timeOnlyFormatter.format(now);
+  
+  sections.push(`## 🕐 CURRENT DATE & TIME AWARENESS [CRITICAL]`);
+  sections.push(`Current Date/Time: ${currentDateTime}`);
+  sections.push(`Current Date: ${currentDate}`);
+  sections.push(`Current Time: ${currentTime}`);
+  sections.push(`Business Timezone: ${timezone}`);
+  sections.push(`Today is: ${new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long' }).format(now)}`);
+  sections.push(`\n**Time-Awareness Rules:**`);
+  sections.push(`- If customer asks "what time is it?" or "what's the time?" → Tell them: "${currentTime}"`);
+  sections.push(`- If customer asks "what day is it?" or "what's today's date?" → Tell them: "${currentDate}"`);
+  sections.push(`- If customer gives a PAST date for booking → Politely correct them and suggest valid future dates`);
+  sections.push(`- If customer gives a PAST time today → Politely say that time has passed and suggest later times`);
+  sections.push(`- "Yesterday" or past dates → Cannot book in the past, suggest today or future dates`);
+  sections.push(`- Validate all booking times are in the FUTURE before confirming`);
+  
+  sections.push(`\n## VERIFIED BUSINESS INFORMATION [HIGH CONFIDENCE]`);
   sections.push(`Business: ${receptionist.business_name}`);
   if (receptionist.business_type) sections.push(`Type: ${receptionist.business_type}`);
   if (receptionist.business_phone || receptionist.phone) sections.push(`Phone: ${receptionist.business_phone || receptionist.phone}`);
@@ -511,14 +555,48 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[]): st
       JSON.stringify(receptionist.hours_of_operation, null, 2) : receptionist.hours_of_operation);
   }
   
-  if (services && services.length > 0) {
+  // Services (non-products)
+  const serviceItems = services.filter((s: any) => !s.is_product);
+  if (serviceItems && serviceItems.length > 0) {
     sections.push(`\n## AVAILABLE SERVICES [HIGH CONFIDENCE]`);
-    services.forEach((s: any) => {
+    serviceItems.forEach((s: any) => {
       let serviceDesc = `- **${s.name}**`;
       if (s.duration_minutes) serviceDesc += ` (${s.duration_minutes} minutes)`;
+      if (s.price) serviceDesc += ` - $${parseFloat(s.price).toFixed(2)}`;
       if (s.description) serviceDesc += `: ${s.description}`;
       sections.push(serviceDesc);
     });
+  }
+  
+  // Products with inventory
+  const productItems = products.length > 0 ? products : services.filter((s: any) => s.is_product);
+  if (productItems && productItems.length > 0) {
+    sections.push(`\n## AVAILABLE PRODUCTS & INVENTORY [HIGH CONFIDENCE]`);
+    productItems.forEach((p: any) => {
+      let productDesc = `- **${p.name}**`;
+      if (p.price) productDesc += ` - $${parseFloat(p.price).toFixed(2)}`;
+      
+      // Inventory status
+      if (p.stock_quantity !== null && p.stock_quantity !== undefined) {
+        if (p.stock_quantity === 0) {
+          productDesc += ` [❌ OUT OF STOCK]`;
+        } else if (p.stock_quantity <= (p.low_stock_threshold || 5)) {
+          productDesc += ` [⚠️ LOW STOCK: ${p.stock_quantity} left]`;
+        } else {
+          productDesc += ` [✓ In Stock: ${p.stock_quantity} available]`;
+        }
+      } else {
+        productDesc += ` [✓ In Stock]`;
+      }
+      
+      if (p.description) productDesc += `: ${p.description}`;
+      sections.push(productDesc);
+    });
+    
+    sections.push(`\n**Inventory Rules:**`);
+    sections.push(`- If product is OUT OF STOCK → Apologize and suggest alternatives or ask if they'd like to be notified when back in stock`);
+    sections.push(`- If product is LOW STOCK → Mention limited availability and encourage quick decision`);
+    sections.push(`- If quantity requested exceeds available stock → Inform customer of available quantity and ask if they want that amount instead`);
   }
   
   if (faqs && faqs.length > 0) {
@@ -678,7 +756,14 @@ After a booking is confirmed OR purchase is complete:
    → DO NOT repeat any booking/order details
    → The conversation is DONE
 4. If user says "yes" or asks a new question: Continue helping naturally
-5. NEVER give multiple farewell messages - one goodbye is enough`;
+5. NEVER give multiple farewell messages - one goodbye is enough
+
+## DATE/TIME VALIDATION (CRITICAL)
+- BEFORE confirming any booking, validate the date/time is in the FUTURE
+- If customer says "yesterday" or gives a past date → Respond: "I'm sorry, but [date] is in the past. Would you like to book for today or a future date instead?"
+- If customer gives today's date with a past time → Respond: "That time has already passed today. How about [suggest next available time]?"
+- If customer asks "what time is it?" → Tell them the current time from the knowledge base
+- If customer asks "what day is today?" → Tell them the current date from the knowledge base`;
 
   // BLOCK 6: SAFETY & QUALITY
   const safetyBlock = `# 📌 BLOCK 6 — SAFETY & QUALITY GUARDRAILS
@@ -702,21 +787,28 @@ After a booking is confirmed OR purchase is complete:
 - One farewell is enough - do not keep saying goodbye
 - After "goodbye", if user doesn't respond, conversation is over`;
 
-  // BLOCK 5.5: PRODUCT ORDERING FLOW
-  const orderingBlock = `# 📌 BLOCK 5.5 — PRODUCT ORDERING FLOW
+  // BLOCK 5.5: PRODUCT ORDERING FLOW WITH INVENTORY AWARENESS
+  const orderingBlock = `# 📌 BLOCK 5.5 — PRODUCT ORDERING FLOW WITH INVENTORY
 
 When a customer wants to ORDER/BUY/PURCHASE a product:
 
 1. **Product Selection** → "Which product would you like?" (show options if available)
-2. **Quantity** → "How many would you like?" (assume 1 if not specified)
-3. **Contact Collection** → "Can I get your name and phone/email for the order?"
-4. **Confirmation** → Summarize: product, quantity, contact info
-5. **Close** → Ask if they need anything else, then say goodbye
+2. **INVENTORY CHECK** → Before confirming, check if product is in stock:
+   - If OUT OF STOCK → "I'm sorry, [product] is currently out of stock. Would you like me to suggest an alternative, or notify you when it's back?"
+   - If LOW STOCK → "Good news, we have [quantity] left! Would you like to order before they're gone?"
+   - If quantity requested > available → "We only have [available] in stock right now. Would you like to order [available] instead?"
+3. **Quantity** → "How many would you like?" (assume 1 if not specified)
+4. **Contact Collection** → "Can I get your name and phone/email for the order?"
+5. **Confirmation** → Summarize: product, quantity, contact info
+6. **Close** → Ask if they need anything else, then say goodbye
 
 ### Product Order Confirmation Format:
 "Perfect! I've placed your order for [quantity] x [product]. We'll contact you at [contact] to arrange [pickup/delivery]. Is there anything else I can help you with?"
 
 ### Important:
+- ALWAYS check inventory status from the knowledge base before confirming orders
+- If product shows [❌ OUT OF STOCK] → Do NOT confirm the order, offer alternatives
+- If product shows [⚠️ LOW STOCK: X left] → Mention limited availability
 - Keep it simple and conversational
 - Don't repeat order details after confirmation
 - One confirmation, one follow-up question, one goodbye`;
@@ -965,16 +1057,21 @@ serve(async (req) => {
       .eq("receptionist_id", receptionistId)
       .order("priority", { ascending: false });
 
+    // Fetch services (non-products) with full details
     const { data: services } = await supabase
       .from("services")
-      .select("name, description, duration_minutes")
+      .select("id, name, description, duration_minutes, price, is_product, stock_quantity, low_stock_threshold")
       .eq("receptionist_id", receptionistId)
       .eq("active", true);
+    
+    // Separate services and products for inventory awareness
+    const serviceItems = (services || []).filter((s: any) => !s.is_product);
+    const productItems = (services || []).filter((s: any) => s.is_product);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // LAYER 2: BUILD KNOWLEDGE BASE (RAG)
+    // LAYER 2: BUILD KNOWLEDGE BASE (RAG) WITH TIME & INVENTORY AWARENESS
     // ═══════════════════════════════════════════════════════════════════════
-    const knowledgeBase = buildKnowledgeBase(receptionist, faqs || [], services || []);
+    const knowledgeBase = buildKnowledgeBase(receptionist, faqs || [], services || [], productItems);
 
     // ═══════════════════════════════════════════════════════════════════════
     // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS)
