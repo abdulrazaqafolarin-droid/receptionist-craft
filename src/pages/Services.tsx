@@ -30,6 +30,9 @@ interface ServiceOrProduct {
   active: boolean;
   receptionist_id: string | null;
   price: number | null;
+  is_product: boolean;
+  stock_quantity: number | null;
+  low_stock_threshold: number | null;
 }
 
 export default function Services() {
@@ -52,11 +55,12 @@ export default function Services() {
     buffer_before_minutes: 5,
     buffer_after_minutes: 5,
     price: 0,
+    stock_quantity: null as number | null,
   });
 
   // Separate services and products
-  const services = items.filter(item => item.duration_minutes > 0);
-  const products = items.filter(item => item.duration_minutes === 0);
+  const services = items.filter(item => !item.is_product);
+  const products = items.filter(item => item.is_product);
 
   useEffect(() => {
     loadReceptionists();
@@ -134,6 +138,8 @@ export default function Services() {
         buffer_before_minutes: activeTab === 'services' ? newItem.buffer_before_minutes : 0,
         buffer_after_minutes: activeTab === 'services' ? newItem.buffer_after_minutes : 0,
         price: newItem.price || null,
+        is_product: activeTab === 'products',
+        stock_quantity: activeTab === 'products' ? newItem.stock_quantity : null,
         active: true,
       });
 
@@ -147,6 +153,7 @@ export default function Services() {
         buffer_before_minutes: 5,
         buffer_after_minutes: 5,
         price: 0,
+        stock_quantity: null,
       });
       loadItems();
     } catch (err: any) {
@@ -166,6 +173,7 @@ export default function Services() {
           description: editForm.description,
           duration_minutes: editForm.duration_minutes,
           price: editForm.price,
+          stock_quantity: editForm.stock_quantity,
         })
         .eq("id", id);
 
@@ -222,6 +230,7 @@ export default function Services() {
       description: item.description || "",
       duration_minutes: item.duration_minutes,
       price: item.price || 0,
+      stock_quantity: item.stock_quantity,
     });
   };
 
@@ -276,6 +285,18 @@ export default function Services() {
                     className="h-10"
                   />
                 </div>
+                {!isService && (
+                  <div>
+                    <Label>Stock Quantity</Label>
+                    <Input
+                      type="number"
+                      placeholder="Leave empty for unlimited"
+                      value={editForm.stock_quantity ?? ""}
+                      onChange={(e) => setEditForm({ ...editForm, stock_quantity: e.target.value ? parseInt(e.target.value) : null })}
+                      className="h-10"
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button onClick={() => updateItem(item.id)} size="sm" className="h-9">
@@ -298,6 +319,17 @@ export default function Services() {
                     <Badge variant="outline" className="flex items-center gap-1">
                       <DollarSign className="h-3 w-3" />
                       {item.price.toFixed(2)}
+                    </Badge>
+                  )}
+                  {/* Stock status for products */}
+                  {!isService && item.stock_quantity !== null && (
+                    <Badge 
+                      variant={item.stock_quantity === 0 ? "destructive" : item.stock_quantity <= (item.low_stock_threshold || 5) ? "secondary" : "outline"}
+                      className="flex items-center gap-1"
+                    >
+                      {item.stock_quantity === 0 ? "Out of Stock" : 
+                       item.stock_quantity <= (item.low_stock_threshold || 5) ? `Low: ${item.stock_quantity} left` : 
+                       `Stock: ${item.stock_quantity}`}
                     </Badge>
                   )}
                 </div>
@@ -551,15 +583,29 @@ export default function Services() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="product-description">Description (Optional)</Label>
-                      <Input
-                        id="product-description"
-                        placeholder="Brief description of the product"
-                        value={newItem.description}
-                        onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                        className="h-11"
-                      />
+                    <div className="grid sm:grid-cols-2 gap-5">
+                      <div className="space-y-2">
+                        <Label htmlFor="product-description">Description (Optional)</Label>
+                        <Input
+                          id="product-description"
+                          placeholder="Brief description of the product"
+                          value={newItem.description}
+                          onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                          className="h-11"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="product-stock">Stock Quantity (Optional)</Label>
+                        <Input
+                          id="product-stock"
+                          type="number"
+                          placeholder="Leave empty for unlimited"
+                          value={newItem.stock_quantity ?? ""}
+                          onChange={(e) => setNewItem({ ...newItem, stock_quantity: e.target.value ? parseInt(e.target.value) : null })}
+                          className="h-11"
+                        />
+                        <p className="text-xs text-muted-foreground">Leave empty if you don't track inventory</p>
+                      </div>
                     </div>
 
                     <Button onClick={createItem} disabled={creating} className="h-11">
