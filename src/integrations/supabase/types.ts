@@ -600,6 +600,108 @@ export type Database = {
         }
         Relationships: []
       }
+      conversation_state: {
+        Row: {
+          active_flow: string | null
+          active_topic: string | null
+          created_at: string | null
+          flow_step: string | null
+          id: string
+          last_message_at: string | null
+          receptionist_id: string
+          session_id: string
+          slots: Json | null
+          topic_confidence: number | null
+        }
+        Insert: {
+          active_flow?: string | null
+          active_topic?: string | null
+          created_at?: string | null
+          flow_step?: string | null
+          id?: string
+          last_message_at?: string | null
+          receptionist_id: string
+          session_id: string
+          slots?: Json | null
+          topic_confidence?: number | null
+        }
+        Update: {
+          active_flow?: string | null
+          active_topic?: string | null
+          created_at?: string | null
+          flow_step?: string | null
+          id?: string
+          last_message_at?: string | null
+          receptionist_id?: string
+          session_id?: string
+          slots?: Json | null
+          topic_confidence?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_state_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_state_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_summaries: {
+        Row: {
+          created_at: string | null
+          id: string
+          key_facts: Json
+          last_updated: string | null
+          receptionist_id: string
+          session_id: string
+          summary: string
+          user_fingerprint: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          key_facts?: Json
+          last_updated?: string | null
+          receptionist_id: string
+          session_id: string
+          summary: string
+          user_fingerprint?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          key_facts?: Json
+          last_updated?: string | null
+          receptionist_id?: string
+          session_id?: string
+          summary?: string
+          user_fingerprint?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_summaries_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_summaries_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           bot_message: string
@@ -1291,6 +1393,10 @@ export type Database = {
         Returns: number
       }
       cleanup_old_chat_messages: {
+        Args: { retention_days?: number }
+        Returns: number
+      }
+      cleanup_old_conversation_state: {
         Args: { retention_days?: number }
         Returns: number
       }

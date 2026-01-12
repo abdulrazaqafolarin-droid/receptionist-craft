@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Send, Loader2, MessageCircle, Phone, Mail, MapPin } from "lucide-react";
+import { Send, Loader2, MessageCircle, Phone, Mail, MapPin, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
 import { ServiceSelector } from "@/components/widget/ServiceSelector";
@@ -500,6 +500,46 @@ export default function Widget() {
     }
   }
 
+  // Refresh conversation - soft reset that preserves session but clears flow state
+  async function handleRefreshConversation() {
+    if (!receptionistId || !sessionId) return;
+    
+    // Reset local booking state
+    setBookingState({
+      serviceId: null,
+      serviceName: null,
+      date: null,
+      timeSlot: null,
+      customerName: null,
+      customerEmail: null,
+      customerPhone: null,
+      collectingInfo: null,
+      productId: null,
+      productName: null,
+      quantity: 1,
+      orderMode: false,
+    });
+    
+    // Clear messages and show fresh greeting
+    if (receptionist?.greeting_message) {
+      setMessages([{
+        role: "assistant",
+        content: "Let's start fresh! " + receptionist.greeting_message,
+        timestamp: new Date(),
+        showQuickReplies: true,
+      }]);
+    } else {
+      setMessages([{
+        role: "assistant",
+        content: `Let's start fresh! How can I help you today?`,
+        timestamp: new Date(),
+        showQuickReplies: true,
+      }]);
+    }
+    
+    setInput("");
+  }
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -754,10 +794,17 @@ export default function Widget() {
             </Button>
           </div>
           <div className="flex items-center justify-between mt-3 px-1">
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
-              Typically replies instantly
-            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefreshConversation}
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Start Fresh
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground/70">
               Powered by AI
             </p>
