@@ -3,14 +3,18 @@
 // Manages state persistence and retrieval for conversation flows
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { ConversationState, FlowSlots, createEmptyState } from "./types.ts";
 
 export class StateManager {
-  private supabase: SupabaseClient;
+  private supabase: any;
   
-  constructor(supabaseUrl: string, serviceRoleKey: string) {
-    this.supabase = createClient(supabaseUrl, serviceRoleKey);
+  constructor(supabaseClient: any) {
+    this.supabase = supabaseClient;
+  }
+
+  // Alias for getState (for compatibility)
+  async load(sessionId: string, receptionistId: string): Promise<ConversationState> {
+    return this.getState(sessionId, receptionistId);
   }
 
   async getState(sessionId: string, receptionistId: string): Promise<ConversationState> {

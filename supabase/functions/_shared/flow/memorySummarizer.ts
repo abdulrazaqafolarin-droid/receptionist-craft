@@ -2,8 +2,6 @@
 // MEMORY SUMMARIZER - Long-term memory management
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-
 export interface KeyFacts {
   preferred_service?: string;
   last_booked_service?: string;
@@ -29,10 +27,10 @@ export interface ConversationSummary {
 }
 
 export class MemorySummarizer {
-  private supabase: SupabaseClient;
+  private supabase: any;
 
-  constructor(supabaseUrl: string, serviceRoleKey: string) {
-    this.supabase = createClient(supabaseUrl, serviceRoleKey);
+  constructor(supabaseClient: any) {
+    this.supabase = supabaseClient;
   }
 
   // Get relevant summaries for a session/fingerprint
