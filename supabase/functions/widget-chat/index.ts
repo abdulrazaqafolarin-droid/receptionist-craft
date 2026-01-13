@@ -3,6 +3,24 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// UNIFIED FLOW ENGINE IMPORTS (CANONICAL CONVERSATION FLOW)
+// ═══════════════════════════════════════════════════════════════════════════
+import { StateManager } from "../_shared/flow/stateManager.ts";
+import { 
+  routeIntent, 
+  getNextBookingStep, 
+  getNextOrderingStep,
+  getStepQuestion 
+} from "../_shared/flow/flowRouter.ts";
+import { 
+  extractSlots, 
+  mergeSlots, 
+  buildSlotSummary 
+} from "../_shared/flow/slotExtractor.ts";
+import { MemorySummarizer } from "../_shared/flow/memorySummarizer.ts";
+import type { ConversationState, FlowSlots } from "../_shared/flow/types.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CORS HEADERS
 // ═══════════════════════════════════════════════════════════════════════════
 const corsHeaders = {
@@ -938,6 +956,16 @@ serve(async (req) => {
     if (rErr || !receptionist) throw new Error("Receptionist not found or inactive");
 
     // ═══════════════════════════════════════════════════════════════════════
+    // UNIFIED FLOW ENGINE: INITIALIZE STATE MANAGER
+    // ═══════════════════════════════════════════════════════════════════════
+    const stateManager = new StateManager(supabase);
+    const memorySummarizer = new MemorySummarizer(supabase);
+    
+    // Load or create conversation state
+    let conversationState = await stateManager.load(sessionId, receptionistId);
+    console.log(`[Flow Engine] State loaded - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, Greeting: ${conversationState.greeting_sent}`);
+    
+    // ═══════════════════════════════════════════════════════════════════════
     // RE-GREETING PREVENTION (3-LEVEL ENFORCEMENT)
     // ═══════════════════════════════════════════════════════════════════════
     // Level 1: Database check - Use session_id consistently
@@ -950,8 +978,8 @@ serve(async (req) => {
 
     if (historyErr) console.error("[Widget Chat] Error checking message history:", historyErr);
 
-    // Level 2: Backend invariant - isFirstMessage is TRUE only if NO messages exist
-    const isFirstMessage = !existingMessages || existingMessages.length === 0;
+    // Level 2: Backend invariant - isFirstMessage is TRUE only if NO messages exist AND greeting not sent
+    const isFirstMessage = (!existingMessages || existingMessages.length === 0) && !conversationState.greeting_sent;
     console.log(`[Widget Chat] Is first message: ${isFirstMessage}, session: ${sessionId}`);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -984,6 +1012,11 @@ serve(async (req) => {
         message: greetingMessage,
         metadata: { greeting: true, source, timestamp: new Date().toISOString() },
       });
+
+      // Mark greeting as sent in conversation state
+      conversationState.greeting_sent = true;
+      await stateManager.saveState(conversationState);
+      console.log(`[Flow Engine] Greeting sent and state saved`);
 
       return new Response(JSON.stringify({ ok: true, stored: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1067,6 +1100,56 @@ serve(async (req) => {
     // Separate services and products for inventory awareness
     const serviceItems = (services || []).filter((s: any) => !s.is_product);
     const productItems = (services || []).filter((s: any) => s.is_product);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // UNIFIED FLOW ENGINE: SLOT EXTRACTION & STATE UPDATE
+    // ═══════════════════════════════════════════════════════════════════════
+    // Extract slots from current message (with services/products for matching)
+    const extractedSlots = extractSlots(message, conversationState.slots, serviceItems, productItems);
+    if (Object.keys(extractedSlots.slots).length > 0) {
+      console.log(`[Flow Engine] Extracted slots:`, extractedSlots.slots);
+      conversationState.slots = mergeSlots(conversationState.slots, extractedSlots.slots, extractedSlots.corrections);
+    }
+
+    // Route intent and update flow state
+    const intentRouting = routeIntent(messageAnalysis.detectedIntent, conversationState, message);
+    console.log(`[Flow Engine] Routing: FlowType=${intentRouting.flowType}, StartFlow=${intentRouting.shouldStartFlow}`);
+    
+    if (intentRouting.shouldStartFlow && intentRouting.flowType) {
+      conversationState.active_flow = intentRouting.flowType;
+      conversationState.flow_step = intentRouting.initialStep;
+    }
+    if (intentRouting.shouldResetCurrentFlow) {
+      conversationState.active_flow = null;
+      conversationState.flow_step = null;
+      conversationState.slots = {};
+    }
+
+    // Handle topic shift detection
+    const topicShift = intentRouting.topicShift;
+    if (topicShift?.shouldBlock) {
+      console.log(`[Flow Engine] Topic shift BLOCKED: ${topicShift.blockReason}`);
+      // Don't reset flow, AI will be instructed to ask user if they want to continue or cancel
+    } else if (topicShift && topicShift.type === 'explicit' && topicShift.confidence > 0.7) {
+      console.log(`[Flow Engine] Explicit topic shift detected, confidence: ${topicShift.confidence}`);
+      // Reset flow for explicit topic changes
+      conversationState.active_flow = null;
+      conversationState.flow_step = null;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // UNIFIED FLOW ENGINE: LONG-TERM MEMORY
+    // ═══════════════════════════════════════════════════════════════════════
+    // Get relevant memory summaries
+    const memorySummaries = await memorySummarizer.getRelevantSummaries(receptionistId, sessionId);
+    const memoryContext = memorySummarizer.buildMemoryContext(memorySummaries);
+    
+    // Build slot summary for prompt
+    const flowType = conversationState.active_flow || 'SERVICE';
+    const slotSummary = buildSlotSummary(conversationState.slots, flowType);
+    const flowContext = conversationState.active_flow 
+      ? `\n## Active Flow: ${conversationState.active_flow}\nCurrent Step: ${conversationState.flow_step || 'none'}\n${slotSummary ? `Collected Info:\n${slotSummary}` : ''}`
+      : '';
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 2: BUILD KNOWLEDGE BASE (RAG) WITH TIME & INVENTORY AWARENESS
@@ -1377,6 +1460,31 @@ serve(async (req) => {
       }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // UNIFIED FLOW ENGINE: PERSIST STATE
+    // ═══════════════════════════════════════════════════════════════════════
+    // Update booking/order confirmed flags based on response
+    if (bookingResult) {
+      conversationState.booking_confirmed = true;
+      conversationState.flow_step = 'complete';
+    }
+    if (orderResult) {
+      conversationState.order_confirmed = true;
+      conversationState.flow_step = 'complete';
+    }
+    
+    // Save conversation state for next message
+    await stateManager.saveState(conversationState);
+    console.log(`[Flow Engine] State saved - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}`);
+    
+    // Run memory summarization if appropriate
+    if (memorySummarizer.shouldSummarize(history || [], conversationContext)) {
+      const summaryText = memorySummarizer.generateSummaryText(history || [], conversationContext);
+      const keyFacts = memorySummarizer.extractKeyFacts(history || [], conversationContext);
+      await memorySummarizer.saveSummary(receptionistId, sessionId, summaryText, keyFacts);
+      console.log(`[Flow Engine] Memory summary saved`);
+    }
+
     return new Response(
       JSON.stringify({ 
         reply, 
@@ -1391,7 +1499,10 @@ serve(async (req) => {
         orderId: orderResult?.id || null,
         // UI hints to prevent button repetition
         shouldShowServices: !conversationContext.servicesShownInLastMessage && hasBookingIntent,
-        shouldShowProducts: !conversationContext.productsShownInLastMessage && hasOrderIntent
+        shouldShowProducts: !conversationContext.productsShownInLastMessage && hasOrderIntent,
+        // Flow engine state hints
+        activeFlow: conversationState.active_flow,
+        flowStep: conversationState.flow_step
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
