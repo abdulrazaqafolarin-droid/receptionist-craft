@@ -3,13 +3,16 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ShoppingBag, DollarSign, Minus, Plus, Check, ShoppingCart } from "lucide-react";
+import { ShoppingBag, DollarSign, Minus, Plus, ShoppingCart, AlertTriangle, Package, XCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Product {
   id: string;
   name: string;
   price?: number;
   description?: string;
+  stock_quantity?: number | null;
+  low_stock_threshold?: number | null;
 }
 
 interface SelectedProduct {
@@ -25,12 +28,32 @@ interface ProductSelectorEnhancedProps {
   disabled?: boolean;
 }
 
+// Stock status helper
+function getStockStatus(product: Product): { status: 'in_stock' | 'low_stock' | 'out_of_stock'; label: string; maxQty: number } {
+  const stock = product.stock_quantity;
+  const threshold = product.low_stock_threshold ?? 5;
+  
+  if (stock === null || stock === undefined) {
+    return { status: 'in_stock', label: 'In Stock', maxQty: 99 };
+  }
+  if (stock === 0) {
+    return { status: 'out_of_stock', label: 'Out of Stock', maxQty: 0 };
+  }
+  if (stock <= threshold) {
+    return { status: 'low_stock', label: `Only ${stock} left`, maxQty: stock };
+  }
+  return { status: 'in_stock', label: 'In Stock', maxQty: stock };
+}
+
 export function ProductSelectorEnhanced({ products, onConfirm, disabled }: ProductSelectorEnhancedProps) {
   const [selectedProducts, setSelectedProducts] = useState<Map<string, SelectedProduct>>(new Map());
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
 
   const toggleProductSelection = (product: Product) => {
     if (disabled) return;
+    
+    const stockInfo = getStockStatus(product);
+    if (stockInfo.status === 'out_of_stock') return;
     
     const newSelected = new Map(selectedProducts);
     
@@ -52,11 +75,13 @@ export function ProductSelectorEnhanced({ products, onConfirm, disabled }: Produ
     setSelectedProducts(newSelected);
   };
 
-  const updateQuantity = (productId: string, delta: number) => {
+  const updateQuantity = (productId: string, product: Product, delta: number) => {
     const newSelected = new Map(selectedProducts);
     const item = newSelected.get(productId);
+    const stockInfo = getStockStatus(product);
+    
     if (item) {
-      const newQuantity = Math.max(1, item.quantity + delta);
+      const newQuantity = Math.max(1, Math.min(stockInfo.maxQty, item.quantity + delta));
       newSelected.set(productId, { ...item, quantity: newQuantity });
       setSelectedProducts(newSelected);
     }
@@ -71,57 +96,95 @@ export function ProductSelectorEnhanced({ products, onConfirm, disabled }: Produ
   const totalPrice = Array.from(selectedProducts.values()).reduce((sum, p) => sum + (p.price || 0) * p.quantity, 0);
 
   return (
-    <div className="space-y-2 mt-2">
-      <p className="text-xs text-muted-foreground mb-2">Select product(s) and quantity:</p>
+    <div className="space-y-2 mt-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+      <p className="text-xs text-muted-foreground font-medium mb-2">Select product(s) and quantity:</p>
       
-      {products.map((product) => {
+      {products.map((product, idx) => {
         const isSelected = selectedProducts.has(product.id);
         const selectedItem = selectedProducts.get(product.id);
-        const isExpanded = expandedProductId === product.id && isSelected;
+        const stockInfo = getStockStatus(product);
+        const isOutOfStock = stockInfo.status === 'out_of_stock';
         
         return (
           <Card
             key={product.id}
-            className={`p-3 transition-all ${
-              disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-            } ${isSelected ? "border-primary ring-1 ring-primary/20 bg-primary/5" : "hover:border-primary/50"}`}
+            className={cn(
+              "p-3 transition-all duration-200",
+              disabled || isOutOfStock ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
+              isSelected ? "border-primary ring-1 ring-primary/20 bg-primary/5" : "hover:border-primary/50 hover:shadow-md",
+              isOutOfStock && "bg-muted/50"
+            )}
+            style={{ animationDelay: `${idx * 50}ms` }}
           >
             <div className="flex items-start gap-3">
               {/* Checkbox */}
               <div 
                 className="pt-0.5"
-                onClick={() => toggleProductSelection(product)}
+                onClick={() => !isOutOfStock && toggleProductSelection(product)}
               >
-                <Checkbox 
-                  checked={isSelected}
-                  disabled={disabled}
-                  className="h-5 w-5"
-                />
+                {isOutOfStock ? (
+                  <div className="h-5 w-5 rounded-sm border border-muted-foreground/30 flex items-center justify-center">
+                    <XCircle className="h-3 w-3 text-muted-foreground" />
+                  </div>
+                ) : (
+                  <Checkbox 
+                    checked={isSelected}
+                    disabled={disabled}
+                    className="h-5 w-5"
+                  />
+                )}
               </div>
 
               {/* Product Info */}
               <div 
                 className="flex-1 min-w-0"
-                onClick={() => toggleProductSelection(product)}
+                onClick={() => !isOutOfStock && toggleProductSelection(product)}
               >
                 <div className="flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                  <div className={cn(
+                    "h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                    isOutOfStock ? "bg-muted" : "bg-primary/10"
+                  )}>
+                    {isOutOfStock ? (
+                      <Package className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <ShoppingBag className="h-4 w-4 text-primary" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-sm truncate">{product.name}</h4>
+                    <h4 className={cn(
+                      "font-medium text-sm truncate",
+                      isOutOfStock && "text-muted-foreground"
+                    )}>{product.name}</h4>
                     {product.description && (
                       <p className="text-xs text-muted-foreground line-clamp-1">{product.description}</p>
                     )}
+                    {/* Stock status badge */}
+                    <div className="flex items-center gap-1.5 mt-1">
+                      {stockInfo.status === 'low_stock' && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-900/20">
+                          <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
+                          {stockInfo.label}
+                        </Badge>
+                      )}
+                      {stockInfo.status === 'out_of_stock' && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground">
+                          Out of Stock
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Price Badge */}
               {product.price !== null && product.price !== undefined && (
-                <Badge variant="secondary" className="flex items-center gap-1 shrink-0">
+                <Badge variant={isOutOfStock ? "secondary" : "outline"} className={cn(
+                  "flex items-center gap-1 shrink-0",
+                  !isOutOfStock && "text-primary border-primary/30"
+                )}>
                   <DollarSign className="h-3 w-3" />
-                  {product.price.toFixed(2)}
+                  {product.price.toFixed(0)}
                 </Badge>
               )}
 
@@ -135,7 +198,7 @@ export function ProductSelectorEnhanced({ products, onConfirm, disabled }: Produ
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6"
-                    onClick={() => updateQuantity(product.id, -1)}
+                    onClick={() => updateQuantity(product.id, product, -1)}
                     disabled={disabled || (selectedItem?.quantity || 1) <= 1}
                   >
                     <Minus className="h-3 w-3" />
@@ -147,8 +210,8 @@ export function ProductSelectorEnhanced({ products, onConfirm, disabled }: Produ
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6"
-                    onClick={() => updateQuantity(product.id, 1)}
-                    disabled={disabled}
+                    onClick={() => updateQuantity(product.id, product, 1)}
+                    disabled={disabled || (selectedItem?.quantity || 1) >= stockInfo.maxQty}
                   >
                     <Plus className="h-3 w-3" />
                   </Button>
