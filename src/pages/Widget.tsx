@@ -8,7 +8,7 @@ import { Send, Loader2, MessageCircle, Phone, Mail, MapPin, RefreshCw } from "lu
 import { useToast } from "@/hooks/use-toast";
 import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
 import { ServiceSelector } from "@/components/widget/ServiceSelector";
-import { ProductSelector } from "@/components/widget/ProductSelector";
+import { ProductSelectorEnhanced } from "@/components/widget/ProductSelectorEnhanced";
 import { DateSelector } from "@/components/widget/DateSelector";
 import { TimeSlotSelector } from "@/components/widget/TimeSlotSelector";
 import { BookingConfirmation } from "@/components/widget/BookingConfirmation";
@@ -130,7 +130,8 @@ export default function Widget() {
           message: "",
           receptionistId,
           sessionId,
-          bookingContext: bookingState,
+          displayedGreeting: receptionist?.greeting_message || `Hello! Welcome. How can I help you today?`,
+          source: "widget_client"
         }
       });
       setGreetingStored(true);
@@ -335,20 +336,27 @@ export default function Widget() {
         timestamp: new Date(),
       };
 
-      // Detect booking intent and show services
-      if (data.hasBookingIntent || lowerReply.includes("which service") || lowerReply.includes("what service")) {
+      // Detect booking intent and show services (only if not already in booking flow)
+      if ((data.hasBookingIntent || lowerReply.includes("which service") || lowerReply.includes("what service")) && !bookingState.serviceId) {
         if (services.length > 0) {
           botMessage.showServices = true;
         }
       }
 
-      // If service selected, show date picker
-      if (bookingState.serviceId && !bookingState.date && (lowerReply.includes("what day") || lowerReply.includes("when would"))) {
+      // Detect product order intent and show products
+      if ((data.hasOrderIntent || lowerReply.includes("which product") || lowerReply.includes("what product")) && !bookingState.productId) {
+        if (products.length > 0) {
+          botMessage.showProducts = true;
+        }
+      }
+
+      // Auto-show date picker after service selection (proactive UX)
+      if (bookingState.serviceId && !bookingState.date) {
         botMessage.showDatePicker = true;
       }
 
-      // If date selected, show time slots
-      if (bookingState.date && !bookingState.timeSlot) {
+      // Auto-show time slots after date selection
+      if (bookingState.serviceId && bookingState.date && !bookingState.timeSlot) {
         const dateStr = format(bookingState.date, "yyyy-MM-dd");
         const { data: slotsData } = await supabase.functions.invoke("check-availability", {
           body: {
@@ -363,6 +371,10 @@ export default function Widget() {
         if (slotsData?.slots && slotsData.slots.length > 0) {
           botMessage.showTimeSlots = true;
           botMessage.timeSlots = slotsData.slots;
+        } else {
+          // No slots available, tell user
+          botMessage.content += "\n\nUnfortunately, no time slots are available for that date. Please select another date.";
+          botMessage.showDatePicker = true;
         }
       }
 
@@ -384,18 +396,26 @@ export default function Widget() {
     await sendMessage(`I'd like to book ${serviceName}`);
   }
 
-  async function handleProductSelect(productId: string, productName: string) {
+  async function handleProductsConfirm(selectedProducts: Array<{ productId: string; productName: string; quantity: number; price?: number }>) {
+    if (selectedProducts.length === 0) return;
+    
+    // Store products in booking state
+    const productNames = selectedProducts.map(p => `${p.quantity}x ${p.productName}`).join(', ');
+    const totalPrice = selectedProducts.reduce((sum, p) => sum + ((p.price || 0) * p.quantity), 0);
+    
     setBookingState(prev => ({ 
       ...prev, 
-      productId, 
-      productName, 
+      productId: selectedProducts[0].productId,
+      productName: productNames,
+      quantity: selectedProducts.reduce((sum, p) => sum + p.quantity, 0),
       orderMode: true,
       collectingInfo: 'name' 
     }));
     
+    const priceText = totalPrice > 0 ? ` (Total: $${totalPrice.toFixed(2)})` : '';
     const botMessage: Message = {
       role: "assistant",
-      content: `Great choice! You've selected ${productName}. What's your name so I can process your order?`,
+      content: `Great choice! You've selected ${productNames}${priceText}. What's your name so I can process your order?`,
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, botMessage]);
@@ -407,11 +427,18 @@ export default function Widget() {
   }
 
   async function handleTimeSlotSelect(slot: any) {
-    setBookingState(prev => ({ ...prev, timeSlot: slot, collectingInfo: 'name' }));
+    // Handle both "start" and "startTime" property names for compatibility
+    const startTime = slot.startTime || slot.start;
+    setBookingState(prev => ({ 
+      ...prev, 
+      timeSlot: { ...slot, startTime }, 
+      collectingInfo: 'name' 
+    }));
     
+    const formattedTime = format(new Date(startTime), "h:mm a");
     const botMessage: Message = {
       role: "assistant",
-      content: "Perfect! What's your name?",
+      content: `Great! You've selected ${formattedTime}. What's your name for the booking?`,
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, botMessage]);
@@ -684,10 +711,10 @@ export default function Widget() {
 
                   {msg.showProducts && products.length > 0 && (
                     <div className="flex justify-start">
-                      <div className="max-w-[80%]">
-                        <ProductSelector
+                      <div className="max-w-[85%]">
+                        <ProductSelectorEnhanced
                           products={products}
-                          onSelect={handleProductSelect}
+                          onConfirm={handleProductsConfirm}
                           disabled={loading}
                         />
                       </div>
