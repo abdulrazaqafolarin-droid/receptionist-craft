@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageCircle, Calendar, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap } from "lucide-react";
+import { MessageCircle, Calendar, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
+import { RevenueEngine } from "@/components/RevenueEngine";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -263,40 +264,54 @@ export default function Dashboard() {
           </nav>
         </section>
 
-        {/* Setup Quick Actions */}
+        {/* Revenue Engine Section */}
         {receptionists.length > 0 && (
-          <section className="grid sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-6 mt-6 sm:mt-8" aria-label="Setup actions">
-            <Card 
-              className="cursor-pointer hover:shadow-lg hover:border-primary/20 transition-all duration-300 focus-within:ring-2 focus-within:ring-ring" 
-              onClick={() => navigate("/services")}
-              role="link"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && navigate("/services")}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-primary" aria-hidden="true" />
-                  Manage Services
-                </CardTitle>
-                <CardDescription className="text-xs sm:text-sm">Add and manage the services customers can book</CardDescription>
-              </CardHeader>
-            </Card>
-            
-            <Card 
-              className="cursor-pointer hover:shadow-lg hover:border-primary/20 transition-all duration-300 focus-within:ring-2 focus-within:ring-ring" 
-              onClick={() => navigate("/availability")}
-              role="link"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && navigate("/availability")}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-primary" aria-hidden="true" />
-                  Set Business Hours
-                </CardTitle>
-                <CardDescription className="text-xs sm:text-sm">Configure when your AI can accept bookings</CardDescription>
-              </CardHeader>
-            </Card>
+          <section className="mt-6 sm:mt-8" aria-labelledby="revenue-engine-title">
+            <div className="mb-4">
+              <h2 id="revenue-engine-title" className="sr-only">Revenue Engine</h2>
+            </div>
+            <div className="grid lg:grid-cols-2 gap-4 lg:gap-6">
+              {/* Revenue Engine for first receptionist */}
+              <RevenueEngine 
+                receptionistId={receptionists[0]?.id} 
+                currentMode={receptionists[0]?.ai_mode || 'booking'}
+              />
+              
+              {/* Setup Quick Actions */}
+              <div className="space-y-4">
+                <Card 
+                  className="cursor-pointer hover:shadow-lg hover:border-primary/20 transition-all duration-300 focus-within:ring-2 focus-within:ring-ring" 
+                  onClick={() => navigate("/services")}
+                  role="link"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && navigate("/services")}
+                >
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                      <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-primary" aria-hidden="true" />
+                      Manage Services
+                    </CardTitle>
+                    <CardDescription className="text-xs sm:text-sm">Add and manage the services customers can book</CardDescription>
+                  </CardHeader>
+                </Card>
+                
+                <Card 
+                  className="cursor-pointer hover:shadow-lg hover:border-primary/20 transition-all duration-300 focus-within:ring-2 focus-within:ring-ring" 
+                  onClick={() => navigate("/availability")}
+                  role="link"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && navigate("/availability")}
+                >
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                      <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-primary" aria-hidden="true" />
+                      Set Business Hours
+                    </CardTitle>
+                    <CardDescription className="text-xs sm:text-sm">Configure when your AI can accept bookings</CardDescription>
+                  </CardHeader>
+                </Card>
+              </div>
+            </div>
           </section>
         )}
       </main>

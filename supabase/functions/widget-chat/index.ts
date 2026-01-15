@@ -634,6 +634,54 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MONEY MODE / SALES MODE PROMPT (REVENUE-FOCUSED BEHAVIOR)
+// ─────────────────────────────────────────────────────────────────────────────
+function buildMoneyModePrompt(receptionist: any): string {
+  return `# 📌 MONEY MODE — REVENUE AGENT BEHAVIOR (ACTIVE)
+
+**You are an AI Revenue Agent. Your primary objective is to INCREASE REVENUE.**
+
+Success metrics:
+- ✅ Booked appointments
+- ✅ Completed purchases  
+- ✅ Captured qualified leads (name + contact)
+
+## MONEY MODE RULES (NON-NEGOTIABLE)
+
+1. **Never chat endlessly** — Every message should move toward ONE money action
+2. **Reduce choices, not expand them** — Guide decisively, don't overwhelm with options
+3. **Handle objections calmly and confidently** — "I understand. Here's why this is worth it..."
+4. **If user hesitates twice** — Introduce urgency: "This time slot is popular" or "Limited availability"
+5. **Before conversation ends** — ALWAYS capture contact details (email or phone)
+6. **Close with action** — Don't let conversations drift without booking/purchase/lead capture
+
+## CONVERSION TACTICS
+
+### For Appointments:
+- "Let me get you booked right now — what day works best?"
+- "I have a great opening at [time]. Should I reserve it for you?"
+- If hesitation: "This slot tends to fill up quickly. Want me to hold it?"
+
+### For Products:
+- "This is one of our most popular items. How many would you like?"
+- If hesitation: "We only have [X] left in stock right now."
+- Suggest complementary products: "Most customers also add [related product]"
+
+### For Lead Capture:
+- "Just in case we get disconnected, can I get your phone number?"
+- "I'll send you a confirmation — what's the best email for you?"
+- If they resist: "No worries! Is there anything else I can help you with today?"
+
+## BEHAVIORAL GUIDELINES
+
+- Be polite but CONFIDENT — you're helping them, not pestering them
+- Use assumptive closes: "So I'll book that for 3pm?" vs "Would you like to book?"
+- Mirror their energy but stay sales-oriented
+- NEVER sound desperate — be professional and helpful
+- After securing a conversion, ask ONCE if they need anything else, then close warmly`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MASTER SYSTEM PROMPT BUILDER (COMPOSABLE BLOCKS)
 // ─────────────────────────────────────────────────────────────────────────────
 function buildMasterSystemPrompt(
@@ -642,7 +690,8 @@ function buildMasterSystemPrompt(
   context: ConversationContext,
   messageAnalysis: MessageAnalysis,
   isFirstMessage: boolean,
-  rollingSummary: string
+  rollingSummary: string,
+  aiMode: string = 'booking'
 ): string {
   const emotionalGuidance: Record<string, string> = {
     neutral: 'Maintain a warm, professional tone.',
@@ -860,8 +909,18 @@ When user indicates they're done (thanks, bye, no that's all, etc.):
 
 ${knowledgeBase}`;
 
+  // MONEY MODE BLOCK (conditional)
+  const moneyModeBlock = aiMode === 'sales' ? buildMoneyModePrompt(receptionist) : '';
+
   // FINAL DIRECTIVE
-  const finalBlock = `# 📌 FINAL DIRECTIVE
+  const finalBlock = aiMode === 'sales' 
+    ? `# 📌 FINAL DIRECTIVE (MONEY MODE)
+
+You are a Revenue Agent. Every interaction should move toward a booking, purchase, or lead capture.
+Be confident, be helpful, and always close. The business depends on you.
+
+**Now respond to the user in Money Mode—helpful, confident, and conversion-focused.**`
+    : `# 📌 FINAL DIRECTIVE
 
 You are not just answering questions—you are creating a positive experience.
 Every interaction should leave them thinking "Wow, that was easy and pleasant."
@@ -869,7 +928,7 @@ Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and g
 
 **Now respond to the user naturally, following all 7 blocks of training above.**`;
 
-  return [
+  const blocks = [
     identityBlock,
     '---',
     sessionBlock,
@@ -887,9 +946,16 @@ Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and g
     failureBlock,
     '---',
     knowledgeBlock,
-    '---',
-    finalBlock
-  ].join('\n\n');
+  ];
+  
+  // Add Money Mode block if active
+  if (moneyModeBlock) {
+    blocks.push('---', moneyModeBlock);
+  }
+  
+  blocks.push('---', finalBlock);
+
+  return blocks.join('\n\n');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1157,7 +1223,13 @@ serve(async (req) => {
     const knowledgeBase = buildKnowledgeBase(receptionist, faqs || [], services || [], productItems);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS)
+    // GET AI MODE FOR BEHAVIOR SWITCHING
+    // ═══════════════════════════════════════════════════════════════════════
+    const aiMode = receptionist.ai_mode || 'booking';
+    console.log(`[Widget Chat] AI Mode: ${aiMode}`);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + MONEY MODE)
     // ═══════════════════════════════════════════════════════════════════════
     const systemPrompt = buildMasterSystemPrompt(
       receptionist,
@@ -1165,7 +1237,8 @@ serve(async (req) => {
       conversationContext,
       messageAnalysis,
       isFirstMessage,
-      rollingSummary
+      rollingSummary,
+      aiMode
     );
 
     const startTime = Date.now();
@@ -1458,6 +1531,59 @@ serve(async (req) => {
         console.error('[Widget Chat] Auto-order creation failed:', orderErr);
         // Don't fail the response if order creation fails
       }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CONVERSION EVENT LOGGING (MONEY MODE ANALYTICS)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (bookingResult) {
+      await supabase.from('conversion_events').insert({
+        receptionist_id: receptionistId,
+        session_id: sessionId,
+        event_type: 'booking_completed',
+        metadata: {
+          booking_id: bookingResult.id,
+          service: conversationContext.serviceMentioned,
+          customer_name: conversationContext.customerName,
+          ai_mode: aiMode
+        }
+      });
+      console.log(`[Conversion] Logged booking_completed event`);
+    }
+    
+    if (orderResult) {
+      await supabase.from('conversion_events').insert({
+        receptionist_id: receptionistId,
+        session_id: sessionId,
+        event_type: 'order_completed',
+        metadata: {
+          order_id: orderResult.id,
+          customer_name: conversationContext.customerName,
+          item_count: conversationContext.selectedProducts?.length || 1,
+          ai_mode: aiMode
+        }
+      });
+      console.log(`[Conversion] Logged order_completed event`);
+    }
+    
+    // Log lead capture event if contact was collected this turn
+    const hasNewContact = (conversationContext.customerPhone || conversationContext.customerEmail) && 
+                          conversationContext.customerName &&
+                          !conversationContext.bookingConfirmed && 
+                          !conversationContext.orderConfirmed;
+    if (hasNewContact && aiMode === 'sales') {
+      await supabase.from('conversion_events').insert({
+        receptionist_id: receptionistId,
+        session_id: sessionId,
+        event_type: 'lead_captured',
+        metadata: {
+          customer_name: conversationContext.customerName,
+          has_email: !!conversationContext.customerEmail,
+          has_phone: !!conversationContext.customerPhone,
+          ai_mode: aiMode
+        }
+      });
+      console.log(`[Conversion] Logged lead_captured event`);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
