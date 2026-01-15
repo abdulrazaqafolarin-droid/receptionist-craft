@@ -747,6 +747,48 @@ export type Database = {
           },
         ]
       }
+      conversion_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          receptionist_id: string
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          receptionist_id: string
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          receptionist_id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversion_events_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversion_events_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integrations: {
         Row: {
           config_json: Json | null
@@ -1142,6 +1184,7 @@ export type Database = {
           active: boolean | null
           additional_languages: string[] | null
           address: string | null
+          ai_mode: Database["public"]["Enums"]["ai_mode"]
           allow_interruptions: boolean | null
           business_info: Json | null
           business_model: string | null
@@ -1174,6 +1217,7 @@ export type Database = {
           active?: boolean | null
           additional_languages?: string[] | null
           address?: string | null
+          ai_mode?: Database["public"]["Enums"]["ai_mode"]
           allow_interruptions?: boolean | null
           business_info?: Json | null
           business_model?: string | null
@@ -1206,6 +1250,7 @@ export type Database = {
           active?: boolean | null
           additional_languages?: string[] | null
           address?: string | null
+          ai_mode?: Database["public"]["Enums"]["ai_mode"]
           allow_interruptions?: boolean | null
           business_info?: Json | null
           business_model?: string | null
@@ -1429,6 +1474,7 @@ export type Database = {
       }
     }
     Enums: {
+      ai_mode: "support" | "booking" | "sales"
       appointment_status: "booked" | "cancelled" | "completed"
       integration_type: "twilio" | "openai" | "google_calendar" | "stripe"
       receptionist_tone: "friendly" | "professional" | "playful"
@@ -1560,6 +1606,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      ai_mode: ["support", "booking", "sales"],
       appointment_status: ["booked", "cancelled", "completed"],
       integration_type: ["twilio", "openai", "google_calendar", "stripe"],
       receptionist_tone: ["friendly", "professional", "playful"],
