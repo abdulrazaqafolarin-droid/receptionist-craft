@@ -13,6 +13,7 @@ import { DateSelector } from "@/components/widget/DateSelector";
 import { TimeSlotSelector } from "@/components/widget/TimeSlotSelector";
 import { BookingConfirmation } from "@/components/widget/BookingConfirmation";
 import { OrderConfirmation } from "@/components/widget/OrderConfirmation";
+import { ChatSessionOverlay } from "@/components/widget/ChatSessionOverlay";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -65,18 +66,113 @@ export default function Widget() {
     logoUrl: "",
   });
   const [greetingStored, setGreetingStored] = useState(false);
+  const [hasExistingSession, setHasExistingSession] = useState(false);
+  const [showSessionOverlay, setShowSessionOverlay] = useState(false);
+  const [existingMessages, setExistingMessages] = useState<any[]>([]);
 
-  // Initialize persistent session ID
+  // Initialize persistent session ID and check for existing conversation
   useEffect(() => {
     if (!receptionistId) return;
     
     let sid = localStorage.getItem(`widget_session_${receptionistId}`);
+    const isNewSession = !sid;
+    
     if (!sid) {
       sid = crypto.randomUUID();
       localStorage.setItem(`widget_session_${receptionistId}`, sid);
     }
     setSessionId(sid);
+    
+    // If this isn't a new session, check for existing messages
+    if (!isNewSession) {
+      checkExistingConversation(sid);
+    }
   }, [receptionistId]);
+  
+  // Check if there's an existing conversation for this session
+  async function checkExistingConversation(sid: string) {
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('message, sender, created_at')
+        .eq('session_id', sid)
+        .eq('receptionist_id', receptionistId)
+        .order('created_at', { ascending: true })
+        .limit(50);
+      
+      if (!error && data && data.length > 1) {
+        // Has existing conversation (more than just the greeting)
+        setExistingMessages(data);
+        setHasExistingSession(true);
+        setShowSessionOverlay(true);
+      }
+    } catch (err) {
+      console.error('Error checking existing conversation:', err);
+    }
+  }
+  
+  // Handle continue existing chat
+  function handleContinueChat() {
+    setShowSessionOverlay(false);
+    setGreetingStored(true); // Prevent re-storing greeting
+    
+    // Restore messages from the existing conversation
+    if (existingMessages.length > 0) {
+      const restoredMessages: Message[] = existingMessages.map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.message,
+        timestamp: new Date(msg.created_at),
+        showQuickReplies: false,
+      }));
+      
+      // Add quick replies to the last assistant message
+      if (restoredMessages.length > 0 && restoredMessages[restoredMessages.length - 1].role === 'assistant') {
+        restoredMessages[restoredMessages.length - 1].showQuickReplies = true;
+      }
+      
+      setMessages(restoredMessages);
+    }
+  }
+  
+  // Handle start new chat
+  async function handleNewChat() {
+    setShowSessionOverlay(false);
+    setHasExistingSession(false);
+    setExistingMessages([]);
+    
+    // Generate new session ID
+    const newSid = crypto.randomUUID();
+    localStorage.setItem(`widget_session_${receptionistId}`, newSid);
+    setSessionId(newSid);
+    
+    // Reset booking state
+    setBookingState({
+      serviceId: null,
+      serviceName: null,
+      date: null,
+      timeSlot: null,
+      customerName: null,
+      customerEmail: null,
+      customerPhone: null,
+      collectingInfo: null,
+      productId: null,
+      productName: null,
+      quantity: 1,
+      orderMode: false,
+    });
+    
+    // Show fresh greeting with a proper "Hi" conversation start
+    if (receptionist?.greeting_message) {
+      setMessages([{
+        role: "assistant",
+        content: receptionist.greeting_message,
+        timestamp: new Date(),
+        showQuickReplies: true,
+      }]);
+    }
+    
+    setGreetingStored(false); // Allow greeting to be stored for new session
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -527,9 +623,14 @@ export default function Widget() {
     }
   }
 
-  // Refresh conversation - soft reset that preserves session but clears flow state
+  // Refresh conversation - now creates a truly new chat with new session ID
   async function handleRefreshConversation() {
-    if (!receptionistId || !sessionId) return;
+    if (!receptionistId) return;
+    
+    // Generate new session ID for a clean slate
+    const newSid = crypto.randomUUID();
+    localStorage.setItem(`widget_session_${receptionistId}`, newSid);
+    setSessionId(newSid);
     
     // Reset local booking state
     setBookingState({
@@ -547,18 +648,23 @@ export default function Widget() {
       orderMode: false,
     });
     
+    // Reset session tracking
+    setHasExistingSession(false);
+    setExistingMessages([]);
+    setGreetingStored(false);
+    
     // Clear messages and show fresh greeting
     if (receptionist?.greeting_message) {
       setMessages([{
         role: "assistant",
-        content: "Let's start fresh! " + receptionist.greeting_message,
+        content: receptionist.greeting_message,
         timestamp: new Date(),
         showQuickReplies: true,
       }]);
     } else {
       setMessages([{
         role: "assistant",
-        content: `Let's start fresh! How can I help you today?`,
+        content: `Hello! How can I help you today?`,
         timestamp: new Date(),
         showQuickReplies: true,
       }]);
@@ -605,7 +711,14 @@ export default function Widget() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-2 sm:p-4">
-      <Card className="w-full max-w-3xl h-[90vh] sm:h-[700px] flex flex-col shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-300">
+      <Card className="w-full max-w-3xl h-[90vh] sm:h-[700px] flex flex-col shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-300 relative">
+        {/* Chat Session Overlay - shown when returning with existing conversation */}
+        <ChatSessionOverlay
+          hasExistingSession={showSessionOverlay}
+          onContinue={handleContinueChat}
+          onNewChat={handleNewChat}
+          businessName={receptionist.business_name}
+        />
         {/* Header */}
         <div 
           className="text-primary-foreground p-4 sm:p-6 relative overflow-hidden"
