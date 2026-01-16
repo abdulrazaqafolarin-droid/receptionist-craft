@@ -750,26 +750,32 @@ export type Database = {
       conversion_events: {
         Row: {
           created_at: string
+          currency: string | null
           event_type: string
           id: string
           metadata: Json | null
           receptionist_id: string
+          revenue_value: number | null
           session_id: string
         }
         Insert: {
           created_at?: string
+          currency?: string | null
           event_type: string
           id?: string
           metadata?: Json | null
           receptionist_id: string
+          revenue_value?: number | null
           session_id: string
         }
         Update: {
           created_at?: string
+          currency?: string | null
           event_type?: string
           id?: string
           metadata?: Json | null
           receptionist_id?: string
+          revenue_value?: number | null
           session_id?: string
         }
         Relationships: [
@@ -1404,6 +1410,33 @@ export type Database = {
       }
     }
     Views: {
+      revenue_attribution: {
+        Row: {
+          bookings_count: number | null
+          checkouts_count: number | null
+          currency: string | null
+          leads_count: number | null
+          orders_count: number | null
+          receptionist_id: string | null
+          total_revenue_assisted: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversion_events_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversion_events_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       widget_receptionists: {
         Row: {
           business_name: string | null
