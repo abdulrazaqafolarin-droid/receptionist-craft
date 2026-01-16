@@ -1537,33 +1537,58 @@ serve(async (req) => {
     // CONVERSION EVENT LOGGING (MONEY MODE ANALYTICS)
     // ═══════════════════════════════════════════════════════════════════════
     if (bookingResult) {
+      // Estimate revenue from booking - use service price if available
+      let estimatedRevenue = 0;
+      if (conversationState.slots?.serviceId) {
+        const { data: serviceData } = await supabase
+          .from('services')
+          .select('price')
+          .eq('id', conversationState.slots.serviceId)
+          .maybeSingle();
+        estimatedRevenue = serviceData?.price || 0;
+      }
+      
       await supabase.from('conversion_events').insert({
         receptionist_id: receptionistId,
         session_id: sessionId,
         event_type: 'booking_completed',
+        revenue_value: estimatedRevenue,
+        currency: 'NGN',
         metadata: {
           booking_id: bookingResult.id,
           service: conversationContext.serviceMentioned,
           customer_name: conversationContext.customerName,
-          ai_mode: aiMode
+          ai_mode: aiMode,
+          estimated_value: estimatedRevenue
         }
       });
-      console.log(`[Conversion] Logged booking_completed event`);
+      console.log(`[Conversion] Logged booking_completed event with revenue: ${estimatedRevenue}`);
     }
     
     if (orderResult) {
+      // Calculate order revenue from selected products
+      let orderRevenue = 0;
+      if (conversationContext.selectedProducts?.length) {
+        orderRevenue = conversationContext.selectedProducts.reduce((sum, p) => {
+          return sum + ((p.price || 0) * (p.quantity || 1));
+        }, 0);
+      }
+      
       await supabase.from('conversion_events').insert({
         receptionist_id: receptionistId,
         session_id: sessionId,
         event_type: 'order_completed',
+        revenue_value: orderRevenue,
+        currency: 'NGN',
         metadata: {
           order_id: orderResult.id,
           customer_name: conversationContext.customerName,
           item_count: conversationContext.selectedProducts?.length || 1,
-          ai_mode: aiMode
+          ai_mode: aiMode,
+          order_total: orderRevenue
         }
       });
-      console.log(`[Conversion] Logged order_completed event`);
+      console.log(`[Conversion] Logged order_completed event with revenue: ${orderRevenue}`);
     }
     
     // Log lead capture event if contact was collected this turn
@@ -1576,6 +1601,8 @@ serve(async (req) => {
         receptionist_id: receptionistId,
         session_id: sessionId,
         event_type: 'lead_captured',
+        revenue_value: 0, // Leads don't have immediate revenue
+        currency: 'NGN',
         metadata: {
           customer_name: conversationContext.customerName,
           has_email: !!conversationContext.customerEmail,

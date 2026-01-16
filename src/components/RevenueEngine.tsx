@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, TrendingUp, Zap, Target, ShoppingCart, Users } from "lucide-react";
+import { DollarSign, TrendingUp, Zap, Target, Users, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -13,13 +12,23 @@ interface RevenueEngineProps {
   onModeChange?: (mode: string) => void;
 }
 
+interface ConversionStats {
+  bookings: number;
+  leads: number;
+  orders: number;
+  totalRevenue: number;
+  currency: string;
+}
+
 export function RevenueEngine({ receptionistId, currentMode = 'booking', onModeChange }: RevenueEngineProps) {
   const [aiMode, setAiMode] = useState<'support' | 'booking' | 'sales'>(currentMode as 'support' | 'booking' | 'sales');
   const [loading, setLoading] = useState(false);
-  const [conversionStats, setConversionStats] = useState({
+  const [conversionStats, setConversionStats] = useState<ConversionStats>({
     bookings: 0,
     leads: 0,
-    orders: 0
+    orders: 0,
+    totalRevenue: 0,
+    currency: 'NGN'
   });
 
   useEffect(() => {
@@ -28,28 +37,42 @@ export function RevenueEngine({ receptionistId, currentMode = 'booking', onModeC
 
   const loadConversionStats = async () => {
     try {
-      // Get conversion events for the last 30 days
+      // Get conversion events for the last 30 days with revenue
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
       const { data, error } = await supabase
         .from('conversion_events')
-        .select('event_type')
+        .select('event_type, revenue_value, currency')
         .eq('receptionist_id', receptionistId)
         .gte('created_at', thirtyDaysAgo.toISOString());
 
       if (error) throw error;
 
-      const stats = {
+      const stats: ConversionStats = {
         bookings: data?.filter(e => e.event_type === 'booking_completed').length || 0,
         leads: data?.filter(e => e.event_type === 'lead_captured').length || 0,
-        orders: data?.filter(e => e.event_type === 'order_completed').length || 0
+        orders: data?.filter(e => e.event_type === 'order_completed').length || 0,
+        totalRevenue: data?.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0) || 0,
+        currency: data?.[0]?.currency || 'NGN'
       };
 
       setConversionStats(stats);
     } catch (error) {
       console.error('Error loading conversion stats:', error);
     }
+  };
+  
+  // Format currency with symbol
+  const formatCurrency = (amount: number, currency: string) => {
+    const symbols: Record<string, string> = {
+      'NGN': '₦',
+      'USD': '$',
+      'EUR': '€',
+      'GBP': '£'
+    };
+    const symbol = symbols[currency] || currency;
+    return `${symbol}${amount.toLocaleString()}`;
   };
 
   const handleModeChange = async (newMode: 'support' | 'booking' | 'sales') => {
@@ -200,6 +223,23 @@ export function RevenueEngine({ receptionistId, currentMode = 'booking', onModeC
               <li>• Captures contact details before ending</li>
               <li>• Introduces urgency when users hesitate</li>
             </ul>
+          </div>
+        )}
+
+        {/* Revenue Attribution - THE MOAT */}
+        {conversionStats.totalRevenue > 0 && (
+          <div className="p-4 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                <Sparkles className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">AI Helped Generate</div>
+                <div className="text-2xl font-bold text-green-600">
+                  {formatCurrency(conversionStats.totalRevenue, conversionStats.currency)}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
