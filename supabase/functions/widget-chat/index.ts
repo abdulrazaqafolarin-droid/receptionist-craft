@@ -21,6 +21,20 @@ import { MemorySummarizer } from "../_shared/flow/memorySummarizer.ts";
 import type { ConversationState, FlowSlots } from "../_shared/flow/types.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CAPABILITY-BASED ARCHITECTURE IMPORTS (UNIVERSAL BUSINESS OPERATOR)
+// ═══════════════════════════════════════════════════════════════════════════
+import { 
+  classifyUniversalIntent, 
+  validateIntentAgainstCapabilities,
+  buildCapabilityPrompt 
+} from "../_shared/capabilities/intentClassifier.ts";
+import { 
+  resolveCapabilities, 
+  resolvePrimaryGoal 
+} from "../_shared/capabilities/index.ts";
+import type { BusinessCapabilities, PrimaryGoal, UniversalIntent } from "../_shared/capabilities/types.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CORS HEADERS
 // ═══════════════════════════════════════════════════════════════════════════
 const corsHeaders = {
@@ -691,7 +705,8 @@ function buildMasterSystemPrompt(
   messageAnalysis: MessageAnalysis,
   isFirstMessage: boolean,
   rollingSummary: string,
-  aiMode: string = 'booking'
+  aiMode: string = 'booking',
+  capabilityPrompt: string = ''
 ): string {
   const emotionalGuidance: Record<string, string> = {
     neutral: 'Maintain a warm, professional tone.',
@@ -947,6 +962,11 @@ Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and g
     '---',
     knowledgeBlock,
   ];
+  
+  // Add Capability Prompt block (new capability-based architecture)
+  if (capabilityPrompt) {
+    blocks.push('---', capabilityPrompt);
+  }
   
   // Add Money Mode block if active
   if (moneyModeBlock) {
@@ -1223,13 +1243,29 @@ serve(async (req) => {
     const knowledgeBase = buildKnowledgeBase(receptionist, faqs || [], services || [], productItems);
 
     // ═══════════════════════════════════════════════════════════════════════
+    // CAPABILITY-BASED ARCHITECTURE: RESOLVE CAPABILITIES & VALIDATE INTENT
+    // ═══════════════════════════════════════════════════════════════════════
+    const capabilities = resolveCapabilities(receptionist);
+    const primaryGoal = resolvePrimaryGoal(receptionist);
+    
+    // Classify universal intent and validate against capabilities
+    const universalIntent = classifyUniversalIntent(message);
+    const intentValidation = validateIntentAgainstCapabilities(universalIntent, capabilities);
+    
+    console.log(`[Capability Engine] Intent: ${universalIntent}, Primary Goal: ${primaryGoal}`);
+    console.log(`[Capability Engine] Validation: allowed=${intentValidation.allowed}, reason=${intentValidation.reason || 'none'}`);
+    
+    // Build capability-aware prompt section
+    const capabilityPrompt = buildCapabilityPrompt(capabilities, primaryGoal, universalIntent, intentValidation);
+
+    // ═══════════════════════════════════════════════════════════════════════
     // GET AI MODE FOR BEHAVIOR SWITCHING
     // ═══════════════════════════════════════════════════════════════════════
     const aiMode = receptionist.ai_mode || 'booking';
     console.log(`[Widget Chat] AI Mode: ${aiMode}`);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + MONEY MODE)
+    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + CAPABILITY GRAPH + MONEY MODE)
     // ═══════════════════════════════════════════════════════════════════════
     const systemPrompt = buildMasterSystemPrompt(
       receptionist,
@@ -1238,7 +1274,8 @@ serve(async (req) => {
       messageAnalysis,
       isFirstMessage,
       rollingSummary,
-      aiMode
+      aiMode,
+      capabilityPrompt
     );
 
     const startTime = Date.now();

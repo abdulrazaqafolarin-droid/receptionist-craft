@@ -3,6 +3,17 @@ import { persist } from 'zustand/middleware';
 
 export type ItemType = 'service' | 'product';
 
+export type PrimaryGoal = 'sales' | 'bookings' | 'support' | 'leads';
+
+export type BusinessCapabilities = {
+  sells_products: boolean;
+  books_appointments: boolean;
+  offers_services: boolean;
+  delivers: boolean;
+  requires_compliance: boolean;
+  supports_emergency: boolean;
+};
+
 type ServiceOrProduct = {
   name: string;
   duration_minutes: number;
@@ -38,6 +49,9 @@ type OnboardingState = {
     goal: string;
     tone: 'friendly' | 'professional' | 'playful';
     language: string;
+    // New capability-based fields
+    primary_goal: PrimaryGoal;
+    capabilities: BusinessCapabilities;
   };
   services: ServiceOrProduct[];
   availabilityRules: AvailabilityRule[];
@@ -56,6 +70,15 @@ type OnboardingState = {
   reset: () => void;
 };
 
+const DEFAULT_CAPABILITIES: BusinessCapabilities = {
+  sells_products: false,
+  books_appointments: true,
+  offers_services: true,
+  delivers: false,
+  requires_compliance: false,
+  supports_emergency: false,
+};
+
 const initialState = {
   currentStep: 1,
   receptionistId: null,
@@ -69,6 +92,8 @@ const initialState = {
     goal: '',
     tone: 'friendly' as const,
     language: 'English',
+    primary_goal: 'bookings' as PrimaryGoal,
+    capabilities: DEFAULT_CAPABILITIES,
   },
   services: [],
   availabilityRules: [],
