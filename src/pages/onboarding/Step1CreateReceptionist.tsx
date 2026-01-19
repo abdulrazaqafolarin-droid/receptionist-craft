@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useOnboardingStore } from "@/store/onboarding";
+import { useState, useEffect } from "react";
+import { useOnboardingStore, type PrimaryGoal, type BusinessCapabilities } from "@/store/onboarding";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowRight, Sparkles, MapPin, Users, History, Trophy, FileText, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowRight, Sparkles, MapPin, Users, History, Trophy, FileText, BookOpen, ChevronDown, ChevronUp, Target, ShoppingCart, Calendar, Headphones, UserPlus, Truck, Shield, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -37,10 +38,106 @@ const BUSINESS_TYPES = [
   "General Business",
 ];
 
+const PRIMARY_GOALS: { value: PrimaryGoal; label: string; description: string; icon: React.ReactNode }[] = [
+  { value: 'sales', label: 'Increase Sales', description: 'Focus on selling products and closing deals', icon: <ShoppingCart className="h-4 w-4" /> },
+  { value: 'bookings', label: 'Get More Bookings', description: 'Prioritize appointment scheduling', icon: <Calendar className="h-4 w-4" /> },
+  { value: 'support', label: 'Answer Questions', description: 'Provide information and customer support', icon: <Headphones className="h-4 w-4" /> },
+  { value: 'leads', label: 'Capture Leads', description: 'Collect contact information from prospects', icon: <UserPlus className="h-4 w-4" /> },
+];
+
+const CAPABILITY_OPTIONS: { key: keyof BusinessCapabilities; label: string; description: string; icon: React.ReactNode }[] = [
+  { key: 'sells_products', label: 'Sell Products', description: 'Take product orders from customers', icon: <ShoppingCart className="h-4 w-4" /> },
+  { key: 'books_appointments', label: 'Book Appointments', description: 'Schedule appointments and services', icon: <Calendar className="h-4 w-4" /> },
+  { key: 'offers_services', label: 'Offer Services', description: 'Provide on-demand or scheduled services', icon: <Headphones className="h-4 w-4" /> },
+  { key: 'delivers', label: 'Deliver to Customers', description: 'Offer delivery options for orders', icon: <Truck className="h-4 w-4" /> },
+  { key: 'requires_compliance', label: 'Requires Compliance', description: 'Has regulatory or legal requirements', icon: <Shield className="h-4 w-4" /> },
+  { key: 'supports_emergency', label: 'Handle Urgent Requests', description: 'Support emergency or urgent inquiries', icon: <AlertTriangle className="h-4 w-4" /> },
+];
+
+// Auto-detect capabilities based on business type
+function getDefaultCapabilities(businessType: string): BusinessCapabilities {
+  const defaults: BusinessCapabilities = {
+    sells_products: false,
+    books_appointments: true,
+    offers_services: true,
+    delivers: false,
+    requires_compliance: false,
+    supports_emergency: false,
+  };
+
+  switch (businessType) {
+    case 'Dental Clinic':
+    case 'Medical Clinic':
+    case 'Spa & Wellness':
+    case 'Barber Shop':
+    case 'Hair Salon':
+    case 'Law Office':
+      return { ...defaults, books_appointments: true, offers_services: true, requires_compliance: true };
+    
+    case 'Grocery Store':
+    case 'Electronics Store':
+    case 'Retail Store':
+    case 'Auto Parts':
+    case 'Bakery':
+      return { ...defaults, sells_products: true, books_appointments: false, offers_services: false, delivers: true };
+    
+    case 'Car Wash':
+    case 'Gym & Fitness':
+    case 'Florist':
+      return { ...defaults, books_appointments: true, offers_services: true };
+    
+    case 'Pharmacy':
+      return { sells_products: true, books_appointments: true, offers_services: true, delivers: true, requires_compliance: true, supports_emergency: true };
+    
+    case 'Restaurant':
+      return { ...defaults, sells_products: true, books_appointments: true, delivers: true };
+    
+    case 'Pet Shop':
+      return { ...defaults, sells_products: true, books_appointments: true, offers_services: true, delivers: true };
+    
+    case 'Real Estate':
+      return { ...defaults, books_appointments: true, offers_services: true, requires_compliance: true };
+    
+    default:
+      return { ...defaults, sells_products: true, books_appointments: true, offers_services: true };
+  }
+}
+
+// Auto-detect primary goal based on business type
+function getDefaultPrimaryGoal(businessType: string): PrimaryGoal {
+  switch (businessType) {
+    case 'Dental Clinic':
+    case 'Medical Clinic':
+    case 'Spa & Wellness':
+    case 'Barber Shop':
+    case 'Hair Salon':
+    case 'Law Office':
+    case 'Real Estate':
+    case 'Restaurant':
+    case 'Car Wash':
+    case 'Gym & Fitness':
+      return 'bookings';
+    
+    case 'Grocery Store':
+    case 'Electronics Store':
+    case 'Retail Store':
+    case 'Auto Parts':
+    case 'Bakery':
+    case 'Pharmacy':
+    case 'Pet Shop':
+    case 'Florist':
+      return 'sales';
+    
+    default:
+      return 'support';
+  }
+}
+
 export default function Step1CreateReceptionist() {
   const { receptionist, setReceptionist, setStep, setReceptionistId } = useOnboardingStore();
   const [loading, setLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showCapabilities, setShowCapabilities] = useState(false);
   
   // Additional business info state
   const [businessInfo, setBusinessInfo] = useState({
@@ -51,6 +148,27 @@ export default function Step1CreateReceptionist() {
     aiGuidelines: "",
     generalKnowledge: "",
   });
+
+  // Auto-update capabilities and primary goal when business type changes
+  useEffect(() => {
+    if (receptionist.business_type) {
+      const defaultCaps = getDefaultCapabilities(receptionist.business_type);
+      const defaultGoal = getDefaultPrimaryGoal(receptionist.business_type);
+      setReceptionist({ 
+        capabilities: defaultCaps, 
+        primary_goal: defaultGoal 
+      });
+    }
+  }, [receptionist.business_type]);
+
+  const handleCapabilityChange = (key: keyof BusinessCapabilities, checked: boolean) => {
+    setReceptionist({
+      capabilities: {
+        ...receptionist.capabilities,
+        [key]: checked,
+      },
+    });
+  };
 
   const handleContinue = async () => {
     if (!receptionist.name || !receptionist.business_name || !receptionist.business_type) {
@@ -94,6 +212,9 @@ export default function Step1CreateReceptionist() {
           address: businessInfo.location || null,
           business_info: comprehensiveBusinessInfo,
           persona_description: `${receptionist.tone.charAt(0).toUpperCase() + receptionist.tone.slice(1)}, professional AI receptionist for ${receptionist.business_name}.`,
+          // New capability-based fields
+          primary_goal: receptionist.primary_goal,
+          capabilities: receptionist.capabilities,
         })
         .select()
         .single();
@@ -152,7 +273,7 @@ export default function Step1CreateReceptionist() {
           <CardTitle>Create Your AI Receptionist</CardTitle>
         </div>
         <CardDescription>
-          Let's start by setting up your AI receptionist's identity and personality
+          Let's start by setting up your AI receptionist's identity and capabilities
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -191,7 +312,73 @@ export default function Step1CreateReceptionist() {
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">This helps us auto-configure your AI's capabilities</p>
         </div>
+
+        {/* Primary Business Goal Selector */}
+        <div className="space-y-3">
+          <Label className="flex items-center gap-2">
+            <Target className="h-4 w-4 text-primary" />
+            What's your main goal with this AI? *
+          </Label>
+          <RadioGroup 
+            value={receptionist.primary_goal} 
+            onValueChange={(value: PrimaryGoal) => setReceptionist({ primary_goal: value })}
+            className="grid grid-cols-1 md:grid-cols-2 gap-3"
+          >
+            {PRIMARY_GOALS.map((goal) => (
+              <div key={goal.value} className="flex items-center space-x-2 p-3 border rounded-md hover:bg-muted/50 transition-colors">
+                <RadioGroupItem value={goal.value} id={goal.value} />
+                <Label htmlFor={goal.value} className="font-normal cursor-pointer flex-1">
+                  <div className="flex items-center gap-2 font-medium">
+                    {goal.icon}
+                    {goal.label}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{goal.description}</div>
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+        </div>
+
+        {/* Business Capabilities Section */}
+        <Collapsible open={showCapabilities} onOpenChange={setShowCapabilities}>
+          <CollapsibleTrigger asChild>
+            <Button variant="outline" className="w-full justify-between">
+              <span className="flex items-center gap-2">
+                <ShoppingCart className="h-4 w-4" />
+                Business Capabilities
+              </span>
+              {showCapabilities ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-3 pt-4">
+            <p className="text-sm text-muted-foreground">
+              Select what your business can do. The AI will adapt its behavior based on these capabilities.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {CAPABILITY_OPTIONS.map((cap) => (
+                <div 
+                  key={cap.key} 
+                  className="flex items-start space-x-3 p-3 border rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  <Checkbox
+                    id={cap.key}
+                    checked={receptionist.capabilities[cap.key]}
+                    onCheckedChange={(checked) => handleCapabilityChange(cap.key, checked === true)}
+                  />
+                  <Label htmlFor={cap.key} className="font-normal cursor-pointer flex-1">
+                    <div className="flex items-center gap-2 font-medium">
+                      {cap.icon}
+                      {cap.label}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{cap.description}</div>
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
 
         <div className="space-y-2">
           <Label htmlFor="phone">Business Phone (Optional)</Label>

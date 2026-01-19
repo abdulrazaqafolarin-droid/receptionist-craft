@@ -1197,6 +1197,7 @@ export type Database = {
           business_name: string
           business_phone: string | null
           business_type: string | null
+          capabilities: Json | null
           created_at: string
           default_response: string | null
           goal: string | null
@@ -1210,6 +1211,7 @@ export type Database = {
           name: string
           persona_description: string | null
           phone: string | null
+          primary_goal: string | null
           services_and_prices: Json | null
           system_prompt: string | null
           temperature: number | null
@@ -1230,6 +1232,7 @@ export type Database = {
           business_name: string
           business_phone?: string | null
           business_type?: string | null
+          capabilities?: Json | null
           created_at?: string
           default_response?: string | null
           goal?: string | null
@@ -1243,6 +1246,7 @@ export type Database = {
           name: string
           persona_description?: string | null
           phone?: string | null
+          primary_goal?: string | null
           services_and_prices?: Json | null
           system_prompt?: string | null
           temperature?: number | null
@@ -1263,6 +1267,7 @@ export type Database = {
           business_name?: string
           business_phone?: string | null
           business_type?: string | null
+          capabilities?: Json | null
           created_at?: string
           default_response?: string | null
           goal?: string | null
@@ -1276,6 +1281,7 @@ export type Database = {
           name?: string
           persona_description?: string | null
           phone?: string | null
+          primary_goal?: string | null
           services_and_prices?: Json | null
           system_prompt?: string | null
           temperature?: number | null
@@ -1466,6 +1472,14 @@ export type Database = {
       }
     }
     Functions: {
+      auto_detect_capabilities: {
+        Args: { business_type: string }
+        Returns: Json
+      }
+      auto_detect_primary_goal: {
+        Args: { business_type: string }
+        Returns: string
+      }
       cleanup_old_booking_suggestions: {
         Args: { retention_days?: number }
         Returns: number
