@@ -869,8 +869,8 @@ After a booking is confirmed OR purchase is complete:
 - One farewell is enough - do not keep saying goodbye
 - After "goodbye", if user doesn't respond, conversation is over`;
 
-  // BLOCK 5.5: PRODUCT ORDERING FLOW WITH INVENTORY AWARENESS
-  const orderingBlock = `# 📌 BLOCK 5.5 — PRODUCT ORDERING FLOW WITH INVENTORY
+  // BLOCK 5.5: PRODUCT ORDERING FLOW WITH INVENTORY & DELIVERY
+  const orderingBlock = `# 📌 BLOCK 5.5 — PRODUCT ORDERING FLOW WITH INVENTORY & DELIVERY
 
 When a customer wants to ORDER/BUY/PURCHASE a product:
 
@@ -881,14 +881,19 @@ When a customer wants to ORDER/BUY/PURCHASE a product:
    - If quantity requested > available → "We only have [available] in stock right now. Would you like to order [available] instead?"
 3. **Quantity** → "How many would you like?" (assume 1 if not specified)
 4. **Contact Collection** → "Can I get your name and phone/email for the order?"
-5. **Confirmation** → Summarize: product, quantity, contact info
-6. **Close** → Ask if they need anything else, then say goodbye
+5. **Delivery Location** → "Where would you like us to deliver your order? Please share your address."
+   - This is REQUIRED for product orders
+   - Accept any reasonable address format
+   - If pickup is preferred, customer can say "I'll pick it up" and skip delivery address
+6. **Confirmation** → Summarize: product, quantity, contact info, AND delivery address
+7. **Close** → Ask if they need anything else, then say goodbye
 
 ### Product Order Confirmation Format:
-"Perfect! I've placed your order for [quantity] x [product]. We'll contact you at [contact] to arrange [pickup/delivery]. Is there anything else I can help you with?"
+"Perfect! I've placed your order for [quantity] x [product]. We'll deliver to [address] and contact you at [contact] to confirm. Is there anything else I can help you with?"
 
 ### Important:
 - ALWAYS check inventory status from the knowledge base before confirming orders
+- ALWAYS collect delivery address before confirming (unless customer opts for pickup)
 - If product shows [❌ OUT OF STOCK] → Do NOT confirm the order, offer alternatives
 - If product shows [⚠️ LOW STOCK: X left] → Mention limited availability
 - Keep it simple and conversational
@@ -1500,7 +1505,8 @@ serve(async (req) => {
       try {
         console.log(`[Widget Chat] Auto-creating order for ${conversationContext.customerName}`);
         
-        // Create order
+        // Create order with delivery location
+        const deliveryAddress = conversationState.slots?.deliveryLocation || null;
         const { data: order, error: orderErr } = await supabase
           .from('orders')
           .insert({
@@ -1513,7 +1519,8 @@ serve(async (req) => {
             metadata: {
               session_id: sessionId,
               ordered_via: 'widget_chat_auto',
-              conversation_phase: conversationContext.conversationPhase
+              conversation_phase: conversationContext.conversationPhase,
+              delivery_address: deliveryAddress
             }
           })
           .select()

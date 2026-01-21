@@ -175,8 +175,8 @@ export function getNextBookingStep(state: ConversationState): FlowStep {
   return 'complete';
 }
 
-// Determine next step in ordering flow
-export function getNextOrderingStep(state: ConversationState): FlowStep {
+// Determine next step in ordering flow (includes location for delivery)
+export function getNextOrderingStep(state: ConversationState, requiresDelivery: boolean = true): FlowStep {
   const slots = state.slots;
   const hasProducts = (slots.selectedProducts && slots.selectedProducts.length > 0) || slots.productId;
   
@@ -184,6 +184,7 @@ export function getNextOrderingStep(state: ConversationState): FlowStep {
   if (!slots.quantity && !slots.selectedProducts?.length) return 'select_quantity';
   if (!slots.customerName) return 'collect_name';
   if (!slots.customerPhone && !slots.customerEmail) return 'collect_contact';
+  if (requiresDelivery && !slots.deliveryLocation) return 'collect_location';
   if (!state.order_confirmed) return 'confirm';
   return 'complete';
 }
@@ -207,6 +208,7 @@ export function getStepQuestion(step: FlowStep, flowType: FlowType): string {
     'select_quantity': "How many would you like?",
     'collect_name': "What's your name for the order?",
     'collect_contact': "Please provide your phone number or email so we can contact you about the order.",
+    'collect_location': "Where would you like us to deliver your order? Please provide your delivery address.",
     'confirm': "Would you like me to confirm this order?",
     'complete': "Is there anything else I can help you with today?",
   };
