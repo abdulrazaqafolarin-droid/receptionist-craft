@@ -11,7 +11,8 @@ export type FlowStep =
   | 'select_product'
   | 'select_quantity'
   | 'collect_name'
-  | 'collect_contact' 
+  | 'collect_contact'
+  | 'collect_location'
   | 'confirm' 
   | 'complete'
   | null;
@@ -48,6 +49,9 @@ export interface FlowSlots {
   customerName?: string | null;
   customerPhone?: string | null;
   customerEmail?: string | null;
+  
+  // Location slot (for orders with delivery)
+  deliveryLocation?: string | null;
 }
 
 export interface ConversationState {

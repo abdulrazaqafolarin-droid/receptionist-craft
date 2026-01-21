@@ -38,6 +38,12 @@ const NAME_PATTERNS = [
 // Quantity patterns
 const QUANTITY_PATTERN = /(\d+)\s*(?:pieces?|items?|units?|of|x)?/i;
 
+// Location/Address patterns
+const LOCATION_PATTERNS = [
+  /(?:deliver(?:y)?(?:\s+to)?|send(?:\s+to)?|ship(?:\s+to)?|address\s+is|at)\s+(.{10,100})/i,
+  /(\d+\s+[A-Za-z]+(?:\s+[A-Za-z]+)*(?:\s+(?:street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|way|court|ct|place|pl)))/i,
+];
+
 // Extract date from message
 function extractDate(message: string): string | null {
   for (const pattern of DATE_PATTERNS) {
@@ -97,6 +103,19 @@ function extractQuantity(message: string): number | null {
   return null;
 }
 
+// Extract delivery location
+function extractLocation(message: string): string | null {
+  for (const pattern of LOCATION_PATTERNS) {
+    const match = message.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  // If no pattern matched but message is likely a location response (during collect_location step)
+  // We'll let the AI handle natural location extraction
+  return null;
+}
+
 // Detect corrections
 function detectCorrections(message: string, currentSlots: FlowSlots): string[] {
   const corrections: string[] = [];
@@ -119,10 +138,12 @@ function detectCorrections(message: string, currentSlots: FlowSlots): string[] {
       const newDate = extractDate(message);
       const newTime = extractTime(message);
       const newName = extractName(message);
+      const newLocation = extractLocation(message);
       
       if (newDate && currentSlots.date) corrections.push('date');
       if (newTime && currentSlots.time) corrections.push('time');
       if (newName && currentSlots.customerName) corrections.push('name');
+      if (newLocation && currentSlots.deliveryLocation) corrections.push('deliveryLocation');
       break;
     }
   }
@@ -163,6 +184,10 @@ export function extractSlots(
   // Extract quantity
   const quantity = extractQuantity(message);
   if (quantity) extractedSlots.quantity = quantity;
+  
+  // Extract delivery location
+  const location = extractLocation(message);
+  if (location) extractedSlots.deliveryLocation = location;
   
   // Match service by name if services provided
   if (services && services.length > 0) {
@@ -229,6 +254,7 @@ export function buildSlotSummary(slots: FlowSlots, flowType: 'SERVICE' | 'PRODUC
         .join(', ');
       parts.push(`Products: ${productList}`);
     }
+    if (slots.deliveryLocation) parts.push(`Delivery Address: ${slots.deliveryLocation}`);
   }
   
   if (slots.customerName) parts.push(`Name: ${slots.customerName}`);
