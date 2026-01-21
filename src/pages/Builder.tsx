@@ -33,6 +33,17 @@ import {
  * Uses integrated Supabase client from @/integrations/supabase/client
  */
 
+type PrimaryGoal = 'sales' | 'bookings' | 'support' | 'leads';
+
+type BusinessCapabilities = {
+  sells_products: boolean;
+  books_appointments: boolean;
+  offers_services: boolean;
+  delivers: boolean;
+  requires_compliance: boolean;
+  supports_emergency: boolean;
+};
+
 type Receptionist = {
   id?: string;
   name?: string;
@@ -48,6 +59,8 @@ type Receptionist = {
   language?: string;
   goal?: string;
   created_at?: string;
+  primary_goal?: PrimaryGoal;
+  capabilities?: BusinessCapabilities;
 };
 
 type ChatMessage = {
@@ -77,6 +90,15 @@ export default function BuilderPage() {
     temperature: 0.7,
     language: "English",
     goal: "",
+    primary_goal: "bookings",
+    capabilities: {
+      sells_products: false,
+      books_appointments: true,
+      offers_services: true,
+      delivers: false,
+      requires_compliance: false,
+      supports_emergency: false,
+    },
   });
 
   const [loading, setLoading] = useState(false);
@@ -154,14 +176,19 @@ export default function BuilderPage() {
       const { data, error } = await supabase
         .from("receptionists")
         .select(
-          "id, name, business_name, business_type, phone, tone, greeting_message, default_response, knowledge_base, system_prompt, temperature, language, goal, created_at"
+          "id, name, business_name, business_type, phone, tone, greeting_message, default_response, knowledge_base, system_prompt, temperature, language, goal, created_at, primary_goal, capabilities"
         )
         .eq("id", id)
         .maybeSingle();
 
       if (error) throw error;
       if (data) {
-        setReceptionist((prev) => ({ ...prev, ...data }));
+        setReceptionist((prev) => ({ 
+          ...prev, 
+          ...data,
+          primary_goal: (data.primary_goal as PrimaryGoal) || 'bookings',
+          capabilities: (data.capabilities as BusinessCapabilities) || prev.capabilities,
+        }));
       } else {
         // not found
         setError("Receptionist not found");
@@ -230,6 +257,8 @@ export default function BuilderPage() {
           temperature: receptionist.temperature,
           language: receptionist.language,
           goal: receptionist.goal,
+          primary_goal: receptionist.primary_goal,
+          capabilities: receptionist.capabilities,
         }).eq("id", receptionistId).eq("user_id", currentUserId);
 
         if (error) {
@@ -255,6 +284,8 @@ export default function BuilderPage() {
           temperature: receptionist.temperature,
           language: receptionist.language,
           goal: receptionist.goal,
+          primary_goal: receptionist.primary_goal,
+          capabilities: receptionist.capabilities,
         }]).select().single();
 
         if (error) {
@@ -731,6 +762,60 @@ export default function BuilderPage() {
                     <option value="Gym & Fitness">Gym & Fitness</option>
                     <option value="General Business">General Business</option>
                   </select>
+                </div>
+
+                {/* Primary Goal */}
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Primary Business Goal</label>
+                  <select 
+                    className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" 
+                    value={receptionist.primary_goal || "bookings"} 
+                    onChange={(e) => onFieldChange("primary_goal", e.target.value as PrimaryGoal)}
+                  >
+                    <option value="bookings">📅 Drive Bookings - Fill your calendar</option>
+                    <option value="sales">💰 Increase Sales - Sell products & services</option>
+                    <option value="support">💬 Reduce Support Calls - Answer questions</option>
+                    <option value="leads">🎯 Capture Leads - Collect contact info</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">This influences how your AI prioritizes conversations</p>
+                </div>
+
+                {/* Business Capabilities */}
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-2">What can your business do?</label>
+                  <div className="space-y-2 p-3 bg-muted/30 rounded-lg border border-border">
+                    {[
+                      { key: 'books_appointments', label: '📅 Book Appointments', desc: 'Schedule meetings, consultations' },
+                      { key: 'offers_services', label: '🔧 Offer Services', desc: 'Provide services to customers' },
+                      { key: 'sells_products', label: '🛒 Sell Products', desc: 'Physical or digital products' },
+                      { key: 'delivers', label: '🚚 Deliver', desc: 'Delivery or shipping services' },
+                      { key: 'requires_compliance', label: '📋 Requires Compliance', desc: 'Medical, legal, financial' },
+                      { key: 'supports_emergency', label: '🚨 Emergency Support', desc: 'Urgent after-hours support' },
+                    ].map((cap) => (
+                      <label key={cap.key} className="flex items-start gap-2 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={receptionist.capabilities?.[cap.key as keyof BusinessCapabilities] ?? false}
+                          onChange={(e) => {
+                            setReceptionist(prev => ({
+                              ...prev,
+                              capabilities: {
+                                ...prev.capabilities!,
+                                [cap.key]: e.target.checked,
+                              },
+                            }));
+                            setHasUnsavedChanges(true);
+                          }}
+                          className="mt-1 rounded border-border accent-primary"
+                        />
+                        <div>
+                          <div className="text-sm font-medium group-hover:text-primary transition-colors">{cap.label}</div>
+                          <div className="text-xs text-muted-foreground">{cap.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">AI will only offer features your business supports</p>
                 </div>
 
                 <div>
