@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, User, Phone, Mail, CheckCircle, Download } from "lucide-react";
+import { Calendar, Clock, User, Phone, Mail, CheckCircle, Download, MapPin, Briefcase, Hash } from "lucide-react";
 import { format } from "date-fns";
 
 interface BookingConfirmationProps {
@@ -11,8 +11,11 @@ interface BookingConfirmationProps {
   time?: string;
   customerName: string;
   customerPhone?: string;
+  customerEmail?: string;
   contactInfo?: string;
   confirmationId?: string;
+  location?: string;
+  duration?: number;
 }
 
 export function BookingConfirmation({
@@ -23,74 +26,122 @@ export function BookingConfirmation({
   time,
   customerName,
   customerPhone,
+  customerEmail,
   contactInfo,
   confirmationId,
+  location,
+  duration,
 }: BookingConfirmationProps) {
   // Normalize the data - handle both old and new prop formats
   const displayService = serviceName || service || "Appointment";
   const displayDateTime = dateTime || date;
-  const displayContact = contactInfo || customerPhone || "";
+  const displayContact = contactInfo || customerEmail || customerPhone || "";
   const isEmail = displayContact?.includes('@');
   const displayId = confirmationId || crypto.randomUUID();
 
   const formattedDateTime = displayDateTime 
-    ? format(new Date(displayDateTime), "MMMM d, yyyy 'at' h:mm a")
+    ? format(new Date(displayDateTime), "EEEE, MMMM d, yyyy 'at' h:mm a")
     : time || "TBD";
+
+  const formattedDate = displayDateTime
+    ? format(new Date(displayDateTime), "MMMM d, yyyy")
+    : "";
+
+  const formattedTime = displayDateTime
+    ? format(new Date(displayDateTime), "h:mm a")
+    : time || "";
 
   const generateICS = () => {
     if (!displayDateTime) return;
     
     const startDate = new Date(displayDateTime);
-    const formattedDate = format(startDate, "yyyyMMdd'T'HHmmss");
+    const endDate = new Date(startDate);
+    if (duration) {
+      endDate.setMinutes(endDate.getMinutes() + duration);
+    } else {
+      endDate.setHours(endDate.getHours() + 1); // Default 1 hour
+    }
+    
+    const formatICSDate = (d: Date) => {
+      return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    };
     
     const icsContent = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
+      "PRODID:-//AI Receptionist//Booking//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
       "BEGIN:VEVENT",
-      `DTSTART:${formattedDate}`,
-      `SUMMARY:${displayService} Appointment`,
-      `DESCRIPTION:Appointment for ${customerName}`,
-      `UID:${displayId}`,
+      `DTSTART:${formatICSDate(startDate)}`,
+      `DTEND:${formatICSDate(endDate)}`,
+      `SUMMARY:${displayService}`,
+      `DESCRIPTION:Appointment for ${customerName}${location ? `\\nLocation: ${location}` : ''}`,
+      location ? `LOCATION:${location}` : "",
+      `UID:${displayId}@aireceptionist.app`,
+      `DTSTAMP:${formatICSDate(new Date())}`,
+      "STATUS:CONFIRMED",
       "END:VEVENT",
       "END:VCALENDAR",
-    ].join("\n");
+    ].filter(Boolean).join("\r\n");
 
-    const blob = new Blob([icsContent], { type: "text/calendar" });
+    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "appointment.ics";
+    link.download = `appointment-${displayId.slice(0, 8)}.ics`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
   return (
-    <Card className="p-4 mt-2 bg-primary/5 border-primary/20">
+    <Card className="p-4 mt-2 bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
       <div className="flex items-start gap-3">
-        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <CheckCircle className="h-5 w-5 text-primary" />
+        <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0">
+          <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
         </div>
         <div className="flex-1 space-y-3">
           <div>
-            <h4 className="font-semibold text-sm">Booking Confirmed!</h4>
-            <p className="text-xs text-muted-foreground mt-1">
-              Confirmation ID: {displayId.slice(0, 8)}
+            <h4 className="font-semibold text-sm text-green-800 dark:text-green-200">Booking Confirmed!</h4>
+            <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
+              <Hash className="h-3 w-3" />
+              Confirmation: {displayId.slice(0, 8).toUpperCase()}
             </p>
           </div>
 
           <div className="space-y-2 text-sm">
+            {/* Service */}
             <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span>{displayService}</span>
+              <Briefcase className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium">{displayService}</span>
+              {duration && (
+                <span className="text-xs text-muted-foreground">({duration} min)</span>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <span>{formattedDateTime}</span>
-            </div>
+
+            {/* Date */}
+            {formattedDate && (
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span>{formattedDate}</span>
+              </div>
+            )}
+
+            {/* Time */}
+            {formattedTime && (
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span>{formattedTime}</span>
+              </div>
+            )}
+
+            {/* Customer Name */}
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-muted-foreground" />
               <span>{customerName}</span>
             </div>
+
+            {/* Contact Info */}
             {displayContact && (
               <div className="flex items-center gap-2">
                 {isEmail ? (
@@ -101,14 +152,29 @@ export function BookingConfirmation({
                 <span>{displayContact}</span>
               </div>
             )}
+
+            {/* Location if provided */}
+            {location && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span>{location}</span>
+              </div>
+            )}
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            {isEmail 
+              ? "A confirmation email has been sent to your inbox."
+              : "You'll receive a confirmation message shortly."
+            }
+          </p>
 
           {displayDateTime && (
             <Button
               variant="outline"
               size="sm"
               onClick={generateICS}
-              className="w-full"
+              className="w-full bg-green-100 dark:bg-green-900/50 border-green-200 dark:border-green-800 hover:bg-green-200 dark:hover:bg-green-900"
             >
               <Download className="h-3 w-3 mr-2" />
               Add to Calendar

@@ -6,22 +6,51 @@ import { AppointmentModal } from "@/components/appointments/AppointmentModal";
 import { AppointmentFilters, type FilterState } from "@/components/appointments/AppointmentFilters";
 import type { Appointment } from "@/types/appointments";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MessageCircle, RefreshCw, Plus, Download, Calendar, Sparkles } from "lucide-react";
+import { RefreshCw, Plus, Download, Calendar, Sparkles, ShoppingBag, Package } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingState } from "@/components/LoadingState";
 import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { format } from "date-fns";
+
+interface Order {
+  id: string;
+  receptionist_id: string;
+  customer_name: string;
+  customer_email?: string | null;
+  customer_phone?: string | null;
+  status: string;
+  total_amount?: number | null;
+  notes?: string | null;
+  metadata?: any;
+  created_at: string;
+  updated_at: string;
+  items?: OrderItem[];
+}
+
+interface OrderItem {
+  id: string;
+  order_id: string;
+  product_id?: string | null;
+  product_name: string;
+  quantity: number;
+  unit_price?: number | null;
+}
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [receptionists, setReceptionists] = useState<any[]>([]);
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [activeTab, setActiveTab] = useState<string>("appointments");
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     status: [],
@@ -33,10 +62,12 @@ export default function Appointments() {
   useEffect(() => {
     loadReceptionists();
     loadAppointments();
+    loadOrders();
   }, []);
 
   useEffect(() => {
     loadAppointments();
+    loadOrders();
   }, [selectedReceptionist]);
 
   useEffect(() => {
@@ -144,6 +175,29 @@ export default function Appointments() {
     }
   }
 
+  async function loadOrders() {
+    try {
+      let query = supabase
+        .from("orders")
+        .select(`
+          *,
+          items:order_items(*)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (selectedReceptionist !== "all") {
+        query = query.eq('receptionist_id', selectedReceptionist);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      setOrders((data || []) as Order[]);
+    } catch (err) {
+      console.error("loadOrders error", err);
+    }
+  }
+
   function toggleSelect(id: string) {
     setSelected((s) => ({ ...s, [id]: !s[id] }));
   }
@@ -183,6 +237,40 @@ export default function Appointments() {
     }
   }
 
+  async function updateOrderStatus(orderId: string, newStatus: string) {
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: newStatus })
+        .eq("id", orderId);
+
+      if (error) throw error;
+      toast.success(`Order status updated to ${newStatus}`);
+      loadOrders();
+    } catch (err) {
+      console.error("updateOrderStatus error", err);
+      toast.error("Failed to update order status");
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+      case 'confirmed': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+      case 'completed': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+      case 'cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  // Count new items (created in last 24 hours)
+  const recentAppointments = appointments.filter(a => 
+    new Date(a.created_at || a.start_time).getTime() > Date.now() - 24 * 60 * 60 * 1000
+  ).length;
+  const recentOrders = orders.filter(o => 
+    new Date(o.created_at).getTime() > Date.now() - 24 * 60 * 60 * 1000
+  ).length;
+
   return (
     <div className="relative min-h-screen">
       <FloatingBackground variant="minimal" />
@@ -195,8 +283,8 @@ export default function Appointments() {
                 <Calendar className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl lg:text-3xl font-bold">Appointments Calendar</h1>
-                <p className="text-muted-foreground text-sm lg:text-base">View all appointments booked via AI chat</p>
+                <h1 className="text-2xl lg:text-3xl font-bold">Orders & Appointments</h1>
+                <p className="text-muted-foreground text-sm lg:text-base">Manage all bookings and orders from your AI receptionist</p>
               </div>
             </div>
           </div>
@@ -235,7 +323,7 @@ export default function Appointments() {
               <Download className="mr-2 h-4 w-4" />
               Export CSV
             </Button>
-            <Button onClick={() => loadAppointments()} disabled={loading} variant="outline" className="h-11">
+            <Button onClick={() => { loadAppointments(); loadOrders(); }} disabled={loading} variant="outline" className="h-11">
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
@@ -248,43 +336,188 @@ export default function Appointments() {
               <Sparkles className="h-5 w-5 text-primary" />
             </div>
             <AlertDescription className="text-sm">
-              Appointments are booked automatically when customers chat with your AI receptionist. 
-              Go to the Builder page to test the booking flow.
+              Appointments and orders are created automatically when customers chat with your AI receptionist. 
+              Go to the Builder page to test the booking and ordering flow.
             </AlertDescription>
           </div>
         </Alert>
 
-        <div className="mb-6">
-          <AppointmentFilters
-            onFilterChange={setFilters}
-            totalCount={appointments.length}
-            filteredCount={filteredAppointments.length}
-          />
-        </div>
+        {/* Tabs for switching between Appointments and Orders */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="appointments" className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Appointments
+              {recentAppointments > 0 && (
+                <Badge variant="secondary" className="ml-1 bg-primary text-primary-foreground">
+                  {recentAppointments} new
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="orders" className="flex items-center gap-2">
+              <ShoppingBag className="h-4 w-4" />
+              Orders
+              {recentOrders > 0 && (
+                <Badge variant="secondary" className="ml-1 bg-primary text-primary-foreground">
+                  {recentOrders} new
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
 
-        {loading && appointments.length === 0 ? (
-          <LoadingState message="Loading appointments..." />
-        ) : filteredAppointments.length === 0 && appointments.length === 0 ? (
-          <EmptyState
-            icon={Calendar}
-            title="No appointments yet"
-            description="Appointments booked through your AI receptionist will appear here. Test your widget to create your first appointment!"
-            actionLabel="Create Appointment"
-            onAction={() => setCreateModalOpen(true)}
-          />
-        ) : filteredAppointments.length === 0 ? (
-          <EmptyState
-            icon={Calendar}
-            title="No appointments match your filters"
-            description="Try adjusting your search or filter criteria to see more results."
-          />
-        ) : (
-          <AppointmentCalendar 
-            appointments={filteredAppointments} 
-            onEdit={(apt) => setEditingAppointment(apt)}
-            onRefresh={loadAppointments}
-          />
-        )}
+          {/* Appointments Tab */}
+          <TabsContent value="appointments" className="space-y-6">
+            <div className="mb-6">
+              <AppointmentFilters
+                onFilterChange={setFilters}
+                totalCount={appointments.length}
+                filteredCount={filteredAppointments.length}
+              />
+            </div>
+
+            {loading && appointments.length === 0 ? (
+              <LoadingState message="Loading appointments..." />
+            ) : filteredAppointments.length === 0 && appointments.length === 0 ? (
+              <EmptyState
+                icon={Calendar}
+                title="No appointments yet"
+                description="Appointments booked through your AI receptionist will appear here. Test your widget to create your first appointment!"
+                actionLabel="Create Appointment"
+                onAction={() => setCreateModalOpen(true)}
+              />
+            ) : filteredAppointments.length === 0 ? (
+              <EmptyState
+                icon={Calendar}
+                title="No appointments match your filters"
+                description="Try adjusting your search or filter criteria to see more results."
+              />
+            ) : (
+              <AppointmentCalendar 
+                appointments={filteredAppointments} 
+                onEdit={(apt) => setEditingAppointment(apt)}
+                onRefresh={loadAppointments}
+              />
+            )}
+          </TabsContent>
+
+          {/* Orders Tab */}
+          <TabsContent value="orders" className="space-y-6">
+            {loading && orders.length === 0 ? (
+              <LoadingState message="Loading orders..." />
+            ) : orders.length === 0 ? (
+              <EmptyState
+                icon={ShoppingBag}
+                title="No orders yet"
+                description="Orders placed through your AI receptionist will appear here. Test your widget to create your first order!"
+              />
+            ) : (
+              <div className="grid gap-4">
+                {orders.map((order) => (
+                  <Card key={order.id} className="overflow-hidden">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <Package className="h-5 w-5 text-primary" />
+                            Order #{order.id.slice(0, 8)}
+                          </CardTitle>
+                          <CardDescription>
+                            {format(new Date(order.created_at), "MMM d, yyyy 'at' h:mm a")}
+                          </CardDescription>
+                        </div>
+                        <Badge className={getStatusColor(order.status)}>
+                          {order.status}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Customer:</span>
+                          <p className="font-medium">{order.customer_name}</p>
+                        </div>
+                        {order.customer_email && (
+                          <div>
+                            <span className="text-muted-foreground">Email:</span>
+                            <p className="font-medium">{order.customer_email}</p>
+                          </div>
+                        )}
+                        {order.customer_phone && (
+                          <div>
+                            <span className="text-muted-foreground">Phone:</span>
+                            <p className="font-medium">{order.customer_phone}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Delivery Address if present */}
+                      {order.metadata?.delivery_address && (
+                        <div className="text-sm">
+                          <span className="text-muted-foreground">Delivery Address:</span>
+                          <p className="font-medium">{order.metadata.delivery_address}</p>
+                        </div>
+                      )}
+
+                      {/* Order Items */}
+                      {order.items && order.items.length > 0 && (
+                        <div className="border-t pt-3">
+                          <p className="text-sm text-muted-foreground mb-2">Items:</p>
+                          <div className="space-y-1">
+                            {order.items.map((item) => (
+                              <div key={item.id} className="flex justify-between text-sm">
+                                <span>{item.quantity}x {item.product_name}</span>
+                                {item.unit_price && (
+                                  <span className="text-muted-foreground">
+                                    ${(item.unit_price * item.quantity).toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          {order.total_amount && (
+                            <div className="flex justify-between font-medium mt-2 pt-2 border-t">
+                              <span>Total:</span>
+                              <span>${order.total_amount.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Status Actions */}
+                      <div className="flex gap-2 pt-2">
+                        {order.status === 'pending' && (
+                          <>
+                            <Button 
+                              size="sm" 
+                              onClick={() => updateOrderStatus(order.id, 'confirmed')}
+                            >
+                              Confirm Order
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="destructive"
+                              onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        )}
+                        {order.status === 'confirmed' && (
+                          <Button 
+                            size="sm" 
+                            onClick={() => updateOrderStatus(order.id, 'completed')}
+                          >
+                            Mark Completed
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
 
         <AppointmentModal
           open={createModalOpen}
