@@ -435,27 +435,84 @@ export default function Widget() {
         timestamp: new Date(),
       };
 
+      // Check if booking was created by the backend
+      if (data.bookingCreated && data.bookingDetails) {
+        botMessage.bookingConfirmation = {
+          serviceName: data.bookingDetails.serviceName,
+          dateTime: data.bookingDetails.startTime,
+          customerName: data.bookingDetails.customerName,
+          customerEmail: data.bookingDetails.customerEmail,
+          customerPhone: data.bookingDetails.customerPhone,
+          confirmationId: data.bookingDetails.id,
+          duration: services.find(s => s.id === bookingState.serviceId)?.duration_minutes,
+        };
+        
+        // Reset booking state after successful booking
+        setBookingState({
+          serviceId: null,
+          serviceName: null,
+          date: null,
+          timeSlot: null,
+          customerName: null,
+          customerEmail: null,
+          customerPhone: null,
+          collectingInfo: null,
+          productId: null,
+          productName: null,
+          quantity: 1,
+          orderMode: false,
+        });
+      }
+      
+      // Check if order was created by the backend
+      if (data.orderCreated && data.orderDetails) {
+        botMessage.orderConfirmation = {
+          products: data.orderDetails.products || [],
+          customerName: data.orderDetails.customerName,
+          contactInfo: data.orderDetails.customerEmail || data.orderDetails.customerPhone,
+          orderId: data.orderDetails.id,
+          totalAmount: data.orderDetails.totalAmount,
+          deliveryAddress: data.orderDetails.deliveryAddress,
+        };
+        
+        // Reset booking state after successful order
+        setBookingState({
+          serviceId: null,
+          serviceName: null,
+          date: null,
+          timeSlot: null,
+          customerName: null,
+          customerEmail: null,
+          customerPhone: null,
+          collectingInfo: null,
+          productId: null,
+          productName: null,
+          quantity: 1,
+          orderMode: false,
+        });
+      }
+
       // Detect booking intent and show services (only if not already in booking flow)
-      if ((data.hasBookingIntent || lowerReply.includes("which service") || lowerReply.includes("what service")) && !bookingState.serviceId) {
+      if ((data.hasBookingIntent || lowerReply.includes("which service") || lowerReply.includes("what service")) && !bookingState.serviceId && !data.bookingCreated) {
         if (services.length > 0) {
           botMessage.showServices = true;
         }
       }
 
       // Detect product order intent and show products
-      if ((data.hasOrderIntent || lowerReply.includes("which product") || lowerReply.includes("what product")) && !bookingState.productId) {
+      if ((data.hasOrderIntent || lowerReply.includes("which product") || lowerReply.includes("what product")) && !bookingState.productId && !data.orderCreated) {
         if (products.length > 0) {
           botMessage.showProducts = true;
         }
       }
 
       // Auto-show date picker after service selection (proactive UX)
-      if (bookingState.serviceId && !bookingState.date) {
+      if (bookingState.serviceId && !bookingState.date && !data.bookingCreated) {
         botMessage.showDatePicker = true;
       }
 
       // Auto-show time slots after date selection
-      if (bookingState.serviceId && bookingState.date && !bookingState.timeSlot) {
+      if (bookingState.serviceId && bookingState.date && !bookingState.timeSlot && !data.bookingCreated) {
         const dateStr = format(bookingState.date, "yyyy-MM-dd");
         const { data: slotsData } = await supabase.functions.invoke("check-availability", {
           body: {

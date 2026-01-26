@@ -1424,45 +1424,72 @@ serve(async (req) => {
       /buy|purchase|order|get|want/i.test(message);
 
     // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: SYNC SLOTS WITH CONVERSATION CONTEXT
+    // Ensure flow engine slots and context extraction are synchronized
+    // ═══════════════════════════════════════════════════════════════════════
+    // Merge slot data into context for booking (slots take priority as they're from structured UI)
+    const mergedServiceId = conversationState.slots?.serviceId || conversationContext.serviceId;
+    const mergedServiceName = conversationState.slots?.serviceName || conversationContext.serviceMentioned;
+    const mergedDate = conversationState.slots?.date || conversationContext.dateMentioned;
+    const mergedTime = conversationState.slots?.time || conversationContext.timeMentioned;
+    const mergedCustomerName = conversationState.slots?.customerName || conversationContext.customerName;
+    const mergedCustomerPhone = conversationState.slots?.customerPhone || conversationContext.customerPhone;
+    const mergedCustomerEmail = conversationState.slots?.customerEmail || conversationContext.customerEmail;
+
+    // ═══════════════════════════════════════════════════════════════════════
     // LAYER 5: AUTOMATIC BOOKING CREATION
     // Check if we have all required booking info and should auto-book
     // ═══════════════════════════════════════════════════════════════════════
     let bookingResult = null;
-    const hasAllBookingInfo = conversationContext.serviceId && 
-                              conversationContext.dateMentioned && 
-                              conversationContext.timeMentioned &&
-                              conversationContext.customerName &&
-                              (conversationContext.customerPhone || conversationContext.customerEmail);
+    const hasAllBookingInfo = mergedServiceId && 
+                              mergedDate && 
+                              mergedTime &&
+                              mergedCustomerName &&
+                              (mergedCustomerPhone || mergedCustomerEmail);
     
-    // Only auto-book if AI response indicates confirmation
-    const isBookingConfirmation = /(?:booked|confirmed|scheduled|appointment is set|all set)/i.test(reply) && 
-                                   !conversationContext.bookingConfirmed;
+    // Only auto-book if AI response indicates confirmation OR flow step is complete
+    const isBookingConfirmation = (
+      /(?:booked|confirmed|scheduled|appointment is set|all set|I['']ve scheduled)/i.test(reply) || 
+      conversationState.flow_step === 'confirm'
+    ) && !conversationState.booking_confirmed;
+    
+    console.log(`[Booking Check] hasAllInfo: ${hasAllBookingInfo}, isConfirmation: ${isBookingConfirmation}, flowStep: ${conversationState.flow_step}`);
     
     if (hasAllBookingInfo && isBookingConfirmation) {
       try {
-        console.log(`[Widget Chat] Auto-booking appointment for ${conversationContext.customerName}`);
+        console.log(`[Widget Chat] Auto-booking appointment for ${mergedCustomerName}`);
         
-        // Parse the date/time into ISO format
-        const startTime = parseBookingDateTime(
-          conversationContext.dateMentioned!, 
-          conversationContext.timeMentioned!
-        );
+        // Parse the date/time into ISO format - use slot data first (structured), then natural language
+        let startTime: Date | null = null;
         
-        if (startTime) {
+        // If we have ISO format date from slots (from DateSelector/TimeSlotSelector)
+        if (mergedDate && mergedDate.includes('T')) {
+          startTime = new Date(mergedDate);
+        } else if (mergedTime && mergedTime.includes('T')) {
+          startTime = new Date(mergedTime);
+        } else {
+          // Fall back to natural language parsing
+          startTime = parseBookingDateTime(mergedDate!, mergedTime!);
+        }
+        
+        if (startTime && !isNaN(startTime.getTime())) {
           const bookingPayload = {
             receptionistId,
-            serviceId: conversationContext.serviceId,
+            serviceId: mergedServiceId,
             startTime: startTime.toISOString(),
-            customerName: conversationContext.customerName,
-            customerEmail: conversationContext.customerEmail || null,
-            customerPhone: conversationContext.customerPhone || null,
+            customerName: mergedCustomerName,
+            customerEmail: mergedCustomerEmail || null,
+            customerPhone: mergedCustomerPhone || null,
             bookingSource: 'ai_receptionist',
             metadata: {
               session_id: sessionId,
               booked_via: 'widget_chat_auto',
-              conversation_phase: conversationContext.conversationPhase
+              conversation_phase: conversationContext.conversationPhase,
+              service_name: mergedServiceName
             }
           };
+          
+          console.log(`[Widget Chat] Booking payload:`, JSON.stringify(bookingPayload));
           
           // Call book-appointment function
           const bookingRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/book-appointment`, {
@@ -1478,9 +1505,16 @@ serve(async (req) => {
             const bookingData = await bookingRes.json();
             if (bookingData.success) {
               bookingResult = bookingData.appointment;
+              bookingResult.service_name = mergedServiceName; // Add for confirmation card
               console.log(`[Widget Chat] Appointment created: ${bookingResult.id}`);
+            } else {
+              console.error('[Widget Chat] Booking failed:', bookingData.error);
             }
+          } else {
+            console.error('[Widget Chat] Booking request failed:', bookingRes.status);
           }
+        } else {
+          console.warn('[Widget Chat] Could not parse booking date/time:', mergedDate, mergedTime);
         }
       } catch (bookingErr) {
         console.error('[Widget Chat] Auto-booking failed:', bookingErr);
@@ -1692,14 +1726,43 @@ serve(async (req) => {
         qualityScore: qualityRubric.overall_score,
         bookingCreated: bookingResult ? true : false,
         bookingId: bookingResult?.id || null,
+        // Include full booking details for confirmation card
+        bookingDetails: bookingResult ? {
+          id: bookingResult.id,
+          serviceName: bookingResult.service_name || bookingResult.service || mergedServiceName,
+          startTime: bookingResult.start_time,
+          endTime: bookingResult.end_time,
+          customerName: bookingResult.customer_name || mergedCustomerName,
+          customerEmail: bookingResult.customer_email || mergedCustomerEmail,
+          customerPhone: bookingResult.customer_phone || mergedCustomerPhone,
+          confirmationToken: bookingResult.confirmation_token,
+        } : null,
         orderCreated: orderResult ? true : false,
         orderId: orderResult?.id || null,
+        // Include full order details for confirmation card
+        orderDetails: orderResult ? {
+          id: orderResult.id,
+          customerName: orderResult.customer_name,
+          customerEmail: orderResult.customer_email,
+          customerPhone: orderResult.customer_phone,
+          totalAmount: orderResult.total_amount,
+          deliveryAddress: conversationState.slots?.deliveryLocation || null,
+          products: conversationContext.selectedProducts || [],
+        } : null,
         // UI hints to prevent button repetition
         shouldShowServices: !conversationContext.servicesShownInLastMessage && hasBookingIntent,
         shouldShowProducts: !conversationContext.productsShownInLastMessage && hasOrderIntent,
         // Flow engine state hints
         activeFlow: conversationState.active_flow,
-        flowStep: conversationState.flow_step
+        flowStep: conversationState.flow_step,
+        // Collected slots for debugging/UI
+        collectedSlots: {
+          serviceName: mergedServiceName,
+          date: mergedDate,
+          time: mergedTime,
+          customerName: mergedCustomerName,
+          hasContact: !!(mergedCustomerPhone || mergedCustomerEmail),
+        }
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

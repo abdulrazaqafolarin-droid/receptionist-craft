@@ -138,6 +138,8 @@ export default function Step1CreateReceptionist() {
   const [loading, setLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCapabilities, setShowCapabilities] = useState(false);
+  const [hasManuallySetCapabilities, setHasManuallySetCapabilities] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
   // Additional business info state
   const [businessInfo, setBusinessInfo] = useState({
@@ -150,8 +152,9 @@ export default function Step1CreateReceptionist() {
   });
 
   // Auto-update capabilities and primary goal when business type changes
+  // ONLY if user hasn't manually set them
   useEffect(() => {
-    if (receptionist.business_type) {
+    if (receptionist.business_type && !hasManuallySetCapabilities) {
       const defaultCaps = getDefaultCapabilities(receptionist.business_type);
       const defaultGoal = getDefaultPrimaryGoal(receptionist.business_type);
       setReceptionist({ 
@@ -159,9 +162,22 @@ export default function Step1CreateReceptionist() {
         primary_goal: defaultGoal 
       });
     }
-  }, [receptionist.business_type]);
+  }, [receptionist.business_type, hasManuallySetCapabilities]);
+
+  // Auto-set business_model based on capabilities
+  useEffect(() => {
+    const { sells_products, books_appointments, offers_services } = receptionist.capabilities;
+    if (sells_products && (books_appointments || offers_services)) {
+      setReceptionist({ business_model: 'both' });
+    } else if (sells_products) {
+      setReceptionist({ business_model: 'products' });
+    } else {
+      setReceptionist({ business_model: 'services' });
+    }
+  }, [receptionist.capabilities]);
 
   const handleCapabilityChange = (key: keyof BusinessCapabilities, checked: boolean) => {
+    setHasManuallySetCapabilities(true); // Mark as manually set
     setReceptionist({
       capabilities: {
         ...receptionist.capabilities,
@@ -170,8 +186,47 @@ export default function Step1CreateReceptionist() {
     });
   };
 
+  // Clear validation error when field is updated
+  const handleFieldChange = (field: string, value: string) => {
+    if (validationErrors[field]) {
+      setValidationErrors(prev => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+    setReceptionist({ [field]: value });
+  };
+
+  // Validate all required fields
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    
+    if (!receptionist.name?.trim()) {
+      errors.name = "Receptionist name is required";
+    }
+    if (!receptionist.business_name?.trim()) {
+      errors.business_name = "Business name is required";
+    }
+    if (!receptionist.business_type) {
+      errors.business_type = "Please select a business type";
+    }
+    if (!receptionist.primary_goal) {
+      errors.primary_goal = "Please select a primary goal";
+    }
+    
+    // Check at least one capability is selected
+    const hasCapability = Object.values(receptionist.capabilities).some(v => v);
+    if (!hasCapability) {
+      errors.capabilities = "Please select at least one capability";
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleContinue = async () => {
-    if (!receptionist.name || !receptionist.business_name || !receptionist.business_type) {
+    if (!validateForm()) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -278,30 +333,51 @@ export default function Step1CreateReceptionist() {
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
-          <Label htmlFor="name">Receptionist Name *</Label>
+          <Label htmlFor="name" className={validationErrors.name ? "text-destructive" : ""}>
+            Receptionist Name *
+          </Label>
           <Input
             id="name"
             placeholder="e.g., Sarah, Alex, Maya"
             value={receptionist.name}
-            onChange={(e) => setReceptionist({ name: e.target.value })}
+            onChange={(e) => handleFieldChange('name', e.target.value)}
+            className={validationErrors.name ? "border-destructive" : ""}
           />
-          <p className="text-xs text-muted-foreground">Give your AI a friendly, professional name</p>
+          {validationErrors.name ? (
+            <p className="text-xs text-destructive">{validationErrors.name}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Give your AI a friendly, professional name</p>
+          )}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="business_name">Business Name *</Label>
+          <Label htmlFor="business_name" className={validationErrors.business_name ? "text-destructive" : ""}>
+            Business Name *
+          </Label>
           <Input
             id="business_name"
             placeholder="e.g., Sunshine Dental Clinic"
             value={receptionist.business_name}
-            onChange={(e) => setReceptionist({ business_name: e.target.value })}
+            onChange={(e) => handleFieldChange('business_name', e.target.value)}
+            className={validationErrors.business_name ? "border-destructive" : ""}
           />
+          {validationErrors.business_name && (
+            <p className="text-xs text-destructive">{validationErrors.business_name}</p>
+          )}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="business_type">Business Type *</Label>
-          <Select value={receptionist.business_type} onValueChange={(value) => setReceptionist({ business_type: value })}>
-            <SelectTrigger>
+          <Label htmlFor="business_type" className={validationErrors.business_type ? "text-destructive" : ""}>
+            Business Type *
+          </Label>
+          <Select 
+            value={receptionist.business_type} 
+            onValueChange={(value) => {
+              setHasManuallySetCapabilities(false); // Reset manual flag when type changes
+              handleFieldChange('business_type', value);
+            }}
+          >
+            <SelectTrigger className={validationErrors.business_type ? "border-destructive" : ""}>
               <SelectValue placeholder="Select your business type" />
             </SelectTrigger>
             <SelectContent>
@@ -312,7 +388,11 @@ export default function Step1CreateReceptionist() {
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">This helps us auto-configure your AI's capabilities</p>
+          {validationErrors.business_type ? (
+            <p className="text-xs text-destructive">{validationErrors.business_type}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">This helps us auto-configure your AI's capabilities</p>
+          )}
         </div>
 
         {/* Primary Business Goal Selector */}
@@ -342,12 +422,19 @@ export default function Step1CreateReceptionist() {
         </div>
 
         {/* Business Capabilities Section */}
+        {/* Business Capabilities Section */}
         <Collapsible open={showCapabilities} onOpenChange={setShowCapabilities}>
           <CollapsibleTrigger asChild>
-            <Button variant="outline" className="w-full justify-between">
+            <Button 
+              variant="outline" 
+              className={`w-full justify-between ${validationErrors.capabilities ? "border-destructive" : ""}`}
+            >
               <span className="flex items-center gap-2">
                 <ShoppingCart className="h-4 w-4" />
                 Business Capabilities
+                {hasManuallySetCapabilities && (
+                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">Customized</span>
+                )}
               </span>
               {showCapabilities ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
@@ -356,11 +443,16 @@ export default function Step1CreateReceptionist() {
             <p className="text-sm text-muted-foreground">
               Select what your business can do. The AI will adapt its behavior based on these capabilities.
             </p>
+            {validationErrors.capabilities && (
+              <p className="text-xs text-destructive">{validationErrors.capabilities}</p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {CAPABILITY_OPTIONS.map((cap) => (
                 <div 
                   key={cap.key} 
-                  className="flex items-start space-x-3 p-3 border rounded-md hover:bg-muted/50 transition-colors"
+                  className={`flex items-start space-x-3 p-3 border rounded-md hover:bg-muted/50 transition-colors ${
+                    receptionist.capabilities[cap.key] ? "border-primary/50 bg-primary/5" : ""
+                  }`}
                 >
                   <Checkbox
                     id={cap.key}
@@ -376,6 +468,16 @@ export default function Step1CreateReceptionist() {
                   </Label>
                 </div>
               ))}
+            </div>
+            
+            {/* Business Model Summary */}
+            <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm font-medium">AI Mode: <span className="text-primary capitalize">{receptionist.business_model}</span></p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {receptionist.business_model === 'both' && "Your AI will handle both appointments/services and product orders."}
+                {receptionist.business_model === 'services' && "Your AI will focus on booking appointments and providing service information."}
+                {receptionist.business_model === 'products' && "Your AI will focus on taking product orders and managing inventory."}
+              </p>
             </div>
           </CollapsibleContent>
         </Collapsible>
