@@ -111,23 +111,26 @@ export default function Widget() {
     }
   }
   
-  // Handle continue existing chat
+  // Handle continue existing chat - show BOTH user and assistant messages
   function handleContinueChat() {
     setShowSessionOverlay(false);
     setGreetingStored(true); // Prevent re-storing greeting
     
-    // Restore messages from the existing conversation
+    // Restore messages from the existing conversation - include both user and AI messages
     if (existingMessages.length > 0) {
-      const restoredMessages: Message[] = existingMessages.map(msg => ({
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.message,
-        timestamp: new Date(msg.created_at),
-        showQuickReplies: false,
-      }));
+      const restoredMessages: Message[] = existingMessages
+        .filter(msg => msg.message && msg.message.trim()) // Filter out empty messages
+        .map(msg => ({
+          role: msg.sender === 'user' ? 'user' as const : 'assistant' as const,
+          content: msg.message,
+          timestamp: new Date(msg.created_at),
+          showQuickReplies: false,
+        }));
       
       // Add quick replies to the last assistant message
-      if (restoredMessages.length > 0 && restoredMessages[restoredMessages.length - 1].role === 'assistant') {
-        restoredMessages[restoredMessages.length - 1].showQuickReplies = true;
+      const lastIndex = restoredMessages.length - 1;
+      if (lastIndex >= 0 && restoredMessages[lastIndex].role === 'assistant') {
+        restoredMessages[lastIndex].showQuickReplies = true;
       }
       
       setMessages(restoredMessages);

@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ShoppingBag, DollarSign, Minus, Plus, ShoppingCart, AlertTriangle, Package, XCircle } from "lucide-react";
+import { ShoppingBag, DollarSign, Minus, Plus, ShoppingCart, AlertTriangle, Package, XCircle, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Product {
@@ -26,6 +26,7 @@ interface ProductSelectorEnhancedProps {
   products: Product[];
   onConfirm: (selectedProducts: SelectedProduct[]) => void;
   disabled?: boolean;
+  initialLimit?: number;
 }
 
 // Stock status helper
@@ -45,9 +46,14 @@ function getStockStatus(product: Product): { status: 'in_stock' | 'low_stock' | 
   return { status: 'in_stock', label: 'In Stock', maxQty: stock };
 }
 
-export function ProductSelectorEnhanced({ products, onConfirm, disabled }: ProductSelectorEnhancedProps) {
+export function ProductSelectorEnhanced({ products, onConfirm, disabled, initialLimit = 10 }: ProductSelectorEnhancedProps) {
   const [selectedProducts, setSelectedProducts] = useState<Map<string, SelectedProduct>>(new Map());
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  const displayedProducts = showAll ? products : products.slice(0, initialLimit);
+  const hasMore = products.length > initialLimit;
+  const remainingCount = products.length - initialLimit;
 
   const toggleProductSelection = (product: Product) => {
     if (disabled) return;
@@ -99,7 +105,7 @@ export function ProductSelectorEnhanced({ products, onConfirm, disabled }: Produ
     <div className="space-y-2 mt-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
       <p className="text-xs text-muted-foreground font-medium mb-2">Select product(s) and quantity:</p>
       
-      {products.map((product, idx) => {
+      {displayedProducts.map((product, idx) => {
         const isSelected = selectedProducts.has(product.id);
         const selectedItem = selectedProducts.get(product.id);
         const stockInfo = getStockStatus(product);
@@ -221,6 +227,29 @@ export function ProductSelectorEnhanced({ products, onConfirm, disabled }: Produ
           </Card>
         );
       })}
+
+      {/* Show More / Show Less Button */}
+      {hasMore && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full text-muted-foreground hover:text-primary mt-2"
+          onClick={() => setShowAll(!showAll)}
+          disabled={disabled}
+        >
+          {showAll ? (
+            <>
+              Show Less
+              <ChevronDown className="h-4 w-4 ml-1 rotate-180" />
+            </>
+          ) : (
+            <>
+              Show More ({remainingCount} more)
+              <ChevronDown className="h-4 w-4 ml-1" />
+            </>
+          )}
+        </Button>
+      )}
 
       {/* Confirm Selection Button */}
       {selectedProducts.size > 0 && (

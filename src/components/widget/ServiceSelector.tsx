@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, DollarSign, Briefcase, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Clock, DollarSign, Briefcase, ChevronRight, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Service {
@@ -15,13 +17,20 @@ interface ServiceSelectorProps {
   services: Service[];
   onSelect: (serviceId: string, serviceName: string) => void;
   disabled?: boolean;
+  initialLimit?: number;
 }
 
-export function ServiceSelector({ services, onSelect, disabled }: ServiceSelectorProps) {
+export function ServiceSelector({ services, onSelect, disabled, initialLimit = 10 }: ServiceSelectorProps) {
+  const [showAll, setShowAll] = useState(false);
+  
+  const displayedServices = showAll ? services : services.slice(0, initialLimit);
+  const hasMore = services.length > initialLimit;
+  const remainingCount = services.length - initialLimit;
+
   return (
     <div className="space-y-2 mt-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
       <p className="text-xs text-muted-foreground mb-2 font-medium">Choose a service:</p>
-      {services.map((service, idx) => (
+      {displayedServices.map((service, idx) => (
         <Card
           key={service.id}
           className={cn(
@@ -62,6 +71,29 @@ export function ServiceSelector({ services, onSelect, disabled }: ServiceSelecto
           </div>
         </Card>
       ))}
+      
+      {/* Show More / Show Less Button */}
+      {hasMore && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full text-muted-foreground hover:text-primary mt-2"
+          onClick={() => setShowAll(!showAll)}
+          disabled={disabled}
+        >
+          {showAll ? (
+            <>
+              Show Less
+              <ChevronDown className="h-4 w-4 ml-1 rotate-180" />
+            </>
+          ) : (
+            <>
+              Show More ({remainingCount} more)
+              <ChevronDown className="h-4 w-4 ml-1" />
+            </>
+          )}
+        </Button>
+      )}
     </div>
   );
 }
