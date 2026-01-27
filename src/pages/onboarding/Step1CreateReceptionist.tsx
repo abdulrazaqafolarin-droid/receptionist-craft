@@ -162,10 +162,18 @@ export default function Step1CreateReceptionist() {
         primary_goal: defaultGoal 
       });
     }
-  }, [receptionist.business_type, hasManuallySetCapabilities]);
+  }, [receptionist.business_type, hasManuallySetCapabilities, setReceptionist]);
 
   // Auto-set business_model based on capabilities
+  // Guard against undefined capabilities from persisted state
   useEffect(() => {
+    // Ensure capabilities exists before destructuring
+    if (!receptionist.capabilities) {
+      // Initialize with defaults if missing
+      setReceptionist({ capabilities: getDefaultCapabilities(receptionist.business_type || 'General Business') });
+      return;
+    }
+    
     const { sells_products, books_appointments, offers_services } = receptionist.capabilities;
     if (sells_products && (books_appointments || offers_services)) {
       setReceptionist({ business_model: 'both' });
@@ -174,7 +182,7 @@ export default function Step1CreateReceptionist() {
     } else {
       setReceptionist({ business_model: 'services' });
     }
-  }, [receptionist.capabilities]);
+  }, [receptionist.capabilities, receptionist.business_type, setReceptionist]);
 
   const handleCapabilityChange = (key: keyof BusinessCapabilities, checked: boolean) => {
     setHasManuallySetCapabilities(true); // Mark as manually set
@@ -215,8 +223,9 @@ export default function Step1CreateReceptionist() {
       errors.primary_goal = "Please select a primary goal";
     }
     
-    // Check at least one capability is selected
-    const hasCapability = Object.values(receptionist.capabilities).some(v => v);
+    // Check at least one capability is selected (guard against undefined)
+    const capabilities = receptionist.capabilities || {};
+    const hasCapability = Object.values(capabilities).some(v => v);
     if (!hasCapability) {
       errors.capabilities = "Please select at least one capability";
     }

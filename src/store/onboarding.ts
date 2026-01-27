@@ -130,6 +130,23 @@ export const useOnboardingStore = create<OnboardingState>()(
     }),
     {
       name: 'onboarding-storage',
+      // Migrate old persisted state that may be missing capabilities
+      migrate: (persistedState: any, version: number) => {
+        const state = persistedState as OnboardingState;
+        // Ensure capabilities exists
+        if (!state.receptionist?.capabilities) {
+          return {
+            ...state,
+            receptionist: {
+              ...state.receptionist,
+              capabilities: DEFAULT_CAPABILITIES,
+              primary_goal: state.receptionist?.primary_goal || 'bookings' as PrimaryGoal,
+            }
+          };
+        }
+        return state;
+      },
+      version: 1, // Increment version to trigger migration
     }
   )
 );
