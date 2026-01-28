@@ -1496,6 +1496,39 @@ export type Database = {
         Args: { retention_days?: number }
         Returns: number
       }
+      create_widget_appointment: {
+        Args: {
+          p_booking_source?: string
+          p_customer_email?: string
+          p_customer_name: string
+          p_customer_phone?: string
+          p_end_time: string
+          p_idempotency_key?: string
+          p_metadata?: Json
+          p_notes?: string
+          p_receptionist_id: string
+          p_service: string
+          p_service_id?: string
+          p_start_time: string
+        }
+        Returns: {
+          cancellation_token: string
+          confirmation_token: string
+          id: string
+        }[]
+      }
+      create_widget_order: {
+        Args: {
+          p_customer_email?: string
+          p_customer_name: string
+          p_customer_phone?: string
+          p_items: Json
+          p_metadata?: Json
+          p_notes?: string
+          p_receptionist_id: string
+        }
+        Returns: string
+      }
       get_public_receptionist: {
         Args: { p_receptionist_id: string }
         Returns: {
@@ -1518,6 +1551,49 @@ export type Database = {
           timezone: string
           tone: string
         }[]
+      }
+      insert_booking_suggestion: {
+        Args: {
+          p_latency_ms?: number
+          p_model?: string
+          p_receptionist_id: string
+          p_request_message: string
+          p_suggestions: Json
+        }
+        Returns: string
+      }
+      insert_conversion_event: {
+        Args: {
+          p_currency?: string
+          p_event_type: string
+          p_metadata?: Json
+          p_receptionist_id: string
+          p_revenue_value?: number
+          p_session_id: string
+        }
+        Returns: string
+      }
+      upsert_conversation_state: {
+        Args: {
+          p_active_flow?: string
+          p_active_topic?: string
+          p_flow_step?: string
+          p_receptionist_id: string
+          p_session_id: string
+          p_slots?: Json
+          p_topic_confidence?: number
+        }
+        Returns: string
+      }
+      upsert_conversation_summary: {
+        Args: {
+          p_key_facts?: Json
+          p_receptionist_id: string
+          p_session_id: string
+          p_summary: string
+          p_user_fingerprint?: string
+        }
+        Returns: string
       }
     }
     Enums: {
