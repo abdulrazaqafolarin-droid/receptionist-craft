@@ -1552,6 +1552,21 @@ export type Database = {
           tone: string
         }[]
       }
+      get_services_for_receptionist: {
+        Args: { p_receptionist_id: string }
+        Returns: {
+          active: boolean
+          buffer_after_minutes: number
+          buffer_before_minutes: number
+          description: string
+          duration_minutes: number
+          id: string
+          is_product: boolean
+          name: string
+          price: number
+          stock_quantity: number
+        }[]
+      }
       insert_booking_suggestion: {
         Args: {
           p_latency_ms?: number
