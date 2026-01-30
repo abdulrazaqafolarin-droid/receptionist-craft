@@ -1315,6 +1315,168 @@ export type Database = {
           },
         ]
       }
+      service_costs: {
+        Row: {
+          cost_price: number | null
+          created_at: string
+          currency: string | null
+          discount_max_percentage: number | null
+          id: string
+          margin_percentage: number | null
+          notes: string | null
+          service_id: string
+          tax_rate: number | null
+          updated_at: string
+          wholesale_price: number | null
+        }
+        Insert: {
+          cost_price?: number | null
+          created_at?: string
+          currency?: string | null
+          discount_max_percentage?: number | null
+          id?: string
+          margin_percentage?: number | null
+          notes?: string | null
+          service_id: string
+          tax_rate?: number | null
+          updated_at?: string
+          wholesale_price?: number | null
+        }
+        Update: {
+          cost_price?: number | null
+          created_at?: string
+          currency?: string | null
+          discount_max_percentage?: number | null
+          id?: string
+          margin_percentage?: number | null
+          notes?: string | null
+          service_id?: string
+          tax_rate?: number | null
+          updated_at?: string
+          wholesale_price?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_costs_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: true
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_costs_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: true
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_inventory: {
+        Row: {
+          created_at: string
+          id: string
+          last_restocked_at: string | null
+          low_stock_threshold: number | null
+          reorder_point: number | null
+          service_id: string
+          stock_quantity: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_restocked_at?: string | null
+          low_stock_threshold?: number | null
+          reorder_point?: number | null
+          service_id: string
+          stock_quantity?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_restocked_at?: string | null
+          low_stock_threshold?: number | null
+          reorder_point?: number | null
+          service_id?: string
+          stock_quantity?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_inventory_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: true
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_inventory_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: true
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_scheduling_rules: {
+        Row: {
+          buffer_after_minutes: number
+          buffer_before_minutes: number
+          cleanup_time_minutes: number | null
+          created_at: string
+          id: string
+          max_advance_booking_days: number | null
+          max_daily_bookings: number | null
+          min_advance_booking_hours: number | null
+          prep_time_minutes: number | null
+          service_id: string
+          updated_at: string
+        }
+        Insert: {
+          buffer_after_minutes?: number
+          buffer_before_minutes?: number
+          cleanup_time_minutes?: number | null
+          created_at?: string
+          id?: string
+          max_advance_booking_days?: number | null
+          max_daily_bookings?: number | null
+          min_advance_booking_hours?: number | null
+          prep_time_minutes?: number | null
+          service_id: string
+          updated_at?: string
+        }
+        Update: {
+          buffer_after_minutes?: number
+          buffer_before_minutes?: number
+          cleanup_time_minutes?: number | null
+          created_at?: string
+          id?: string
+          max_advance_booking_days?: number | null
+          max_daily_bookings?: number | null
+          min_advance_booking_hours?: number | null
+          prep_time_minutes?: number | null
+          service_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_scheduling_rules_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: true
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_scheduling_rules_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: true
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       services: {
         Row: {
           active: boolean | null
