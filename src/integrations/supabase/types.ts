@@ -472,6 +472,13 @@ export type Database = {
             foreignKeyName: "appointments_service_id_fkey"
             columns: ["service_id"]
             isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
             referencedRelation: "services"
             referencedColumns: ["id"]
           },
@@ -1048,6 +1055,13 @@ export type Database = {
             foreignKeyName: "order_items_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
             referencedRelation: "services"
             referencedColumns: ["id"]
           },
@@ -1416,6 +1430,60 @@ export type Database = {
       }
     }
     Views: {
+      public_catalog: {
+        Row: {
+          buffer_after_minutes: number | null
+          buffer_before_minutes: number | null
+          description: string | null
+          duration_minutes: number | null
+          id: string | null
+          in_stock: boolean | null
+          is_product: boolean | null
+          name: string | null
+          price: number | null
+          receptionist_id: string | null
+        }
+        Insert: {
+          buffer_after_minutes?: number | null
+          buffer_before_minutes?: number | null
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string | null
+          in_stock?: never
+          is_product?: boolean | null
+          name?: string | null
+          price?: number | null
+          receptionist_id?: string | null
+        }
+        Update: {
+          buffer_after_minutes?: number | null
+          buffer_before_minutes?: number | null
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string | null
+          in_stock?: never
+          is_product?: boolean | null
+          name?: string | null
+          price?: number | null
+          receptionist_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "services_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "services_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       revenue_attribution: {
         Row: {
           bookings_count: number | null
