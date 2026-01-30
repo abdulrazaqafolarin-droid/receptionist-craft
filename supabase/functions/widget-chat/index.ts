@@ -21,6 +21,19 @@ import { MemorySummarizer } from "../_shared/flow/memorySummarizer.ts";
 import type { ConversationState, FlowSlots } from "../_shared/flow/types.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ACTION PERMISSION GATE (MIDDLEWARE VALIDATOR)
+// ═══════════════════════════════════════════════════════════════════════════
+import { 
+  validateActionGate, 
+  detectActionFromIntent,
+  buildActionGatePrompt,
+  checkBookingGate,
+  checkOrderGate,
+  type ActionGateResult,
+  type ActionType
+} from "../_shared/actionGate.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CAPABILITY-BASED ARCHITECTURE IMPORTS (UNIVERSAL BUSINESS OPERATOR)
 // ═══════════════════════════════════════════════════════════════════════════
 import { 
@@ -706,7 +719,8 @@ function buildMasterSystemPrompt(
   isFirstMessage: boolean,
   rollingSummary: string,
   aiMode: string = 'booking',
-  capabilityPrompt: string = ''
+  capabilityPrompt: string = '',
+  actionGateBlock: string = ''
 ): string {
   const emotionalGuidance: Record<string, string> = {
     neutral: 'Maintain a warm, professional tone.',
@@ -971,6 +985,11 @@ Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and g
   // Add Capability Prompt block (new capability-based architecture)
   if (capabilityPrompt) {
     blocks.push('---', capabilityPrompt);
+  }
+  
+  // Add Action Permission Gate block (middleware validator)
+  if (actionGateBlock) {
+    blocks.push('---', actionGateBlock);
   }
   
   // Add Money Mode block if active
@@ -1270,7 +1289,36 @@ serve(async (req) => {
     console.log(`[Widget Chat] AI Mode: ${aiMode}`);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + CAPABILITY GRAPH + MONEY MODE)
+    // ACTION PERMISSION GATE: PRE-VALIDATE CURRENT ACTION STATE
+    // Build gate block for system prompt based on detected intent
+    // ═══════════════════════════════════════════════════════════════════════
+    const detectedAction = detectActionFromIntent(messageAnalysis.detectedIntent);
+    let preActionGateResult: ActionGateResult | null = null;
+    
+    if (detectedAction) {
+      const gateContext = {
+        serviceId: conversationContext.serviceId,
+        serviceMentioned: conversationContext.serviceMentioned,
+        productId: conversationContext.productId,
+        productMentioned: conversationContext.productMentioned,
+        dateMentioned: conversationContext.dateMentioned,
+        timeMentioned: conversationContext.timeMentioned,
+        customerName: conversationContext.customerName,
+        customerPhone: conversationContext.customerPhone,
+        customerEmail: conversationContext.customerEmail,
+        quantity: conversationContext.quantity,
+        selectedProducts: conversationContext.selectedProducts,
+      };
+      
+      preActionGateResult = validateActionGate(detectedAction, conversationState.slots || {}, gateContext);
+      console.log(`[Action Gate] Pre-check for ${detectedAction}: ${preActionGateResult.summary}`);
+    }
+    
+    // Build action gate prompt block
+    const actionGateBlock = buildActionGatePrompt(preActionGateResult);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + CAPABILITY GRAPH + ACTION GATE + MONEY MODE)
     // ═══════════════════════════════════════════════════════════════════════
     const systemPrompt = buildMasterSystemPrompt(
       receptionist,
@@ -1280,7 +1328,8 @@ serve(async (req) => {
       isFirstMessage,
       rollingSummary,
       aiMode,
-      capabilityPrompt
+      capabilityPrompt,
+      actionGateBlock
     );
 
     const startTime = Date.now();
@@ -1437,25 +1486,35 @@ serve(async (req) => {
     const mergedCustomerEmail = conversationState.slots?.customerEmail || conversationContext.customerEmail;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // LAYER 5: AUTOMATIC BOOKING CREATION
-    // Check if we have all required booking info and should auto-book
+    // ACTION PERMISSION GATE: BOOKING VALIDATION
+    // AI NEVER books until all required slots are collected and verified
     // ═══════════════════════════════════════════════════════════════════════
     let bookingResult = null;
-    const hasAllBookingInfo = mergedServiceId && 
-                              mergedDate && 
-                              mergedTime &&
-                              mergedCustomerName &&
-                              (mergedCustomerPhone || mergedCustomerEmail);
     
-    // Only auto-book if AI response indicates confirmation OR flow step is complete
+    // Use Action Gate to validate booking requirements
+    const bookingGate = checkBookingGate(
+      conversationState.slots || {},
+      {
+        serviceId: mergedServiceId,
+        serviceMentioned: mergedServiceName,
+        dateMentioned: mergedDate,
+        timeMentioned: mergedTime,
+        customerName: mergedCustomerName,
+        customerPhone: mergedCustomerPhone,
+        customerEmail: mergedCustomerEmail,
+      }
+    );
+    
+    console.log(`[Action Gate] Booking: ${bookingGate.summary}`);
+    
+    // Only auto-book if AI response indicates confirmation AND gate allows
     const isBookingConfirmation = (
       /(?:booked|confirmed|scheduled|appointment is set|all set|I['']ve scheduled)/i.test(reply) || 
       conversationState.flow_step === 'confirm'
     ) && !conversationState.booking_confirmed;
     
-    console.log(`[Booking Check] hasAllInfo: ${hasAllBookingInfo}, isConfirmation: ${isBookingConfirmation}, flowStep: ${conversationState.flow_step}`);
-    
-    if (hasAllBookingInfo && isBookingConfirmation) {
+    // GATE ENFORCEMENT: Block booking if requirements not met
+    if (bookingGate.allowed && isBookingConfirmation) {
       try {
         console.log(`[Widget Chat] Auto-booking appointment for ${mergedCustomerName}`);
         
@@ -1523,19 +1582,33 @@ serve(async (req) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // LAYER 5: AUTOMATIC ORDER CREATION
-    // Check if we have all required order info and should auto-create order
+    // ACTION PERMISSION GATE: ORDER VALIDATION  
+    // AI NEVER creates orders until all required slots are collected and verified
     // ═══════════════════════════════════════════════════════════════════════
     let orderResult = null;
-    const hasOrderInfo = (conversationContext.selectedProducts.length > 0 || conversationContext.productId) &&
-                         conversationContext.customerName &&
-                         (conversationContext.customerPhone || conversationContext.customerEmail);
     
-    // Only auto-create order if AI response indicates confirmation
+    // Use Action Gate to validate order requirements
+    const orderGate = checkOrderGate(
+      conversationState.slots || {},
+      {
+        productId: conversationContext.productId,
+        productMentioned: conversationContext.productMentioned,
+        quantity: conversationContext.quantity,
+        customerName: conversationContext.customerName,
+        customerPhone: conversationContext.customerPhone,
+        customerEmail: conversationContext.customerEmail,
+        selectedProducts: conversationContext.selectedProducts,
+      }
+    );
+    
+    console.log(`[Action Gate] Order: ${orderGate.summary}`);
+    
+    // Only auto-create order if AI response indicates confirmation AND gate allows
     const isOrderConfirmation = /(?:order confirmed|placed your order|order is set|purchase confirmed)/i.test(reply) && 
                                  !conversationContext.orderConfirmed;
     
-    if (hasOrderInfo && isOrderConfirmation) {
+    // GATE ENFORCEMENT: Block order if requirements not met
+    if (orderGate.allowed && isOrderConfirmation) {
       try {
         console.log(`[Widget Chat] Auto-creating order for ${conversationContext.customerName}`);
         
