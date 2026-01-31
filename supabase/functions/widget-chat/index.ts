@@ -51,6 +51,18 @@ import {
 } from "../_shared/stateMachine.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// HALLUCINATION GUARD (DATA GROUNDING ENFORCEMENT)
+// ═══════════════════════════════════════════════════════════════════════════
+import {
+  checkGroundingRequired,
+  validateGroundedData,
+  buildHallucinationGuardPrompt,
+  extractGroundedData,
+  type GroundedData,
+  type GroundingCheckResult,
+} from "../_shared/hallucinationGuard.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CAPABILITY-BASED ARCHITECTURE IMPORTS (UNIVERSAL BUSINESS OPERATOR)
 // ═══════════════════════════════════════════════════════════════════════════
 import { 
@@ -738,7 +750,8 @@ function buildMasterSystemPrompt(
   aiMode: string = 'booking',
   capabilityPrompt: string = '',
   actionGateBlock: string = '',
-  stateMachineBlock: string = ''
+  stateMachineBlock: string = '',
+  hallucinationGuardBlock: string = ''
 ): string {
   const emotionalGuidance: Record<string, string> = {
     neutral: 'Maintain a warm, professional tone.',
@@ -1013,6 +1026,11 @@ Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and g
   // Add State Machine block (enforced conversation flow)
   if (stateMachineBlock) {
     blocks.push('---', stateMachineBlock);
+  }
+  
+  // Add Hallucination Guard block (data grounding enforcement)
+  if (hallucinationGuardBlock) {
+    blocks.push('---', hallucinationGuardBlock);
   }
   
   // Add Money Mode block if active
@@ -1402,7 +1420,21 @@ serve(async (req) => {
     const actionGateBlock = buildActionGatePrompt(preActionGateResult);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + CAPABILITY GRAPH + ACTION GATE + STATE MACHINE + MONEY MODE)
+    // HALLUCINATION GUARD: EXTRACT GROUNDED DATA & BUILD GUARD PROMPT
+    // ═══════════════════════════════════════════════════════════════════════
+    const groundedData = extractGroundedData(services || [], receptionist, receptionist.knowledge_base);
+    const hallucinationGuardBlock = buildHallucinationGuardPrompt(groundedData);
+    
+    // Check if current message requires grounding validation
+    const groundingCheck = checkGroundingRequired(message);
+    if (groundingCheck.required) {
+      const groundingValidation = validateGroundedData(groundingCheck.categories, groundedData);
+      console.log(`[Hallucination Guard] Grounding required for: ${groundingCheck.categories.join(', ')}`);
+      console.log(`[Hallucination Guard] Data available: ${groundingValidation.dataAvailable}, Missing: ${groundingValidation.missingData.join(', ') || 'none'}`);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + CAPABILITY GRAPH + ACTION GATE + STATE MACHINE + HALLUCINATION GUARD + MONEY MODE)
     // ═══════════════════════════════════════════════════════════════════════
     const systemPrompt = buildMasterSystemPrompt(
       receptionist,
@@ -1414,7 +1446,8 @@ serve(async (req) => {
       aiMode,
       capabilityPrompt,
       actionGateBlock,
-      stateMachineBlock
+      stateMachineBlock,
+      hallucinationGuardBlock
     );
 
     const startTime = Date.now();
