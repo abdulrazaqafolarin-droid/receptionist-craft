@@ -51,6 +51,18 @@ import {
 } from "../_shared/flow/memoryPipeline.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// UNIFIED CONVERSATION CORE (SINGLE SOURCE OF TRUTH)
+// ═══════════════════════════════════════════════════════════════════════════
+import {
+  runUnifiedCore,
+  createEmptyUnifiedState,
+  serializeUnifiedState,
+  deserializeUnifiedState,
+  type UnifiedState,
+  type CoreResult,
+} from "../_shared/flow/unifiedCore.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CONVERSATION GOVERNOR (STATE-DRIVEN EXECUTION CONTROL)
 // ═══════════════════════════════════════════════════════════════════════════
 import {
@@ -1289,10 +1301,9 @@ serve(async (req) => {
     console.log(`[Analysis] Intent: ${messageAnalysis.detectedIntent}, Ack: ${messageAnalysis.isAcknowledgment}, Correction: ${messageAnalysis.isCorrection}`);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // MEMORY PIPELINE — UNIFIED TASK INTELLIGENCE
-    // Step 1: Intent → Step 2: Entities → Step 3: Task State → Step 4: UI State
+    // UNIFIED CONVERSATION CORE — SINGLE SOURCE OF TRUTH
+    // Replaces: memoryPipeline, taskIntelligence, conversationGovernor
     // ═══════════════════════════════════════════════════════════════════════
-    let activeTask: ActiveTask | null = conversationState.active_task;
     
     // Fetch services/products early for entity extraction
     const { data: services } = await supabase
@@ -1310,7 +1321,61 @@ serve(async (req) => {
       canOrder: productItems.length > 0,
     };
     
-    // Run unified memory pipeline (Steps 1-4)
+    // ═══════════════════════════════════════════════════════════════════════
+    // RUN UNIFIED CORE (SINGLE PROCESSING PIPELINE)
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    // Load or create unified state
+    let unifiedState: UnifiedState | null = conversationState.unified_state 
+      ? (conversationState.unified_state as unknown as UnifiedState)
+      : null;
+    
+    // Sync greeting state from conversation state
+    if (unifiedState && conversationState.greeting_sent) {
+      unifiedState.rules.greeted = true;
+    }
+    if (unifiedState && (conversationState.booking_confirmed || conversationState.order_confirmed)) {
+      unifiedState.rules.confirmationSent = true;
+      unifiedState.rules.locked = true;
+    }
+    
+    // Run the unified core
+    const coreResult: CoreResult = runUnifiedCore(
+      message,
+      unifiedState,
+      serviceItems.map(s => ({ id: s.id, name: s.name, duration_minutes: s.duration_minutes, price: s.price })),
+      productItems.map(p => ({ id: p.id, name: p.name, price: p.price })),
+      businessCapabilities,
+      isFirstMessage,
+      receptionist.timezone || undefined
+    );
+    
+    // Update unified state
+    unifiedState = coreResult.state;
+    conversationState.unified_state = unifiedState as any;
+    
+    // Sync unified state back to legacy activeTask for backward compatibility
+    let activeTask: ActiveTask | null = unifiedState.task;
+    conversationState.active_task = activeTask;
+    
+    // Log unified core results
+    console.log(`[UnifiedCore] Intent: ${coreResult.intent.intent} (${coreResult.intent.confidence})`);
+    console.log(`[UnifiedCore] Entities: ${Object.keys(coreResult.entities).filter(k => coreResult.entities[k as keyof typeof coreResult.entities]).join(', ') || 'none'}`);
+    console.log(`[UnifiedCore] Task: ${activeTask?.type || 'none'}, Step: ${activeTask?.step || 'idle'}`);
+    console.log(`[UnifiedCore] Missing: ${coreResult.requirements.missingFields.join(', ') || 'none'}`);
+    console.log(`[UnifiedCore] Next required: ${coreResult.requirements.nextRequired || 'CONFIRMATION'}`);
+    console.log(`[UnifiedCore] Locked: ${unifiedState.rules.locked}`);
+    
+    if (coreResult.isIllegalResponse) {
+      console.warn(`[UnifiedCore] ⚠️ ILLEGAL RESPONSE BLOCKED: ${coreResult.illegalReason}`);
+    }
+    
+    // Build unified governor prompt (will be injected into system prompt)
+    const unifiedGovernorBlock = coreResult.prompt;
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // LEGACY MEMORY PIPELINE (for backward compatibility during transition)
+    // ═══════════════════════════════════════════════════════════════════════
     const pipelineResult = runMemoryPipeline(
       message,
       activeTask,
@@ -1320,73 +1385,10 @@ serve(async (req) => {
       receptionist.timezone || undefined
     );
     
-    // Update task from pipeline result
-    if (pipelineResult.shouldResetFlow) {
-      console.log(`[Memory Pipeline] Flow reset requested`);
-      activeTask = null;
-      conversationState.active_task = null;
-      conversationState.active_flow = null;
-      conversationState.flow_step = null;
-    } else {
-      activeTask = pipelineResult.task;
-      conversationState.active_task = activeTask;
-    }
-    
-    // Log pipeline results
+    // Log pipeline results (for comparison)
     console.log(`[Memory Pipeline] Intent: ${pipelineResult.intent.intent} (${pipelineResult.intent.confidence})`);
-    console.log(`[Memory Pipeline] Entities extracted: ${Object.keys(pipelineResult.entities).filter(k => pipelineResult.entities[k as keyof ExtractedEntities]).join(', ') || 'none'}`);
     
-    // Legacy active task processing for backward compatibility
-    if (activeTask) {
-      // Check for flow exit request (legacy)
-      if (detectFlowExit(message)) {
-        console.log(`[Task Intelligence] User requested flow exit, resetting task`);
-        activeTask = null;
-        conversationState.active_task = null;
-      }
-    }
-    
-    // Detect task intent if no active task (legacy fallback)
-    if (!activeTask && !pipelineResult.task) {
-      const taskIntent = detectTaskIntent(message);
-      if (taskIntent) {
-        console.log(`[Task Intelligence] Legacy fallback - Detected new task intent: ${taskIntent}`);
-        activeTask = startTask(taskIntent, receptionist.timezone || undefined);
-        conversationState.active_task = activeTask;
-      }
-    }
-    
-    // If there's an active task, check if message is on-topic
-    let taskTopicAnalysis = null;
-    if (activeTask) {
-      taskTopicAnalysis = isMessageOnTopic(message, activeTask);
-      console.log(`[Task Intelligence] Message on-topic: ${taskTopicAnalysis.onTopic}, confidence: ${taskTopicAnalysis.confidence}, action: ${taskTopicAnalysis.suggestedAction}`);
-      
-      // Update active task with pipeline-extracted entities
-      if (Object.keys(pipelineResult.entities).length > 0) {
-        activeTask = updateTaskEntities(activeTask, {
-          serviceId: pipelineResult.entities.serviceId,
-          serviceName: pipelineResult.entities.serviceName,
-          date: pipelineResult.entities.date,
-          time: pipelineResult.entities.time,
-          productId: pipelineResult.entities.productId,
-          productName: pipelineResult.entities.productName,
-          quantity: pipelineResult.entities.quantity,
-          customerName: pipelineResult.entities.customerName,
-          customerPhone: pipelineResult.entities.customerPhone,
-          customerEmail: pipelineResult.entities.customerEmail,
-          deliveryAddress: pipelineResult.entities.deliveryAddress,
-        });
-        conversationState.active_task = activeTask;
-      }
-      
-      // Update confirmation flag
-      if (messageAnalysis.detectedIntent === 'confirm') {
-        activeTask.flow_flags.confirmation_shown = true;
-      }
-    }
-    
-    // Log current task state
+    // If there's an active task, log state
     if (activeTask) {
       console.log(`[Task Intelligence] Active task: ${activeTask.type}, step: ${activeTask.step}, pending: ${activeTask.memory.pending_info.join(', ')}`);
     }
@@ -1596,13 +1598,26 @@ serve(async (req) => {
 
     // ═══════════════════════════════════════════════════════════════════════
     // CONVERSATION GOVERNOR: STATE-DRIVEN EXECUTION CONTROL
-    // 4-Layer Validator: Input → Intent → Requirements → Response
+    // Now powered by UnifiedCore (single source of truth)
     // ═══════════════════════════════════════════════════════════════════════
     
-    // Initialize or restore governor state from conversation state
+    // Use unified governor block as PRIMARY (from UnifiedCore)
+    // Keep legacy governor for backward compatibility logging only
     let governorState: GovernorState = conversationState.governor_state || createGovernorState();
     
-    // Update governor state with current flags
+    // Sync legacy governor state with unified state
+    if (unifiedState) {
+      governorState.conversation_rules.greeted = unifiedState.rules.greeted;
+      governorState.conversation_rules.confirmation_sent = unifiedState.rules.confirmationSent;
+      governorState.conversation_rules.closing_sent = unifiedState.rules.closingOffered;
+      governorState.conversation_rules.asked_if_need_more = unifiedState.rules.askedIfNeedMore;
+      governorState.locked = unifiedState.rules.locked;
+      governorState.topic_lock = unifiedState.rules.topicLock;
+      governorState.missing_fields = coreResult.requirements.missingFields;
+      governorState.collected_fields = coreResult.requirements.collectedFields;
+    }
+    
+    // Update governor state with current flags (legacy sync)
     if (conversationState.greeting_sent) {
       governorState.conversation_rules.greeted = true;
     }
@@ -1611,7 +1626,7 @@ serve(async (req) => {
       governorState.locked = true;
     }
     
-    // Run the 4-layer governor pipeline
+    // Run legacy governor for comparison logging (will be removed after testing)
     const governorResult = runGovernor(
       message,
       activeTask,
@@ -1619,26 +1634,18 @@ serve(async (req) => {
       businessCapabilities
     );
     
-    // Log governor results
-    console.log(`[Governor] Input cleaned: ${governorResult.validatedInput.corrections.length} corrections`);
-    console.log(`[Governor] Intent: ${governorResult.clarifiedIntent.intent} (${governorResult.clarifiedIntent.confidence})`);
-    console.log(`[Governor] Missing fields: ${governorResult.requirements.missing_fields.join(', ') || 'none'}`);
-    console.log(`[Governor] Next required: ${governorResult.requirements.next_required || 'CONFIRM'}`);
-    console.log(`[Governor] Allowed actions: ${governorResult.instruction.allowed_actions.join(', ')}`);
+    // Log governor comparison
+    console.log(`[Governor Legacy] Intent: ${governorResult.clarifiedIntent.intent} vs [UnifiedCore] Intent: ${coreResult.intent.intent}`);
+    console.log(`[Governor Legacy] Next: ${governorResult.requirements.next_required || 'CONFIRM'} vs [UnifiedCore] Next: ${coreResult.requirements.nextRequired || 'CONFIRM'}`);
     
-    if (governorResult.isIllegalResponse) {
-      console.warn(`[Governor] ILLEGAL RESPONSE BLOCKED: ${governorResult.illegalReason}`);
-    }
-    
-    // Build governor prompt block
-    const governorBlock = buildGovernorPrompt(governorResult);
+    // USE UNIFIED GOVERNOR BLOCK (not legacy)
+    const governorBlock = unifiedGovernorBlock;
     
     // Update governor state for persistence
-    governorState = governorResult.state;
     conversationState.governor_state = governorState;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + CAPABILITY GRAPH + ACTION GATE + STATE MACHINE + HALLUCINATION GUARD + MONEY MODE + TASK INTELLIGENCE + GOVERNOR)
+    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + UNIFIED GOVERNOR)
     // ═══════════════════════════════════════════════════════════════════════
     const systemPrompt = buildMasterSystemPrompt(
       receptionist,
@@ -1654,7 +1661,7 @@ serve(async (req) => {
       hallucinationGuardBlock,
       taskContinuityBlock,
       flowLockBlock,
-      governorBlock
+      governorBlock // Now using unifiedGovernorBlock
     );
 
     const startTime = Date.now();
