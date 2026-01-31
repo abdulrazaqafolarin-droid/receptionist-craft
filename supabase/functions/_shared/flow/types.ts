@@ -151,6 +151,25 @@ export interface FlowSlots {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// GOVERNOR STATE (for state-driven execution control)
+// ═══════════════════════════════════════════════════════════════════════════
+export interface GovernorStateType {
+  active_flow: 'booking' | 'ordering' | 'support' | 'info' | 'none';
+  current_step: TaskStep | null;
+  locked: boolean;
+  topic_lock: string | null;
+  missing_fields: string[];
+  collected_fields: string[];
+  conversation_rules: {
+    greeted: boolean;
+    confirmation_sent: boolean;
+    closing_sent: boolean;
+    asked_if_need_more: boolean;
+  };
+  last_ai_action: string | null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CONVERSATION STATE - Full Session State
 // ═══════════════════════════════════════════════════════════════════════════
 export interface ConversationState {
@@ -170,6 +189,8 @@ export interface ConversationState {
   last_message_at: string;
   // New: Active Task object
   active_task: ActiveTask | null;
+  // New: Governor State object
+  governor_state?: GovernorStateType | null;
 }
 
 export interface TopicShiftSignal {
