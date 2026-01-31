@@ -63,6 +63,20 @@ import {
 } from "../_shared/hallucinationGuard.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ABUSE PROTECTION SYSTEM (RATE LIMITING & BOT DETECTION)
+// ═══════════════════════════════════════════════════════════════════════════
+import {
+  performAbuseCheck,
+  recordFailedBooking,
+  clearFailedAttempts,
+  checkBookingBlocked,
+  logSuspiciousActivity,
+  rateLimitResponse,
+  blockedResponse,
+  type AbuseCheckResult,
+} from "../_shared/abuseProtection.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CAPABILITY-BASED ARCHITECTURE IMPORTS (UNIVERSAL BUSINESS OPERATOR)
 // ═══════════════════════════════════════════════════════════════════════════
 import { 
@@ -83,37 +97,6 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// ═══════════════════════════════════════════════════════════════════════════
-// RATE LIMITER (In-memory sliding window)
-// ═══════════════════════════════════════════════════════════════════════════
-interface RateLimitEntry { count: number; windowStart: number; }
-const rateLimitStore = new Map<string, RateLimitEntry>();
-const RATE_LIMIT = { windowMs: 60_000, maxRequests: 30 };
-
-function checkRateLimit(sessionId: string): { allowed: boolean; retryAfterMs?: number } {
-  const now = Date.now();
-  const key = `widget:${sessionId}`;
-  const entry = rateLimitStore.get(key);
-
-  if (rateLimitStore.size > 5000) {
-    for (const [k, v] of rateLimitStore.entries()) {
-      if (now - v.windowStart > RATE_LIMIT.windowMs * 2) rateLimitStore.delete(k);
-    }
-  }
-
-  if (!entry || now - entry.windowStart > RATE_LIMIT.windowMs) {
-    rateLimitStore.set(key, { count: 1, windowStart: now });
-    return { allowed: true };
-  }
-
-  if (entry.count >= RATE_LIMIT.maxRequests) {
-    return { allowed: false, retryAfterMs: RATE_LIMIT.windowMs - (now - entry.windowStart) };
-  }
-
-  entry.count++;
-  return { allowed: true };
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INPUT SANITIZATION
@@ -1058,6 +1041,11 @@ serve(async (req) => {
     const sessionId = payload.sessionId ?? null;
     const displayedGreeting = payload.displayedGreeting ?? null;
     const source = payload.source ?? "widget";
+    
+    // Honeypot and timing fields for bot detection
+    const honeypotValue = payload._hp_field ?? null;
+    const formLoadTime = payload._form_load_time ?? null;
+    const formSubmitTime = formLoadTime ? (Date.now() - formLoadTime) : undefined;
 
     // ═══════════════════════════════════════════════════════════════════════
     // SECURITY: Validate required fields
@@ -1070,21 +1058,33 @@ serve(async (req) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // RATE LIMITING CHECK
+    // ABUSE PROTECTION: Rate Limiting, Honeypot, & Suspicious Pattern Detection
     // ═══════════════════════════════════════════════════════════════════════
-    const rateCheck = checkRateLimit(sessionId);
-    if (!rateCheck.allowed) {
-      console.log(`[Widget Chat] Rate limited: session ${sessionId}`);
-      return new Response(
-        JSON.stringify({ 
-          error: "Too many messages. Please slow down and try again.",
-          retryAfterSeconds: Math.ceil((rateCheck.retryAfterMs || 60000) / 1000)
-        }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(Math.ceil((rateCheck.retryAfterMs || 60000) / 1000)) } }
-      );
-    }
-
     const message = rawMessage ? sanitizeInput(rawMessage, 2000) : "";
+    
+    const abuseCheck: AbuseCheckResult = performAbuseCheck(
+      sessionId,
+      message,
+      honeypotValue,
+      formSubmitTime
+    );
+    
+    if (!abuseCheck.allowed) {
+      console.warn(`[Abuse Protection] Request blocked: ${abuseCheck.reason}`, {
+        sessionId: sessionId.substring(0, 8) + '...',
+        score: abuseCheck.suspiciousScore
+      });
+      
+      if (abuseCheck.retryAfterMs) {
+        return rateLimitResponse(abuseCheck.retryAfterMs);
+      }
+      return blockedResponse(abuseCheck.reason);
+    }
+    
+    // Log if suspicious but still allowed
+    if (abuseCheck.suspiciousScore > 0) {
+      console.log(`[Abuse Protection] Suspicious activity (score: ${abuseCheck.suspiciousScore}), but allowing request`);
+    }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
