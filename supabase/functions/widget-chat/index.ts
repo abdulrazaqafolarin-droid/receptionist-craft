@@ -18,7 +18,24 @@ import {
   buildSlotSummary 
 } from "../_shared/flow/slotExtractor.ts";
 import { MemorySummarizer } from "../_shared/flow/memorySummarizer.ts";
-import type { ConversationState, FlowSlots } from "../_shared/flow/types.ts";
+import type { ConversationState, FlowSlots, ActiveTask } from "../_shared/flow/types.ts";
+import { createEmptyActiveTask } from "../_shared/flow/types.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TASK INTELLIGENCE MODULE (ACTIVE_TASK SYSTEM)
+// ═══════════════════════════════════════════════════════════════════════════
+import {
+  startTask,
+  updateTaskEntities,
+  confirmTask,
+  resetTask,
+  detectFlowExit,
+  isMessageOnTopic,
+  buildTaskContinuityPrompt,
+  buildFlowLockPrompt,
+  detectTaskIntent,
+  buildSmartMemorySummary,
+} from "../_shared/flow/taskIntelligence.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ACTION PERMISSION GATE (MIDDLEWARE VALIDATOR)
@@ -734,7 +751,9 @@ function buildMasterSystemPrompt(
   capabilityPrompt: string = '',
   actionGateBlock: string = '',
   stateMachineBlock: string = '',
-  hallucinationGuardBlock: string = ''
+  hallucinationGuardBlock: string = '',
+  taskContinuityBlock: string = '',
+  flowLockBlock: string = ''
 ): string {
   const emotionalGuidance: Record<string, string> = {
     neutral: 'Maintain a warm, professional tone.',
@@ -1016,6 +1035,15 @@ Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and g
     blocks.push('---', hallucinationGuardBlock);
   }
   
+  // Add Task Intelligence blocks (ACTIVE_TASK system)
+  if (taskContinuityBlock) {
+    blocks.push('---', taskContinuityBlock);
+  }
+  
+  if (flowLockBlock) {
+    blocks.push('---', flowLockBlock);
+  }
+  
   // Add Money Mode block if active
   if (moneyModeBlock) {
     blocks.push('---', moneyModeBlock);
@@ -1229,6 +1257,46 @@ serve(async (req) => {
     console.log(`[Analysis] Intent: ${messageAnalysis.detectedIntent}, Ack: ${messageAnalysis.isAcknowledgment}, Correction: ${messageAnalysis.isCorrection}`);
 
     // ═══════════════════════════════════════════════════════════════════════
+    // ACTIVE TASK PROCESSING (TASK-INTELLIGENT AI)
+    // ═══════════════════════════════════════════════════════════════════════
+    let activeTask: ActiveTask | null = conversationState.active_task;
+    
+    // Check for flow exit request
+    if (activeTask && detectFlowExit(message)) {
+      console.log(`[Task Intelligence] User requested flow exit, resetting task`);
+      activeTask = null;
+      conversationState.active_task = null;
+    }
+    
+    // Detect task intent if no active task
+    if (!activeTask) {
+      const taskIntent = detectTaskIntent(message);
+      if (taskIntent) {
+        console.log(`[Task Intelligence] Detected new task intent: ${taskIntent}`);
+        activeTask = startTask(taskIntent, receptionist.timezone || undefined);
+        conversationState.active_task = activeTask;
+      }
+    }
+    
+    // If there's an active task, check if message is on-topic
+    let taskTopicAnalysis = null;
+    if (activeTask) {
+      taskTopicAnalysis = isMessageOnTopic(message, activeTask);
+      console.log(`[Task Intelligence] Message on-topic: ${taskTopicAnalysis.onTopic}, confidence: ${taskTopicAnalysis.confidence}, action: ${taskTopicAnalysis.suggestedAction}`);
+      
+      // Update active task with any newly extracted entities
+      if (messageAnalysis.detectedIntent === 'confirm') {
+        // User confirmed - task may complete
+        activeTask.flow_flags.confirmation_shown = true;
+      }
+    }
+    
+    // Log current task state
+    if (activeTask) {
+      console.log(`[Task Intelligence] Active task: ${activeTask.type}, step: ${activeTask.step}, pending: ${activeTask.memory.pending_info.join(', ')}`);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     // LAYER 3: CONTEXT EXTRACTION & ROLLING SUMMARY
     // ═══════════════════════════════════════════════════════════════════════
     const conversationContext = extractContextFromHistory(history || []);
@@ -1434,7 +1502,16 @@ serve(async (req) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + CAPABILITY GRAPH + ACTION GATE + STATE MACHINE + HALLUCINATION GUARD + MONEY MODE)
+    // TASK INTELLIGENCE: BUILD TASK CONTINUITY & FLOW LOCK PROMPTS
+    // ═══════════════════════════════════════════════════════════════════════
+    const taskContinuityBlock = buildTaskContinuityPrompt(activeTask);
+    const flowLockBlock = buildFlowLockPrompt(activeTask);
+    const smartMemorySummary = buildSmartMemorySummary(activeTask);
+    
+    console.log(`[Task Intelligence] Smart memory: ${smartMemorySummary.substring(0, 100)}...`);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + CAPABILITY GRAPH + ACTION GATE + STATE MACHINE + HALLUCINATION GUARD + MONEY MODE + TASK INTELLIGENCE)
     // ═══════════════════════════════════════════════════════════════════════
     const systemPrompt = buildMasterSystemPrompt(
       receptionist,
@@ -1447,7 +1524,9 @@ serve(async (req) => {
       capabilityPrompt,
       actionGateBlock,
       stateMachineBlock,
-      hallucinationGuardBlock
+      hallucinationGuardBlock,
+      taskContinuityBlock,
+      flowLockBlock
     );
 
     const startTime = Date.now();
@@ -1919,9 +1998,40 @@ serve(async (req) => {
       customerEmail: machineContext.customerEmail || conversationState.slots?.customerEmail,
     };
     
+    // Update active task with conversation context (sync extracted entities)
+    if (activeTask) {
+      activeTask = updateTaskEntities(activeTask, {
+        serviceId: conversationContext.serviceId || undefined,
+        serviceName: conversationContext.serviceMentioned || undefined,
+        date: conversationContext.dateMentioned || undefined,
+        time: conversationContext.timeMentioned || undefined,
+        productId: conversationContext.productId || undefined,
+        productName: conversationContext.productMentioned || undefined,
+        quantity: conversationContext.quantity || undefined,
+        customerName: conversationContext.customerName || undefined,
+        customerPhone: conversationContext.customerPhone || undefined,
+        customerEmail: conversationContext.customerEmail || undefined,
+      });
+      
+      // Update memory
+      activeTask.memory.last_user_intent = messageAnalysis.detectedIntent;
+      activeTask.memory.emotional_tone = conversationContext.emotionalState;
+      activeTask.memory.summary = buildSmartMemorySummary(activeTask);
+      
+      // Check if booking/order was completed
+      if (bookingResult || orderResult) {
+        activeTask = confirmTask(activeTask);
+        console.log(`[Task Intelligence] Task completed: ${activeTask.type}`);
+      }
+    }
+    
+    // Save active task to conversation state
+    conversationState.active_task = activeTask;
+    
     // Save conversation state for next message
     await stateManager.saveState(conversationState);
-    console.log(`[Flow Engine] State saved - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, MachineState: ${machineContext.state}`);
+    console.log(`[Flow Engine] State saved - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, MachineState: ${machineContext.state}, ActiveTask: ${activeTask?.type || 'none'}`);
+    
     
     // Run memory summarization if appropriate
     if (memorySummarizer.shouldSummarize(history || [], conversationContext)) {
