@@ -38,6 +38,19 @@ import {
 } from "../_shared/flow/taskIntelligence.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// MEMORY PIPELINE (UNIFIED STATE MANAGEMENT)
+// ═══════════════════════════════════════════════════════════════════════════
+import {
+  runMemoryPipeline,
+  runPostResponsePipeline,
+  detectIntent as detectIntentPipeline,
+  extractEntities,
+  type PipelineResult,
+  type IntentResult,
+  type ExtractedEntities,
+} from "../_shared/flow/memoryPipeline.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ACTION PERMISSION GATE (MIDDLEWARE VALIDATOR)
 // ═══════════════════════════════════════════════════════════════════════════
 import { 
@@ -1257,22 +1270,68 @@ serve(async (req) => {
     console.log(`[Analysis] Intent: ${messageAnalysis.detectedIntent}, Ack: ${messageAnalysis.isAcknowledgment}, Correction: ${messageAnalysis.isCorrection}`);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ACTIVE TASK PROCESSING (TASK-INTELLIGENT AI)
+    // MEMORY PIPELINE — UNIFIED TASK INTELLIGENCE
+    // Step 1: Intent → Step 2: Entities → Step 3: Task State → Step 4: UI State
     // ═══════════════════════════════════════════════════════════════════════
     let activeTask: ActiveTask | null = conversationState.active_task;
     
-    // Check for flow exit request
-    if (activeTask && detectFlowExit(message)) {
-      console.log(`[Task Intelligence] User requested flow exit, resetting task`);
+    // Fetch services/products early for entity extraction
+    const { data: services } = await supabase
+      .from("services")
+      .select("id, name, description, duration_minutes, price, is_product, stock_quantity, low_stock_threshold")
+      .eq("receptionist_id", receptionistId)
+      .eq("active", true);
+    
+    const serviceItems = (services || []).filter((s: any) => !s.is_product);
+    const productItems = (services || []).filter((s: any) => s.is_product);
+    
+    // Determine business capabilities
+    const businessCapabilities = {
+      canBook: serviceItems.length > 0,
+      canOrder: productItems.length > 0,
+    };
+    
+    // Run unified memory pipeline (Steps 1-4)
+    const pipelineResult = runMemoryPipeline(
+      message,
+      activeTask,
+      serviceItems,
+      productItems,
+      businessCapabilities,
+      receptionist.timezone || undefined
+    );
+    
+    // Update task from pipeline result
+    if (pipelineResult.shouldResetFlow) {
+      console.log(`[Memory Pipeline] Flow reset requested`);
       activeTask = null;
       conversationState.active_task = null;
+      conversationState.active_flow = null;
+      conversationState.flow_step = null;
+    } else {
+      activeTask = pipelineResult.task;
+      conversationState.active_task = activeTask;
     }
     
-    // Detect task intent if no active task
-    if (!activeTask) {
+    // Log pipeline results
+    console.log(`[Memory Pipeline] Intent: ${pipelineResult.intent.intent} (${pipelineResult.intent.confidence})`);
+    console.log(`[Memory Pipeline] Entities extracted: ${Object.keys(pipelineResult.entities).filter(k => pipelineResult.entities[k as keyof ExtractedEntities]).join(', ') || 'none'}`);
+    
+    // Legacy active task processing for backward compatibility
+    if (activeTask) {
+      // Check for flow exit request (legacy)
+      if (detectFlowExit(message)) {
+        console.log(`[Task Intelligence] User requested flow exit, resetting task`);
+        activeTask = null;
+        conversationState.active_task = null;
+      }
+    }
+    
+    // Detect task intent if no active task (legacy fallback)
+    if (!activeTask && !pipelineResult.task) {
       const taskIntent = detectTaskIntent(message);
       if (taskIntent) {
-        console.log(`[Task Intelligence] Detected new task intent: ${taskIntent}`);
+        console.log(`[Task Intelligence] Legacy fallback - Detected new task intent: ${taskIntent}`);
         activeTask = startTask(taskIntent, receptionist.timezone || undefined);
         conversationState.active_task = activeTask;
       }
@@ -1284,9 +1343,26 @@ serve(async (req) => {
       taskTopicAnalysis = isMessageOnTopic(message, activeTask);
       console.log(`[Task Intelligence] Message on-topic: ${taskTopicAnalysis.onTopic}, confidence: ${taskTopicAnalysis.confidence}, action: ${taskTopicAnalysis.suggestedAction}`);
       
-      // Update active task with any newly extracted entities
+      // Update active task with pipeline-extracted entities
+      if (Object.keys(pipelineResult.entities).length > 0) {
+        activeTask = updateTaskEntities(activeTask, {
+          serviceId: pipelineResult.entities.serviceId,
+          serviceName: pipelineResult.entities.serviceName,
+          date: pipelineResult.entities.date,
+          time: pipelineResult.entities.time,
+          productId: pipelineResult.entities.productId,
+          productName: pipelineResult.entities.productName,
+          quantity: pipelineResult.entities.quantity,
+          customerName: pipelineResult.entities.customerName,
+          customerPhone: pipelineResult.entities.customerPhone,
+          customerEmail: pipelineResult.entities.customerEmail,
+          deliveryAddress: pipelineResult.entities.deliveryAddress,
+        });
+        conversationState.active_task = activeTask;
+      }
+      
+      // Update confirmation flag
       if (messageAnalysis.detectedIntent === 'confirm') {
-        // User confirmed - task may complete
         activeTask.flow_flags.confirmation_shown = true;
       }
     }
@@ -1302,23 +1378,12 @@ serve(async (req) => {
     const conversationContext = extractContextFromHistory(history || []);
     const { summary: rollingSummary, recentMessages } = generateRollingSummary(history || [], 15);
 
-    // Fetch FAQs and services for RAG
+    // Fetch FAQs for RAG (services already fetched in memory pipeline above)
     const { data: faqs } = await supabase
       .from("receptionist_faqs")
       .select("question, answer")
       .eq("receptionist_id", receptionistId)
       .order("priority", { ascending: false });
-
-    // Fetch services (non-products) with full details
-    const { data: services } = await supabase
-      .from("services")
-      .select("id, name, description, duration_minutes, price, is_product, stock_quantity, low_stock_threshold")
-      .eq("receptionist_id", receptionistId)
-      .eq("active", true);
-    
-    // Separate services and products for inventory awareness
-    const serviceItems = (services || []).filter((s: any) => !s.is_product);
-    const productItems = (services || []).filter((s: any) => s.is_product);
 
     // ═══════════════════════════════════════════════════════════════════════
     // UNIFIED FLOW ENGINE: SLOT EXTRACTION & STATE UPDATE
@@ -1600,7 +1665,7 @@ serve(async (req) => {
     console.log(`[KPIs] Engaged: ${conversationKPIs.is_engaged}, Repetition: ${conversationKPIs.repetition_rate.toFixed(2)}, Hallucination risk: ${conversationKPIs.hallucination_risk.toFixed(2)}`);
 
     // Store user message
-    await supabase.from("chat_messages").insert({
+    const { error: userMsgErr } = await supabase.from("chat_messages").insert({
       receptionist_id: receptionistId,
       session_id: sessionId,
       user_id: sessionId,
@@ -1613,9 +1678,13 @@ serve(async (req) => {
         is_correction: messageAnalysis.isCorrection
       }
     });
+    
+    if (userMsgErr) {
+      console.error('[Widget Chat] Error storing user message:', userMsgErr);
+    }
 
     // Store bot reply
-    await supabase.from("chat_messages").insert({
+    const { error: botMsgErr } = await supabase.from("chat_messages").insert({
       receptionist_id: receptionistId,
       session_id: sessionId,
       user_id: sessionId,
@@ -1633,6 +1702,12 @@ serve(async (req) => {
         }
       }
     });
+    
+    if (botMsgErr) {
+      console.error('[Widget Chat] Error storing bot message:', botMsgErr);
+    } else {
+      console.log('[Widget Chat] Bot message stored successfully');
+    }
 
     // Log conversation for analytics
     await supabase.from("conversations").insert({
