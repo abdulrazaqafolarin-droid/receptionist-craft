@@ -34,6 +34,23 @@ import {
 } from "../_shared/actionGate.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CONVERSATION STATE MACHINE (ENFORCED STATE TRANSITIONS)
+// ═══════════════════════════════════════════════════════════════════════════
+import {
+  createMachineContext,
+  transition,
+  detectEventFromInput,
+  buildStateMachinePrompt,
+  getUIHintsForState,
+  getRedirectMessage,
+  serializeMachineContext,
+  deserializeMachineContext,
+  type MachineContext,
+  type ConversationMachineState,
+  type TransitionEvent,
+} from "../_shared/stateMachine.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CAPABILITY-BASED ARCHITECTURE IMPORTS (UNIVERSAL BUSINESS OPERATOR)
 // ═══════════════════════════════════════════════════════════════════════════
 import { 
@@ -720,7 +737,8 @@ function buildMasterSystemPrompt(
   rollingSummary: string,
   aiMode: string = 'booking',
   capabilityPrompt: string = '',
-  actionGateBlock: string = ''
+  actionGateBlock: string = '',
+  stateMachineBlock: string = ''
 ): string {
   const emotionalGuidance: Record<string, string> = {
     neutral: 'Maintain a warm, professional tone.',
@@ -990,6 +1008,11 @@ Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and g
   // Add Action Permission Gate block (middleware validator)
   if (actionGateBlock) {
     blocks.push('---', actionGateBlock);
+  }
+  
+  // Add State Machine block (enforced conversation flow)
+  if (stateMachineBlock) {
+    blocks.push('---', stateMachineBlock);
   }
   
   // Add Money Mode block if active
@@ -1289,6 +1312,67 @@ serve(async (req) => {
     console.log(`[Widget Chat] AI Mode: ${aiMode}`);
 
     // ═══════════════════════════════════════════════════════════════════════
+    // CONVERSATION STATE MACHINE: LOAD AND PROCESS STATE
+    // ═══════════════════════════════════════════════════════════════════════
+    // Load existing machine context from conversation state slots
+    let machineContext: MachineContext = deserializeMachineContext(
+      conversationState.slots?.machineContext as string | null
+    );
+    
+    // Detect event from user input and metadata
+    const userMetadata = {
+      selectedServiceId: conversationContext.serviceId || undefined,
+      selectedServiceName: conversationContext.serviceMentioned || undefined,
+      selectedDate: conversationContext.dateMentioned || undefined,
+      selectedTime: conversationContext.timeMentioned || undefined,
+      selectedProductId: conversationContext.productId || undefined,
+      selectedProductName: conversationContext.productMentioned || undefined,
+      quantity: conversationContext.quantity || undefined,
+      customerName: conversationContext.customerName || undefined,
+      customerPhone: conversationContext.customerPhone || undefined,
+      customerEmail: conversationContext.customerEmail || undefined,
+    };
+    
+    const { event: detectedEvent, data: eventData } = detectEventFromInput(
+      message,
+      machineContext.state,
+      userMetadata
+    );
+    
+    // Execute state transition if event detected
+    if (detectedEvent) {
+      const transitionResult = transition(machineContext, detectedEvent, eventData);
+      if (transitionResult.success) {
+        machineContext = transitionResult.context;
+        console.log(`[State Machine] Transitioned: ${transitionResult.context.previousState} → ${transitionResult.newState} (${detectedEvent})`);
+      } else {
+        console.log(`[State Machine] Transition blocked: ${transitionResult.error}`);
+      }
+    }
+    
+    // Sync machine context with flow slots
+    machineContext.serviceId = machineContext.serviceId || conversationContext.serviceId;
+    machineContext.serviceName = machineContext.serviceName || conversationContext.serviceMentioned;
+    machineContext.date = machineContext.date || conversationContext.dateMentioned;
+    machineContext.time = machineContext.time || conversationContext.timeMentioned;
+    machineContext.productId = machineContext.productId || conversationContext.productId;
+    machineContext.productName = machineContext.productName || conversationContext.productMentioned;
+    machineContext.quantity = machineContext.quantity || conversationContext.quantity;
+    machineContext.customerName = machineContext.customerName || conversationContext.customerName;
+    machineContext.customerPhone = machineContext.customerPhone || conversationContext.customerPhone;
+    machineContext.customerEmail = machineContext.customerEmail || conversationContext.customerEmail;
+    machineContext.selectedProducts = machineContext.selectedProducts.length > 0 
+      ? machineContext.selectedProducts 
+      : conversationContext.selectedProducts;
+    
+    // Get UI hints based on current state
+    const uiHints = getUIHintsForState(machineContext.state);
+    console.log(`[State Machine] Current state: ${machineContext.state}, Flow: ${machineContext.flow}, Expected: ${uiHints.expectedInput}`);
+    
+    // Build state machine prompt block
+    const stateMachineBlock = buildStateMachinePrompt(machineContext);
+
+    // ═══════════════════════════════════════════════════════════════════════
     // ACTION PERMISSION GATE: PRE-VALIDATE CURRENT ACTION STATE
     // Build gate block for system prompt based on detected intent
     // ═══════════════════════════════════════════════════════════════════════
@@ -1297,17 +1381,17 @@ serve(async (req) => {
     
     if (detectedAction) {
       const gateContext = {
-        serviceId: conversationContext.serviceId,
-        serviceMentioned: conversationContext.serviceMentioned,
-        productId: conversationContext.productId,
-        productMentioned: conversationContext.productMentioned,
-        dateMentioned: conversationContext.dateMentioned,
-        timeMentioned: conversationContext.timeMentioned,
-        customerName: conversationContext.customerName,
-        customerPhone: conversationContext.customerPhone,
-        customerEmail: conversationContext.customerEmail,
-        quantity: conversationContext.quantity,
-        selectedProducts: conversationContext.selectedProducts,
+        serviceId: machineContext.serviceId,
+        serviceMentioned: machineContext.serviceName,
+        productId: machineContext.productId,
+        productMentioned: machineContext.productName,
+        dateMentioned: machineContext.date,
+        timeMentioned: machineContext.time,
+        customerName: machineContext.customerName,
+        customerPhone: machineContext.customerPhone,
+        customerEmail: machineContext.customerEmail,
+        quantity: machineContext.quantity,
+        selectedProducts: machineContext.selectedProducts,
       };
       
       preActionGateResult = validateActionGate(detectedAction, conversationState.slots || {}, gateContext);
@@ -1318,7 +1402,7 @@ serve(async (req) => {
     const actionGateBlock = buildActionGatePrompt(preActionGateResult);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + CAPABILITY GRAPH + ACTION GATE + MONEY MODE)
+    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + CAPABILITY GRAPH + ACTION GATE + STATE MACHINE + MONEY MODE)
     // ═══════════════════════════════════════════════════════════════════════
     const systemPrompt = buildMasterSystemPrompt(
       receptionist,
@@ -1329,7 +1413,8 @@ serve(async (req) => {
       rollingSummary,
       aiMode,
       capabilityPrompt,
-      actionGateBlock
+      actionGateBlock,
+      stateMachineBlock
     );
 
     const startTime = Date.now();
@@ -1765,21 +1850,45 @@ serve(async (req) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // UNIFIED FLOW ENGINE: PERSIST STATE
+    // UNIFIED FLOW ENGINE: PERSIST STATE (INCLUDING STATE MACHINE)
     // ═══════════════════════════════════════════════════════════════════════
     // Update booking/order confirmed flags based on response
     if (bookingResult) {
       conversationState.booking_confirmed = true;
       conversationState.flow_step = 'complete';
+      // Transition state machine to completed
+      const completedTransition = transition(machineContext, 'USER_CONFIRMED', {});
+      if (completedTransition.success) {
+        machineContext = completedTransition.context;
+      }
     }
     if (orderResult) {
       conversationState.order_confirmed = true;
       conversationState.flow_step = 'complete';
+      // Transition state machine to completed
+      const completedTransition = transition(machineContext, 'USER_CONFIRMED', {});
+      if (completedTransition.success) {
+        machineContext = completedTransition.context;
+      }
     }
+    
+    // Serialize and save machine context in conversation state slots
+    conversationState.slots = {
+      ...conversationState.slots,
+      machineContext: serializeMachineContext(machineContext),
+      // Sync machine data back to slots
+      serviceId: machineContext.serviceId || conversationState.slots?.serviceId,
+      serviceName: machineContext.serviceName || conversationState.slots?.serviceName,
+      date: machineContext.date || conversationState.slots?.date,
+      time: machineContext.time || conversationState.slots?.time,
+      customerName: machineContext.customerName || conversationState.slots?.customerName,
+      customerPhone: machineContext.customerPhone || conversationState.slots?.customerPhone,
+      customerEmail: machineContext.customerEmail || conversationState.slots?.customerEmail,
+    };
     
     // Save conversation state for next message
     await stateManager.saveState(conversationState);
-    console.log(`[Flow Engine] State saved - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}`);
+    console.log(`[Flow Engine] State saved - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, MachineState: ${machineContext.state}`);
     
     // Run memory summarization if appropriate
     if (memorySummarizer.shouldSummarize(history || [], conversationContext)) {
@@ -1822,19 +1931,36 @@ serve(async (req) => {
           deliveryAddress: conversationState.slots?.deliveryLocation || null,
           products: conversationContext.selectedProducts || [],
         } : null,
-        // UI hints to prevent button repetition
-        shouldShowServices: !conversationContext.servicesShownInLastMessage && hasBookingIntent,
-        shouldShowProducts: !conversationContext.productsShownInLastMessage && hasOrderIntent,
+        // UI hints based on state machine (replaces old button repetition logic)
+        uiHints: {
+          showServiceSelector: uiHints.showServiceSelector && !conversationContext.servicesShownInLastMessage,
+          showDatePicker: uiHints.showDatePicker,
+          showTimePicker: uiHints.showTimePicker,
+          showProductSelector: uiHints.showProductSelector && !conversationContext.productsShownInLastMessage,
+          showQuantityInput: uiHints.showQuantityInput,
+          showContactForm: uiHints.showContactForm,
+          showConfirmButton: uiHints.showConfirmButton,
+          expectedInput: uiHints.expectedInput,
+        },
+        // Legacy UI hints for backward compatibility
+        shouldShowServices: uiHints.showServiceSelector && !conversationContext.servicesShownInLastMessage,
+        shouldShowProducts: uiHints.showProductSelector && !conversationContext.productsShownInLastMessage,
+        // State machine info
+        stateMachine: {
+          state: machineContext.state,
+          flow: machineContext.flow,
+          previousState: machineContext.previousState,
+        },
         // Flow engine state hints
         activeFlow: conversationState.active_flow,
         flowStep: conversationState.flow_step,
         // Collected slots for debugging/UI
         collectedSlots: {
-          serviceName: mergedServiceName,
-          date: mergedDate,
-          time: mergedTime,
-          customerName: mergedCustomerName,
-          hasContact: !!(mergedCustomerPhone || mergedCustomerEmail),
+          serviceName: machineContext.serviceName || mergedServiceName,
+          date: machineContext.date || mergedDate,
+          time: machineContext.time || mergedTime,
+          customerName: machineContext.customerName || mergedCustomerName,
+          hasContact: !!(machineContext.customerPhone || machineContext.customerEmail || mergedCustomerPhone || mergedCustomerEmail),
         }
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

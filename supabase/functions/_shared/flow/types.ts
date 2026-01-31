@@ -52,6 +52,9 @@ export interface FlowSlots {
   
   // Location slot (for orders with delivery)
   deliveryLocation?: string | null;
+  
+  // State machine context (serialized JSON)
+  machineContext?: string | null;
 }
 
 export interface ConversationState {
