@@ -51,6 +51,19 @@ import {
 } from "../_shared/flow/memoryPipeline.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CONVERSATION GOVERNOR (STATE-DRIVEN EXECUTION CONTROL)
+// ═══════════════════════════════════════════════════════════════════════════
+import {
+  runGovernor,
+  buildGovernorPrompt,
+  checkRequirements,
+  createGovernorState,
+  updateGovernorState,
+  type GovernorState,
+  type GovernorResult,
+} from "../_shared/flow/conversationGovernor.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ACTION PERMISSION GATE (MIDDLEWARE VALIDATOR)
 // ═══════════════════════════════════════════════════════════════════════════
 import { 
@@ -766,7 +779,8 @@ function buildMasterSystemPrompt(
   stateMachineBlock: string = '',
   hallucinationGuardBlock: string = '',
   taskContinuityBlock: string = '',
-  flowLockBlock: string = ''
+  flowLockBlock: string = '',
+  governorBlock: string = ''
 ): string {
   const emotionalGuidance: Record<string, string> = {
     neutral: 'Maintain a warm, professional tone.',
@@ -1055,6 +1069,11 @@ Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and g
   
   if (flowLockBlock) {
     blocks.push('---', flowLockBlock);
+  }
+  
+  // Add Conversation Governor block (STATE-DRIVEN EXECUTION - HIGHEST PRIORITY)
+  if (governorBlock) {
+    blocks.push('---', governorBlock);
   }
   
   // Add Money Mode block if active
@@ -1576,7 +1595,50 @@ serve(async (req) => {
     console.log(`[Task Intelligence] Smart memory: ${smartMemorySummary.substring(0, 100)}...`);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + CAPABILITY GRAPH + ACTION GATE + STATE MACHINE + HALLUCINATION GUARD + MONEY MODE + TASK INTELLIGENCE)
+    // CONVERSATION GOVERNOR: STATE-DRIVEN EXECUTION CONTROL
+    // 4-Layer Validator: Input → Intent → Requirements → Response
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    // Initialize or restore governor state from conversation state
+    let governorState: GovernorState = conversationState.governor_state || createGovernorState();
+    
+    // Update governor state with current flags
+    if (conversationState.greeting_sent) {
+      governorState.conversation_rules.greeted = true;
+    }
+    if (conversationState.booking_confirmed || conversationState.order_confirmed) {
+      governorState.conversation_rules.confirmation_sent = true;
+      governorState.locked = true;
+    }
+    
+    // Run the 4-layer governor pipeline
+    const governorResult = runGovernor(
+      message,
+      activeTask,
+      governorState,
+      businessCapabilities
+    );
+    
+    // Log governor results
+    console.log(`[Governor] Input cleaned: ${governorResult.validatedInput.corrections.length} corrections`);
+    console.log(`[Governor] Intent: ${governorResult.clarifiedIntent.intent} (${governorResult.clarifiedIntent.confidence})`);
+    console.log(`[Governor] Missing fields: ${governorResult.requirements.missing_fields.join(', ') || 'none'}`);
+    console.log(`[Governor] Next required: ${governorResult.requirements.next_required || 'CONFIRM'}`);
+    console.log(`[Governor] Allowed actions: ${governorResult.instruction.allowed_actions.join(', ')}`);
+    
+    if (governorResult.isIllegalResponse) {
+      console.warn(`[Governor] ILLEGAL RESPONSE BLOCKED: ${governorResult.illegalReason}`);
+    }
+    
+    // Build governor prompt block
+    const governorBlock = buildGovernorPrompt(governorResult);
+    
+    // Update governor state for persistence
+    governorState = governorResult.state;
+    conversationState.governor_state = governorState;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + CAPABILITY GRAPH + ACTION GATE + STATE MACHINE + HALLUCINATION GUARD + MONEY MODE + TASK INTELLIGENCE + GOVERNOR)
     // ═══════════════════════════════════════════════════════════════════════
     const systemPrompt = buildMasterSystemPrompt(
       receptionist,
@@ -1591,7 +1653,8 @@ serve(async (req) => {
       stateMachineBlock,
       hallucinationGuardBlock,
       taskContinuityBlock,
-      flowLockBlock
+      flowLockBlock,
+      governorBlock
     );
 
     const startTime = Date.now();
