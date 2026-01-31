@@ -13,7 +13,7 @@ interface RateLimitEntry {
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
 export const RATE_LIMITS = {
-  widgetChat: { windowMs: 60_000, maxRequests: 20 }, // 20 per minute
+  widgetChat: { windowMs: 60_000, maxRequests: 30 }, // 30 per minute
   booking: { windowMs: 60_000, maxRequests: 10 },
   checkAvailability: { windowMs: 60_000, maxRequests: 20 },
 } as const;
