@@ -69,6 +69,7 @@ export default function Widget() {
   const [hasExistingSession, setHasExistingSession] = useState(false);
   const [showSessionOverlay, setShowSessionOverlay] = useState(false);
   const [existingMessages, setExistingMessages] = useState<any[]>([]);
+  const [sessionCheckComplete, setSessionCheckComplete] = useState(false);
 
   // Initialize persistent session ID and check for existing conversation
   useEffect(() => {
@@ -86,6 +87,9 @@ export default function Widget() {
     // If this isn't a new session, check for existing messages
     if (!isNewSession) {
       checkExistingConversation(sid);
+    } else {
+      // New session - mark check as complete immediately
+      setSessionCheckComplete(true);
     }
   }, [receptionistId]);
   
@@ -108,6 +112,9 @@ export default function Widget() {
       }
     } catch (err) {
       console.error('Error checking existing conversation:', err);
+    } finally {
+      // Mark session check as complete regardless of outcome
+      setSessionCheckComplete(true);
     }
   }
   
@@ -210,8 +217,9 @@ export default function Widget() {
       });
     }
     
-    // Display greeting message with quick replies (will be stored in DB via storeInitialGreeting)
-    if (data.greeting_message) {
+    // Only display greeting message for NEW sessions (not when continuing existing conversation)
+    // If hasExistingSession is true, the overlay will show and user will choose to continue or start fresh
+    if (data.greeting_message && !hasExistingSession) {
       setMessages([{
         role: "assistant",
         content: data.greeting_message,
@@ -256,13 +264,13 @@ export default function Widget() {
     }
   }
 
-  // Load receptionist and services when sessionId is ready
+  // Load receptionist and services when sessionId is ready AND session check is complete
   useEffect(() => {
-    if (receptionistId && sessionId) {
+    if (receptionistId && sessionId && sessionCheckComplete) {
       loadReceptionist();
       loadServicesAndProducts();
     }
-  }, [receptionistId, sessionId]);
+  }, [receptionistId, sessionId, sessionCheckComplete, hasExistingSession]);
 
   // Store initial greeting in database to prevent re-greeting
   useEffect(() => {
