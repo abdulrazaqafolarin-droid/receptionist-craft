@@ -3,7 +3,15 @@
 // Manages state persistence and retrieval for conversation flows
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { ConversationState, FlowSlots, createEmptyState } from "./types.ts";
+import { 
+  ConversationState, 
+  FlowSlots, 
+  ActiveTask,
+  createEmptyState,
+  createEmptyActiveTask,
+  serializeActiveTask,
+  deserializeActiveTask,
+} from "./types.ts";
 
 export class StateManager {
   private supabase: any;
@@ -29,6 +37,11 @@ export class StateManager {
     }
 
     if (data) {
+      const slots = (data.slots as FlowSlots) || {};
+      
+      // Deserialize active task from slots
+      const activeTask = deserializeActiveTask(slots.activeTask);
+      
       return {
         session_id: data.session_id,
         receptionist_id: data.receptionist_id,
@@ -36,14 +49,15 @@ export class StateManager {
         active_topic: data.active_topic,
         flow_step: data.flow_step,
         topic_confidence: data.topic_confidence || 0,
-        slots: (data.slots as FlowSlots) || {},
-        greeting_sent: (data.slots as any)?.greeting_sent || false,
-        booking_confirmed: (data.slots as any)?.booking_confirmed || false,
-        order_confirmed: (data.slots as any)?.order_confirmed || false,
-        asked_if_need_more_help: (data.slots as any)?.asked_if_need_more_help || false,
-        services_shown: (data.slots as any)?.services_shown || false,
-        products_shown: (data.slots as any)?.products_shown || false,
+        slots: slots,
+        greeting_sent: (slots as any)?.greeting_sent || false,
+        booking_confirmed: (slots as any)?.booking_confirmed || false,
+        order_confirmed: (slots as any)?.order_confirmed || false,
+        asked_if_need_more_help: (slots as any)?.asked_if_need_more_help || false,
+        services_shown: (slots as any)?.services_shown || false,
+        products_shown: (slots as any)?.products_shown || false,
         last_message_at: data.last_message_at,
+        active_task: activeTask,
       };
     }
 
@@ -59,6 +73,8 @@ export class StateManager {
       asked_if_need_more_help: state.asked_if_need_more_help,
       services_shown: state.services_shown,
       products_shown: state.products_shown,
+      // Serialize active task into slots
+      activeTask: serializeActiveTask(state.active_task),
     };
 
     const { error } = await this.supabase
@@ -90,6 +106,25 @@ export class StateManager {
 
     const currentSlots = (existing?.slots as FlowSlots) || {};
     const newSlots = { ...currentSlots, ...updates };
+
+    await this.supabase
+      .from('conversation_state')
+      .update({ slots: newSlots, last_message_at: new Date().toISOString() })
+      .eq('session_id', sessionId);
+  }
+
+  async updateActiveTask(sessionId: string, task: ActiveTask | null): Promise<void> {
+    const { data: existing } = await this.supabase
+      .from('conversation_state')
+      .select('slots')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+
+    const currentSlots = (existing?.slots as FlowSlots) || {};
+    const newSlots = { 
+      ...currentSlots, 
+      activeTask: serializeActiveTask(task) 
+    };
 
     await this.supabase
       .from('conversation_state')
