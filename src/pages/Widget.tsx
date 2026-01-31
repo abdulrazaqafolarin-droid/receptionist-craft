@@ -70,6 +70,10 @@ export default function Widget() {
   const [showSessionOverlay, setShowSessionOverlay] = useState(false);
   const [existingMessages, setExistingMessages] = useState<any[]>([]);
   const [sessionCheckComplete, setSessionCheckComplete] = useState(false);
+  
+  // Abuse protection: honeypot field and form load timing
+  const [honeypotValue, setHoneypotValue] = useState("");
+  const formLoadTimeRef = useRef<number>(Date.now());
 
   // Initialize persistent session ID and check for existing conversation
   useEffect(() => {
@@ -451,13 +455,16 @@ export default function Widget() {
         }
       }
 
-      // Normal conversation flow
+      // Normal conversation flow - include abuse protection fields
       const { data, error } = await supabase.functions.invoke("widget-chat", {
         body: {
           message: textToSend,
           receptionistId,
           sessionId,
           bookingContext: bookingState,
+          // Honeypot and timing for bot detection
+          _hp_field: honeypotValue,
+          _form_load_time: formLoadTimeRef.current,
         }
       });
 
@@ -1116,6 +1123,24 @@ export default function Widget() {
         {/* Input */}
         <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
           <div className="flex gap-2 items-end">
+            {/* Invisible honeypot field - bots will fill this, humans won't see it */}
+            <input
+              type="text"
+              name="_hp_email_confirm"
+              value={honeypotValue}
+              onChange={(e) => setHoneypotValue(e.target.value)}
+              autoComplete="off"
+              tabIndex={-1}
+              style={{
+                position: 'absolute',
+                left: '-9999px',
+                width: '1px',
+                height: '1px',
+                opacity: 0,
+                overflow: 'hidden',
+              }}
+              aria-hidden="true"
+            />
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
