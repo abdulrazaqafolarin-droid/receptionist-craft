@@ -170,6 +170,23 @@ export interface GovernorStateType {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// UNIFIED STATE (for UnifiedConversationCore - SINGLE SOURCE OF TRUTH)
+// ═══════════════════════════════════════════════════════════════════════════
+export interface UnifiedStateType {
+  task: ActiveTask | null;
+  rules: {
+    greeted: boolean;
+    confirmationSent: boolean;
+    closingOffered: boolean;
+    askedIfNeedMore: boolean;
+    locked: boolean;
+    topicLock: string | null;
+  };
+  lastIntent: string;
+  lastAction: string | null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CONVERSATION STATE - Full Session State
 // ═══════════════════════════════════════════════════════════════════════════
 export interface ConversationState {
@@ -189,8 +206,10 @@ export interface ConversationState {
   last_message_at: string;
   // New: Active Task object
   active_task: ActiveTask | null;
-  // New: Governor State object
+  // New: Governor State object (legacy)
   governor_state?: GovernorStateType | null;
+  // New: Unified State object (SINGLE SOURCE OF TRUTH)
+  unified_state?: UnifiedStateType | null;
 }
 
 export interface TopicShiftSignal {
