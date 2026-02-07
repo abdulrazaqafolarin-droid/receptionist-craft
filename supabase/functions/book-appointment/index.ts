@@ -2,6 +2,15 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
+// Phase 3: Enhanced Booking Validation
+import { 
+  createBookingValidator, 
+  formatValidationErrors,
+  formatConflictMessage,
+  formatSuggestions,
+  type ValidationResult,
+} from "../_shared/bookingValidator.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -36,16 +45,6 @@ function checkRateLimit(key: string): { allowed: boolean; retryAfterMs?: number 
 function sanitize(input: string | null | undefined, maxLen = 500): string {
   if (!input || typeof input !== 'string') return '';
   return input.slice(0, maxLen).replace(/[<>]/g, '').trim();
-}
-
-// Email validation
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-// Phone validation (basic - allows digits, spaces, dashes, plus, parens)
-function isValidPhone(phone: string): boolean {
-  return /^[\d\s\-+()]{7,20}$/.test(phone);
 }
 
 serve(async (req) => {
@@ -101,39 +100,61 @@ serve(async (req) => {
       bookingSource,
     });
 
-    // Validate required fields
-    if (!receptionistId || !serviceId || !startTime || !customerName) {
-      throw new Error("Missing required fields: receptionistId, serviceId, startTime, customerName");
-    }
-
-    // Validate email format if provided
-    if (customerEmail && !isValidEmail(customerEmail)) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Invalid email format" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Validate phone format if provided
-    if (customerPhone && !isValidPhone(customerPhone)) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Invalid phone format" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Require contact info (phone or email)
-    if (!customerEmail && !customerPhone) {
+    // ═══════════════════════════════════════════════════════════════════════
+    // PHASE 3: ENHANCED BOOKING VALIDATION
+    // Uses BookingValidator for comprehensive checks
+    // ═══════════════════════════════════════════════════════════════════════
+    const validator = createBookingValidator(supabase);
+    const validationResult: ValidationResult = await validator.validateBooking({
+      receptionistId,
+      serviceId,
+      startTime,
+      customerName,
+      customerEmail,
+      customerPhone,
+      userId,
+      bookingSource,
+      metadata,
+    });
+    
+    if (!validationResult.valid) {
+      console.log(`[book-appointment] Validation failed:`, validationResult.errors);
+      
+      // Format error response
+      const errorMessage = formatValidationErrors(validationResult);
+      const conflictMessage = validationResult.conflicts ? formatConflictMessage(validationResult.conflicts) : '';
+      const suggestionsMessage = validationResult.suggestions ? formatSuggestions(validationResult.suggestions) : '';
+      
+      // Determine status code based on error type
+      const firstError = validationResult.errors[0];
+      let statusCode = 400;
+      if (firstError?.code === 'TIME_CONFLICT') statusCode = 409;
+      if (firstError?.code === 'DAILY_LIMIT_EXCEEDED') statusCode = 429;
+      
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: "Contact information required: please provide phone or email" 
+          error: firstError?.message || 'Validation failed',
+          errors: validationResult.errors,
+          warnings: validationResult.warnings,
+          conflicts: validationResult.conflicts,
+          suggestions: validationResult.suggestions,
+          formatted: {
+            errors: errorMessage,
+            conflicts: conflictMessage,
+            suggestions: suggestionsMessage,
+          }
         }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: statusCode, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    
+    // Log any warnings
+    if (validationResult.warnings.length > 0) {
+      console.log(`[book-appointment] Warnings:`, validationResult.warnings);
+    }
 
-    // Load service
+    // Load service for duration calculation
     const { data: service, error: srvErr } = await supabase
       .from("services")
       .select("*")
@@ -155,7 +176,7 @@ serve(async (req) => {
     const startWithBuffer = new Date(start.getTime() - bufferBefore * 60000);
     const endWithBuffer = new Date(end.getTime() + bufferAfter * 60000);
 
-    console.log(`[book-appointment] Slot: ${start.toISOString()} - ${end.toISOString()}`);
+    console.log(`[book-appointment] Validated slot: ${start.toISOString()} - ${end.toISOString()}`);
 
     // IDEMPOTENCY CHECK: Check by idempotency_key first (if provided)
     if (idempotencyKey) {
