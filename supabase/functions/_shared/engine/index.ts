@@ -81,3 +81,41 @@ export {
   ROBOTIC_PHRASES,
   NATURAL_ACKS,
 } from './personality.ts';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 2: CONVERSATION QUALITY ENHANCEMENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Empathy & Emotional Intelligence
+export {
+  analyzeEmotionalContext,
+  buildEmpathyPrompt,
+  getEmpathyStarter,
+  analyzeConversationMemory,
+  buildMemoryAwarenessPrompt,
+  EMPATHY_STARTERS,
+  type EmotionalContext,
+  type ConversationMemory,
+} from './empathy.ts';
+
+// Response Quality Evaluator
+export {
+  evaluateResponseQuality,
+  buildQualityPrompt,
+  shouldRegenerateResponse,
+  getQualityFeedback,
+  type ResponseQuality,
+  type QualityIssue,
+} from './responseQuality.ts';
+
+// Tone Adapter
+export {
+  detectBusinessTone,
+  adaptTone,
+  buildTonePrompt,
+  getModelParamsForTone,
+  TONE_PROFILES,
+  type BusinessTone,
+  type ToneProfile,
+  type AdaptedTone,
+} from './toneAdapter.ts';
