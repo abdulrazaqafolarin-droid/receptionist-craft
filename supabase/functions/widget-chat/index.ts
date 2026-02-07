@@ -3,6 +3,22 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// UNIFIED ENGINE v2 (PRIMARY AI CONTROL LAYER)
+// ═══════════════════════════════════════════════════════════════════════════
+import {
+  runEngine,
+  loadState as loadEngineState,
+  saveState as saveEngineState,
+  createEmptyState as createEmptyEngineState,
+  detectSentiment,
+  polishResponse,
+  type EngineState,
+  type EngineInput,
+  type EngineResult,
+  type BusinessCapabilities as EngineCapabilities,
+} from "../_shared/engine/index.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // UNIFIED FLOW ENGINE IMPORTS (CANONICAL CONVERSATION FLOW)
 // ═══════════════════════════════════════════════════════════════════════════
 import { StateManager } from "../_shared/flow/stateManager.ts";
@@ -1301,8 +1317,8 @@ serve(async (req) => {
     console.log(`[Analysis] Intent: ${messageAnalysis.detectedIntent}, Ack: ${messageAnalysis.isAcknowledgment}, Correction: ${messageAnalysis.isCorrection}`);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // UNIFIED CONVERSATION CORE — SINGLE SOURCE OF TRUTH
-    // Replaces: memoryPipeline, taskIntelligence, conversationGovernor
+    // UNIFIED ENGINE v2 — SINGLE SOURCE OF TRUTH (PRIMARY CONTROL LAYER)
+    // Consolidates: intent detection, entity extraction, state, governor
     // ═══════════════════════════════════════════════════════════════════════
     
     // Fetch services/products early for entity extraction
@@ -1315,14 +1331,99 @@ serve(async (req) => {
     const serviceItems = (services || []).filter((s: any) => !s.is_product);
     const productItems = (services || []).filter((s: any) => s.is_product);
     
-    // Determine business capabilities
+    // Determine business capabilities for Engine v2
+    const engineCapabilities: EngineCapabilities = {
+      can_book: serviceItems.length > 0,
+      can_order: productItems.length > 0,
+      can_deliver: productItems.length > 0, // If has products, assume can deliver
+      primary_goal: (receptionist.primary_goal as 'sales' | 'bookings' | 'support' | 'leads') || 
+                    (productItems.length > serviceItems.length ? 'sales' : 'bookings'),
+    };
+    
+    // Legacy format for backward compatibility
     const businessCapabilities = {
       canBook: serviceItems.length > 0,
       canOrder: productItems.length > 0,
     };
     
     // ═══════════════════════════════════════════════════════════════════════
-    // RUN UNIFIED CORE (SINGLE PROCESSING PIPELINE)
+    // ENGINE v2: LOAD STATE FROM CONVERSATION STATE
+    // ═══════════════════════════════════════════════════════════════════════
+    let engineState: EngineState | null = null;
+    
+    // Try to load from conversation state slots
+    if (conversationState.slots?.engineState) {
+      try {
+        engineState = JSON.parse(conversationState.slots.engineState as string) as EngineState;
+      } catch {
+        engineState = null;
+      }
+    }
+    
+    // Sync greeting/confirmation state from legacy system
+    if (engineState) {
+      if (conversationState.greeting_sent) {
+        engineState.rules.greeted = true;
+      }
+      if (conversationState.booking_confirmed || conversationState.order_confirmed) {
+        engineState.rules.confirmation_sent = true;
+        engineState.locked = true;
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE v2: RUN MAIN PIPELINE
+    // Input → Clean → Detect Intent → Extract Entities → Update State → Govern
+    // ═══════════════════════════════════════════════════════════════════════
+    const engineInput: EngineInput = {
+      message,
+      session_id: sessionId,
+      receptionist_id: receptionistId,
+      is_first_message: isFirstMessage,
+      capabilities: engineCapabilities,
+      services: serviceItems.map(s => ({ 
+        id: s.id, 
+        name: s.name, 
+        duration_minutes: s.duration_minutes, 
+        price: s.price 
+      })),
+      products: productItems.map(p => ({ 
+        id: p.id, 
+        name: p.name, 
+        price: p.price,
+        in_stock: (p.stock_quantity || 0) > 0
+      })),
+      timezone: receptionist.timezone || undefined,
+      current_state: engineState,
+    };
+    
+    const engineResult: EngineResult = runEngine(engineInput);
+    
+    // Update engine state
+    engineState = engineResult.state;
+    
+    // Log Engine v2 results
+    console.log(`[Engine v2] Intent: ${engineResult.intent.intent} (conf: ${engineResult.intent.confidence.toFixed(2)})`);
+    console.log(`[Engine v2] Task: ${engineState.task_type || 'none'}, Step: ${engineState.task_step || 'idle'}`);
+    console.log(`[Engine v2] Missing: ${engineResult.requirements.missing.join(', ') || 'none'}`);
+    console.log(`[Engine v2] Next: ${engineResult.requirements.next_required || 'CONFIRMATION'}`);
+    console.log(`[Engine v2] UI Hints: ${JSON.stringify(engineResult.ui_hints)}`);
+    
+    if (engineResult.illegal) {
+      console.warn(`[Engine v2] ⚠️ ILLEGAL STATE: ${engineResult.illegal_reason}`);
+    }
+    
+    // Persist engine state in conversation slots
+    conversationState.slots = {
+      ...conversationState.slots,
+      engineState: JSON.stringify(engineState),
+    };
+    
+    // Build Engine v2 governor prompt block (PRIMARY - highest priority)
+    const enginePromptBlock = engineResult.prompt_block;
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // LEGACY UNIFIED CORE (backward compatibility during transition)
     // ═══════════════════════════════════════════════════════════════════════
     
     // Load or create unified state
@@ -1358,17 +1459,8 @@ serve(async (req) => {
     let activeTask: ActiveTask | null = unifiedState.task;
     conversationState.active_task = activeTask;
     
-    // Log unified core results
+    // Log unified core results (for comparison during transition)
     console.log(`[UnifiedCore] Intent: ${coreResult.intent.intent} (${coreResult.intent.confidence})`);
-    console.log(`[UnifiedCore] Entities: ${Object.keys(coreResult.entities).filter(k => coreResult.entities[k as keyof typeof coreResult.entities]).join(', ') || 'none'}`);
-    console.log(`[UnifiedCore] Task: ${activeTask?.type || 'none'}, Step: ${activeTask?.step || 'idle'}`);
-    console.log(`[UnifiedCore] Missing: ${coreResult.requirements.missingFields.join(', ') || 'none'}`);
-    console.log(`[UnifiedCore] Next required: ${coreResult.requirements.nextRequired || 'CONFIRMATION'}`);
-    console.log(`[UnifiedCore] Locked: ${unifiedState.rules.locked}`);
-    
-    if (coreResult.isIllegalResponse) {
-      console.warn(`[UnifiedCore] ⚠️ ILLEGAL RESPONSE BLOCKED: ${coreResult.illegalReason}`);
-    }
     
     // Build unified governor prompt (will be injected into system prompt)
     const unifiedGovernorBlock = coreResult.prompt;
@@ -1638,14 +1730,14 @@ serve(async (req) => {
     console.log(`[Governor Legacy] Intent: ${governorResult.clarifiedIntent.intent} vs [UnifiedCore] Intent: ${coreResult.intent.intent}`);
     console.log(`[Governor Legacy] Next: ${governorResult.requirements.next_required || 'CONFIRM'} vs [UnifiedCore] Next: ${coreResult.requirements.nextRequired || 'CONFIRM'}`);
     
-    // USE UNIFIED GOVERNOR BLOCK (not legacy)
-    const governorBlock = unifiedGovernorBlock;
+    // USE ENGINE v2 BLOCK (PRIMARY) + UNIFIED GOVERNOR BLOCK (BACKUP)
+    const governorBlock = enginePromptBlock + '\n\n' + unifiedGovernorBlock;
     
     // Update governor state for persistence
     conversationState.governor_state = governorState;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + UNIFIED GOVERNOR)
+    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + ENGINE v2 GOVERNOR)
     // ═══════════════════════════════════════════════════════════════════════
     const systemPrompt = buildMasterSystemPrompt(
       receptionist,
@@ -1661,7 +1753,7 @@ serve(async (req) => {
       hallucinationGuardBlock,
       taskContinuityBlock,
       flowLockBlock,
-      governorBlock // Now using unifiedGovernorBlock
+      governorBlock // Now using Engine v2 + unifiedGovernorBlock
     );
 
     const startTime = Date.now();
@@ -1719,6 +1811,13 @@ serve(async (req) => {
     const aiData = await aiRes.json();
     let reply = aiData.choices?.[0]?.message?.content || "I'm sorry, I couldn't process that.";
     const latencyMs = Date.now() - startTime;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE v2: PERSONALITY POLISHING (REMOVE ROBOTIC PHRASES)
+    // ═══════════════════════════════════════════════════════════════════════
+    const sentiment = detectSentiment(message);
+    reply = polishResponse(reply, sentiment);
+    console.log(`[Engine v2] Sentiment: ${sentiment}, Response polished`);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 6: POST-RESPONSE QUALITY CHECK
@@ -2219,21 +2318,32 @@ serve(async (req) => {
           deliveryAddress: conversationState.slots?.deliveryLocation || null,
           products: conversationContext.selectedProducts || [],
         } : null,
-        // UI hints based on state machine (replaces old button repetition logic)
+        // UI hints based on Engine v2 (PRIMARY) with state machine fallback
         uiHints: {
-          showServiceSelector: uiHints.showServiceSelector && !conversationContext.servicesShownInLastMessage,
-          showDatePicker: uiHints.showDatePicker,
-          showTimePicker: uiHints.showTimePicker,
-          showProductSelector: uiHints.showProductSelector && !conversationContext.productsShownInLastMessage,
+          showServiceSelector: (engineResult.ui_hints.show_services || uiHints.showServiceSelector) && !conversationContext.servicesShownInLastMessage,
+          showDatePicker: engineResult.ui_hints.show_calendar || uiHints.showDatePicker,
+          showTimePicker: engineResult.ui_hints.show_time_slots || uiHints.showTimePicker,
+          showProductSelector: (engineResult.ui_hints.show_products || uiHints.showProductSelector) && !conversationContext.productsShownInLastMessage,
           showQuantityInput: uiHints.showQuantityInput,
           showContactForm: uiHints.showContactForm,
-          showConfirmButton: uiHints.showConfirmButton,
+          showConfirmButton: engineResult.ui_hints.show_confirmation || uiHints.showConfirmButton,
+          showOrderConfirmation: engineResult.ui_hints.show_order_confirmation,
           expectedInput: uiHints.expectedInput,
         },
         // Legacy UI hints for backward compatibility
-        shouldShowServices: uiHints.showServiceSelector && !conversationContext.servicesShownInLastMessage,
-        shouldShowProducts: uiHints.showProductSelector && !conversationContext.productsShownInLastMessage,
-        // State machine info
+        shouldShowServices: (engineResult.ui_hints.show_services || uiHints.showServiceSelector) && !conversationContext.servicesShownInLastMessage,
+        shouldShowProducts: (engineResult.ui_hints.show_products || uiHints.showProductSelector) && !conversationContext.productsShownInLastMessage,
+        // Engine v2 state info (PRIMARY)
+        engineV2: {
+          taskType: engineState?.task_type || null,
+          taskStep: engineState?.task_step || null,
+          intent: engineResult.intent.intent,
+          intentConfidence: engineResult.intent.confidence,
+          missing: engineResult.requirements.missing,
+          nextRequired: engineResult.requirements.next_required,
+          locked: engineState?.locked || false,
+        },
+        // State machine info (LEGACY)
         stateMachine: {
           state: machineContext.state,
           flow: machineContext.flow,
@@ -2244,11 +2354,11 @@ serve(async (req) => {
         flowStep: conversationState.flow_step,
         // Collected slots for debugging/UI
         collectedSlots: {
-          serviceName: machineContext.serviceName || mergedServiceName,
-          date: machineContext.date || mergedDate,
-          time: machineContext.time || mergedTime,
-          customerName: machineContext.customerName || mergedCustomerName,
-          hasContact: !!(machineContext.customerPhone || machineContext.customerEmail || mergedCustomerPhone || mergedCustomerEmail),
+          serviceName: engineState?.entities?.service?.name || machineContext.serviceName || mergedServiceName,
+          date: engineState?.entities?.appointment?.date || machineContext.date || mergedDate,
+          time: engineState?.entities?.appointment?.time || machineContext.time || mergedTime,
+          customerName: engineState?.entities?.customer?.name || machineContext.customerName || mergedCustomerName,
+          hasContact: !!(engineState?.entities?.customer?.phone || engineState?.entities?.customer?.email || machineContext.customerPhone || machineContext.customerEmail || mergedCustomerPhone || mergedCustomerEmail),
         }
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
