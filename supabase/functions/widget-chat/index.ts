@@ -12,10 +12,25 @@ import {
   createEmptyState as createEmptyEngineState,
   detectSentiment,
   polishResponse,
+  // Phase 2: Conversation Quality Enhancement
+  analyzeEmotionalContext,
+  buildEmpathyPrompt,
+  getEmpathyStarter,
+  analyzeConversationMemory,
+  buildMemoryAwarenessPrompt,
+  evaluateResponseQuality,
+  buildQualityPrompt,
+  shouldRegenerateResponse,
+  detectBusinessTone,
+  adaptTone,
+  buildTonePrompt,
+  getModelParamsForTone,
   type EngineState,
   type EngineInput,
   type EngineResult,
   type BusinessCapabilities as EngineCapabilities,
+  type EmotionalContext,
+  type AdaptedTone,
 } from "../_shared/engine/index.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1737,7 +1752,44 @@ serve(async (req) => {
     conversationState.governor_state = governorState;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + ENGINE v2 GOVERNOR)
+    // PHASE 2: CONVERSATION QUALITY ENHANCEMENT
+    // Advanced Empathy, Tone Adaptation, Memory Awareness
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    // 1. Deep Emotional Analysis
+    const emotionalContext: EmotionalContext = analyzeEmotionalContext(
+      message, 
+      history?.map(h => ({ sender: h.sender || 'user', message: h.message || '' }))
+    );
+    console.log(`[Empathy Engine] Emotion: ${emotionalContext.primaryEmotion} (${emotionalContext.intensity}), Signals: ${emotionalContext.signals.join(', ') || 'none'}`);
+    
+    // 2. Build Empathy Prompt Block
+    const empathyPromptBlock = buildEmpathyPrompt(emotionalContext);
+    
+    // 3. Detect and Adapt Business Tone
+    const businessTone = detectBusinessTone(receptionist.business_type || '', receptionist.tone || 'friendly');
+    const adaptedTone: AdaptedTone = adaptTone(
+      businessTone,
+      emotionalContext.primaryEmotion,
+      isFirstMessage,
+      emotionalContext.intensity === 'high' && emotionalContext.primaryEmotion === 'urgent' ? 'critical' : 'normal'
+    );
+    console.log(`[Tone Adapter] Business: ${businessTone}, Adapted Temp: ${adaptedTone.temperature}, Adjustments: ${adaptedTone.adjustments.join(', ') || 'none'}`);
+    
+    // 4. Build Tone Prompt Block
+    const tonePromptBlock = buildTonePrompt(adaptedTone, receptionist.business_name, receptionist.name);
+    
+    // 5. Analyze Conversation Memory for Awareness
+    const conversationMemory = analyzeConversationMemory(
+      history?.map(h => ({ sender: h.sender || 'user', message: h.message || '' })) || []
+    );
+    const memoryAwarenessBlock = buildMemoryAwarenessPrompt(conversationMemory);
+    
+    // 6. Build Quality Standards Block
+    const qualityStandardsBlock = buildQualityPrompt();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + ENGINE v2 GOVERNOR + PHASE 2)
     // ═══════════════════════════════════════════════════════════════════════
     const systemPrompt = buildMasterSystemPrompt(
       receptionist,
@@ -1754,7 +1806,7 @@ serve(async (req) => {
       taskContinuityBlock,
       flowLockBlock,
       governorBlock // Now using Engine v2 + unifiedGovernorBlock
-    );
+    ) + '\n\n' + empathyPromptBlock + '\n\n' + tonePromptBlock + '\n\n' + memoryAwarenessBlock + '\n\n' + qualityStandardsBlock;
 
     const startTime = Date.now();
 
@@ -1769,11 +1821,15 @@ serve(async (req) => {
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
-    // LAYER 1: AI MODEL CALL
+    // PHASE 2: ADAPTIVE MODEL PARAMETERS (BASED ON TONE & CONTEXT)
     // ═══════════════════════════════════════════════════════════════════════
+    const toneParams = getModelParamsForTone(adaptedTone);
     const temperature = messageAnalysis.isAcknowledgment ? 0.7 : 
-                       messageAnalysis.isCorrection ? 0.75 : 0.85;
-    const maxTokens = messageAnalysis.isAcknowledgment ? 150 : 500;
+                       messageAnalysis.isCorrection ? 0.75 : 
+                       toneParams.temperature; // Use adaptive temperature from tone adapter
+    const maxTokens = messageAnalysis.isAcknowledgment ? 150 : toneParams.maxTokens;
+    
+    console.log(`[Model Params] Temp: ${temperature}, MaxTokens: ${maxTokens} (from tone adaptation)`);
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -1813,17 +1869,44 @@ serve(async (req) => {
     const latencyMs = Date.now() - startTime;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ENGINE v2: PERSONALITY POLISHING (REMOVE ROBOTIC PHRASES)
+    // PHASE 2: ENHANCED PERSONALITY POLISHING
     // ═══════════════════════════════════════════════════════════════════════
     const sentiment = detectSentiment(message);
-    reply = polishResponse(reply, sentiment);
-    console.log(`[Engine v2] Sentiment: ${sentiment}, Response polished`);
+    reply = polishResponse(reply);
+    console.log(`[Personality Engine] Sentiment: ${sentiment}, Response polished`);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // LAYER 6: POST-RESPONSE QUALITY CHECK
+    // PHASE 2: ENHANCED QUALITY EVALUATION
     // ═══════════════════════════════════════════════════════════════════════
-    const qualityRubric = evaluateResponseQuality(reply, conversationContext, messageAnalysis);
-    console.log(`[Quality] Overall: ${qualityRubric.overall_score}, Empathy: ${qualityRubric.empathy}, Passes: ${qualityRubric.passes_threshold}`);
+    const responseQuality = evaluateResponseQuality(
+      reply,
+      message,
+      isFirstMessage,
+      emotionalContext.primaryEmotion,
+      history?.map(h => ({ sender: h.sender || 'user', message: h.message || '' }))
+    );
+    
+    console.log(`[Quality Evaluator] Score: ${responseQuality.score}/100, Grade: ${responseQuality.grade}, Issues: ${responseQuality.issues.length}`);
+    
+    if (!responseQuality.passesThreshold) {
+      console.warn(`[Quality Evaluator] ⚠️ Below threshold! Issues: ${responseQuality.issues.map(i => i.type).join(', ')}`);
+      console.warn(`[Quality Evaluator] Improvements: ${responseQuality.improvements.join('; ')}`);
+    }
+    
+    // Check if response should be flagged for regeneration (critical issues only)
+    if (shouldRegenerateResponse(responseQuality)) {
+      console.warn(`[Quality Evaluator] ⚠️ CRITICAL ISSUE - Response flagged (not regenerating in production to avoid loops)`);
+      // In future: could trigger regeneration with stricter prompt
+    }
+    
+    // Legacy quality rubric for backward compatibility
+    const qualityRubric = {
+      overall_score: responseQuality.score / 100,
+      empathy: emotionalContext.empathyLevel,
+      passes_threshold: responseQuality.passesThreshold,
+      grade: responseQuality.grade,
+      issues: responseQuality.issues.map(i => i.type),
+    };
     
     const escalationCheck = checkEscalationNeeded(message, conversationContext, history || []);
     if (escalationCheck.shouldEscalate) {
