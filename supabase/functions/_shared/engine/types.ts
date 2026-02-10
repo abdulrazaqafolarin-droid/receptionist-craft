@@ -20,6 +20,7 @@ export type TaskStep =
   // Ordering steps
   | 'select_product'
   | 'select_quantity'
+  | 'collect_delivery'
   // Shared steps
   | 'collect_name'
   | 'collect_contact'
