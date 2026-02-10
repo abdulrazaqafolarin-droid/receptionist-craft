@@ -150,6 +150,7 @@ function computeStep(state: EngineState): TaskStep {
     if (needsQuantity) return 'select_quantity';
     if (!state.entities.customer.name) return 'collect_name';
     if (!state.entities.customer.phone && !state.entities.customer.email) return 'collect_contact';
+    if (!state.entities.delivery_address) return 'collect_delivery';
     if (!state.rules.confirmation_sent) return 'confirm';
     return 'complete';
   }
@@ -228,6 +229,12 @@ export function checkRequirements(state: EngineState): RequirementCheck {
       result.collected.push('contact');
     } else {
       result.missing.push('contact');
+    }
+
+    if (state.entities.delivery_address) {
+      result.collected.push('delivery_address');
+    } else {
+      result.missing.push('delivery_address');
     }
   }
   

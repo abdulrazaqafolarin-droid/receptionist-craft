@@ -172,11 +172,15 @@ export function generateInstruction(
         instruction.allowed.push('ask_for_contact');
         instruction.instruction = 'Ask for their phone number or email for order confirmation.';
         break;
+      case 'delivery_address':
+        instruction.allowed.push('ask_for_delivery_address');
+        instruction.instruction = 'Ask where they would like us to deliver the order. Accept any address or "pickup" if they prefer to collect.';
+        break;
       case null:
         if (!state.rules.confirmation_sent) {
           instruction.should_confirm = true;
           instruction.allowed.push('summarize_and_confirm');
-          instruction.instruction = 'Summarize the order ONCE and ask for confirmation.';
+          instruction.instruction = 'Summarize the order including delivery address ONCE and ask for confirmation.';
         } else {
           instruction.should_close = true;
           instruction.allowed.push('thank_and_close');
@@ -283,6 +287,9 @@ Use varied acknowledgments (not "Certainly!"). Be conversational but brief.
     }
     if (state.entities.customer.email) {
       lines.push(`• Email: ${state.entities.customer.email}`);
+    }
+    if (state.entities.delivery_address) {
+      lines.push(`• Delivery: ${state.entities.delivery_address}`);
     }
   }
 

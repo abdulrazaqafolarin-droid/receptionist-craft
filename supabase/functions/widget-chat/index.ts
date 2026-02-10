@@ -149,6 +149,17 @@ import {
 } from "../_shared/hallucinationGuard.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// INVENTORY VALIDATOR (COMMERCE ENGINE)
+// ═══════════════════════════════════════════════════════════════════════════
+import {
+  createInventoryValidator,
+  mapProductStock,
+  validateCart,
+  type CartItem,
+  type InventoryValidationResult,
+} from "../_shared/inventoryValidator.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ABUSE PROTECTION SYSTEM (RATE LIMITING & BOT DETECTION)
 // ═══════════════════════════════════════════════════════════════════════════
 import {
@@ -2106,10 +2117,11 @@ serve(async (req) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ACTION PERMISSION GATE: ORDER VALIDATION  
+    // ACTION PERMISSION GATE: ORDER VALIDATION + INVENTORY VALIDATION
     // AI NEVER creates orders until all required slots are collected and verified
     // ═══════════════════════════════════════════════════════════════════════
     let orderResult = null;
+    let orderValidation: InventoryValidationResult | null = null;
     
     // Use Action Gate to validate order requirements
     const orderGate = checkOrderGate(
@@ -2118,9 +2130,9 @@ serve(async (req) => {
         productId: conversationContext.productId,
         productMentioned: conversationContext.productMentioned,
         quantity: conversationContext.quantity,
-        customerName: conversationContext.customerName,
-        customerPhone: conversationContext.customerPhone,
-        customerEmail: conversationContext.customerEmail,
+        customerName: conversationContext.customerName || engineState?.entities?.customer?.name,
+        customerPhone: conversationContext.customerPhone || engineState?.entities?.customer?.phone,
+        customerEmail: conversationContext.customerEmail || engineState?.entities?.customer?.email,
         selectedProducts: conversationContext.selectedProducts,
       }
     );
@@ -2134,77 +2146,102 @@ serve(async (req) => {
     // GATE ENFORCEMENT: Block order if requirements not met
     if (orderGate.allowed && isOrderConfirmation) {
       try {
-        console.log(`[Widget Chat] Auto-creating order for ${conversationContext.customerName}`);
+        const customerName = conversationContext.customerName || engineState?.entities?.customer?.name || 'Customer';
+        console.log(`[Commerce Engine] Auto-creating order for ${customerName}`);
         
-        // Create order with delivery location
-        const deliveryAddress = conversationState.slots?.deliveryLocation || null;
-        const { data: order, error: orderErr } = await supabase
-          .from('orders')
-          .insert({
-            receptionist_id: receptionistId,
-            customer_name: conversationContext.customerName,
-            customer_email: conversationContext.customerEmail || null,
-            customer_phone: conversationContext.customerPhone || null,
-            status: 'pending',
-            total_amount: conversationContext.selectedProducts.reduce((sum, p) => sum + ((p.price || 0) * p.quantity), 0),
-            metadata: {
-              session_id: sessionId,
-              ordered_via: 'widget_chat_auto',
-              conversation_phase: conversationContext.conversationPhase,
-              delivery_address: deliveryAddress
-            }
-          })
-          .select()
-          .single();
-        
-        if (!orderErr && order) {
-          // Create order items
-          const productsToInsert = conversationContext.selectedProducts.length > 0 
-            ? conversationContext.selectedProducts 
-            : [{ productId: conversationContext.productId, productName: conversationContext.productMentioned, quantity: conversationContext.quantity || 1 }];
-          
-          const orderItems = productsToInsert.map((p: any) => ({
-            order_id: order.id,
-            product_id: p.productId || null,
-            product_name: p.productName || conversationContext.productMentioned || 'Unknown Product',
-            quantity: p.quantity || 1,
-            unit_price: p.price || null
-          }));
-          
-          await supabase.from('order_items').insert(orderItems);
-          
-          orderResult = order;
-          console.log(`[Widget Chat] Order created: ${order.id}`);
-          
-          // Send notification to receptionist owner
-          const { data: receptionist2 } = await supabase
-            .from('receptionists')
-            .select('user_id')
-            .eq('id', receptionistId)
-            .maybeSingle();
-          
-          if (receptionist2?.user_id) {
-            await supabase.from('notifications').insert({
-              type: 'order.created',
-              title: `New Order: ${conversationContext.customerName}`,
-              body: `Order placed via AI receptionist`,
-              message: `${productsToInsert.length} item(s) ordered`,
-              receptionist_id: receptionistId,
-              user_id: receptionist2.user_id,
-              severity: 'info',
-              category: 'orders',
-              priority: 'normal',
-              metadata: {
-                order_id: order.id,
-                customer_name: conversationContext.customerName,
-                item_count: productsToInsert.length
-              }
+        // Build cart items from context
+        const cartItems: CartItem[] = conversationContext.selectedProducts.length > 0
+          ? conversationContext.selectedProducts.map((p: any) => ({
+              product_id: p.productId,
+              product_name: p.productName || 'Unknown Product',
+              quantity: p.quantity || 1,
+              unit_price: p.price || null,
+            }))
+          : conversationContext.productId
+            ? [{
+                product_id: conversationContext.productId,
+                product_name: conversationContext.productMentioned || 'Unknown Product',
+                quantity: conversationContext.quantity || 1,
+                unit_price: null,
+              }]
+            : [];
+
+        // Also check Engine v2 state for products
+        if (cartItems.length === 0 && engineState?.entities?.products?.length) {
+          for (const p of engineState.entities.products) {
+            cartItems.push({
+              product_id: p.id,
+              product_name: p.name,
+              quantity: p.quantity,
+              unit_price: p.price,
             });
           }
         }
+
+        if (cartItems.length > 0) {
+          // Inventory-validated order creation
+          const inventoryValidator = createInventoryValidator(supabase);
+          const deliveryAddress = engineState?.entities?.delivery_address || conversationState.slots?.deliveryLocation || null;
+          
+          const orderExecution = await inventoryValidator.executeOrder(
+            receptionistId,
+            cartItems,
+            customerName,
+            {
+              customerEmail: conversationContext.customerEmail || engineState?.entities?.customer?.email || null,
+              customerPhone: conversationContext.customerPhone || engineState?.entities?.customer?.phone || null,
+              deliveryAddress,
+              sessionId,
+            }
+          );
+
+          orderValidation = orderExecution.validation;
+
+          if (orderExecution.success && orderExecution.orderId) {
+            // Fetch the created order for response
+            const { data: createdOrder } = await supabase
+              .from('orders')
+              .select('*')
+              .eq('id', orderExecution.orderId)
+              .maybeSingle();
+
+            orderResult = createdOrder;
+            console.log(`[Commerce Engine] Order created: ${orderExecution.orderId}, Total: ${orderExecution.validation.total_amount}`);
+            
+            // Send notification to receptionist owner
+            const { data: receptionist2 } = await supabase
+              .from('receptionists')
+              .select('user_id')
+              .eq('id', receptionistId)
+              .maybeSingle();
+            
+            if (receptionist2?.user_id) {
+              await supabase.from('notifications').insert({
+                type: 'order.created',
+                title: `New Order: ${customerName}`,
+                body: `Order placed via AI receptionist`,
+                message: `${cartItems.length} item(s) ordered — ₦${orderExecution.validation.total_amount.toLocaleString()}`,
+                receptionist_id: receptionistId,
+                user_id: receptionist2.user_id,
+                severity: 'info',
+                category: 'orders',
+                priority: 'normal',
+                metadata: {
+                  order_id: orderExecution.orderId,
+                  customer_name: customerName,
+                  item_count: cartItems.length,
+                  total_amount: orderExecution.validation.total_amount,
+                  inventory_validated: true,
+                }
+              });
+            }
+          } else {
+            console.warn(`[Commerce Engine] Order validation failed:`, orderExecution.errors);
+            // Stock issues — don't create order, let AI handle the error messaging
+          }
+        }
       } catch (orderErr) {
-        console.error('[Widget Chat] Auto-order creation failed:', orderErr);
-        // Don't fail the response if order creation fails
+        console.error('[Commerce Engine] Auto-order creation failed:', orderErr);
       }
     }
 
