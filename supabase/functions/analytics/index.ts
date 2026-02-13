@@ -88,6 +88,18 @@ serve(async (req) => {
         .order("created_at", { ascending: false })
         .limit(1000);
 
+      // Fetch conversion events for revenue attribution
+      const { data: conversionEvents } = await supabase
+        .from("conversion_events")
+        .select("event_type, revenue_value, currency, receptionist_id, created_at, session_id, metadata")
+        .in("receptionist_id", receptionistIds);
+
+      // Fetch orders for commerce metrics
+      const { data: orders } = await supabase
+        .from("orders")
+        .select("id, total_amount, status, receptionist_id, created_at")
+        .in("receptionist_id", receptionistIds);
+
       // Calculate metrics
       const now = Date.now();
       const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
@@ -137,11 +149,35 @@ serve(async (req) => {
 
       const totalAIResponses = aiResponses?.length || 0;
 
+      // Revenue attribution metrics
+      const totalRevenue = conversionEvents?.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0) || 0;
+      const bookingEvents = conversionEvents?.filter(e => e.event_type === 'booking_completed') || [];
+      const orderEvents = conversionEvents?.filter(e => e.event_type === 'order_completed') || [];
+      const leadEvents = conversionEvents?.filter(e => e.event_type === 'lead_captured') || [];
+      const checkoutEvents = conversionEvents?.filter(e => e.event_type === 'checkout_started') || [];
+      const primaryCurrency = conversionEvents?.[0]?.currency || 'NGN';
+
+      // Revenue over time (daily)
+      const revenueByDay: Record<string, number> = {};
+      conversionEvents?.forEach(e => {
+        if (e.revenue_value && Number(e.revenue_value) > 0) {
+          const date = new Date(e.created_at).toISOString().split('T')[0];
+          revenueByDay[date] = (revenueByDay[date] || 0) + Number(e.revenue_value);
+        }
+      });
+
+      // Conversion funnel
+      const totalSessions = new Set(conversionEvents?.map(e => e.session_id) || []).size;
+      const sessionsWithBooking = new Set(bookingEvents.map(e => e.session_id)).size;
+      const sessionsWithOrder = new Set(orderEvents.map(e => e.session_id)).size;
+
       // Per-receptionist breakdown
       const receptionistBreakdown = receptionists.map(rec => {
         const recConvs = conversations?.filter(c => c.receptionist_id === rec.id).length || 0;
         const recAppts = appointments?.filter(a => a.receptionist_id === rec.id).length || 0;
         const recResponses = aiResponses?.filter(r => r.receptionist_id === rec.id) || [];
+        const recConversionEvents = conversionEvents?.filter(e => e.receptionist_id === rec.id) || [];
+        const recOrders = orders?.filter(o => o.receptionist_id === rec.id) || [];
         
         let recQuality = 0, recQualityCount = 0;
         let recFaqMatches = 0;
@@ -157,14 +193,20 @@ serve(async (req) => {
           if (qs?.faqMatch) recFaqMatches++;
         });
 
+        const recRevenue = recConversionEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0);
+
         return {
           id: rec.id,
           name: rec.name,
           business_name: rec.business_name,
           conversations: recConvs,
           appointments: recAppts,
+          orders: recOrders.length,
           avg_quality_score: recQualityCount > 0 ? (recQuality / recQualityCount) : null,
-          faq_match_rate: recResponses.length > 0 ? (recFaqMatches / recResponses.length) : 0
+          faq_match_rate: recResponses.length > 0 ? (recFaqMatches / recResponses.length) : 0,
+          revenue: recRevenue,
+          bookings_completed: recConversionEvents.filter(e => e.event_type === 'booking_completed').length,
+          leads_captured: recConversionEvents.filter(e => e.event_type === 'lead_captured').length,
         };
       });
 
@@ -190,12 +232,37 @@ serve(async (req) => {
         },
         business_metrics: {
           appointments_booked: appointments?.length || 0,
-          lead_captures: chatMessages?.filter(m => 
-            m.metadata && (m.metadata as any).lead_captured
-          ).length || 0,
+          lead_captures: leadEvents.length,
           booking_conversion_rate: conversations?.length 
             ? ((appointments?.length || 0) / conversations.length) 
             : 0,
+        },
+        revenue_metrics: {
+          total_revenue: totalRevenue,
+          currency: primaryCurrency,
+          bookings_revenue: bookingEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0),
+          orders_revenue: orderEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0),
+          bookings_count: bookingEvents.length,
+          orders_count: orderEvents.length,
+          leads_count: leadEvents.length,
+          avg_booking_value: bookingEvents.length > 0
+            ? bookingEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0) / bookingEvents.length
+            : 0,
+          avg_order_value: orderEvents.length > 0
+            ? orderEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0) / orderEvents.length
+            : 0,
+          revenue_over_time: Object.entries(revenueByDay)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, amount]) => ({ date, amount })),
+        },
+        conversion_funnel: {
+          total_conversations: conversations?.length || 0,
+          engaged_sessions: totalSessions,
+          bookings_completed: sessionsWithBooking,
+          orders_completed: sessionsWithOrder,
+          leads_captured: leadEvents.length,
+          booking_rate: conversations?.length ? (sessionsWithBooking / conversations.length) : 0,
+          order_rate: conversations?.length ? (sessionsWithOrder / conversations.length) : 0,
         },
         performance_metrics: {
           average_response_time: latencyCount > 0 ? (totalLatency / latencyCount) : null,
