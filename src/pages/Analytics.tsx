@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { MessageCircle, Calendar, TrendingUp, Clock, Target, Award, BarChart3, RefreshCw, Download } from "lucide-react";
+import { MessageCircle, Calendar, TrendingUp, Clock, Target, Award, BarChart3, RefreshCw, Download, DollarSign, ShoppingCart, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +36,27 @@ type Analytics = {
     lead_captures: number;
     booking_conversion_rate: number;
   };
+  revenue_metrics: {
+    total_revenue: number;
+    currency: string;
+    bookings_revenue: number;
+    orders_revenue: number;
+    bookings_count: number;
+    orders_count: number;
+    leads_count: number;
+    avg_booking_value: number;
+    avg_order_value: number;
+    revenue_over_time: Array<{ date: string; amount: number }>;
+  };
+  conversion_funnel: {
+    total_conversations: number;
+    engaged_sessions: number;
+    bookings_completed: number;
+    orders_completed: number;
+    leads_captured: number;
+    booking_rate: number;
+    order_rate: number;
+  };
   performance_metrics: {
     average_response_time: number | null;
   };
@@ -45,8 +66,12 @@ type Analytics = {
     business_name: string;
     conversations: number;
     appointments: number;
+    orders: number;
     avg_quality_score: number | null;
     faq_match_rate: number;
+    revenue: number;
+    bookings_completed: number;
+    leads_captured: number;
   }>;
   computed_at: string;
 };
@@ -112,6 +137,10 @@ export default function Analytics() {
 
   const formatPercent = (value: number) => `${(value * 100).toFixed(1)}%`;
   const formatNumber = (value: number | null) => value != null ? value.toFixed(2) : "—";
+  const formatCurrency = (amount: number, currency: string) => {
+    const symbols: Record<string, string> = { NGN: '₦', USD: '$', EUR: '€', GBP: '£' };
+    return `${symbols[currency] || currency}${amount.toLocaleString()}`;
+  };
 
   const conversationTrendData = analytics
     ? Object.entries(analytics.conversation_metrics.conversations_per_day)
@@ -257,12 +286,47 @@ export default function Analytics() {
           </Card>
         ) : (
           <div className="space-y-8">
+            {/* Revenue Hero Banner */}
+            {analytics.revenue_metrics && analytics.revenue_metrics.total_revenue > 0 && (
+              <Card className="border-2 border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10 overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg">
+                        <DollarSign className="h-7 w-7 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">AI-Generated Revenue</p>
+                        <p className="text-3xl lg:text-4xl font-bold text-amber-600 dark:text-amber-400">
+                          {formatCurrency(analytics.revenue_metrics.total_revenue, analytics.revenue_metrics.currency)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 lg:gap-6">
+                      <div className="text-center p-3 rounded-xl bg-card/50 border border-border/50">
+                        <div className="text-xl font-bold text-primary">{analytics.revenue_metrics.bookings_count}</div>
+                        <div className="text-xs text-muted-foreground">Bookings</div>
+                      </div>
+                      <div className="text-center p-3 rounded-xl bg-card/50 border border-border/50">
+                        <div className="text-xl font-bold text-amber-600">{analytics.revenue_metrics.orders_count}</div>
+                        <div className="text-xs text-muted-foreground">Orders</div>
+                      </div>
+                      <div className="text-center p-3 rounded-xl bg-card/50 border border-border/50">
+                        <div className="text-xl font-bold text-green-600">{analytics.revenue_metrics.leads_count}</div>
+                        <div className="text-xs text-muted-foreground">Leads</div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Key Metrics */}
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
               <StatCard 
                 title="Conversations" 
                 value={analytics.conversation_metrics.total_conversations}
-                subtitle="Last 30 days"
+                subtitle={dateRange.label}
                 icon={MessageCircle}
                 color="bg-primary/10 text-primary"
               />
@@ -274,18 +338,18 @@ export default function Analytics() {
                 color="bg-secondary/10 text-secondary"
               />
               <StatCard 
+                title="Orders" 
+                value={analytics.revenue_metrics?.orders_count || 0}
+                subtitle="Completed"
+                icon={ShoppingCart}
+                color="bg-amber-500/10 text-amber-600"
+              />
+              <StatCard 
                 title="Quality Score" 
                 value={formatNumber(analytics.ai_quality_metrics.avg_quality_score)}
                 subtitle="Average rating"
                 icon={Award}
                 color="bg-primary/10 text-primary"
-              />
-              <StatCard 
-                title="FAQ Match" 
-                value={formatPercent(analytics.ai_quality_metrics.faq_match_rate)}
-                subtitle="Accuracy rate"
-                icon={Target}
-                color="bg-secondary/10 text-secondary"
               />
               <StatCard 
                 title="Response Time" 
@@ -295,14 +359,14 @@ export default function Analytics() {
                 }
                 subtitle="Average latency"
                 icon={Clock}
-                color="bg-primary/10 text-primary"
+                color="bg-secondary/10 text-secondary"
               />
               <StatCard 
                 title="Conversion" 
                 value={formatPercent(analytics.business_metrics.booking_conversion_rate)}
                 subtitle="Booking rate"
                 icon={TrendingUp}
-                color="bg-secondary/10 text-secondary"
+                color="bg-green-500/10 text-green-600"
               />
             </div>
 
@@ -391,29 +455,115 @@ export default function Analytics() {
                 </CardContent>
               </Card>
 
+              {/* Revenue Over Time */}
+              {analytics.revenue_metrics?.revenue_over_time?.length > 0 && (
+                <Card className="border-2 border-amber-500/20">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <DollarSign className="h-5 w-5 text-amber-500" />
+                      Revenue Over Time
+                    </CardTitle>
+                    <CardDescription>Daily AI-generated revenue</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={analytics.revenue_metrics.revenue_over_time}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis 
+                          dataKey="date" 
+                          stroke="hsl(var(--muted-foreground))" 
+                          fontSize={12}
+                          tickFormatter={(d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        />
+                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: "hsl(var(--card))", 
+                            border: "2px solid hsl(var(--border))",
+                            borderRadius: "12px"
+                          }}
+                          formatter={(value: number) => [formatCurrency(value, analytics.revenue_metrics.currency), "Revenue"]}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="amount" 
+                          stroke="#f59e0b"
+                          strokeWidth={3}
+                          dot={{ fill: "#f59e0b", strokeWidth: 2 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Business Impact + Conversion Funnel */}
               <Card className="border-2 border-border/50">
                 <CardHeader>
-                  <CardTitle>Business Impact</CardTitle>
-                  <CardDescription>Key business metrics at a glance</CardDescription>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                    Business Impact & Conversion Funnel
+                  </CardTitle>
+                  <CardDescription>Revenue attribution and conversion metrics</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex justify-between items-center p-4 rounded-xl bg-primary/5 border border-primary/10">
-                    <span className="font-medium">Total Messages</span>
-                    <span className="text-2xl font-bold text-primary">{analytics.conversation_metrics.total_messages}</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex justify-between items-center p-4 rounded-xl bg-primary/5 border border-primary/10">
+                      <span className="font-medium text-sm">Total Messages</span>
+                      <span className="text-xl font-bold text-primary">{analytics.conversation_metrics.total_messages}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-4 rounded-xl bg-secondary/5 border border-secondary/10">
+                      <span className="font-medium text-sm">Lead Captures</span>
+                      <span className="text-xl font-bold text-secondary">{analytics.business_metrics.lead_captures}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center p-4 rounded-xl bg-secondary/5 border border-secondary/10">
-                    <span className="font-medium">Lead Captures</span>
-                    <span className="text-2xl font-bold text-secondary">{analytics.business_metrics.lead_captures}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 rounded-xl bg-muted/50 border border-border">
-                    <span className="font-medium">Avg Conv. Length</span>
-                    <span className="text-2xl font-bold">
-                      {analytics.conversation_metrics.average_conversation_length.toFixed(1)}
-                    </span>
-                  </div>
+                  {analytics.revenue_metrics && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex justify-between items-center p-4 rounded-xl bg-amber-500/5 border border-amber-500/10">
+                        <span className="font-medium text-sm">Avg Booking Value</span>
+                        <span className="text-xl font-bold text-amber-600">
+                          {analytics.revenue_metrics.avg_booking_value > 0
+                            ? formatCurrency(analytics.revenue_metrics.avg_booking_value, analytics.revenue_metrics.currency)
+                            : "—"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center p-4 rounded-xl bg-amber-500/5 border border-amber-500/10">
+                        <span className="font-medium text-sm">Avg Order Value</span>
+                        <span className="text-xl font-bold text-amber-600">
+                          {analytics.revenue_metrics.avg_order_value > 0
+                            ? formatCurrency(analytics.revenue_metrics.avg_order_value, analytics.revenue_metrics.currency)
+                            : "—"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {analytics.conversion_funnel && (
+                    <div className="space-y-2 pt-2">
+                      <p className="text-xs font-medium text-muted-foreground">Conversion Funnel</p>
+                      {[
+                        { label: "Conversations", value: analytics.conversion_funnel.total_conversations, pct: 100 },
+                        { label: "Engaged Sessions", value: analytics.conversion_funnel.engaged_sessions, pct: analytics.conversion_funnel.total_conversations ? (analytics.conversion_funnel.engaged_sessions / analytics.conversion_funnel.total_conversations * 100) : 0 },
+                        { label: "Bookings", value: analytics.conversion_funnel.bookings_completed, pct: analytics.conversion_funnel.total_conversations ? (analytics.conversion_funnel.bookings_completed / analytics.conversion_funnel.total_conversations * 100) : 0 },
+                        { label: "Orders", value: analytics.conversion_funnel.orders_completed, pct: analytics.conversion_funnel.total_conversations ? (analytics.conversion_funnel.orders_completed / analytics.conversion_funnel.total_conversations * 100) : 0 },
+                      ].map((step) => (
+                        <div key={step.label} className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span>{step.label}</span>
+                            <span className="font-medium">{step.value} ({step.pct.toFixed(1)}%)</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-muted overflow-hidden">
+                            <div 
+                              className="h-full rounded-full bg-primary transition-all"
+                              style={{ width: `${Math.max(step.pct, 2)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex justify-between items-center p-4 rounded-xl bg-destructive/5 border border-destructive/10">
-                    <span className="font-medium">Unanswered</span>
-                    <span className="text-2xl font-bold text-destructive">
+                    <span className="font-medium text-sm">Unanswered</span>
+                    <span className="text-xl font-bold text-destructive">
                       {analytics.ai_quality_metrics.unanswered_questions}
                     </span>
                   </div>
@@ -435,9 +585,11 @@ export default function Analytics() {
                         <TableHead>Name</TableHead>
                         <TableHead>Business</TableHead>
                         <TableHead className="text-right">Conversations</TableHead>
-                        <TableHead className="text-right">Appointments</TableHead>
+                        <TableHead className="text-right">Bookings</TableHead>
+                        <TableHead className="text-right">Orders</TableHead>
+                        <TableHead className="text-right">Revenue</TableHead>
                         <TableHead className="text-right">Avg Quality</TableHead>
-                        <TableHead className="text-right">FAQ Match</TableHead>
+                        <TableHead className="text-right">Leads</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -446,10 +598,14 @@ export default function Analytics() {
                           <TableCell className="font-medium">{rec.name}</TableCell>
                           <TableCell className="text-muted-foreground">{rec.business_name}</TableCell>
                           <TableCell className="text-right">{rec.conversations}</TableCell>
-                          <TableCell className="text-right">{rec.appointments}</TableCell>
+                          <TableCell className="text-right">{rec.bookings_completed}</TableCell>
+                          <TableCell className="text-right">{rec.orders}</TableCell>
+                          <TableCell className="text-right font-medium text-amber-600">
+                            {rec.revenue > 0 ? formatCurrency(rec.revenue, analytics.revenue_metrics?.currency || 'NGN') : "—"}
+                          </TableCell>
                           <TableCell className="text-right">{formatNumber(rec.avg_quality_score)}</TableCell>
                           <TableCell className="text-right">
-                            <Badge variant="secondary">{formatPercent(rec.faq_match_rate)}</Badge>
+                            <Badge variant="secondary">{rec.leads_captured}</Badge>
                           </TableCell>
                         </TableRow>
                       ))}
