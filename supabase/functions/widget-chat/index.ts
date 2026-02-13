@@ -2001,6 +2001,39 @@ serve(async (req) => {
       }
     });
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // KB GAP DETECTION: Log low-confidence responses for KB optimization
+    // ═══════════════════════════════════════════════════════════════════════
+    const isLowConfidence = qualityRubric.overall_score < 0.6;
+    const isUnanswered = /i don't have that information|i'm not sure|let me check|i can't find/i.test(reply);
+    const isEscalation = escalationCheck.shouldEscalate;
+    
+    if (isLowConfidence || isUnanswered || isEscalation) {
+      try {
+        await supabase.from("ai_responses").insert({
+          receptionist_id: receptionistId,
+          user_id: sessionId,
+          request_message: message,
+          reply_text: reply,
+          confidence: qualityRubric.overall_score,
+          quality_score: qualityRubric,
+          model: receptionist.model || "google/gemini-2.5-flash",
+          latency_ms: latencyMs,
+          channel: "widget",
+          tags: [
+            isLowConfidence ? "low_confidence" : null,
+            isUnanswered ? "unanswered" : null,
+            isEscalation ? "escalation" : null,
+            messageAnalysis.detectedIntent,
+          ].filter(Boolean),
+          flagged: isUnanswered || isEscalation,
+        });
+        console.log(`[KB Gap] Logged gap: confidence=${qualityRubric.overall_score}, unanswered=${isUnanswered}, escalation=${isEscalation}`);
+      } catch (gapErr) {
+        console.warn("[KB Gap] Failed to log gap:", gapErr);
+      }
+    }
+
     const hasBookingIntent = messageAnalysis.detectedIntent === 'book_appointment' || 
       /book|appointment|schedule|reserve/i.test(message);
     
