@@ -11,36 +11,13 @@ import {
   type ValidationResult,
 } from "../_shared/bookingValidator.ts";
 
+// Phase 8: Production Hardening
+import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from "../_shared/rateLimiter.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// ═══════════════════════════════════════════════════════════════════════════
-// RATE LIMITER & INPUT SANITIZATION
-// ═══════════════════════════════════════════════════════════════════════════
-interface RateLimitEntry { count: number; windowStart: number; }
-const rateLimitStore = new Map<string, RateLimitEntry>();
-const RATE_LIMIT = { windowMs: 60_000, maxRequests: 10 }; // 10 bookings/minute
-
-function checkRateLimit(key: string): { allowed: boolean; retryAfterMs?: number } {
-  const now = Date.now();
-  const entry = rateLimitStore.get(key);
-  if (rateLimitStore.size > 5000) {
-    for (const [k, v] of rateLimitStore.entries()) {
-      if (now - v.windowStart > RATE_LIMIT.windowMs * 2) rateLimitStore.delete(k);
-    }
-  }
-  if (!entry || now - entry.windowStart > RATE_LIMIT.windowMs) {
-    rateLimitStore.set(key, { count: 1, windowStart: now });
-    return { allowed: true };
-  }
-  if (entry.count >= RATE_LIMIT.maxRequests) {
-    return { allowed: false, retryAfterMs: RATE_LIMIT.windowMs - (now - entry.windowStart) };
-  }
-  entry.count++;
-  return { allowed: true };
-}
 
 function sanitize(input: string | null | undefined, maxLen = 500): string {
   if (!input || typeof input !== 'string') return '';
@@ -68,19 +45,12 @@ serve(async (req) => {
     const metadata = body.metadata || {};
     const rawNotes = body.notes;
 
-    // Rate limiting by receptionistId (or IP if available)
+    // Phase 8: Rate limiting with shared limiter (burst protection)
     const rateLimitKey = `booking:${receptionistId}:${userId || 'anon'}`;
-    const rateCheck = checkRateLimit(rateLimitKey);
+    const rateCheck = checkRateLimit(rateLimitKey, RATE_LIMITS.booking);
     if (!rateCheck.allowed) {
-      console.log(`[book-appointment] Rate limited: ${rateLimitKey}`);
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: "Too many booking attempts. Please try again later.",
-          retryAfterSeconds: Math.ceil((rateCheck.retryAfterMs || 60000) / 1000)
-        }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      console.log(`[book-appointment] Rate limited: ${rateLimitKey} (reason: ${rateCheck.reason})`);
+      return rateLimitResponse(rateCheck.retryAfterMs, rateCheck.reason);
     }
 
     // Sanitize inputs

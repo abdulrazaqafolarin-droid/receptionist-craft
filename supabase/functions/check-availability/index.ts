@@ -2,36 +2,13 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
+// Phase 8: Production Hardening
+import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from "../_shared/rateLimiter.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// ═══════════════════════════════════════════════════════════════════════════
-// RATE LIMITER
-// ═══════════════════════════════════════════════════════════════════════════
-interface RateLimitEntry { count: number; windowStart: number; }
-const rateLimitStore = new Map<string, RateLimitEntry>();
-const RATE_LIMIT = { windowMs: 60_000, maxRequests: 30 }; // 30 checks/minute
-
-function checkRateLimit(key: string): { allowed: boolean; retryAfterMs?: number } {
-  const now = Date.now();
-  const entry = rateLimitStore.get(key);
-  if (rateLimitStore.size > 5000) {
-    for (const [k, v] of rateLimitStore.entries()) {
-      if (now - v.windowStart > RATE_LIMIT.windowMs * 2) rateLimitStore.delete(k);
-    }
-  }
-  if (!entry || now - entry.windowStart > RATE_LIMIT.windowMs) {
-    rateLimitStore.set(key, { count: 1, windowStart: now });
-    return { allowed: true };
-  }
-  if (entry.count >= RATE_LIMIT.maxRequests) {
-    return { allowed: false, retryAfterMs: RATE_LIMIT.windowMs - (now - entry.windowStart) };
-  }
-  entry.count++;
-  return { allowed: true };
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -57,17 +34,10 @@ serve(async (req) => {
 
     if (!receptionistId) throw new Error("receptionistId required");
 
-    // Rate limiting
-    const rateCheck = checkRateLimit(`avail:${receptionistId}`);
+    // Phase 8: Rate limiting with shared limiter
+    const rateCheck = checkRateLimit(`avail:${receptionistId}`, RATE_LIMITS.checkAvailability);
     if (!rateCheck.allowed) {
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: "Too many requests. Please slow down.",
-          slots: [] 
-        }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return rateLimitResponse(rateCheck.retryAfterMs, rateCheck.reason);
     }
 
     console.log(`[check-availability] Checking for receptionist ${receptionistId}`);

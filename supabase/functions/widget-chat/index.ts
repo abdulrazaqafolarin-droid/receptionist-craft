@@ -3,6 +3,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// PHASE 8: PRODUCTION HARDENING IMPORTS
+// ═══════════════════════════════════════════════════════════════════════════
+import { callAIWithCircuitBreaker } from "../_shared/circuitBreaker.ts";
+import { checkRateLimit as sharedRateLimit, RATE_LIMITS, rateLimitResponse as sharedRateLimitResponse } from "../_shared/rateLimiter.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // UNIFIED ENGINE v2 (PRIMARY AI CONTROL LAYER)
 // ═══════════════════════════════════════════════════════════════════════════
 import {
@@ -1790,40 +1796,46 @@ serve(async (req) => {
     
     console.log(`[Model Params] Temp: ${temperature}, MaxTokens: ${maxTokens} (from tone adaptation)`);
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
+    // ═══════════════════════════════════════════════════════════════════════
+    // PHASE 8: AI CALL WITH CIRCUIT BREAKER + TIMEOUT
+    // ═══════════════════════════════════════════════════════════════════════
+    const aiData = await callAIWithCircuitBreaker(
+      receptionist.model || "google/gemini-2.5-flash",
+      async () => {
+        const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: receptionist.model || "google/gemini-2.5-flash",
+            messages: conversationMessages,
+            temperature,
+            max_tokens: maxTokens
+          })
+        });
+
+        if (!aiRes.ok) {
+          const errTxt = await aiRes.text();
+          console.error("AI API error:", aiRes.status, errTxt);
+          
+          if (aiRes.status === 429) {
+            throw new Error("AI_RATE_LIMITED");
+          }
+          if (aiRes.status === 402) {
+            throw new Error("AI_QUOTA_EXCEEDED");
+          }
+          throw new Error(`AI request failed: ${aiRes.status}`);
+        }
+
+        return await aiRes.json();
       },
-      body: JSON.stringify({
-        model: receptionist.model || "google/gemini-2.5-flash",
-        messages: conversationMessages,
-        temperature,
-        max_tokens: maxTokens
-      })
-    });
+      // Graceful fallback response when circuit is open
+      { choices: [{ message: { content: "I'm experiencing a temporary issue. Please try again in a moment, or feel free to call us directly for immediate assistance." } }] },
+      30000 // 30s timeout
+    );
 
-    if (!aiRes.ok) {
-      const errTxt = await aiRes.text();
-      console.error("AI API error:", aiRes.status, errTxt);
-      
-      if (aiRes.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Service is busy. Please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (aiRes.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Service temporarily unavailable." }),
-          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      throw new Error("AI request failed");
-    }
-
-    const aiData = await aiRes.json();
     let reply = aiData.choices?.[0]?.message?.content || "I'm sorry, I couldn't process that.";
     const latencyMs = Date.now() - startTime;
 
