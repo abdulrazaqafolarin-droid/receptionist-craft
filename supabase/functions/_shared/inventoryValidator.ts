@@ -278,49 +278,24 @@ export async function deductStock(
   const errors: string[] = [];
 
   for (const item of items) {
-    // Use raw SQL for atomic decrement
-    const { error } = await supabase.rpc('', {}).then(() => 
-      supabase
-        .from('services')
-        .update({
-          stock_quantity: supabase.rpc ? undefined : 0, // Fallback
-        })
-        .eq('id', item.product_id)
-    ).catch(() => {
-      // Fallback: read-then-write (less safe but functional)
-      return deductStockFallback(supabase, item.product_id, item.quantity);
+    // Use atomic RPC function with row-level locking
+    const { data, error } = await supabase.rpc('deduct_stock', {
+      p_product_id: item.product_id,
+      p_quantity: item.quantity,
     });
 
     if (error) {
       errors.push(`Failed to deduct stock for ${item.product_id}: ${error.message}`);
+      continue;
+    }
+
+    const result = data as { success: boolean; error?: string; available?: number };
+    if (!result.success) {
+      errors.push(result.error || `Stock deduction failed for ${item.product_id}`);
     }
   }
 
   return { success: errors.length === 0, errors };
-}
-
-async function deductStockFallback(
-  supabase: any,
-  productId: string,
-  quantity: number
-): Promise<{ error: any }> {
-  const { data: product, error: fetchErr } = await supabase
-    .from('services')
-    .select('stock_quantity')
-    .eq('id', productId)
-    .maybeSingle();
-
-  if (fetchErr || !product) {
-    return { error: fetchErr || { message: 'Product not found' } };
-  }
-
-  const newQty = Math.max(0, (product.stock_quantity || 0) - quantity);
-  const { error: updateErr } = await supabase
-    .from('services')
-    .update({ stock_quantity: newQty })
-    .eq('id', productId);
-
-  return { error: updateErr };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

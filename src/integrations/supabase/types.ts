@@ -1759,6 +1759,10 @@ export type Database = {
         }
         Returns: string
       }
+      deduct_stock: {
+        Args: { p_product_id: string; p_quantity: number }
+        Returns: Json
+      }
       get_public_receptionist: {
         Args: { p_receptionist_id: string }
         Returns: {

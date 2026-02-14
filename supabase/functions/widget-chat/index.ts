@@ -69,26 +69,16 @@ import {
 } from "../_shared/flow/taskIntelligence.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// MEMORY PIPELINE (UNIFIED STATE MANAGEMENT)
+// MEMORY PIPELINE - Kept for slot extraction & summarization only
 // ═══════════════════════════════════════════════════════════════════════════
 import {
-  runMemoryPipeline,
-  runPostResponsePipeline,
-  detectIntent as detectIntentPipeline,
-  extractEntities,
   type PipelineResult,
   type IntentResult,
   type ExtractedEntities,
 } from "../_shared/flow/memoryPipeline.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
-// UNIFIED CONVERSATION CORE (SINGLE SOURCE OF TRUTH)
-// ═══════════════════════════════════════════════════════════════════════════
+// UnifiedCore consolidated into Engine v2 — imports kept for type compatibility only
 import {
-  runUnifiedCore,
-  createEmptyUnifiedState,
-  serializeUnifiedState,
-  deserializeUnifiedState,
   type UnifiedState,
   type CoreResult,
 } from "../_shared/flow/unifiedCore.ts";
@@ -1449,67 +1439,25 @@ serve(async (req) => {
     const enginePromptBlock = engineResult.prompt_block;
     
     // ═══════════════════════════════════════════════════════════════════════
-    // LEGACY UNIFIED CORE (backward compatibility during transition)
+    // ENGINE v2 IS NOW THE SINGLE SOURCE OF TRUTH
+    // Legacy UnifiedCore and MemoryPipeline have been consolidated into Engine v2
+    // ActiveTask is now derived from Engine v2 state
     // ═══════════════════════════════════════════════════════════════════════
     
-    // Load or create unified state
-    let unifiedState: UnifiedState | null = conversationState.unified_state 
-      ? (conversationState.unified_state as unknown as UnifiedState)
-      : null;
+    // Derive activeTask from Engine v2 state for backward compatibility
+    let activeTask: ActiveTask | null = conversationState.active_task || null;
     
-    // Sync greeting state from conversation state
-    if (unifiedState && conversationState.greeting_sent) {
-      unifiedState.rules.greeted = true;
+    // Sync Engine v2 task state into activeTask format
+    if (engineState?.task_type && engineState.task_type !== 'none') {
+      if (!activeTask) {
+        activeTask = createEmptyActiveTask();
+      }
+      activeTask.type = engineState.task_type as any;
+      activeTask.step = (engineState.task_step || 'idle') as any;
+      activeTask.memory.last_user_intent = engineResult.intent.intent;
+      activeTask.memory.pending_info = engineResult.requirements.missing;
     }
-    if (unifiedState && (conversationState.booking_confirmed || conversationState.order_confirmed)) {
-      unifiedState.rules.confirmationSent = true;
-      unifiedState.rules.locked = true;
-    }
-    
-    // Run the unified core
-    const coreResult: CoreResult = runUnifiedCore(
-      message,
-      unifiedState,
-      serviceItems.map(s => ({ id: s.id, name: s.name, duration_minutes: s.duration_minutes, price: s.price })),
-      productItems.map(p => ({ id: p.id, name: p.name, price: p.price })),
-      businessCapabilities,
-      isFirstMessage,
-      receptionist.timezone || undefined
-    );
-    
-    // Update unified state
-    unifiedState = coreResult.state;
-    conversationState.unified_state = unifiedState as any;
-    
-    // Sync unified state back to legacy activeTask for backward compatibility
-    let activeTask: ActiveTask | null = unifiedState.task;
     conversationState.active_task = activeTask;
-    
-    // Log unified core results (for comparison during transition)
-    console.log(`[UnifiedCore] Intent: ${coreResult.intent.intent} (${coreResult.intent.confidence})`);
-    
-    // Build unified governor prompt (will be injected into system prompt)
-    const unifiedGovernorBlock = coreResult.prompt;
-    
-    // ═══════════════════════════════════════════════════════════════════════
-    // LEGACY MEMORY PIPELINE (for backward compatibility during transition)
-    // ═══════════════════════════════════════════════════════════════════════
-    const pipelineResult = runMemoryPipeline(
-      message,
-      activeTask,
-      serviceItems,
-      productItems,
-      businessCapabilities,
-      receptionist.timezone || undefined
-    );
-    
-    // Log pipeline results (for comparison)
-    console.log(`[Memory Pipeline] Intent: ${pipelineResult.intent.intent} (${pipelineResult.intent.confidence})`);
-    
-    // If there's an active task, log state
-    if (activeTask) {
-      console.log(`[Task Intelligence] Active task: ${activeTask.type}, step: ${activeTask.step}, pending: ${activeTask.memory.pending_info.join(', ')}`);
-    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 3: CONTEXT EXTRACTION & ROLLING SUMMARY
