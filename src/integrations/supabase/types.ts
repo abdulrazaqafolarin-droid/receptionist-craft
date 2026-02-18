@@ -1124,6 +1124,142 @@ export type Database = {
           },
         ]
       }
+      organization_locations: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          is_primary: boolean | null
+          metadata: Json | null
+          name: string
+          organization_id: string
+          phone: string | null
+          timezone: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          metadata?: Json | null
+          name: string
+          organization_id: string
+          phone?: string | null
+          timezone?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          metadata?: Json | null
+          name?: string
+          organization_id?: string
+          phone?: string | null
+          timezone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_locations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_members: {
+        Row: {
+          created_at: string
+          id: string
+          invited_at: string | null
+          invited_by: string | null
+          joined_at: string | null
+          organization_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invited_at?: string | null
+          invited_by?: string | null
+          joined_at?: string | null
+          organization_id: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invited_at?: string | null
+          invited_by?: string | null
+          joined_at?: string | null
+          organization_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          accent_color: string | null
+          created_at: string
+          custom_domain: string | null
+          id: string
+          logo_url: string | null
+          max_members: number | null
+          max_receptionists: number | null
+          metadata: Json | null
+          name: string
+          plan: string | null
+          primary_color: string | null
+          slug: string
+          updated_at: string
+          white_label: boolean | null
+        }
+        Insert: {
+          accent_color?: string | null
+          created_at?: string
+          custom_domain?: string | null
+          id?: string
+          logo_url?: string | null
+          max_members?: number | null
+          max_receptionists?: number | null
+          metadata?: Json | null
+          name: string
+          plan?: string | null
+          primary_color?: string | null
+          slug: string
+          updated_at?: string
+          white_label?: boolean | null
+        }
+        Update: {
+          accent_color?: string | null
+          created_at?: string
+          custom_domain?: string | null
+          id?: string
+          logo_url?: string | null
+          max_members?: number | null
+          max_receptionists?: number | null
+          metadata?: Json | null
+          name?: string
+          plan?: string | null
+          primary_color?: string | null
+          slug?: string
+          updated_at?: string
+          white_label?: boolean | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -1220,9 +1356,11 @@ export type Database = {
           id: string
           knowledge_base: string | null
           language: string | null
+          location_id: string | null
           mock_mode: boolean | null
           model: string | null
           name: string
+          organization_id: string | null
           persona_description: string | null
           phone: string | null
           primary_goal: string | null
@@ -1255,9 +1393,11 @@ export type Database = {
           id?: string
           knowledge_base?: string | null
           language?: string | null
+          location_id?: string | null
           mock_mode?: boolean | null
           model?: string | null
           name: string
+          organization_id?: string | null
           persona_description?: string | null
           phone?: string | null
           primary_goal?: string | null
@@ -1290,9 +1430,11 @@ export type Database = {
           id?: string
           knowledge_base?: string | null
           language?: string | null
+          location_id?: string | null
           mock_mode?: boolean | null
           model?: string | null
           name?: string
+          organization_id?: string | null
           persona_description?: string | null
           phone?: string | null
           primary_goal?: string | null
@@ -1306,6 +1448,20 @@ export type Database = {
           website?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "receptionists_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "organization_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receptionists_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "receptionists_user_id_fkey"
             columns: ["user_id"]
@@ -1590,6 +1746,24 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       public_catalog: {
@@ -1801,6 +1975,15 @@ export type Database = {
           stock_quantity: number
         }[]
       }
+      get_user_org_ids: { Args: { _user_id: string }; Returns: string[] }
+      has_org_role: {
+        Args: {
+          _org_id: string
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       insert_booking_suggestion: {
         Args: {
           p_latency_ms?: number
@@ -1821,6 +2004,10 @@ export type Database = {
           p_session_id: string
         }
         Returns: string
+      }
+      is_org_member: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
       }
       upsert_conversation_state: {
         Args: {
@@ -1847,6 +2034,7 @@ export type Database = {
     }
     Enums: {
       ai_mode: "support" | "booking" | "sales"
+      app_role: "owner" | "admin" | "member" | "viewer"
       appointment_status: "booked" | "cancelled" | "completed"
       integration_type: "twilio" | "openai" | "google_calendar" | "stripe"
       receptionist_tone: "friendly" | "professional" | "playful"
@@ -1979,6 +2167,7 @@ export const Constants = {
   public: {
     Enums: {
       ai_mode: ["support", "booking", "sales"],
+      app_role: ["owner", "admin", "member", "viewer"],
       appointment_status: ["booked", "cancelled", "completed"],
       integration_type: ["twilio", "openai", "google_calendar", "stripe"],
       receptionist_tone: ["friendly", "professional", "playful"],

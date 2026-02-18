@@ -37,6 +37,7 @@ import CancelAppointment from "./pages/CancelAppointment";
 import ManageBooking from "./pages/ManageBooking";
 import WidgetInstall from "./pages/WidgetInstall";
 import FAQManagement from "./pages/FAQManagement";
+import OrganizationPage from "./pages/Organization";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -134,6 +135,7 @@ const App = () => {
                               <Route path="/diagnostics" element={<Diagnostics />} />
                               <Route path="/notifications" element={<Notifications />} />
                               <Route path="/realtime-logs" element={<RealtimeLogs />} />
+                              <Route path="/organization" element={<OrganizationPage />} />
                               <Route path="/settings" element={<Settings />} />
                               <Route path="/widget-install/:id" element={<WidgetInstall />} />
                               <Route path="*" element={<NotFound />} />
