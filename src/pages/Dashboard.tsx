@@ -7,6 +7,7 @@ import { MessageCircle, Calendar, BarChart3, Plus, Phone, CheckCircle2, Sparkles
 import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { RevenueEngine } from "@/components/RevenueEngine";
+import { DashboardCharts } from "@/components/DashboardCharts";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -160,6 +161,13 @@ export default function Dashboard() {
             </Card>
           ))}
         </section>
+
+        {/* Charts Section */}
+        {receptionists.length > 0 && (
+          <section className="mb-8 sm:mb-10 animate-fade-in" aria-label="Activity charts">
+            <DashboardCharts receptionistIds={receptionists.map(r => r.id)} />
+          </section>
+        )}
 
         {/* Receptionists List */}
         <section aria-labelledby="receptionists-title">
