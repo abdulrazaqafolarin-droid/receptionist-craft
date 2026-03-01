@@ -16,7 +16,7 @@ import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from "../_shared/rateL
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 function sanitize(input: string | null | undefined, maxLen = 500): string {

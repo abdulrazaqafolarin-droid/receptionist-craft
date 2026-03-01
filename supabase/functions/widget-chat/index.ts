@@ -188,7 +188,7 @@ import type { BusinessCapabilities, PrimaryGoal, UniversalIntent } from "../_sha
 // ═══════════════════════════════════════════════════════════════════════════
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -489,7 +489,7 @@ function summarizeConversation(history: any[]): string {
 }
 
 // Rolling summary for long conversations (STEP 3: Summarization Memory)
-function generateRollingSummary(history: any[], verbatimCount: number = 15): { summary: string; recentMessages: any[] } {
+function generateRollingSummary(history: any[], verbatimCount: number = 30): { summary: string; recentMessages: any[] } {
   if (history.length <= verbatimCount) {
     return { summary: '', recentMessages: history };
   }
@@ -1328,7 +1328,7 @@ serve(async (req) => {
       .eq("receptionist_id", receptionistId)
       .eq("session_id", sessionId)
       .order("created_at", { ascending: true })
-      .limit(50);
+      .limit(60);
     
     console.log(`[Widget Chat] Loaded ${history?.length || 0} messages from session ${sessionId}`);
 
