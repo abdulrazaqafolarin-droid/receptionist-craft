@@ -1677,16 +1677,16 @@ serve(async (req) => {
     // Keep legacy governor for backward compatibility logging only
     let governorState: GovernorState = conversationState.governor_state || createGovernorState();
     
-    // Sync legacy governor state with unified state
-    if (unifiedState) {
-      governorState.conversation_rules.greeted = unifiedState.rules.greeted;
-      governorState.conversation_rules.confirmation_sent = unifiedState.rules.confirmationSent;
-      governorState.conversation_rules.closing_sent = unifiedState.rules.closingOffered;
-      governorState.conversation_rules.asked_if_need_more = unifiedState.rules.askedIfNeedMore;
-      governorState.locked = unifiedState.rules.locked;
-      governorState.topic_lock = unifiedState.rules.topicLock;
-      governorState.missing_fields = coreResult.requirements.missingFields;
-      governorState.collected_fields = coreResult.requirements.collectedFields;
+    // Sync legacy governor state with Engine v2 state
+    if (engineState) {
+      governorState.conversation_rules.greeted = engineState.rules?.greeted ?? false;
+      governorState.conversation_rules.confirmation_sent = engineState.rules?.confirmation_sent ?? false;
+      governorState.conversation_rules.closing_sent = engineState.rules?.closing_offered ?? false;
+      governorState.conversation_rules.asked_if_need_more = engineState.rules?.asked_if_need_more ?? false;
+      governorState.locked = engineState.locked ?? false;
+      governorState.topic_lock = engineState.topic_lock ?? null;
+      governorState.missing_fields = engineResult.requirements.missing;
+      governorState.collected_fields = engineResult.requirements.collected || [];
     }
     
     // Update governor state with current flags (legacy sync)
