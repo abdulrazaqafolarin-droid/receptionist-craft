@@ -14,7 +14,7 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 serve(async (req) => {
@@ -85,7 +85,7 @@ serve(async (req) => {
         .eq("receptionist_id", receptionistId)
         .eq("user_id", userId)
         .order("created_at", { ascending: true })
-        .limit(20);
+        .limit(30);
       history = historyData || [];
       console.log(`[Chat] Loaded ${history.length} history messages`);
     }

@@ -162,7 +162,7 @@ export function summarizeConversation(history: ChatMessage[]): string {
  */
 export function generateRollingSummary(
   history: ChatMessage[],
-  verbatimCount: number = 15
+  verbatimCount: number = 30
 ): { summary: string; recentMessages: ChatMessage[] } {
   if (history.length <= verbatimCount) {
     return {
