@@ -459,7 +459,7 @@ function extractContextFromHistory(history: any[]): ConversationContext {
   // Determine conversation phase
   if (context.bookingConfirmed || context.orderConfirmed) {
     context.conversationPhase = context.askedIfNeedMoreHelp ? 'closing' : 'followup';
-  } else if (context.productMentioned || context.selectedProducts.length > 0) {
+  } else if (context.productMentioned || (context.selectedProducts?.length || 0) > 0) {
     context.conversationPhase = 'ordering';
   } else if (context.serviceMentioned && context.dateMentioned && context.timeMentioned) {
     context.conversationPhase = context.customerName ? 'confirmation' : 'booking';
@@ -1481,16 +1481,20 @@ serve(async (req) => {
     // ═══════════════════════════════════════════════════════════════════════
     // UNIFIED FLOW ENGINE: SLOT EXTRACTION & STATE UPDATE
     // ═══════════════════════════════════════════════════════════════════════
-    // Extract slots from current message (with services/products for matching)
-    const extractedSlots = extractSlots(message, conversationState.slots, serviceItems, productItems);
-    if (Object.keys(extractedSlots.slots).length > 0) {
+    const extractedSlots = extractSlots(message, conversationState.slots || {}, serviceItems || [], productItems || []);
+    if (extractedSlots && extractedSlots.slots && Object.keys(extractedSlots.slots).length > 0) {
       console.log(`[Flow Engine] Extracted slots:`, extractedSlots.slots);
       conversationState.slots = mergeSlots(conversationState.slots, extractedSlots.slots, extractedSlots.corrections);
     }
 
-    // Route intent and update flow state
-    const intentRouting = routeIntent(messageAnalysis.detectedIntent, conversationState, message);
-    console.log(`[Flow Engine] Routing: FlowType=${intentRouting.flowType}, StartFlow=${intentRouting.shouldStartFlow}`);
+    // Route intent and update flow state (with defensive guards)
+    let intentRouting: any = { flowType: null, shouldStartFlow: false, shouldResetCurrentFlow: false, topicShift: null, initialStep: null };
+    try {
+      intentRouting = routeIntent(messageAnalysis.detectedIntent, conversationState, message);
+      console.log(`[Flow Engine] Routing: FlowType=${intentRouting.flowType}, StartFlow=${intentRouting.shouldStartFlow}`);
+    } catch (routeErr) {
+      console.error(`[Flow Engine] routeIntent error (non-fatal):`, routeErr);
+    }
     
     if (intentRouting.shouldStartFlow && intentRouting.flowType) {
       conversationState.active_flow = intentRouting.flowType;
@@ -1506,10 +1510,8 @@ serve(async (req) => {
     const topicShift = intentRouting.topicShift;
     if (topicShift?.shouldBlock) {
       console.log(`[Flow Engine] Topic shift BLOCKED: ${topicShift.blockReason}`);
-      // Don't reset flow, AI will be instructed to ask user if they want to continue or cancel
     } else if (topicShift && topicShift.type === 'explicit' && topicShift.confidence > 0.7) {
       console.log(`[Flow Engine] Explicit topic shift detected, confidence: ${topicShift.confidence}`);
-      // Reset flow for explicit topic changes
       conversationState.active_flow = null;
       conversationState.flow_step = null;
     }
@@ -1605,9 +1607,9 @@ serve(async (req) => {
     machineContext.customerName = machineContext.customerName || conversationContext.customerName;
     machineContext.customerPhone = machineContext.customerPhone || conversationContext.customerPhone;
     machineContext.customerEmail = machineContext.customerEmail || conversationContext.customerEmail;
-    machineContext.selectedProducts = machineContext.selectedProducts.length > 0 
+    machineContext.selectedProducts = (machineContext.selectedProducts?.length || 0) > 0 
       ? machineContext.selectedProducts 
-      : conversationContext.selectedProducts;
+      : (conversationContext.selectedProducts || []);
     
     // Get UI hints based on current state
     const uiHints = getUIHintsForState(machineContext.state);
@@ -1707,11 +1709,11 @@ serve(async (req) => {
     );
     
     // Log governor comparison
-    console.log(`[Governor Legacy] Intent: ${governorResult.clarifiedIntent.intent} vs [UnifiedCore] Intent: ${coreResult.intent.intent}`);
-    console.log(`[Governor Legacy] Next: ${governorResult.requirements.next_required || 'CONFIRM'} vs [UnifiedCore] Next: ${coreResult.requirements.nextRequired || 'CONFIRM'}`);
+    console.log(`[Governor Legacy] Intent: ${governorResult.clarifiedIntent.intent} vs [Engine v2] Intent: ${engineResult?.intent?.primary || 'N/A'}`);
+    console.log(`[Governor Legacy] Next: ${governorResult.requirements.next_required || 'CONFIRM'} vs [Engine v2] Next: ${engineResult?.requirements?.missing?.[0] || 'CONFIRM'}`);
     
-    // USE ENGINE v2 BLOCK (PRIMARY) + UNIFIED GOVERNOR BLOCK (BACKUP)
-    const governorBlock = enginePromptBlock + '\n\n' + unifiedGovernorBlock;
+    // USE ENGINE v2 BLOCK (PRIMARY)
+    const governorBlock = enginePromptBlock;
     
     // Update governor state for persistence
     conversationState.governor_state = governorState;
@@ -2143,7 +2145,7 @@ serve(async (req) => {
         console.log(`[Commerce Engine] Auto-creating order for ${customerName}`);
         
         // Build cart items from context
-        const cartItems: CartItem[] = conversationContext.selectedProducts.length > 0
+        const cartItems: CartItem[] = (conversationContext.selectedProducts?.length || 0) > 0
           ? conversationContext.selectedProducts.map((p: any) => ({
               product_id: p.productId,
               product_name: p.productName || 'Unknown Product',
