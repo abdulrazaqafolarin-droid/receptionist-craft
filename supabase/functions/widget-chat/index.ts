@@ -1890,11 +1890,11 @@ serve(async (req) => {
       history?.map(h => ({ sender: h.sender || 'user', message: h.message || '' }))
     );
     
-    console.log(`[Quality Evaluator] Score: ${responseQuality.score}/100, Grade: ${responseQuality.grade}, Issues: ${responseQuality.issues.length}`);
+    console.log(`[Quality Evaluator] Score: ${responseQuality?.score ?? 'N/A'}/100, Grade: ${responseQuality?.grade ?? 'N/A'}, Issues: ${responseQuality?.issues?.length ?? 0}`);
     
-    if (!responseQuality.passesThreshold) {
-      console.warn(`[Quality Evaluator] ⚠️ Below threshold! Issues: ${responseQuality.issues.map(i => i.type).join(', ')}`);
-      console.warn(`[Quality Evaluator] Improvements: ${responseQuality.improvements.join('; ')}`);
+    if (responseQuality && !responseQuality.passesThreshold) {
+      console.warn(`[Quality Evaluator] ⚠️ Below threshold! Issues: ${(responseQuality.issues || []).map((i: any) => i.type).join(', ')}`);
+      console.warn(`[Quality Evaluator] Improvements: ${(responseQuality.improvements || []).join('; ')}`);
     }
     
     // Check if response should be flagged for regeneration (critical issues only)
@@ -1905,11 +1905,11 @@ serve(async (req) => {
     
     // Legacy quality rubric for backward compatibility
     const qualityRubric = {
-      overall_score: responseQuality.score / 100,
-      empathy: emotionalContext.empathyLevel,
-      passes_threshold: responseQuality.passesThreshold,
-      grade: responseQuality.grade,
-      issues: responseQuality.issues.map(i => i.type),
+      overall_score: (responseQuality?.score || 50) / 100,
+      empathy: emotionalContext?.empathyLevel || 0,
+      passes_threshold: responseQuality?.passesThreshold ?? true,
+      grade: responseQuality?.grade || 'B',
+      issues: (responseQuality?.issues || []).map((i: any) => i.type),
     };
     
     const escalationCheck = checkEscalationNeeded(message, conversationContext, history || []);
