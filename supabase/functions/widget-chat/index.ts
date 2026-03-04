@@ -1197,7 +1197,13 @@ serve(async (req) => {
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
+    if (!LOVABLE_API_KEY) {
+      console.error("[Widget Chat] LOVABLE_API_KEY missing");
+      return new Response(
+        JSON.stringify({ reply: "I'm temporarily unavailable. Please try again shortly or contact us directly.", hasBookingIntent: false }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     console.log(`[Widget Chat] Processing message for receptionist ${receptionistId}, session: ${sessionId}`);
 
@@ -1214,7 +1220,13 @@ serve(async (req) => {
       .eq("active", true)
       .maybeSingle();
 
-    if (rErr || !receptionist) throw new Error("Receptionist not found or inactive");
+    if (rErr || !receptionist) {
+      console.error("[Widget Chat] Receptionist not found or inactive:", rErr?.message || receptionistId);
+      return new Response(
+        JSON.stringify({ reply: "I'm sorry, this assistant is currently unavailable. Please try again later.", hasBookingIntent: false }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // UNIFIED FLOW ENGINE: INITIALIZE STATE MANAGER
@@ -1425,13 +1437,13 @@ serve(async (req) => {
     engineState = engineResult.state;
     
     // Log Engine v2 results
-    console.log(`[Engine v2] Intent: ${engineResult.intent.intent} (conf: ${engineResult.intent.confidence.toFixed(2)})`);
-    console.log(`[Engine v2] Task: ${engineState.task_type || 'none'}, Step: ${engineState.task_step || 'idle'}`);
-    console.log(`[Engine v2] Missing: ${engineResult.requirements.missing.join(', ') || 'none'}`);
-    console.log(`[Engine v2] Next: ${engineResult.requirements.next_required || 'CONFIRMATION'}`);
-    console.log(`[Engine v2] UI Hints: ${JSON.stringify(engineResult.ui_hints)}`);
+    console.log(`[Engine v2] Intent: ${engineResult?.intent?.intent || 'unknown'} (conf: ${engineResult?.intent?.confidence?.toFixed(2) || '0'})`);
+    console.log(`[Engine v2] Task: ${engineState?.task_type || 'none'}, Step: ${engineState?.task_step || 'idle'}`);
+    console.log(`[Engine v2] Missing: ${(engineResult?.requirements?.missing || []).join(', ') || 'none'}`);
+    console.log(`[Engine v2] Next: ${engineResult?.requirements?.next_required || 'CONFIRMATION'}`);
+    console.log(`[Engine v2] UI Hints: ${JSON.stringify(engineResult?.ui_hints || {})}`);
     
-    if (engineResult.illegal) {
+    if (engineResult?.illegal) {
       console.warn(`[Engine v2] ⚠️ ILLEGAL STATE: ${engineResult.illegal_reason}`);
     }
     
@@ -1460,8 +1472,10 @@ serve(async (req) => {
       }
       activeTask.type = engineState.task_type as any;
       activeTask.step = (engineState.task_step || 'idle') as any;
-      activeTask.memory.last_user_intent = engineResult.intent.intent;
-      activeTask.memory.pending_info = engineResult.requirements.missing;
+      if (activeTask.memory) {
+        activeTask.memory.last_user_intent = engineResult?.intent?.intent || 'unknown';
+        activeTask.memory.pending_info = engineResult?.requirements?.missing || [];
+      }
     }
     conversationState.active_task = activeTask;
 
@@ -1687,8 +1701,8 @@ serve(async (req) => {
       governorState.conversation_rules.asked_if_need_more = engineState.rules?.asked_if_need_more ?? false;
       governorState.locked = engineState.locked ?? false;
       governorState.topic_lock = engineState.topic_lock ?? null;
-      governorState.missing_fields = engineResult.requirements.missing;
-      governorState.collected_fields = engineResult.requirements.collected || [];
+      governorState.missing_fields = engineResult?.requirements?.missing || [];
+      governorState.collected_fields = engineResult?.requirements?.collected || [];
     }
     
     // Update governor state with current flags (legacy sync)
@@ -1709,8 +1723,8 @@ serve(async (req) => {
     );
     
     // Log governor comparison
-    console.log(`[Governor Legacy] Intent: ${governorResult.clarifiedIntent.intent} vs [Engine v2] Intent: ${engineResult?.intent?.primary || 'N/A'}`);
-    console.log(`[Governor Legacy] Next: ${governorResult.requirements.next_required || 'CONFIRM'} vs [Engine v2] Next: ${engineResult?.requirements?.missing?.[0] || 'CONFIRM'}`);
+    console.log(`[Governor Legacy] Intent: ${governorResult?.clarifiedIntent?.intent || 'N/A'} vs [Engine v2] Intent: ${engineResult?.intent?.intent || 'N/A'}`);
+    console.log(`[Governor Legacy] Next: ${governorResult?.requirements?.next_required || 'CONFIRM'} vs [Engine v2] Next: ${engineResult?.requirements?.missing?.[0] || 'CONFIRM'}`);
     
     // USE ENGINE v2 BLOCK (PRIMARY)
     const governorBlock = enginePromptBlock;
@@ -2479,10 +2493,18 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
-    console.error("Widget chat error:", error);
+    console.error("Widget chat CRITICAL error:", error?.message || error, error?.stack || '');
+    // STABILITY: Always return 200 with a safe fallback reply - NEVER return 500 to the widget
+    const safeReply = "I'm sorry, I'm having a temporary issue. Please try again in a moment, or feel free to contact us directly for assistance.";
     return new Response(
-      JSON.stringify({ error: error.message || "Failed to process request" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ 
+        reply: safeReply, 
+        hasBookingIntent: false, 
+        hasOrderIntent: false,
+        uiHints: {},
+        error_logged: true 
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
