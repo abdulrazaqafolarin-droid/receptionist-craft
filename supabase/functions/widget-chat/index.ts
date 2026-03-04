@@ -2403,10 +2403,12 @@ serve(async (req) => {
         customerEmail: conversationContext.customerEmail || undefined,
       });
       
-      // Update memory
-      activeTask.memory.last_user_intent = messageAnalysis.detectedIntent;
-      activeTask.memory.emotional_tone = conversationContext.emotionalState;
-      activeTask.memory.summary = buildSmartMemorySummary(activeTask);
+      // Update memory (with defensive check)
+      if (activeTask.memory) {
+        activeTask.memory.last_user_intent = messageAnalysis.detectedIntent;
+        activeTask.memory.emotional_tone = conversationContext.emotionalState;
+        activeTask.memory.summary = buildSmartMemorySummary(activeTask);
+      }
       
       // Check if booking/order was completed
       if (bookingResult || orderResult) {
