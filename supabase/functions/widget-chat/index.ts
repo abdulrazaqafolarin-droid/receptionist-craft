@@ -1431,10 +1431,27 @@ serve(async (req) => {
       current_state: engineState,
     };
     
-    const engineResult: EngineResult = runEngine(engineInput);
+    let engineResult: EngineResult;
+    try {
+      engineResult = runEngine(engineInput);
+    } catch (engineErr) {
+      console.error('[Engine v2] Pipeline crashed (non-fatal):', engineErr);
+      // Create a safe fallback result so the rest of the pipeline can continue
+      engineResult = {
+        state: engineState || createEmptyEngineState(),
+        intent: { intent: 'general_query' as any, confidence: 0.5, reasoning: 'engine_fallback' },
+        entities: {} as any,
+        requirements: { missing: [], collected: [], next_required: null, ready: false },
+        ui_hints: { show_services: false, show_calendar: false, show_time_slots: false, show_products: false, show_confirmation: false, show_order_confirmation: false },
+        instruction: { allowed: [], forbidden: [], next_action: 'respond naturally' },
+        prompt_block: '',
+        illegal: false,
+        illegal_reason: null,
+      } as EngineResult;
+    }
     
     // Update engine state
-    engineState = engineResult.state;
+    engineState = engineResult.state || engineState || createEmptyEngineState();
     
     // Log Engine v2 results
     console.log(`[Engine v2] Intent: ${engineResult?.intent?.intent || 'unknown'} (conf: ${engineResult?.intent?.confidence?.toFixed(2) || '0'})`);
