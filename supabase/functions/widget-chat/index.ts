@@ -572,7 +572,7 @@ interface QualityRubric {
   passes_threshold: boolean;
 }
 
-function evaluateResponseQuality(reply: string, context: ConversationContext, messageAnalysis: MessageAnalysis): QualityRubric {
+function evaluateLocalResponseQuality(reply: string, context: ConversationContext, messageAnalysis: MessageAnalysis): QualityRubric {
   const lowerReply = reply.toLowerCase();
   
   const factuality = /according to|based on|our (records|schedule|price)/i.test(reply) ? 5 :
