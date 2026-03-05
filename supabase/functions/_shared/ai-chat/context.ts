@@ -80,9 +80,14 @@ export function extractContextFromHistory(history: any[]): ConversationContext {
     }
     
     // Extract name (common patterns)
-    const nameMatch = text.match(/(?:my name is|i'm|i am|call me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
+    // STRICT name extraction — only explicit declarations
+    const nameMatch = text.match(/(?:my\s+name\s+is|i'?m|i\s+am|call\s+me|this\s+is|the\s+name\s+is|you\s+can\s+call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
     if (nameMatch) {
-      context.customerName = nameMatch[1];
+      const candidateName = nameMatch[1].trim().toLowerCase();
+      const blocked = ['hello','thanks','please','yes','no','sure','okay','great','good','fine','ridiculous','terrible','awful','bread','cake','dental','morning','afternoon','evening','urgent','emergency'];
+      if (!blocked.includes(candidateName)) {
+        context.customerName = nameMatch[1];
+      }
     }
     
     // Extract phone

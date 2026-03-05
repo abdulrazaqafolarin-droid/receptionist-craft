@@ -91,10 +91,15 @@ export function extractContextFromHistory(history: ChatMessage[]): ConversationC
   if (timeMatch) context.timeMentioned = timeMatch[0];
 
   // Extract name
+  // STRICT name extraction — only explicit declarations
   const nameMatch = fullText.match(
-    /(?:my name is|i'm|i am|call me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/
+    /(?:my\s+name\s+is|i'?m|i\s+am|call\s+me|this\s+is|the\s+name\s+is|you\s+can\s+call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/
   );
-  if (nameMatch) context.customerName = nameMatch[1];
+  if (nameMatch) {
+    const n = nameMatch[1].trim().toLowerCase();
+    const blocked = ['hello','thanks','please','yes','no','sure','okay','great','good','fine','ridiculous','terrible','awful','bread','cake','dental','morning','afternoon','evening','urgent','emergency'];
+    if (!blocked.includes(n)) context.customerName = nameMatch[1];
+  }
 
   // Extract phone
   const phoneMatch = fullText.match(

@@ -166,20 +166,37 @@ export function extractEntities(
   // ─────────────────────────────────────────────────────────────────────────
   // NAME EXTRACTION
   // ─────────────────────────────────────────────────────────────────────────
+  // STRICT NAME EXTRACTION — Only extract when user EXPLICITLY states their name
+  // Patterns must require an explicit declaration phrase before the name
   const namePatterns = [
-    /(?:my\s+name\s+is|i'?m|i\s+am|call\s+me|this\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-    /(?:name|it'?s)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-    // Just a capitalized name if message is short
-    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)$/,
+    /(?:my\s+name\s+is|i'?m|i\s+am|call\s+me|this\s+is|the\s+name\s+is|it'?s)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+    /(?:name[':]?\s*)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+    /(?:you\s+can\s+call\s+me|they\s+call\s+me|people\s+call\s+me|just\s+call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
   ];
+  
+  // Extended blocklist to prevent capturing common conversational words as names
+  const NAME_BLOCKLIST = new Set([
+    'hello', 'thanks', 'please', 'yes', 'no', 'sure', 'okay', 'great',
+    'good', 'fine', 'nice', 'cool', 'right', 'perfect', 'awesome',
+    'morning', 'afternoon', 'evening', 'today', 'tomorrow', 'monday',
+    'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+    'january', 'february', 'march', 'april', 'may', 'june', 'july',
+    'august', 'september', 'october', 'november', 'december',
+    'ridiculous', 'terrible', 'awful', 'horrible', 'amazing', 'wonderful',
+    'urgent', 'emergency', 'appointment', 'booking', 'order', 'delivery',
+    'bread', 'cake', 'dental', 'clinic', 'store', 'shop', 'service',
+    'the', 'this', 'that', 'what', 'when', 'where', 'how', 'why',
+    'not', 'but', 'and', 'for', 'with', 'about', 'just', 'here',
+  ]);
   
   for (const pattern of namePatterns) {
     const match = message.match(pattern); // Use original to preserve case
     if (match && match[1] && match[1].length >= 2 && match[1].length <= 50) {
-      // Filter out common words that might match
       const name = match[1].trim();
-      const commonWords = ['Hello', 'Thanks', 'Please', 'Yes', 'No', 'Sure', 'Okay', 'Great'];
-      if (!commonWords.includes(name)) {
+      // Block common words and single-character "names"
+      const nameWords = name.toLowerCase().split(/\s+/);
+      const isBlocklisted = nameWords.some(w => NAME_BLOCKLIST.has(w));
+      if (!isBlocklisted && name.length >= 2) {
         entities.customer_name = name;
         break;
       }

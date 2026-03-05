@@ -187,12 +187,12 @@ export function validateGroundedData(
 function generateFallbackResponse(missingData: string[]): string {
   const missing = missingData.join(', ');
   
-  // Use varied, natural responses
+  // Use varied, natural responses — NEVER invent information
   const responses = [
+    `I want to make sure I give you the right information. Let me confirm that for you.`,
     `I don't have the ${missing} available right now. Would you like me to connect you with the business directly?`,
     `I'd need to check on that ${missing} for you. Can I have someone from the team reach out to you?`,
     `I want to give you accurate information, but I don't have the current ${missing}. Would you prefer I connect you to a staff member?`,
-    `That's a great question! I don't have that specific ${missing} in my system. Let me connect you with someone who can help.`,
   ];
   
   return responses[Math.floor(Math.random() * responses.length)];

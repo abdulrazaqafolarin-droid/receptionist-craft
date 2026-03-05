@@ -415,8 +415,15 @@ function extractContextFromHistory(history: any[]): ConversationContext {
   const timeMatch = fullText.match(/(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm)|morning|afternoon|evening)/i);
   if (timeMatch) context.timeMentioned = timeMatch[0];
   
-  const nameMatch = fullText.match(/(?:my name is|i'm|i am|call me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
-  if (nameMatch) context.customerName = nameMatch[1];
+  // STRICT name extraction — only explicit declarations
+  const nameMatch = fullText.match(/(?:my\s+name\s+is|i'?m|i\s+am|call\s+me|this\s+is|the\s+name\s+is|you\s+can\s+call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+  if (nameMatch) {
+    const candidateName = nameMatch[1].trim().toLowerCase();
+    const NAME_BLOCKLIST = ['hello','thanks','please','yes','no','sure','okay','great','good','fine','nice','cool','right','perfect','awesome','ridiculous','terrible','awful','bread','cake','dental','morning','afternoon','evening','urgent','emergency'];
+    if (!NAME_BLOCKLIST.includes(candidateName)) {
+      context.customerName = nameMatch[1];
+    }
+  }
   
   const phoneMatch = fullText.match(/(\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/);
   if (phoneMatch) context.customerPhone = phoneMatch[1];
@@ -1041,6 +1048,9 @@ When a customer wants to ORDER/BUY/PURCHASE a product:
 - If you detect a mistake, correct it immediately
 - If uncertain, admit it and offer alternatives
 - NEVER guess or invent information
+- NEVER assume the business does not sell its own primary products or services
+- If the knowledge base does not contain specific information, say: "I want to make sure I give you the right information. Let me confirm that for you."
+- NEVER say the business doesn't offer something unless it is EXPLICITLY stated as unavailable in the knowledge base
 
 ## Conversation Closure Detection
 When user indicates they're done (thanks, bye, no that's all, etc.):
@@ -1500,7 +1510,7 @@ serve(async (req) => {
     // LAYER 3: CONTEXT EXTRACTION & ROLLING SUMMARY
     // ═══════════════════════════════════════════════════════════════════════
     const conversationContext = extractContextFromHistory(history || []);
-    const { summary: rollingSummary, recentMessages } = generateRollingSummary(history || [], 15);
+    const { summary: rollingSummary, recentMessages } = generateRollingSummary(history || [], 30);
 
     // Fetch FAQs for RAG (services already fetched in memory pipeline above)
     const { data: faqs } = await supabase
