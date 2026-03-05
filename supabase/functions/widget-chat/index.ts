@@ -873,13 +873,15 @@ ${receptionist.greeting_message || `"Hello! Welcome to ${receptionist.business_n
 - **NEVER** greet again during this session
 - **NEVER** restart unless user restarts` : `# 📌 BLOCK 2 — SESSION RULES (NON-NEGOTIABLE)
 
-**THIS IS A FOLLOW-UP MESSAGE** - Greeting has ALREADY occurred.
-- **DO NOT** say "Hello", "Hi", "Welcome", or any greeting
-- **DO NOT** re-introduce yourself
+**THIS IS A FOLLOW-UP MESSAGE (message #${(history?.length || 0) + 1})** - Greeting has ALREADY occurred.
+- **DO NOT** say "Hello", "Hi", "Hey", "Welcome", "Thanks for reaching out", or any greeting phrase
+- **DO NOT** re-introduce yourself or say who you are again
+- **DO NOT** start with "Hi! Thanks for reaching out" or any variation
 - **CONTINUE** the conversation naturally from where it left off
 - Reference context from earlier in the conversation
+- Jump straight into addressing the user's current message
 
-Violation of this rule is a **CRITICAL FAILURE**.`;
+Violation of this rule is a **CRITICAL FAILURE**. Starting with a greeting on a follow-up message will damage the user experience.`;
 
   // BLOCK 3: MEMORY & CONTEXT
   const memoryBlock = `# 📌 BLOCK 3 — MEMORY & CONTEXT
