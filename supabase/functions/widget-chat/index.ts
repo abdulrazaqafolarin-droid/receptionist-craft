@@ -415,8 +415,26 @@ function extractContextFromHistory(history: any[]): ConversationContext {
   const timeMatch = fullText.match(/(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm)|morning|afternoon|evening)/i);
   if (timeMatch) context.timeMentioned = timeMatch[0];
   
-  const nameMatch = fullText.match(/(?:my name is|i'm|i am|call me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
-  if (nameMatch) context.customerName = nameMatch[1];
+  // STRICT name extraction — only explicit declarations, no loose "i'm/i am" patterns
+  const namePatterns = [
+    /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/,
+    /(?:(?:you\s+can\s+)?call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/,
+    /(?:the\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+    /\bi'?m\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
+    /\bi\s+am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
+    /^this\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  ];
+  const NAME_BLOCKLIST_LOCAL = ['hello','thanks','please','yes','no','sure','okay','great','good','fine','nice','cool','right','perfect','awesome','ridiculous','terrible','awful','bread','cake','dental','morning','afternoon','evening','urgent','emergency','in','so','much','not','specifically','interested','looking','waiting','trying'];
+  for (const np of namePatterns) {
+    const nm = fullText.match(np);
+    if (nm && nm[1]) {
+      const candidateName = nm[1].trim().toLowerCase();
+      if (!NAME_BLOCKLIST_LOCAL.includes(candidateName) && !candidateName.split(/\s+/).some(w => NAME_BLOCKLIST_LOCAL.includes(w))) {
+        context.customerName = nm[1].trim();
+        break;
+      }
+    }
+  }
   
   const phoneMatch = fullText.match(/(\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/);
   if (phoneMatch) context.customerPhone = phoneMatch[1];
@@ -866,13 +884,15 @@ ${receptionist.greeting_message || `"Hello! Welcome to ${receptionist.business_n
 - **NEVER** greet again during this session
 - **NEVER** restart unless user restarts` : `# 📌 BLOCK 2 — SESSION RULES (NON-NEGOTIABLE)
 
-**THIS IS A FOLLOW-UP MESSAGE** - Greeting has ALREADY occurred.
-- **DO NOT** say "Hello", "Hi", "Welcome", or any greeting
-- **DO NOT** re-introduce yourself
+**THIS IS A FOLLOW-UP MESSAGE (message #${(history?.length || 0) + 1})** - Greeting has ALREADY occurred.
+- **DO NOT** say "Hello", "Hi", "Hey", "Welcome", "Thanks for reaching out", or any greeting phrase
+- **DO NOT** re-introduce yourself or say who you are again
+- **DO NOT** start with "Hi! Thanks for reaching out" or any variation
 - **CONTINUE** the conversation naturally from where it left off
 - Reference context from earlier in the conversation
+- Jump straight into addressing the user's current message
 
-Violation of this rule is a **CRITICAL FAILURE**.`;
+Violation of this rule is a **CRITICAL FAILURE**. Starting with a greeting on a follow-up message will damage the user experience.`;
 
   // BLOCK 3: MEMORY & CONTEXT
   const memoryBlock = `# 📌 BLOCK 3 — MEMORY & CONTEXT
@@ -1041,6 +1061,9 @@ When a customer wants to ORDER/BUY/PURCHASE a product:
 - If you detect a mistake, correct it immediately
 - If uncertain, admit it and offer alternatives
 - NEVER guess or invent information
+- NEVER assume the business does not sell its own primary products or services
+- If the knowledge base does not contain specific information, say: "I want to make sure I give you the right information. Let me confirm that for you."
+- NEVER say the business doesn't offer something unless it is EXPLICITLY stated as unavailable in the knowledge base
 
 ## Conversation Closure Detection
 When user indicates they're done (thanks, bye, no that's all, etc.):
@@ -1500,7 +1523,7 @@ serve(async (req) => {
     // LAYER 3: CONTEXT EXTRACTION & ROLLING SUMMARY
     // ═══════════════════════════════════════════════════════════════════════
     const conversationContext = extractContextFromHistory(history || []);
-    const { summary: rollingSummary, recentMessages } = generateRollingSummary(history || [], 15);
+    const { summary: rollingSummary, recentMessages } = generateRollingSummary(history || [], 30);
 
     // Fetch FAQs for RAG (services already fetched in memory pipeline above)
     const { data: faqs } = await supabase
