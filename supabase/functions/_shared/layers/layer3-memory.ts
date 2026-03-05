@@ -92,13 +92,23 @@ export function extractContextFromHistory(history: ChatMessage[]): ConversationC
 
   // Extract name
   // STRICT name extraction — only explicit declarations
-  const nameMatch = fullText.match(
-    /(?:my\s+name\s+is|i'?m|i\s+am|call\s+me|this\s+is|the\s+name\s+is|you\s+can\s+call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/
-  );
-  if (nameMatch) {
-    const n = nameMatch[1].trim().toLowerCase();
-    const blocked = ['hello','thanks','please','yes','no','sure','okay','great','good','fine','ridiculous','terrible','awful','bread','cake','dental','morning','afternoon','evening','urgent','emergency'];
-    if (!blocked.includes(n)) context.customerName = nameMatch[1];
+  const namePatterns3 = [
+    /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/,
+    /(?:(?:you\s+can\s+)?call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/,
+    /\bi'?m\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
+    /\bi\s+am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
+    /^this\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  ];
+  const blocked3 = ['hello','thanks','please','yes','no','sure','okay','great','good','fine','ridiculous','terrible','awful','bread','cake','dental','morning','afternoon','evening','urgent','emergency','in','so','much','not','specifically','interested','looking','waiting','trying'];
+  for (const np of namePatterns3) {
+    const nm = fullText.match(np);
+    if (nm && nm[1]) {
+      const n = nm[1].trim().toLowerCase();
+      if (!blocked3.includes(n) && !n.split(/\s+/).some(w => blocked3.includes(w))) {
+        context.customerName = nm[1].trim();
+        break;
+      }
+    }
   }
 
   // Extract phone

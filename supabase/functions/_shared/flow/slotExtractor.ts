@@ -30,9 +30,14 @@ const PHONE_PATTERN = /(\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/;
 const EMAIL_PATTERN = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
 
 // Name patterns
-// STRICT: Only extract name when user explicitly declares it
+// STRICT: Only extract name when user explicitly declares it — NO loose "i'm" or "i am" patterns
 const NAME_PATTERNS = [
-  /(?:my\s+name\s+is|i'?m|i\s+am|call\s+me|this\s+is|the\s+name\s+is|you\s+can\s+call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  /(?:(?:you\s+can\s+)?call\s+me|they\s+call\s+me|just\s+call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  /(?:the\s+name\s+is|name[':]?\s*is)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  /\bi'?m\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
+  /\bi\s+am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
+  /^this\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
 ];
 
 // Quantity patterns

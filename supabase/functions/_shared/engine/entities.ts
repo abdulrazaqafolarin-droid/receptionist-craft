@@ -167,11 +167,22 @@ export function extractEntities(
   // NAME EXTRACTION
   // ─────────────────────────────────────────────────────────────────────────
   // STRICT NAME EXTRACTION — Only extract when user EXPLICITLY states their name
-  // Patterns must require an explicit declaration phrase before the name
+  // DO NOT use loose patterns like "i'm" or "i am" — they match "I'm in pain", "I am not sure"
+  // Only use patterns where the SOLE PURPOSE is to declare a name
+  // ─────────────────────────────────────────────────────────────────────────
   const namePatterns = [
-    /(?:my\s+name\s+is|i'?m|i\s+am|call\s+me|this\s+is|the\s+name\s+is|it'?s)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-    /(?:name[':]?\s*)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-    /(?:you\s+can\s+call\s+me|they\s+call\s+me|people\s+call\s+me|just\s+call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+    // "My name is John" / "My name is John Smith"
+    /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+    // "Call me John" / "You can call me John"
+    /(?:(?:you\s+can\s+)?call\s+me|they\s+call\s+me|people\s+call\s+me|just\s+call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+    // "The name is John" / "Name: John" / "Name is John"
+    /(?:the\s+name\s+is|name[':]?\s*is|name[':]?\s+)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+    // "I'm John" ONLY when followed by end-of-string or punctuation (not "I'm in pain")
+    /\bi'?m\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
+    // "I am John" ONLY when followed by end-of-string or punctuation (not "I am not sure")  
+    /\bi\s+am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
+    // "This is John" ONLY at start of message (introducing oneself)
+    /^this\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
   ];
   
   // Extended blocklist to prevent capturing common conversational words as names
@@ -187,13 +198,15 @@ export function extractEntities(
     'bread', 'cake', 'dental', 'clinic', 'store', 'shop', 'service',
     'the', 'this', 'that', 'what', 'when', 'where', 'how', 'why',
     'not', 'but', 'and', 'for', 'with', 'about', 'just', 'here',
+    'in', 'so', 'much', 'very', 'really', 'quite', 'too', 'also',
+    'specifically', 'interested', 'looking', 'waiting', 'trying',
   ]);
   
   for (const pattern of namePatterns) {
     const match = message.match(pattern); // Use original to preserve case
     if (match && match[1] && match[1].length >= 2 && match[1].length <= 50) {
       const name = match[1].trim();
-      // Block common words and single-character "names"
+      // Block common words
       const nameWords = name.toLowerCase().split(/\s+/);
       const isBlocklisted = nameWords.some(w => NAME_BLOCKLIST.has(w));
       if (!isBlocklisted && name.length >= 2) {
