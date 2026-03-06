@@ -3,6 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { FlowSlots } from "./types.ts";
+import { extractValidatedName } from "../nameValidator.ts";
 
 export interface ExtractionResult {
   slots: Partial<FlowSlots>;
@@ -29,16 +30,7 @@ const TIME_PATTERNS = [
 const PHONE_PATTERN = /(\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/;
 const EMAIL_PATTERN = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
 
-// Name patterns
-// STRICT: Only extract name when user explicitly declares it — NO loose "i'm" or "i am" patterns
-const NAME_PATTERNS = [
-  /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-  /(?:(?:you\s+can\s+)?call\s+me|they\s+call\s+me|just\s+call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-  /(?:the\s+name\s+is|name[':]?\s*is)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-  /\bi'?m\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
-  /\bi\s+am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
-  /^this\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-];
+// Name extraction now uses centralized nameValidator
 
 // Quantity patterns
 const QUANTITY_PATTERN = /(\d+)\s*(?:pieces?|items?|units?|of|x)?/i;
@@ -83,24 +75,9 @@ function extractEmail(message: string): string | null {
   return match ? match[1].toLowerCase() : null;
 }
 
-// Extract name — strict: only explicit declarations, with blocklist
+// Extract name — uses centralized validator
 function extractName(message: string): string | null {
-  const NAME_BLOCKLIST = new Set([
-    'hello', 'thanks', 'please', 'yes', 'no', 'sure', 'okay', 'great',
-    'good', 'fine', 'nice', 'cool', 'right', 'perfect', 'awesome',
-    'ridiculous', 'terrible', 'awful', 'bread', 'cake', 'dental',
-    'morning', 'afternoon', 'evening', 'urgent', 'emergency',
-  ]);
-  for (const pattern of NAME_PATTERNS) {
-    const match = message.match(pattern);
-    if (match && match[1]) {
-      const name = match[1].trim();
-      if (!NAME_BLOCKLIST.has(name.toLowerCase()) && name.length >= 2) {
-        return name;
-      }
-    }
-  }
-  return null;
+  return extractValidatedName(message);
 }
 
 // Extract quantity

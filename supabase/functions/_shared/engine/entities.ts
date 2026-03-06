@@ -6,6 +6,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import type { ExtractedEntities } from './types.ts';
+import { extractValidatedName } from '../nameValidator.ts';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPO CORRECTIONS
@@ -164,56 +165,11 @@ export function extractEntities(
   }
   
   // ─────────────────────────────────────────────────────────────────────────
-  // NAME EXTRACTION
+  // NAME EXTRACTION (CENTRALIZED VALIDATOR)
   // ─────────────────────────────────────────────────────────────────────────
-  // STRICT NAME EXTRACTION — Only extract when user EXPLICITLY states their name
-  // DO NOT use loose patterns like "i'm" or "i am" — they match "I'm in pain", "I am not sure"
-  // Only use patterns where the SOLE PURPOSE is to declare a name
-  // ─────────────────────────────────────────────────────────────────────────
-  const namePatterns = [
-    // "My name is John" / "My name is John Smith"
-    /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-    // "Call me John" / "You can call me John"
-    /(?:(?:you\s+can\s+)?call\s+me|they\s+call\s+me|people\s+call\s+me|just\s+call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-    // "The name is John" / "Name: John" / "Name is John"
-    /(?:the\s+name\s+is|name[':]?\s*is|name[':]?\s+)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-    // "I'm John" ONLY when followed by end-of-string or punctuation (not "I'm in pain")
-    /\bi'?m\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
-    // "I am John" ONLY when followed by end-of-string or punctuation (not "I am not sure")  
-    /\bi\s+am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
-    // "This is John" ONLY at start of message (introducing oneself)
-    /^this\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-  ];
-  
-  // Extended blocklist to prevent capturing common conversational words as names
-  const NAME_BLOCKLIST = new Set([
-    'hello', 'thanks', 'please', 'yes', 'no', 'sure', 'okay', 'great',
-    'good', 'fine', 'nice', 'cool', 'right', 'perfect', 'awesome',
-    'morning', 'afternoon', 'evening', 'today', 'tomorrow', 'monday',
-    'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
-    'january', 'february', 'march', 'april', 'may', 'june', 'july',
-    'august', 'september', 'october', 'november', 'december',
-    'ridiculous', 'terrible', 'awful', 'horrible', 'amazing', 'wonderful',
-    'urgent', 'emergency', 'appointment', 'booking', 'order', 'delivery',
-    'bread', 'cake', 'dental', 'clinic', 'store', 'shop', 'service',
-    'the', 'this', 'that', 'what', 'when', 'where', 'how', 'why',
-    'not', 'but', 'and', 'for', 'with', 'about', 'just', 'here',
-    'in', 'so', 'much', 'very', 'really', 'quite', 'too', 'also',
-    'specifically', 'interested', 'looking', 'waiting', 'trying',
-  ]);
-  
-  for (const pattern of namePatterns) {
-    const match = message.match(pattern); // Use original to preserve case
-    if (match && match[1] && match[1].length >= 2 && match[1].length <= 50) {
-      const name = match[1].trim();
-      // Block common words
-      const nameWords = name.toLowerCase().split(/\s+/);
-      const isBlocklisted = nameWords.some(w => NAME_BLOCKLIST.has(w));
-      if (!isBlocklisted && name.length >= 2) {
-        entities.customer_name = name;
-        break;
-      }
-    }
+  const validatedName = extractValidatedName(message);
+  if (validatedName) {
+    entities.customer_name = validatedName;
   }
   
   // ─────────────────────────────────────────────────────────────────────────
