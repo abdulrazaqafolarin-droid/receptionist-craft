@@ -5,6 +5,8 @@
 // state management. It ensures the AI never forgets or repeats greetings.
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { extractValidatedName } from '../nameValidator.ts';
+
 /**
  * Conversation context extracted from message history
  */
@@ -90,22 +92,13 @@ export function extractContextFromHistory(history: ChatMessage[]): ConversationC
   );
   if (timeMatch) context.timeMentioned = timeMatch[0];
 
-  // Extract name
-  // STRICT name extraction — only explicit declarations
-  const namePatterns3 = [
-    /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/,
-    /(?:(?:you\s+can\s+)?call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/,
-    /\bi'?m\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
-    /\bi\s+am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
-    /^this\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-  ];
-  const blocked3 = ['hello','thanks','please','yes','no','sure','okay','great','good','fine','ridiculous','terrible','awful','bread','cake','dental','morning','afternoon','evening','urgent','emergency','in','so','much','not','specifically','interested','looking','waiting','trying'];
-  for (const np of namePatterns3) {
-    const nm = fullText.match(np);
-    if (nm && nm[1]) {
-      const n = nm[1].trim().toLowerCase();
-      if (!blocked3.includes(n) && !n.split(/\s+/).some(w => blocked3.includes(w))) {
-        context.customerName = nm[1].trim();
+  // Extract name — uses centralized validator
+  // Scan each user message individually (not fullText) so end-of-string patterns work
+  for (const h of history) {
+    if (h.sender === 'user' || !h.sender) {
+      const validatedName = extractValidatedName(h.message || '');
+      if (validatedName) {
+        context.customerName = validatedName;
         break;
       }
     }

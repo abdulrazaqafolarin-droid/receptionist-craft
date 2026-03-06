@@ -2,6 +2,8 @@
 // LAYER 3: MEMORY & CONTEXT MANAGEMENT
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { extractValidatedName } from '../nameValidator.ts';
+
 export interface ConversationContext {
   serviceMentioned: string | null;
   dateMentioned: string | null;
@@ -79,24 +81,12 @@ export function extractContextFromHistory(history: any[]): ConversationContext {
       context.timeMentioned = timeMatch[1] || timeMatch[0];
     }
     
-    // Extract name (common patterns)
-    // STRICT name extraction — only explicit declarations
-    const namePatterns2 = [
-      /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-      /(?:(?:you\s+can\s+)?call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-      /\bi'?m\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
-      /\bi\s+am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
-      /^this\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-    ];
-    const blocked2 = ['hello','thanks','please','yes','no','sure','okay','great','good','fine','ridiculous','terrible','awful','bread','cake','dental','morning','afternoon','evening','urgent','emergency','in','so','much','not','specifically'];
-    for (const np of namePatterns2) {
-      const nm = text.match(np);
-      if (nm && nm[1]) {
-        const candidateName = nm[1].trim().toLowerCase();
-        if (!blocked2.includes(candidateName) && !candidateName.split(/\s+/).some(w => blocked2.includes(w))) {
-          context.customerName = nm[1].trim();
-          break;
-        }
+    // Extract name — uses centralized validator
+    // Scan each user message individually so end-of-string patterns work
+    if (msg.sender !== 'bot') {
+      const validatedName = extractValidatedName(text);
+      if (validatedName) {
+        context.customerName = validatedName;
       }
     }
     

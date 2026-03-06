@@ -54,6 +54,7 @@ import {
   mergeSlots, 
   buildSlotSummary 
 } from "../_shared/flow/slotExtractor.ts";
+import { extractValidatedName } from "../_shared/nameValidator.ts";
 import { MemorySummarizer } from "../_shared/flow/memorySummarizer.ts";
 import type { ConversationState, FlowSlots, ActiveTask } from "../_shared/flow/types.ts";
 import { createEmptyActiveTask } from "../_shared/flow/types.ts";
@@ -415,22 +416,13 @@ function extractContextFromHistory(history: any[]): ConversationContext {
   const timeMatch = fullText.match(/(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm)|morning|afternoon|evening)/i);
   if (timeMatch) context.timeMentioned = timeMatch[0];
   
-  // STRICT name extraction — only explicit declarations, no loose "i'm/i am" patterns
-  const namePatterns = [
-    /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/,
-    /(?:(?:you\s+can\s+)?call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/,
-    /(?:the\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-    /\bi'?m\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
-    /\bi\s+am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
-    /^this\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-  ];
-  const NAME_BLOCKLIST_LOCAL = ['hello','thanks','please','yes','no','sure','okay','great','good','fine','nice','cool','right','perfect','awesome','ridiculous','terrible','awful','bread','cake','dental','morning','afternoon','evening','urgent','emergency','in','so','much','not','specifically','interested','looking','waiting','trying'];
-  for (const np of namePatterns) {
-    const nm = fullText.match(np);
-    if (nm && nm[1]) {
-      const candidateName = nm[1].trim().toLowerCase();
-      if (!NAME_BLOCKLIST_LOCAL.includes(candidateName) && !candidateName.split(/\s+/).some(w => NAME_BLOCKLIST_LOCAL.includes(w))) {
-        context.customerName = nm[1].trim();
+  // STRICT name extraction — uses centralized validator
+  // Scan each user message individually so end-of-string patterns work
+  for (const h of history) {
+    if (h.sender === 'user') {
+      const validatedName = extractValidatedName(h.message || '');
+      if (validatedName) {
+        context.customerName = validatedName;
         break;
       }
     }
