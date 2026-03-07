@@ -840,7 +840,8 @@ function buildMasterSystemPrompt(
   hallucinationGuardBlock: string = '',
   taskContinuityBlock: string = '',
   flowLockBlock: string = '',
-  governorBlock: string = ''
+  governorBlock: string = '',
+  messageCount: number = 0
 ): string {
   const emotionalGuidance: Record<string, string> = {
     neutral: 'Maintain a warm, professional tone.',
@@ -876,7 +877,7 @@ ${receptionist.greeting_message || `"Hello! Welcome to ${receptionist.business_n
 - **NEVER** greet again during this session
 - **NEVER** restart unless user restarts` : `# 📌 BLOCK 2 — SESSION RULES (NON-NEGOTIABLE)
 
-**THIS IS A FOLLOW-UP MESSAGE (message #${(history?.length || 0) + 1})** - Greeting has ALREADY occurred.
+**THIS IS A FOLLOW-UP MESSAGE (message #${messageCount + 1})** - Greeting has ALREADY occurred.
 - **DO NOT** say "Hello", "Hi", "Hey", "Welcome", "Thanks for reaching out", or any greeting phrase
 - **DO NOT** re-introduce yourself or say who you are again
 - **DO NOT** start with "Hi! Thanks for reaching out" or any variation
@@ -1818,7 +1819,8 @@ serve(async (req) => {
       hallucinationGuardBlock,
       taskContinuityBlock,
       flowLockBlock,
-      governorBlock // Now using Engine v2 + unifiedGovernorBlock
+      governorBlock, // Now using Engine v2 + unifiedGovernorBlock
+      history?.length || 0
     ) + '\n\n' + empathyPromptBlock + '\n\n' + tonePromptBlock + '\n\n' + memoryAwarenessBlock + '\n\n' + qualityStandardsBlock;
 
     const startTime = Date.now();
