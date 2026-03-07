@@ -3,12 +3,13 @@ import { useOnboardingStore } from "@/store/onboarding";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowRight, Clock, Calendar } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clock, Calendar, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TIMEZONE_OPTIONS, detectBrowserTimezone, findClosestTimezone } from "@/lib/timezones";
 
 const DAYS = [
   { value: 0, label: "Sunday" },
@@ -30,7 +31,8 @@ const QUICK_PRESETS = [
 export default function Step3Availability() {
   const { availabilityRules, setAvailabilityRules, setStep, receptionistId } = useOnboardingStore();
   const [mode, setMode] = useState<"quick" | "advanced">("quick");
-  const [timezone] = useState("America/New_York");
+  // Auto-detect the business owner's browser timezone — never hardcode
+  const [timezone, setTimezone] = useState(() => findClosestTimezone(detectBrowserTimezone()));
   const [loading, setLoading] = useState(false);
 
   // Advanced mode
@@ -73,7 +75,7 @@ export default function Step3Availability() {
         day_of_week: rule.day_of_week,
         start_time: rule.start_time,
         end_time: rule.end_time,
-        timezone: rule.timezone,
+        timezone: rule.timezone || timezone,
       }));
 
       const { error } = await supabase.from("availability_rules").insert(rulesToInsert);
@@ -100,6 +102,29 @@ export default function Step3Availability() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Timezone Selector */}
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-primary" />
+            Your Business Timezone
+          </Label>
+          <Select value={timezone} onValueChange={setTimezone}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select your timezone" />
+            </SelectTrigger>
+            <SelectContent className="max-h-60">
+              {TIMEZONE_OPTIONS.map((tz) => (
+                <SelectItem key={tz.value} value={tz.value}>
+                  {tz.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Auto-detected from your browser. Change it if your business operates in a different timezone.
+          </p>
+        </div>
+
         {/* Mode Toggle */}
         <div className="flex gap-2">
           <Button
@@ -188,6 +213,9 @@ export default function Step3Availability() {
                   <Clock className="h-3 w-3 text-muted-foreground" />
                   <span>
                     {rule.start_time} - {rule.end_time}
+                  </span>
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {rule.timezone || timezone}
                   </span>
                 </div>
               ))}
