@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { format } from "date-fns";
 import { Clock, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,17 +18,31 @@ interface TimeSlotSelectorProps {
   onShowMore?: () => void;
 }
 
-export function TimeSlotSelector({ slots, onSelect, disabled, showMore, onShowMore }: TimeSlotSelectorProps) {
-  const formatTime = (slot: TimeSlot) => {
-    const timeStr = slot.startTime || slot.start;
-    if (!timeStr) return slot.display || "Unknown";
-    try {
-      return format(new Date(timeStr), "h:mm a");
-    } catch {
-      return slot.display || timeStr;
-    }
-  };
+/**
+ * Format a time slot to the customer's LOCAL browser timezone.
+ * Slots from the backend are always in ISO/UTC format.
+ * We convert to the customer's local time using Intl.DateTimeFormat.
+ */
+function formatSlotToLocalTime(slot: TimeSlot): string {
+  const timeStr = slot.startTime || slot.start;
+  if (!timeStr) return slot.display || "Unknown";
+  try {
+    const date = new Date(timeStr);
+    if (isNaN(date.getTime())) return slot.display || timeStr;
+    // Auto-detect the customer's browser timezone — never hardcode
+    const customerTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: customerTz,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date);
+  } catch {
+    return slot.display || timeStr;
+  }
+}
 
+export function TimeSlotSelector({ slots, onSelect, disabled, showMore, onShowMore }: TimeSlotSelectorProps) {
   if (slots.length === 0) {
     return (
       <div className="mt-3 p-4 bg-muted/50 rounded-xl border border-border/50 flex items-center gap-3 animate-in fade-in-0 duration-300">
@@ -46,7 +59,7 @@ export function TimeSlotSelector({ slots, onSelect, disabled, showMore, onShowMo
 
   return (
     <div className="mt-3 space-y-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
-      <p className="text-xs text-muted-foreground font-medium">Available times:</p>
+      <p className="text-xs text-muted-foreground font-medium">Available times (your local time):</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {slots.map((slot, idx) => (
           <Button
@@ -65,7 +78,7 @@ export function TimeSlotSelector({ slots, onSelect, disabled, showMore, onShowMo
             style={{ animationDelay: `${idx * 50}ms` }}
           >
             <Clock className="h-3.5 w-3.5 text-primary" />
-            <span>{formatTime(slot)}</span>
+            <span>{formatSlotToLocalTime(slot)}</span>
           </Button>
         ))}
       </div>

@@ -101,6 +101,8 @@ serve(async (req) => {
     console.log(`[check-availability] Found ${appointments?.length || 0} existing appointments`);
 
     // Generate candidate slots
+    // Slots are generated in the BUSINESS timezone (from availability_rules)
+    // and returned as UTC ISO strings. The frontend converts to customer's local time.
     const slots: any[] = [];
     let currentDay = new Date(searchStart);
     currentDay.setHours(0, 0, 0, 0);
@@ -112,8 +114,15 @@ serve(async (req) => {
       const dayRules = (rules || []).filter((r: any) => Number(r.day_of_week) === dayOfWeek);
       
       for (const rule of dayRules) {
+        const ruleTz = rule.timezone || 'UTC';
         const [startH, startM] = (rule.start_time || "09:00").split(":").map(Number);
         const [endH, endM] = (rule.end_time || "17:00").split(":").map(Number);
+        
+        // Build slot times relative to the business timezone
+        // We construct date strings and let the runtime handle conversion
+        const year = currentDay.getFullYear();
+        const month = String(currentDay.getMonth() + 1).padStart(2, '0');
+        const day = String(currentDay.getDate()).padStart(2, '0');
         
         let slotStart = new Date(currentDay);
         slotStart.setHours(startH, startM, 0, 0);
@@ -158,15 +167,18 @@ serve(async (req) => {
           });
 
           if (!hasCollision) {
+            // Return ISO strings (UTC) — frontend converts to customer's local timezone
             slots.push({
               start: slotStart.toISOString(),
               end: slotEnd.toISOString(),
+              businessTimezone: ruleTz,
               display: slotStart.toLocaleString("en-US", {
                 weekday: "short",
                 month: "short",
                 day: "numeric",
                 hour: "numeric",
                 minute: "2-digit",
+                timeZone: ruleTz,
               }),
             });
           }

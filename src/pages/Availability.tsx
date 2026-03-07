@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, Plus, Trash2, Calendar, AlertCircle, Zap } from "lucide-react";
+import { Clock, Plus, Trash2, Calendar, AlertCircle, Zap, Globe } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FloatingBackground } from "@/components/FloatingBackground";
+import { TIMEZONE_OPTIONS, detectBrowserTimezone, findClosestTimezone } from "@/lib/timezones";
 
 type AvailabilityRule = {
   id?: string;
@@ -37,15 +38,7 @@ const DAYS = [
   { value: 6, label: "Saturday" },
 ];
 
-const TIMEZONES = [
-  "Africa/Lagos",
-  "America/New_York",
-  "America/Los_Angeles",
-  "Europe/London",
-  "Asia/Dubai",
-  "Asia/Tokyo",
-  "UTC"
-];
+// TIMEZONE_OPTIONS is now imported from @/lib/timezones — never hardcode timezone lists
 
 export default function Availability() {
   const { toast } = useToast();
@@ -58,7 +51,7 @@ export default function Availability() {
   const [newDay, setNewDay] = useState<number>(1);
   const [newStart, setNewStart] = useState("09:00");
   const [newEnd, setNewEnd] = useState("17:00");
-  const [timezone, setTimezone] = useState("Africa/Lagos");
+  const [timezone, setTimezone] = useState(() => findClosestTimezone(detectBrowserTimezone()));
 
   const [exceptionStart, setExceptionStart] = useState("");
   const [exceptionEnd, setExceptionEnd] = useState("");
@@ -380,15 +373,17 @@ export default function Availability() {
                       <Input type="time" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} className="h-11" />
                     </div>
                     <div className="space-y-2">
-                      <Label>Timezone</Label>
+                      <Label className="flex items-center gap-2">
+                        <Globe className="h-3 w-3" /> Timezone
+                      </Label>
                       <Select value={timezone} onValueChange={setTimezone}>
                         <SelectTrigger className="h-11 border-2">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          {TIMEZONES.map((tz) => (
-                            <SelectItem key={tz} value={tz}>
-                              {tz}
+                        <SelectContent className="max-h-60">
+                          {TIMEZONE_OPTIONS.map((tz) => (
+                            <SelectItem key={tz.value} value={tz.value}>
+                              {tz.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
