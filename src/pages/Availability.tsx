@@ -373,15 +373,17 @@ export default function Availability() {
                       <Input type="time" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} className="h-11" />
                     </div>
                     <div className="space-y-2">
-                      <Label>Timezone</Label>
+                      <Label className="flex items-center gap-2">
+                        <Globe className="h-3 w-3" /> Timezone
+                      </Label>
                       <Select value={timezone} onValueChange={setTimezone}>
                         <SelectTrigger className="h-11 border-2">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          {TIMEZONES.map((tz) => (
-                            <SelectItem key={tz} value={tz}>
-                              {tz}
+                        <SelectContent className="max-h-60">
+                          {TIMEZONE_OPTIONS.map((tz) => (
+                            <SelectItem key={tz.value} value={tz.value}>
+                              {tz.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
