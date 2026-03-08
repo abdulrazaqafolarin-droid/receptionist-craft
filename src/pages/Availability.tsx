@@ -197,6 +197,7 @@ export default function Availability() {
     setExceptionStart("");
     setExceptionEnd("");
     setExceptionReason("");
+    await regenerateSlots(selectedReceptionist);
     loadAvailability(selectedReceptionist);
   }
 
