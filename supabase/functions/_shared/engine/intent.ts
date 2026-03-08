@@ -158,9 +158,12 @@ export function detectIntent(
     };
   }
   
-  // P8: Booking
-  if (capabilities.can_book && PATTERNS.book.test(msg)) {
-    const alreadyInBooking = state?.task_type === 'booking';
+  // P8: Booking — split into explicit vs casual availability
+  const hasActiveOrder = state?.task_type === 'ordering';
+  const alreadyInBooking = state?.task_type === 'booking';
+  
+  // P8a: Explicit booking intent — always triggers booking mode
+  if (capabilities.can_book && PATTERNS.book_explicit.test(msg)) {
     return {
       intent: 'book',
       confidence: 0.9,
@@ -168,6 +171,30 @@ export function detectIntent(
       target_task: 'booking',
       should_cancel_task: false,
     };
+  }
+  
+  // P8b: Casual availability question — context-dependent
+  if (PATTERNS.availability_casual.test(msg)) {
+    // If mid-order, treat as an info/hours question — don't cancel the order
+    if (hasActiveOrder) {
+      return {
+        intent: 'hours',
+        confidence: 0.8,
+        should_start_task: false,
+        target_task: null,
+        should_cancel_task: false,
+      };
+    }
+    // No active task — treat as booking intent
+    if (capabilities.can_book) {
+      return {
+        intent: 'book',
+        confidence: 0.85,
+        should_start_task: true,
+        target_task: 'booking',
+        should_cancel_task: false,
+      };
+    }
   }
   
   // P9: Ordering (but not if it mentions booking keywords)
