@@ -471,20 +471,7 @@ export default function Widget() {
         };
         
         // Reset booking state after successful order
-        setBookingState({
-          serviceId: null,
-          serviceName: null,
-          date: null,
-          timeSlot: null,
-          customerName: null,
-          customerEmail: null,
-          customerPhone: null,
-          collectingInfo: null,
-          productId: null,
-          productName: null,
-          quantity: 1,
-          orderMode: false,
-        });
+        setBookingState({...defaultBookingState});
       }
 
       // Detect booking intent and show services (only if not already in booking flow)
