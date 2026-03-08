@@ -408,12 +408,7 @@ export default function Widget() {
       for (const { pattern, action } of QUICK_ACTION_INTENTS) {
         if (action === 'book_appointment') continue; // already handled above
         if (pattern.test(lowerText)) {
-          const userMessage: Message = {
-            role: "user",
-            content: textToSend,
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, userMessage]);
+          addUserMessage(textToSend);
           setInput("");
           await handleQuickReply(action);
           return;
