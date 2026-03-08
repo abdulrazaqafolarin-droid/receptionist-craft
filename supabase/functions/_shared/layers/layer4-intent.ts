@@ -283,19 +283,21 @@ The message contains ambiguous pronouns (it, that, this, they).
 
 **DO:**
 - Use conversation context to resolve references
-- If truly ambiguous, ask: "Just to make sure I understand, are you referring to [X]?"
+- If truly ambiguous, ask ONE short natural clarifying question relevant to the business context
+- Never ask generic "what do you mean?" — frame it with business knowledge
 `;
   }
 
-  if (analysis.hasNumericQuery) {
+  if (analysis.hasUncertainty) {
     specificGuidance += `
-### 🔢 NUMERIC REASONING
-The message involves numeric comparison.
+### ❓ AMBIGUOUS INPUT DETECTED
+The user's message contains uncertainty markers or could mean multiple things.
 
 **DO:**
-- Use explicit calculation/comparison
-- State the comparison clearly
-- Double-check numeric logic
+- Ask ONE short, warm, context-aware clarifying question
+- Frame it using your knowledge of the business and current conversation
+- If this is a SECOND attempt at clarifying the same thing, make a reasonable assumption, state it, and proceed
+- Example: "I'll go ahead and assume you meant [X] — feel free to correct me!"
 `;
   }
 
@@ -320,7 +322,7 @@ Detected intents include:
 ## Dialog Act Selection
 Every reply MUST be classified as:
 - **Answer** → Providing information
-- **AskClarity** → Requesting clarification
+- **AskClarity** → Requesting clarification (use Clarification Protocol from Layer 7)
 - **Acknowledge** → Brief confirmation
 - **Confirm** → Confirming details
 - **Offer Options** → Presenting choices

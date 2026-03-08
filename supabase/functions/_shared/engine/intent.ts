@@ -275,6 +275,26 @@ export function detectIntent(
     };
   }
   
+  // Check for multi-intent ambiguity: message matches multiple high-level patterns
+  const matchCount = [
+    capabilities.can_book && PATTERNS.book_explicit.test(msg),
+    capabilities.can_order && PATTERNS.order.test(msg),
+    PATTERNS.price.test(msg),
+    PATTERNS.hours.test(msg),
+    PATTERNS.info.test(msg),
+  ].filter(Boolean).length;
+  
+  // If message matches 2+ different intent patterns, it's ambiguous
+  if (matchCount >= 2 && !hasActiveTask) {
+    return {
+      intent: 'ambiguous',
+      confidence: 0.4,
+      should_start_task: false,
+      target_task: null,
+      should_cancel_task: false,
+    };
+  }
+
   // Default: Continue current flow or general
   return {
     intent: hasActiveTask ? 'continue' : 'info',
