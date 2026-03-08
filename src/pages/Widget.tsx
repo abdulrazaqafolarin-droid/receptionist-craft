@@ -501,12 +501,7 @@ export default function Widget() {
         
         setBookingState(prev => ({ ...prev, customerName: name, collectingInfo: 'contact' }));
         
-        const botMessage: Message = {
-          role: "assistant",
-          content: `Thank you, ${name}! And what's the best way to reach you? You can share your email address or phone number.`,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage(`Thank you, ${name}! And what's the best way to reach you? You can share your email address or phone number.`);
         setLoading(false);
         return;
       }
