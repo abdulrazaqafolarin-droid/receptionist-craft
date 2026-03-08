@@ -272,9 +272,64 @@ export default function Widget() {
     }
   }, [receptionist, greetingStored, sessionId]);
 
+  // Intent patterns that match quick action button behavior
+  const QUICK_ACTION_INTENTS: { pattern: RegExp; action: string }[] = [
+    // Book Appointment intent → matches "book_appointment" button
+    { pattern: /\b(book|schedule|make|set\s*up|arrange|reserve)\b.*\b(appointment|booking|visit|session|consultation|meeting|slot)\b/i, action: 'book_appointment' },
+    { pattern: /\b(appointment|booking|visit|session|consultation)\b.*\b(book|schedule|make|set\s*up|arrange|reserve)\b/i, action: 'book_appointment' },
+    { pattern: /\b(i('d| would) like to (book|schedule|come in|make an appointment|set up))\b/i, action: 'book_appointment' },
+    { pattern: /\bcan i (book|schedule|get|make)\b/i, action: 'book_appointment' },
+    { pattern: /\b(when (can|could) (i|we) come in|when are you (available|free|open))\b/i, action: 'book_appointment' },
+    { pattern: /\b(any (availability|openings|slots)|do you have (availability|openings))\b/i, action: 'book_appointment' },
+    { pattern: /\bi need (an? )?(appointment|booking|slot|session)\b/i, action: 'book_appointment' },
+    // View Products intent → matches "view_products" button
+    { pattern: /\b(show|see|view|browse|look at|check out|what)\b.*\b(products?|items?|catalog|menu|stock|inventory|merchandise)\b/i, action: 'view_products' },
+    { pattern: /\b(products?|items?|catalog|menu|stock|inventory|merchandise)\b.*\b(show|see|view|browse|available|have|offer|sell)\b/i, action: 'view_products' },
+    { pattern: /\bwhat (do you|can i) (buy|order|purchase|get)\b/i, action: 'view_products' },
+    { pattern: /\b(i('d| would) like to|i want to|can i|let me)\b.*\b(buy|order|purchase|shop|get something)\b/i, action: 'view_products' },
+    { pattern: /\b(buy|order|purchase|shop|get)\b.*\b(something|anything|stuff)\b/i, action: 'view_products' },
+    { pattern: /\bwhat('s| is) (for sale|on (the )?menu|available (to buy|for purchase))\b/i, action: 'view_products' },
+    { pattern: /\bdo you (sell|carry|have|stock)\b/i, action: 'view_products' },
+    // View Services intent → matches "view_services" button
+    { pattern: /\b(show|see|view|list|what are)\b.*\b(services?|offerings?|treatments?|options?)\b/i, action: 'view_services' },
+    { pattern: /\b(services?|offerings?|treatments?)\b.*\b(show|see|view|offer|available|provide|have)\b/i, action: 'view_services' },
+    { pattern: /\bwhat (do you|can you) (do|offer|provide)\b/i, action: 'view_services' },
+    { pattern: /\bwhat (services?|options?) (do you|are) (have|available|offer)\b/i, action: 'view_services' },
+    { pattern: /\b(how can you help|what can you help with|what do you specialize in)\b/i, action: 'view_services' },
+    // Contact intent → matches "contact" button
+    { pattern: /\b(contact|reach|call|phone|email|address|location|directions|where are you|how (do i|can i|to) (reach|contact|find|get to))\b/i, action: 'contact' },
+  ];
+
   async function sendMessage(messageText?: string) {
     const textToSend = messageText || input.trim();
     if (!textToSend || !receptionistId) return;
+
+    // ─── QUICK ACTION INTENT ROUTING ───────────────────────────────
+    // If not already in a booking/order flow, check if the typed message
+    // matches a quick action button intent and route identically.
+    const isInActiveFlow = bookingState.collectingInfo || 
+                           bookingState.awaitingOrderConfirmation || 
+                           bookingState.serviceId || 
+                           bookingState.productId;
+
+    if (!isInActiveFlow) {
+      const lowerText = textToSend.toLowerCase();
+      for (const { pattern, action } of QUICK_ACTION_INTENTS) {
+        if (pattern.test(lowerText)) {
+          // Add user message to chat first
+          const userMessage: Message = {
+            role: "user",
+            content: textToSend,
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, userMessage]);
+          setInput("");
+          // Route to the same handler as the button click
+          await handleQuickReply(action);
+          return;
+        }
+      }
+    }
 
     const userMessage: Message = {
       role: "user",
