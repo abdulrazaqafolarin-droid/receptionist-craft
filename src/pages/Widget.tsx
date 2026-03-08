@@ -45,7 +45,7 @@ export default function Widget() {
   const [services, setServices] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [businessModel, setBusinessModel] = useState<'services' | 'products' | 'both'>('services');
-  const [bookingState, setBookingState] = useState({
+  const defaultBookingState = {
     serviceId: null as string | null,
     serviceName: null as string | null,
     date: null as Date | null,
@@ -54,12 +54,14 @@ export default function Widget() {
     customerEmail: null as string | null,
     customerPhone: null as string | null,
     collectingInfo: null as 'name' | 'contact' | null,
-    // Product ordering state
     productId: null as string | null,
     productName: null as string | null,
     quantity: 1 as number,
     orderMode: false as boolean,
-  });
+    awaitingOrderConfirmation: false as boolean,
+    pendingProducts: [] as Array<{ productId: string; productName: string; quantity: number; price?: number }>,
+  };
+  const [bookingState, setBookingState] = useState(defaultBookingState);
   const [widgetColors, setWidgetColors] = useState({
     primaryColor: "#8B5CF6",
     secondaryColor: "#A78BFA",
@@ -160,20 +162,7 @@ export default function Widget() {
     setSessionId(newSid);
     
     // Reset booking state
-    setBookingState({
-      serviceId: null,
-      serviceName: null,
-      date: null,
-      timeSlot: null,
-      customerName: null,
-      customerEmail: null,
-      customerPhone: null,
-      collectingInfo: null,
-      productId: null,
-      productName: null,
-      quantity: 1,
-      orderMode: false,
-    });
+    setBookingState({...defaultBookingState});
     
     // Show fresh greeting with a proper "Hi" conversation start
     if (receptionist?.greeting_message) {
@@ -298,6 +287,75 @@ export default function Widget() {
     setLoading(true);
 
     try {
+      // Handle soft order confirmation step
+      if (bookingState.awaitingOrderConfirmation) {
+        const lowerText = textToSend.toLowerCase().trim();
+        const isConfirm = /^(yes|yep|yeah|sure|go ahead|proceed|confirm|let's do it|ready|ok|okay|place it|place the order|place order|do it|absolutely|definitely|yea|sounds good|let's go|i'm ready)/.test(lowerText);
+        const isChange = /^(change|modify|edit|update|different|swap|switch|actually|wait|hold on|let me change|i want to change|make changes|no.*change|want.*change)/.test(lowerText) || 
+                         /change|modify|different|swap|switch/.test(lowerText);
+        const isCancel = /^(no|nope|nah|cancel|never\s*mind|not really|not now|not ready|maybe later|i('ll| will) pass|forget it|stop|back off|leave me)/.test(lowerText);
+        
+        if (isConfirm) {
+          // User confirmed — NOW start collecting info
+          setBookingState(prev => ({ 
+            ...prev, 
+            awaitingOrderConfirmation: false,
+            collectingInfo: 'name',
+          }));
+          
+          const botMessage: Message = {
+            role: "assistant",
+            content: "Perfect, let's get your order placed! What's your name?",
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, botMessage]);
+          setLoading(false);
+          return;
+        } else if (isChange) {
+          // User wants to change — show product selector again
+          setBookingState(prev => ({ 
+            ...prev, 
+            awaitingOrderConfirmation: false,
+            pendingProducts: [],
+            productId: null,
+            productName: null,
+            quantity: 1,
+            orderMode: false,
+          }));
+          
+          const botMessage: Message = {
+            role: "assistant",
+            content: "No problem at all! Here are our products again — take your time and pick whatever you'd like.",
+            timestamp: new Date(),
+            showProducts: true,
+          };
+          setMessages(prev => [...prev, botMessage]);
+          setLoading(false);
+          return;
+        } else if (isCancel) {
+          // User not ready — back off completely
+          setBookingState({...defaultBookingState});
+          
+          const botMessage: Message = {
+            role: "assistant",
+            content: "No worries at all! Feel free to browse or ask me anything whenever you're ready. I'm here to help! 😊",
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, botMessage]);
+          setLoading(false);
+          return;
+        }
+        // If none matched, treat as ambiguous — ask again gently
+        const botMessage: Message = {
+          role: "assistant",
+          content: "Just to be sure — would you like to go ahead with this order, make any changes to your selection, or take some more time to browse?",
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, botMessage]);
+        setLoading(false);
+        return;
+      }
+
       // Handle booking info collection
       if (bookingState.collectingInfo === 'name') {
         // User provided their name - validate it's a reasonable name
@@ -369,20 +427,7 @@ export default function Widget() {
           setMessages(prev => [...prev, orderConfirmationMessage]);
           
           // Reset booking state
-          setBookingState({
-            serviceId: null,
-            serviceName: null,
-            date: null,
-            timeSlot: null,
-            customerName: null,
-            customerEmail: null,
-            customerPhone: null,
-            collectingInfo: null,
-            productId: null,
-            productName: null,
-            quantity: 1,
-            orderMode: false,
-          });
+          setBookingState({...defaultBookingState});
           
           setLoading(false);
           return;
@@ -425,20 +470,7 @@ export default function Widget() {
           setMessages(prev => [...prev, confirmationMessage]);
           
           // Reset booking state
-          setBookingState({
-            serviceId: null,
-            serviceName: null,
-            date: null,
-            timeSlot: null,
-            customerName: null,
-            customerEmail: null,
-            customerPhone: null,
-            collectingInfo: null,
-            productId: null,
-            productName: null,
-            quantity: 1,
-            orderMode: false,
-          });
+          setBookingState({...defaultBookingState});
           
           setLoading(false);
           return;
@@ -493,20 +525,7 @@ export default function Widget() {
         };
         
         // Reset booking state after successful booking
-        setBookingState({
-          serviceId: null,
-          serviceName: null,
-          date: null,
-          timeSlot: null,
-          customerName: null,
-          customerEmail: null,
-          customerPhone: null,
-          collectingInfo: null,
-          productId: null,
-          productName: null,
-          quantity: 1,
-          orderMode: false,
-        });
+        setBookingState({...defaultBookingState});
       }
       
       // Check if order was created by the backend
@@ -521,20 +540,7 @@ export default function Widget() {
         };
         
         // Reset booking state after successful order
-        setBookingState({
-          serviceId: null,
-          serviceName: null,
-          date: null,
-          timeSlot: null,
-          customerName: null,
-          customerEmail: null,
-          customerPhone: null,
-          collectingInfo: null,
-          productId: null,
-          productName: null,
-          quantity: 1,
-          orderMode: false,
-        });
+        setBookingState({...defaultBookingState});
       }
 
       // Detect booking intent and show services (only if not already in booking flow)
@@ -649,23 +655,27 @@ export default function Widget() {
   async function handleProductsConfirm(selectedProducts: Array<{ productId: string; productName: string; quantity: number; price?: number }>) {
     if (selectedProducts.length === 0) return;
     
-    // Store products in booking state
+    // Build summary for soft confirmation
     const productNames = selectedProducts.map(p => `${p.quantity}x ${p.productName}`).join(', ');
     const totalPrice = selectedProducts.reduce((sum, p) => sum + ((p.price || 0) * p.quantity), 0);
+    const priceText = totalPrice > 0 ? ` for a total of $${totalPrice.toFixed(2)}` : '';
     
+    // Store pending products but DON'T start collecting info yet
     setBookingState(prev => ({ 
       ...prev, 
+      awaitingOrderConfirmation: true,
+      pendingProducts: selectedProducts,
       productId: selectedProducts[0].productId,
       productName: productNames,
       quantity: selectedProducts.reduce((sum, p) => sum + p.quantity, 0),
       orderMode: true,
-      collectingInfo: 'name' 
+      collectingInfo: null, // NOT collecting info yet
     }));
     
-    const priceText = totalPrice > 0 ? ` (Total: $${totalPrice.toFixed(2)})` : '';
+    // Soft confirmation message — ask if they want to proceed
     const botMessage: Message = {
       role: "assistant",
-      content: `Great choice! You've selected ${productNames}${priceText}. What's your name so I can process your order?`,
+      content: `Great choices! You've selected ${productNames}${priceText}. Are you ready to go ahead with this order, or would you like to make any changes?`,
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, botMessage]);
@@ -853,20 +863,7 @@ export default function Widget() {
     setSessionId(newSid);
     
     // Reset local booking state
-    setBookingState({
-      serviceId: null,
-      serviceName: null,
-      date: null,
-      timeSlot: null,
-      customerName: null,
-      customerEmail: null,
-      customerPhone: null,
-      collectingInfo: null,
-      productId: null,
-      productName: null,
-      quantity: 1,
-      orderMode: false,
-    });
+    setBookingState({...defaultBookingState});
     
     // Reset session tracking
     setHasExistingSession(false);
