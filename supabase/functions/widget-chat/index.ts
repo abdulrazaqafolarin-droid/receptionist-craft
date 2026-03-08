@@ -413,8 +413,8 @@ function extractContextFromHistory(history: any[]): ConversationContext {
   if (history.length === 0) return context;
   
   const fullText = history.map(h => h.message).join(' ');
-  const botMessages = history.filter(h => h.sender === 'bot').map(h => h.message.toLowerCase()).join(' ');
-  const lastBotMessage = history.filter(h => h.sender === 'bot').slice(-1)[0];
+  const botMessages = history.filter(h => h.sender === 'ai' || h.sender === 'bot').map(h => h.message.toLowerCase()).join(' ');
+  const lastBotMessage = history.filter(h => h.sender === 'ai' || h.sender === 'bot').slice(-1)[0];
   const lastUserMessage = history.filter(h => h.sender === 'user').slice(-1)[0];
   
   // Check if services/products were shown in the last bot message
