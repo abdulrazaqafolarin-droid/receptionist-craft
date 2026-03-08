@@ -432,8 +432,9 @@ export default function Widget() {
     }
 
     try {
-      // Handle soft order confirmation step
+      // Handle soft order confirmation step (client-side flow — persist user message)
       if (bookingState.awaitingOrderConfirmation) {
+        persistMessage('user', textToSend);
         const lowerText = textToSend.toLowerCase().trim();
         const isConfirm = /^(yes|yep|yeah|sure|go ahead|proceed|confirm|let's do it|ready|ok|okay|place it|place the order|place order|do it|absolutely|definitely|yea|sounds good|let's go|i'm ready)/.test(lowerText);
         const isChange = /^(change|modify|edit|update|different|swap|switch|actually|wait|hold on|let me change|i want to change|make changes|no.*change|want.*change)/.test(lowerText) || 
