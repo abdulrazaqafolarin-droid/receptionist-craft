@@ -167,9 +167,9 @@ export default function QualityReview() {
   return (
     <div className="container mx-auto p-6 max-w-6xl">
       <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2 text-foreground">Quality Review</h1>
-          <p className="text-muted-foreground">Review AI responses and flag issues for improvement</p>
-        </div>
+        <h1 className="text-4xl font-bold mb-2 text-foreground">Quality Review</h1>
+        <p className="text-muted-foreground">Review AI responses and flag issues for improvement</p>
+      </div>
 
         <div className="mb-6">
           <label className="text-sm font-medium mb-2 block text-foreground">Select Receptionist</label>
