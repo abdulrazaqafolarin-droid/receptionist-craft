@@ -576,7 +576,7 @@ interface ConversationKPIs {
 function computeConversationKPIs(history: any[], context: ConversationContext): ConversationKPIs {
   const messages = history || [];
   const userMessages = messages.filter(m => m.sender === 'user');
-  const botMessages = messages.filter(m => m.sender === 'bot');
+  const botMessages = messages.filter(m => m.sender === 'ai' || m.sender === 'bot');
   
   const botResponses = botMessages.map(m => m.message?.substring(0, 50).toLowerCase());
   const uniqueResponses = new Set(botResponses);
