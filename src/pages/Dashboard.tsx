@@ -49,19 +49,16 @@ export default function Dashboard() {
     if (recs && recs.length > 0) {
       const receptionistIds = recs.map(r => r.id);
 
-      const { count: convCount } = await supabase
-        .from("conversations")
-        .select("*", { count: "exact", head: true })
-        .in("receptionist_id", receptionistIds);
-
-      const { count: apptCount } = await supabase
-        .from("appointments")
-        .select("*", { count: "exact", head: true })
-        .in("receptionist_id", receptionistIds);
+      const [convRes, apptRes, ordersRes] = await Promise.all([
+        supabase.from("conversations").select("*", { count: "exact", head: true }).in("receptionist_id", receptionistIds),
+        supabase.from("appointments").select("*", { count: "exact", head: true }).in("receptionist_id", receptionistIds),
+        supabase.from("orders").select("*", { count: "exact", head: true }).in("receptionist_id", receptionistIds),
+      ]);
 
       setStats({
-        conversations: convCount || 0,
-        appointments: apptCount || 0,
+        conversations: convRes.count || 0,
+        appointments: apptRes.count || 0,
+        orders: ordersRes.count || 0,
         activeReceptionists: recs.filter(r => r.active).length,
       });
     }
