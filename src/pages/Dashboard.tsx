@@ -134,10 +134,11 @@ export default function Dashboard() {
         )}
 
         {/* Stats Grid */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-8 sm:mb-10" aria-label="Statistics overview">
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-8 sm:mb-10" aria-label="Statistics overview">
           {[
             { title: "Total Conversations", value: stats.conversations, icon: MessageCircle, desc: "All time", color: "from-primary to-primary-glow" },
             { title: "Appointments Booked", value: stats.appointments, icon: Calendar, desc: "All time", color: "from-success to-emerald-400" },
+            { title: "Orders", value: stats.orders, icon: ShoppingBag, desc: "All time", color: "from-violet-500 to-purple-400" },
             { title: "Active Receptionists", value: stats.activeReceptionists, icon: Zap, desc: "Ready to serve", color: "from-warning to-amber-400" },
           ].map((stat, idx) => (
             <Card 
