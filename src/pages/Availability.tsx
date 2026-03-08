@@ -169,6 +169,7 @@ export default function Availability() {
     }
 
     toast({ title: "Success", description: "Rule deleted" });
+    await regenerateSlots(selectedReceptionist);
     loadAvailability(selectedReceptionist);
   }
 
