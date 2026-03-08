@@ -570,7 +570,7 @@ export default function Services() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="product-price">Price (₦) *</Label>
+                        <Label htmlFor="product-price">Price *</Label>
                         <Input
                           id="product-price"
                           type="number"
