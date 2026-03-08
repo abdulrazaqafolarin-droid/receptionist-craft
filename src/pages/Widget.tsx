@@ -812,7 +812,7 @@ export default function Widget() {
       if (slotsData?.slots && slotsData.slots.length > 0) {
         const botMessage: Message = {
           role: "assistant",
-          content: `Perfect! Here are the available time slots for ${formattedDate}. Which time works best for you?`,
+          content: `Here are the available slots for ${formattedDate} — pick the one that works best for you!`,
           timestamp: new Date(),
           showTimeSlots: true,
           timeSlots: slotsData.slots,
