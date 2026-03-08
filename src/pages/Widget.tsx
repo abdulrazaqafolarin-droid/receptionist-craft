@@ -652,23 +652,27 @@ export default function Widget() {
   async function handleProductsConfirm(selectedProducts: Array<{ productId: string; productName: string; quantity: number; price?: number }>) {
     if (selectedProducts.length === 0) return;
     
-    // Store products in booking state
+    // Build summary for soft confirmation
     const productNames = selectedProducts.map(p => `${p.quantity}x ${p.productName}`).join(', ');
     const totalPrice = selectedProducts.reduce((sum, p) => sum + ((p.price || 0) * p.quantity), 0);
+    const priceText = totalPrice > 0 ? ` for a total of $${totalPrice.toFixed(2)}` : '';
     
+    // Store pending products but DON'T start collecting info yet
     setBookingState(prev => ({ 
       ...prev, 
+      awaitingOrderConfirmation: true,
+      pendingProducts: selectedProducts,
       productId: selectedProducts[0].productId,
       productName: productNames,
       quantity: selectedProducts.reduce((sum, p) => sum + p.quantity, 0),
       orderMode: true,
-      collectingInfo: 'name' 
+      collectingInfo: null, // NOT collecting info yet
     }));
     
-    const priceText = totalPrice > 0 ? ` (Total: $${totalPrice.toFixed(2)})` : '';
+    // Soft confirmation message — ask if they want to proceed
     const botMessage: Message = {
       role: "assistant",
-      content: `Great choice! You've selected ${productNames}${priceText}. What's your name so I can process your order?`,
+      content: `Great choices! You've selected ${productNames}${priceText}. Are you ready to go ahead with this order, or would you like to make any changes?`,
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, botMessage]);
