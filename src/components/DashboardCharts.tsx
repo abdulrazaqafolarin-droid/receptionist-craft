@@ -99,12 +99,15 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
       // Conversion funnel
       const totalConversations = conversations.length;
       const totalAppointments = appointments.length;
+      const totalOrders = ordersData.length;
       const completedAppointments = appointments.filter((a) => a.status === "completed").length;
+      const completedOrders = ordersData.filter((o) => o.status === "completed").length;
 
       setFunnel([
         { label: "Conversations", value: totalConversations, color: "hsl(var(--primary))" },
         { label: "Bookings", value: totalAppointments, color: "hsl(var(--chart-2))" },
-        { label: "Completed", value: completedAppointments, color: "hsl(var(--success))" },
+        { label: "Orders", value: totalOrders, color: "hsl(var(--chart-4, 280 65% 60%))" },
+        { label: "Completed", value: completedAppointments + completedOrders, color: "hsl(var(--success))" },
       ]);
     } catch (err) {
       console.error("Chart data error:", err);
