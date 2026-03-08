@@ -113,6 +113,7 @@ export function AppointmentCalendar({ appointments, onEdit, onRefresh }: Appoint
                         <div className="flex items-center gap-2">
                           <Badge variant={
                             apt.status === 'booked' ? 'default' : 
+                            apt.status === 'confirmed' ? 'secondary' :
                             apt.status === 'completed' ? 'secondary' : 
                             'outline'
                           }>
@@ -151,10 +152,21 @@ export function AppointmentCalendar({ appointments, onEdit, onRefresh }: Appoint
                       </div>
                       
                       <div className="space-y-2">
+                        {/* Confirmation ID */}
+                        {apt.id && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span className="font-mono bg-muted px-1.5 py-0.5 rounded">#{apt.id.slice(0, 8).toUpperCase()}</span>
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-2 text-sm">
                           <Clock className="h-4 w-4 text-muted-foreground" />
                           <span>
                             {format(new Date(apt.start_time), "h:mm a")} - {format(new Date(apt.end_time), "h:mm a")}
+                          </span>
+                          {/* Duration */}
+                          <span className="text-xs text-muted-foreground">
+                            ({Math.round((new Date(apt.end_time).getTime() - new Date(apt.start_time).getTime()) / 60000)} min)
                           </span>
                         </div>
                         
@@ -171,6 +183,13 @@ export function AppointmentCalendar({ appointments, onEdit, onRefresh }: Appoint
                             <a href={`mailto:${apt.customer_email}`} className="hover:underline">{apt.customer_email}</a>
                           </div>
                         )}
+
+                        {/* Booking source */}
+                        {apt.booking_source && (
+                          <Badge variant="outline" className="text-xs">
+                            {apt.booking_source === 'ai_receptionist' ? 'Booked via AI Chat' : apt.booking_source}
+                          </Badge>
+                        )}
                       </div>
 
                       {apt.notes && (
@@ -178,16 +197,8 @@ export function AppointmentCalendar({ appointments, onEdit, onRefresh }: Appoint
                           {apt.notes}
                         </p>
                       )}
-
-                      {apt.metadata && (
-                        <div className="mt-2 text-xs text-muted-foreground">
-                          {(apt.metadata as any).booked_via_chat && (
-                            <Badge variant="outline" className="text-xs">
-                              Booked via AI Chat
-                            </Badge>
-                          )}
-                        </div>
-                      )}
+                    </CardContent>
+                  </Card>
                     </CardContent>
                   </Card>
                 ))}
