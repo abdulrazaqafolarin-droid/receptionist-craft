@@ -296,8 +296,6 @@ export default function Widget() {
       .eq("receptionist_id", receptionistId)
       .eq("active", true);
 
-    console.log("[Widget] loadServicesAndProducts:", { count: data?.length, error });
-
     if (!error && data) {
       // Separate services and products based on duration_minutes
       // Products have duration_minutes = 0, Services have duration_minutes > 0
