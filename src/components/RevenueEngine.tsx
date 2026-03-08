@@ -54,7 +54,7 @@ export function RevenueEngine({ receptionistId, currentMode = 'booking', onModeC
         leads: data?.filter(e => e.event_type === 'lead_captured').length || 0,
         orders: data?.filter(e => e.event_type === 'order_completed').length || 0,
         totalRevenue: data?.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0) || 0,
-        currency: data?.[0]?.currency || 'NGN'
+        currency: data?.[0]?.currency || 'USD'
       };
 
       setConversionStats(stats);
