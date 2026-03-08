@@ -774,12 +774,8 @@ export default function Widget() {
     }));
     
     // Soft confirmation message — ask if they want to proceed
-    const botMessage: Message = {
-      role: "assistant",
-      content: `Great choices! You've selected ${productNames}${priceText}. Are you ready to go ahead with this order, or would you like to make any changes?`,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, botMessage]);
+    const botContent = `Great choices! You've selected ${productNames}${priceText}. Are you ready to go ahead with this order, or would you like to make any changes?`;
+    addBotMessage(botContent);
   }
 
   async function handleDateSelect(date: Date) {
