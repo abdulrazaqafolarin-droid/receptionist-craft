@@ -475,7 +475,7 @@ export default function Orders() {
                       <div key={item.id} className="flex justify-between text-sm">
                         <span>{item.product_name} x{item.quantity}</span>
                         {item.unit_price && (
-                          <span className="text-muted-foreground">${(item.unit_price * item.quantity).toFixed(2)}</span>
+                          <span className="text-muted-foreground">₦{(item.unit_price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         )}
                       </div>
                     ))}
