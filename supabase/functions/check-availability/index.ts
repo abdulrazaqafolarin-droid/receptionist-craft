@@ -100,6 +100,18 @@ serve(async (req) => {
 
     console.log(`[check-availability] Found ${appointments?.length || 0} existing appointments`);
 
+    // Fetch manually blocked slots from appointment_slots table
+    // (e.g. owner blocked via calendar UI without creating an availability_exception)
+    const { data: blockedSlots } = await supabase
+      .from("appointment_slots")
+      .select("start_time, end_time")
+      .eq("receptionist_id", receptionistId)
+      .eq("is_available", false)
+      .gte("start_time", searchStart.toISOString())
+      .lt("end_time", searchEnd.toISOString());
+
+    console.log(`[check-availability] Found ${blockedSlots?.length || 0} manually blocked slots`);
+
     // Generate candidate slots
     // Slots are generated in the BUSINESS timezone (from availability_rules)
     // and returned as UTC ISO strings. The frontend converts to customer's local time.
@@ -166,7 +178,14 @@ serve(async (req) => {
             return !(slotEndWithBuffer <= apptStart || slotStartWithBuffer >= apptEnd);
           });
 
-          if (!hasCollision) {
+          // Check manually blocked slots from appointment_slots table
+          const isManuallyBlocked = (blockedSlots || []).some((bs: any) => {
+            const bsStart = new Date(bs.start_time);
+            const bsEnd = new Date(bs.end_time);
+            return !(slotEnd <= bsStart || slotStart >= bsEnd);
+          });
+
+          if (!hasCollision && !isManuallyBlocked) {
             // Return ISO strings (UTC) — frontend converts to customer's local timezone
             slots.push({
               start: slotStart.toISOString(),
