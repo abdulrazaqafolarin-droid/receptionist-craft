@@ -482,7 +482,7 @@ export default function Orders() {
                     {selectedOrder.total_amount && (
                       <div className="flex justify-between font-medium pt-2 border-t">
                         <span>Total</span>
-                        <span>${selectedOrder.total_amount.toFixed(2)}</span>
+                        <span>₦{selectedOrder.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     )}
                   </div>
