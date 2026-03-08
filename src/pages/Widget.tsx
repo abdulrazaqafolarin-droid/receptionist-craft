@@ -970,9 +970,10 @@ export default function Widget() {
   async function handleRefreshConversation() {
     if (!receptionistId) return;
     
-    // Generate new session ID for a clean slate
+    // Generate new session ID with fresh timestamp
     const newSid = crypto.randomUUID();
     localStorage.setItem(`widget_session_${receptionistId}`, newSid);
+    localStorage.setItem(`widget_session_ts_${receptionistId}`, Date.now().toString());
     setSessionId(newSid);
     
     // Reset local booking state
