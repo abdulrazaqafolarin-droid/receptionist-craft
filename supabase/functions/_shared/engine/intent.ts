@@ -198,7 +198,7 @@ export function detectIntent(
   }
   
   // P9: Ordering (but not if it mentions booking keywords)
-  if (capabilities.can_order && PATTERNS.order.test(msg) && !PATTERNS.book.test(msg)) {
+  if (capabilities.can_order && PATTERNS.order.test(msg) && !PATTERNS.book_explicit.test(msg)) {
     const alreadyInOrdering = state?.task_type === 'ordering';
     return {
       intent: 'order',
