@@ -113,6 +113,16 @@ export function generateInstruction(
     return instruction;
   }
   
+  // ─────────────────────────────────────────────────────────────────────────
+  // FLOW OVERRIDE NOTICE
+  // If booking just overrode another flow, acknowledge it briefly
+  // ─────────────────────────────────────────────────────────────────────────
+  if (state.task_type === 'booking' && intent.intent === 'book' && intent.should_cancel_task) {
+    instruction.forbidden.push('redirect_to_previous_flow');
+    instruction.forbidden.push('mention_previous_order');
+    instruction.forbidden.push('ask_to_continue_previous_task');
+  }
+  
   // BOOKING FLOW
   if (state.task_type === 'booking') {
     switch (requirements.next_required) {
