@@ -6,6 +6,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Zap, Bell, User, Lock, CreditCard, Palette, Globe } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TIMEZONE_OPTIONS, detectBrowserTimezone, findClosestTimezone } from "@/lib/timezones";
 import { Badge } from "@/components/ui/badge";
 import { notify } from "@/lib/notify";
 import { toast } from "sonner";
