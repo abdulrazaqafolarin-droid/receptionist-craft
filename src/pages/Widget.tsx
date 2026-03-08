@@ -77,8 +77,21 @@ export default function Widget() {
   const [honeypotValue, setHoneypotValue] = useState("");
   const formLoadTimeRef = useRef<number>(Date.now());
 
-  // Persist a message to chat_messages so conversation history restoration works
-  async function persistMessage(sender: 'user' | 'bot', text: string) {
+  // Helper: add a bot message to UI and persist to DB
+  function addBotMessage(content: string, extras?: Partial<Message>) {
+    const msg: Message = { role: "assistant", content, timestamp: new Date(), ...extras };
+    setMessages(prev => [...prev, msg]);
+    persistMessage('bot', content);
+    return msg;
+  }
+
+  // Helper: add a user message to UI and persist to DB
+  function addUserMessage(content: string) {
+    const msg: Message = { role: "user", content, timestamp: new Date() };
+    setMessages(prev => [...prev, msg]);
+    persistMessage('user', content);
+    return msg;
+  }
     if (!receptionistId || !sessionId || !text?.trim()) return;
     try {
       await supabase.from('chat_messages').insert({
