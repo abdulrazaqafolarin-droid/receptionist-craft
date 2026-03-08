@@ -207,7 +207,6 @@ export default function Notifications() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
       
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">

@@ -81,6 +81,17 @@ export default function Step3Availability() {
       const { error } = await supabase.from("availability_rules").insert(rulesToInsert);
       if (error) throw error;
 
+      // Propagate timezone to receptionist record so check-availability uses it
+      if (receptionistId) {
+        await supabase.from("receptionists").update({ timezone }).eq("id", receptionistId);
+      }
+
+      // Also propagate to owner profile
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("profiles").update({ timezone }).eq("id", user.id);
+      }
+
       toast.success("Availability saved!");
       setStep(4);
     } catch (error: any) {
