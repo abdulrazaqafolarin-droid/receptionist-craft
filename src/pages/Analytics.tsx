@@ -138,10 +138,7 @@ export default function Analytics() {
 
   const formatPercent = (value: number) => `${(value * 100).toFixed(1)}%`;
   const formatNumber = (value: number | null) => value != null ? value.toFixed(2) : "—";
-  const formatCurrency = (amount: number, currency: string) => {
-    const symbols: Record<string, string> = { NGN: '₦', USD: '$', EUR: '€', GBP: '£' };
-    return `${symbols[currency] || currency}${amount.toLocaleString()}`;
-  };
+  const formatCurrency = (amount: number, currency: string) => fmtCurrency(amount, currency);
 
   const conversationTrendData = analytics
     ? Object.entries(analytics.conversation_metrics.conversations_per_day)
