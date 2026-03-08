@@ -465,6 +465,5 @@ export default function KBRewrite() {
           )}
         </div>
       </div>
-    </div>
   );
 }
