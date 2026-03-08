@@ -182,6 +182,11 @@ export function isMessageOnTopic(message: string, task: ActiveTask): {
     if (orderingPatterns.test(lowerMsg) || contactPatterns.test(lowerMsg) || confirmPatterns.test(lowerMsg)) {
       return { onTopic: true, confidence: 0.95, suggestedAction: 'continue' };
     }
+    // Casual availability questions mid-order → answer briefly, return to order
+    const casualAvailability = /when\s*can\s*(i|we)|do\s*you\s*have\s*(any\s*)?(availability|time|opening|slot|free)|is\s*there\s*(a\s*|an\s*)?(slot|time|opening|spot)\s*(available|free|open)|what\s*(days?|times?)\s*(are|do)\s*(you|the)\s*.*(available|open|free)/i;
+    if (casualAvailability.test(lowerMsg)) {
+      return { onTopic: false, confidence: 0.8, suggestedAction: 'answer_briefly' };
+    }
   }
   
   // Check for FAQ/info requests mid-flow
