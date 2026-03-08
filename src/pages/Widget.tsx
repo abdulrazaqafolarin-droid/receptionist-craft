@@ -456,20 +456,7 @@ export default function Widget() {
         };
         
         // Reset booking state after successful booking
-        setBookingState({
-          serviceId: null,
-          serviceName: null,
-          date: null,
-          timeSlot: null,
-          customerName: null,
-          customerEmail: null,
-          customerPhone: null,
-          collectingInfo: null,
-          productId: null,
-          productName: null,
-          quantity: 1,
-          orderMode: false,
-        });
+        setBookingState({...defaultBookingState});
       }
       
       // Check if order was created by the backend
