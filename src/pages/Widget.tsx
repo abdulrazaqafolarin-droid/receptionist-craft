@@ -61,7 +61,32 @@ export default function Widget() {
     awaitingOrderConfirmation: false as boolean,
     pendingProducts: [] as Array<{ productId: string; productName: string; quantity: number; price?: number }>,
   };
+  // Persist booking state to localStorage so mid-booking flows survive page close
+  const BOOKING_STATE_KEY = `widget_booking_state_${receptionistId}`;
+  
+  function loadPersistedBookingState() {
+    try {
+      const raw = localStorage.getItem(BOOKING_STATE_KEY);
+      if (!raw) return defaultBookingState;
+      const parsed = JSON.parse(raw);
+      // Rehydrate date from ISO string
+      if (parsed.date) parsed.date = new Date(parsed.date);
+      return { ...defaultBookingState, ...parsed };
+    } catch {
+      return defaultBookingState;
+    }
+  }
+
   const [bookingState, setBookingState] = useState(defaultBookingState);
+  
+  // Whenever bookingState changes, persist it
+  useEffect(() => {
+    if (!receptionistId) return;
+    try {
+      localStorage.setItem(BOOKING_STATE_KEY, JSON.stringify(bookingState));
+    } catch { /* ignore quota errors */ }
+  }, [bookingState, receptionistId]);
+
   const [widgetColors, setWidgetColors] = useState({
     primaryColor: "#8B5CF6",
     secondaryColor: "#A78BFA",
