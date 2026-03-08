@@ -77,6 +77,39 @@ export default function Widget() {
   const [honeypotValue, setHoneypotValue] = useState("");
   const formLoadTimeRef = useRef<number>(Date.now());
 
+  // Persist a message to chat_messages so conversation history restoration works
+  async function persistMessage(sender: 'user' | 'bot', text: string) {
+    if (!receptionistId || !sessionId || !text?.trim()) return;
+    try {
+      await supabase.from('chat_messages').insert({
+        receptionist_id: receptionistId,
+        session_id: sessionId,
+        user_id: sessionId,
+        sender,
+        message: text,
+        metadata: { source: 'widget_client', timestamp: new Date().toISOString() },
+      }).setHeader('x-session-id', sessionId);
+    } catch (e) {
+      console.warn('Failed to persist message:', e);
+    }
+  }
+
+  // Helper: add a bot message to UI and persist to DB
+  function addBotMessage(content: string, extras?: Partial<Message>) {
+    const msg: Message = { role: "assistant", content, timestamp: new Date(), ...extras };
+    setMessages(prev => [...prev, msg]);
+    persistMessage('bot', content);
+    return msg;
+  }
+
+  // Helper: add a user message to UI and persist to DB
+  function addUserMessage(content: string) {
+    const msg: Message = { role: "user", content, timestamp: new Date() };
+    setMessages(prev => [...prev, msg]);
+    persistMessage('user', content);
+    return msg;
+  }
+
   // Initialize persistent session ID and check for existing conversation
   useEffect(() => {
     if (!receptionistId) return;
@@ -358,12 +391,7 @@ export default function Widget() {
       
       if (bookingIntentMatch) {
         const matchedService = matchServiceFromText(textToSend);
-        const userMessage: Message = {
-          role: "user",
-          content: textToSend,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, userMessage]);
+        addUserMessage(textToSend);
         setInput("");
         
         if (matchedService) {
@@ -380,12 +408,7 @@ export default function Widget() {
       for (const { pattern, action } of QUICK_ACTION_INTENTS) {
         if (action === 'book_appointment') continue; // already handled above
         if (pattern.test(lowerText)) {
-          const userMessage: Message = {
-            role: "user",
-            content: textToSend,
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, userMessage]);
+          addUserMessage(textToSend);
           setInput("");
           await handleQuickReply(action);
           return;
@@ -409,8 +432,9 @@ export default function Widget() {
     }
 
     try {
-      // Handle soft order confirmation step
+      // Handle soft order confirmation step (client-side flow — persist user message)
       if (bookingState.awaitingOrderConfirmation) {
+        persistMessage('user', textToSend);
         const lowerText = textToSend.toLowerCase().trim();
         const isConfirm = /^(yes|yep|yeah|sure|go ahead|proceed|confirm|let's do it|ready|ok|okay|place it|place the order|place order|do it|absolutely|definitely|yea|sounds good|let's go|i'm ready)/.test(lowerText);
         const isChange = /^(change|modify|edit|update|different|swap|switch|actually|wait|hold on|let me change|i want to change|make changes|no.*change|want.*change)/.test(lowerText) || 
@@ -425,12 +449,7 @@ export default function Widget() {
             collectingInfo: 'name',
           }));
           
-          const botMessage: Message = {
-            role: "assistant",
-            content: "Perfect, let's get your order placed! What's your name?",
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, botMessage]);
+          addBotMessage("Perfect, let's get your order placed! What's your name?");
           setLoading(false);
           return;
         } else if (isChange) {
@@ -445,67 +464,42 @@ export default function Widget() {
             orderMode: false,
           }));
           
-          const botMessage: Message = {
-            role: "assistant",
-            content: "No problem at all! Here are our products again — take your time and pick whatever you'd like.",
-            timestamp: new Date(),
-            showProducts: true,
-          };
-          setMessages(prev => [...prev, botMessage]);
+          addBotMessage("No problem at all! Here are our products again — take your time and pick whatever you'd like.", { showProducts: true });
           setLoading(false);
           return;
         } else if (isCancel) {
           // User not ready — back off completely
           setBookingState({...defaultBookingState});
-          
-          const botMessage: Message = {
-            role: "assistant",
-            content: "No worries at all! Feel free to browse or ask me anything whenever you're ready. I'm here to help! 😊",
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, botMessage]);
+          addBotMessage("No worries at all! Feel free to browse or ask me anything whenever you're ready. I'm here to help! 😊");
           setLoading(false);
           return;
         }
         // If none matched, treat as ambiguous — ask again gently
-        const botMessage: Message = {
-          role: "assistant",
-          content: "Just to be sure — would you like to go ahead with this order, make any changes to your selection, or take some more time to browse?",
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage("Just to be sure — would you like to go ahead with this order, make any changes to your selection, or take some more time to browse?");
         setLoading(false);
         return;
       }
 
-      // Handle booking info collection
+      // Handle booking info collection (client-side flow — persist user message)
       if (bookingState.collectingInfo === 'name') {
+        persistMessage('user', textToSend);
         // User provided their name - validate it's a reasonable name
         const name = textToSend.trim();
         if (name.length < 2) {
-          const botMessage: Message = {
-            role: "assistant",
-            content: "I didn't quite catch that. Could you please provide your full name?",
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, botMessage]);
+          addBotMessage("I didn't quite catch that. Could you please provide your full name?");
           setLoading(false);
           return;
         }
         
         setBookingState(prev => ({ ...prev, customerName: name, collectingInfo: 'contact' }));
         
-        const botMessage: Message = {
-          role: "assistant",
-          content: `Thank you, ${name}! And what's the best way to reach you? You can share your email address or phone number.`,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage(`Thank you, ${name}! And what's the best way to reach you? You can share your email address or phone number.`);
         setLoading(false);
         return;
       }
 
       if (bookingState.collectingInfo === 'contact') {
+        persistMessage('user', textToSend);
         // User provided contact info - complete the booking or order
         const contactInfo = textToSend.trim();
         const isEmail = contactInfo.includes('@');
@@ -513,12 +507,7 @@ export default function Widget() {
         
         // Validate contact info
         if (!isEmail && !isPhone) {
-          const botMessage: Message = {
-            role: "assistant",
-            content: "I couldn't recognize that as an email or phone number. Could you please provide a valid email address (e.g., you@example.com) or phone number?",
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, botMessage]);
+          addBotMessage("I couldn't recognize that as an email or phone number. Could you please provide a valid email address (e.g., you@example.com) or phone number?");
           setLoading(false);
           return;
         }
@@ -547,6 +536,7 @@ export default function Widget() {
           };
           
           setMessages(prev => [...prev, orderConfirmationMessage]);
+          persistMessage('bot', `Wonderful! Your order has been placed successfully. Here are the details:`);
           
           // Reset booking state
           setBookingState({...defaultBookingState});
@@ -590,6 +580,7 @@ export default function Widget() {
           };
           
           setMessages(prev => [...prev, confirmationMessage]);
+          persistMessage('bot', `Your appointment has been confirmed! Here are your booking details:`);
           
           // Reset booking state
           setBookingState({...defaultBookingState});
@@ -598,12 +589,7 @@ export default function Widget() {
           return;
         } catch (bookErr: any) {
           console.error("Booking error:", bookErr);
-          const errorMessage: Message = {
-            role: "assistant",
-            content: "I apologize, but I encountered an issue while confirming your appointment. Please try again, or feel free to contact us directly for assistance.",
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, errorMessage]);
+          addBotMessage("I apologize, but I encountered an issue while confirming your appointment. Please try again, or feel free to contact us directly for assistance.");
           setLoading(false);
           return;
         }
@@ -756,22 +742,8 @@ export default function Widget() {
 
   async function handleServiceSelect(serviceId: string, serviceName: string) {
     setBookingState(prev => ({ ...prev, serviceId, serviceName, orderMode: false }));
-    
-    // Add user message and bot response asking for date
-    const userMessage: Message = {
-      role: "user",
-      content: `I'd like to book ${serviceName}`,
-      timestamp: new Date(),
-    };
-    
-    const botMessage: Message = {
-      role: "assistant",
-      content: `Great choice! Go ahead and pick a date that works for you.`,
-      timestamp: new Date(),
-      showDatePicker: true,
-    };
-    
-    setMessages(prev => [...prev, userMessage, botMessage]);
+    addUserMessage(`I'd like to book ${serviceName}`);
+    addBotMessage(`Great choice! Go ahead and pick a date that works for you.`, { showDatePicker: true });
   }
 
   async function handleProductsConfirm(selectedProducts: Array<{ productId: string; productName: string; quantity: number; price?: number }>) {
@@ -795,12 +767,8 @@ export default function Widget() {
     }));
     
     // Soft confirmation message — ask if they want to proceed
-    const botMessage: Message = {
-      role: "assistant",
-      content: `Great choices! You've selected ${productNames}${priceText}. Are you ready to go ahead with this order, or would you like to make any changes?`,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, botMessage]);
+    const botContent = `Great choices! You've selected ${productNames}${priceText}. Are you ready to go ahead with this order, or would you like to make any changes?`;
+    addBotMessage(botContent);
   }
 
   async function handleDateSelect(date: Date) {
@@ -810,13 +778,7 @@ export default function Widget() {
     const dateStr = format(date, "yyyy-MM-dd");
     const formattedDate = format(date, "EEEE, MMMM d");
     
-    // Add user message
-    const userMessage: Message = {
-      role: "user",
-      content: `I'd like an appointment on ${formattedDate}`,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, userMessage]);
+    addUserMessage(`I'd like an appointment on ${formattedDate}`);
     setLoading(true);
     
     try {
@@ -831,42 +793,21 @@ export default function Widget() {
       });
       
       if (slotsData?.slots && slotsData.slots.length > 0) {
-        const botMessage: Message = {
-          role: "assistant",
-          content: `Here are the available slots for ${formattedDate} — pick the one that works best for you!`,
-          timestamp: new Date(),
-          showTimeSlots: true,
-          timeSlots: slotsData.slots,
-        };
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage(`Here are the available slots for ${formattedDate} — pick the one that works best for you!`, { showTimeSlots: true, timeSlots: slotsData.slots });
       } else {
-        const botMessage: Message = {
-          role: "assistant",
-          content: `I'm sorry, but there are no available time slots on ${formattedDate}. Would you like to try a different date?`,
-          timestamp: new Date(),
-          showDatePicker: true,
-        };
-        // Reset date so user can pick another
         setBookingState(prev => ({ ...prev, date: null }));
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage(`I'm sorry, but there are no available time slots on ${formattedDate}. Would you like to try a different date?`, { showDatePicker: true });
       }
     } catch (error) {
       console.error("Error fetching availability:", error);
-      const botMessage: Message = {
-        role: "assistant",
-        content: "I had trouble checking availability. Please try selecting a date again.",
-        timestamp: new Date(),
-        showDatePicker: true,
-      };
       setBookingState(prev => ({ ...prev, date: null }));
-      setMessages(prev => [...prev, botMessage]);
+      addBotMessage("I had trouble checking availability. Please try selecting a date again.", { showDatePicker: true });
     } finally {
       setLoading(false);
     }
   }
 
   async function handleTimeSlotSelect(slot: any) {
-    // Handle both "start" and "startTime" property names for compatibility
     const startTime = slot.startTime || slot.start;
     setBookingState(prev => ({ 
       ...prev, 
@@ -877,19 +818,8 @@ export default function Widget() {
     const formattedTime = format(new Date(startTime), "h:mm a");
     const formattedDate = bookingState.date ? format(bookingState.date, "EEEE, MMMM d") : "";
     
-    // Add user message
-    const userMessage: Message = {
-      role: "user",
-      content: `I'll take the ${formattedTime} slot`,
-      timestamp: new Date(),
-    };
-    
-    const botMessage: Message = {
-      role: "assistant",
-      content: `Excellent! You've selected ${bookingState.serviceName} on ${formattedDate} at ${formattedTime}.\n\nTo complete your booking, may I have your name please?`,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, userMessage, botMessage]);
+    addUserMessage(`I'll take the ${formattedTime} slot`);
+    addBotMessage(`Excellent! You've selected ${bookingState.serviceName} on ${formattedDate} at ${formattedTime}.\n\nTo complete your booking, may I have your name please?`);
   }
 
   async function handleQuickReply(value: string) {
@@ -898,50 +828,29 @@ export default function Widget() {
         // Only one service — skip selection, go straight to calendar
         await handleServiceSelect(services[0].id, services[0].name);
       } else if (services.length > 1) {
-        const botMessage: Message = {
-          role: "assistant",
-          content: "Which service would you like to book? Just tap one below!",
-          timestamp: new Date(),
-          showServices: true,
-        };
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage("Which service would you like to book? Just tap one below!", { showServices: true });
       } else {
         await sendMessage("I'd like to book an appointment");
       }
     } else if (value === "view_services") {
-      // Show services list for information only
       if (services.length > 0) {
         const serviceList = services.map(s => 
           `• **${s.name}**${s.duration_minutes ? ` (${s.duration_minutes} min)` : ''}${s.price ? ` - $${s.price}` : ''}`
         ).join('\n');
-        const botMessage: Message = {
-          role: "assistant",
-          content: `Here are our available services:\n\n${serviceList}\n\nWould you like to book any of these?`,
-          timestamp: new Date(),
-          showServices: true,
-        };
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage(`Here are our available services:\n\n${serviceList}\n\nWould you like to book any of these?`, { showServices: true });
       } else {
         await sendMessage("What services do you offer?");
       }
     } else if (value === "view_products") {
-      // Show products directly
       if (products.length > 0) {
         const productList = products.map(p => 
           `• **${p.name}**${p.price ? ` - $${p.price}` : ''}`
         ).join('\n');
-        const botMessage: Message = {
-          role: "assistant",
-          content: `Here are our available products:\n\n${productList}\n\nWould you like to order any of these?`,
-          timestamp: new Date(),
-          showProducts: true,
-        };
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage(`Here are our available products:\n\n${productList}\n\nWould you like to order any of these?`, { showProducts: true });
       } else {
         await sendMessage("What products do you have?");
       }
     } else if (value === "contact") {
-      // Show contact information directly
       const contactInfo = receptionist?.business_info as any;
       let contactMessage = "Here's how you can reach us:\n\n";
       
@@ -964,12 +873,7 @@ export default function Widget() {
         contactMessage += "\nIs there anything else I can help you with?";
       }
       
-      const botMessage: Message = {
-        role: "assistant",
-        content: contactMessage,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, botMessage]);
+      addBotMessage(contactMessage);
     } else if (value === "view_prices") {
       await sendMessage("What are your prices?");
     } else {
