@@ -50,7 +50,9 @@ const NAME_BLOCKLIST = new Set([
   'looking', 'waiting', 'trying', 'going', 'coming', 'leaving', 'calling',
   'booking', 'ordering', 'buying', 'getting', 'having', 'making', 'taking',
   'running', 'sitting', 'standing', 'walking', 'talking', 'asking', 'helping',
-  'wondering', 'thinking', 'feeling', 'working', 'living', 'doing',
+  'wondering', 'thinking', 'feeling', 'working', 'living', 'doing', 'browse',
+  'browsing', 'like', 'sorry', 'want', 'need', 'know', 'think', 'see',
+  'look', 'tell', 'give', 'take', 'come', 'make', 'find', 'keep',
   // Common filler / function words
   'in', 'so', 'much', 'very', 'really', 'quite', 'too', 'also', 'just',
   'not', 'but', 'and', 'for', 'with', 'about', 'here', 'there', 'back',
@@ -62,13 +64,36 @@ const NAME_BLOCKLIST = new Set([
   'available', 'open', 'closed', 'free', 'busy', 'ready',
   // Pronouns & misc
   'someone', 'anyone', 'everyone', 'nobody', 'something', 'anything',
-  'everything', 'nothing', 'done', 'again', 'new', 'old', 'sorry',
+  'everything', 'nothing', 'done', 'again', 'new', 'old',
   // Common short words that look like names
   'sir', 'mam', 'miss', 'mrs', 'dear',
   // Business names that could leak
   'nazdac', 'tess',
   'specifically', 'definitely', 'actually', 'basically', 'honestly',
 ]);
+
+/**
+ * Patterns that indicate the input is a SENTENCE, not a name.
+ * If ANY of these match, the entire input is rejected as a name.
+ */
+const SENTENCE_PATTERNS: RegExp[] = [
+  // Contains common verbs (conjugated)
+  /\b(i'll|i'd|i'm|i've|i am|i was|i will|i would|i could|i should|i might|i can|i want|i need|i think|i know|i see|i hope|i wish|i like|i love|i hate|i don't|i didn't|i won't|i can't|i couldn't|i shouldn't|i wouldn't)\b/i,
+  // Contains "to + verb" patterns
+  /\bto\s+(browse|order|book|buy|get|see|check|look|find|make|take|have|know|ask|try|go|come|leave|start|stop|cancel)\b/i,
+  // Contains apologies or hedging
+  /\b(sorry|apolog|excuse me|pardon|forgive|my bad|oops|whoops)\b/i,
+  // Contains question words in question context
+  /\b(can you|could you|would you|will you|do you|is there|are there|what is|how do|how can)\b/i,
+  // Contains conjunctions suggesting a sentence
+  /\b(because|although|however|therefore|instead|otherwise|meanwhile|furthermore)\b/i,
+  // Starts with a verb or action word
+  /^(let|let's|please|just|maybe|perhaps|actually|honestly|basically|well|so|oh|um|uh|hmm|ah)\b/i,
+  // Contains "like to" pattern (e.g., "I'll like to browse")
+  /\blike\s+to\b/i,
+  // Contains obvious non-name phrases
+  /\b(never\s*mind|forget\s*it|hold\s*on|wait\s*a|not\s+sure|no\s+thanks|no\s+thank)\b/i,
+];
 
 /**
  * Validates a candidate name extracted by regex.
@@ -108,6 +133,40 @@ export function validateCandidateName(candidate: string | undefined | null): str
   // Title-case the result
   const formatted = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
   return formatted;
+}
+
+/**
+ * Validates a raw user input as a name (used when the AI is explicitly asking for a name).
+ * This is stricter than extractValidatedName because the ENTIRE input should be a name,
+ * not just contain a name pattern.
+ *
+ * Returns the cleaned name if valid, or null if rejected.
+ */
+export function validateDirectNameInput(input: string): string | null {
+  if (!input) return null;
+  const trimmed = input.trim();
+
+  // Reject if it looks like a sentence (contains verbs, apologies, etc.)
+  for (const pattern of SENTENCE_PATTERNS) {
+    if (pattern.test(trimmed)) return null;
+  }
+
+  // Reject if more than 3 words (no name is longer than 3 words)
+  const words = trimmed.split(/\s+/);
+  if (words.length > 3) return null;
+
+  // If 3 words, only allow if all look like name parts (e.g., "Mary Jane Watson")
+  if (words.length === 3) {
+    for (const word of words) {
+      if (!/^[A-Za-z][A-Za-z'-]*$/.test(word)) return null;
+      if (word.length < 2 || word.length > 15) return null;
+      if (NAME_BLOCKLIST.has(word.toLowerCase())) return null;
+    }
+    return words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  }
+
+  // For 1-2 words, use the existing validator
+  return validateCandidateName(trimmed);
 }
 
 /**
