@@ -788,7 +788,10 @@ export default function Widget() {
       const nextDay = new Date(date);
       nextDay.setDate(nextDay.getDate() + 1);
       const endDateStr = format(nextDay, "yyyy-MM-dd");
-      const { data: slotsData } = await supabase.functions.invoke("check-availability", {
+      
+      console.log("[Widget] Fetching availability:", { receptionistId, serviceId: bookingState.serviceId, startDate: dateStr, endDate: endDateStr });
+      
+      const { data: slotsData, error: slotsError } = await supabase.functions.invoke("check-availability", {
         body: {
           receptionistId,
           serviceId: bookingState.serviceId,
@@ -798,14 +801,28 @@ export default function Widget() {
         }
       });
       
-      if (slotsData?.slots && slotsData.slots.length > 0) {
-        addBotMessage(`Here are the available slots for ${formattedDate} — pick the one that works best for you!`, { showTimeSlots: true, timeSlots: slotsData.slots });
+      console.log("[Widget] check-availability response:", { slotsData, slotsError });
+      
+      // Handle edge function error
+      if (slotsError) {
+        console.error("[Widget] check-availability error:", slotsError);
+        setBookingState(prev => ({ ...prev, date: null }));
+        addBotMessage("I had trouble checking availability. Please try selecting a date again.", { showDatePicker: true });
+        return;
+      }
+
+      // Extract slots - handle both direct response and nested data
+      const slots = slotsData?.slots || [];
+      console.log("[Widget] Extracted slots count:", slots.length);
+      
+      if (slots.length > 0) {
+        addBotMessage(`Here are the available slots for ${formattedDate} — pick the one that works best for you!`, { showTimeSlots: true, timeSlots: slots });
       } else {
         setBookingState(prev => ({ ...prev, date: null }));
         addBotMessage(`I'm sorry, but there are no available time slots on ${formattedDate}. Would you like to try a different date?`, { showDatePicker: true });
       }
     } catch (error) {
-      console.error("Error fetching availability:", error);
+      console.error("[Widget] Error fetching availability:", error);
       setBookingState(prev => ({ ...prev, date: null }));
       addBotMessage("I had trouble checking availability. Please try selecting a date again.", { showDatePicker: true });
     } finally {
