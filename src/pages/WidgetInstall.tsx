@@ -114,7 +114,7 @@ export function AIReceptionistWidget() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
+      
       
       <div className="container mx-auto p-6 max-w-6xl">
         <div className="mb-8">
