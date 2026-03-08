@@ -204,6 +204,16 @@ export function buildPromptBlock(
 ): string {
   const lines: string[] = [];
   
+  // Determine which UI widgets are currently being shown
+  const uiHints = generateUIHints(state);
+  const activeWidgets: string[] = [];
+  if (uiHints.show_services) activeWidgets.push('Service Selector');
+  if (uiHints.show_products) activeWidgets.push('Product Selector');
+  if (uiHints.show_calendar) activeWidgets.push('Calendar / Date Picker');
+  if (uiHints.show_time_slots) activeWidgets.push('Time Slot Picker');
+  if (uiHints.show_confirmation) activeWidgets.push('Booking Confirmation Card');
+  if (uiHints.show_order_confirmation) activeWidgets.push('Order Confirmation Card');
+  
   lines.push(`
 # 🔒 EXECUTION GOVERNOR (STRICT CONTROL)
 
@@ -235,6 +245,31 @@ ${instruction.forbidden.map(a => `• ${a}`).join('\n')}
 • Summarize more than once
 • Be robotic or repetitive
 • Use phrases like "Certainly!", "Of course!", "I'd be happy to!"
+
+${activeWidgets.length > 0 ? `
+## 🖥️ UI WIDGET ACTIVE — TEXT DEDUPLICATION RULE (CRITICAL)
+
+The following interactive UI widget(s) are being displayed alongside your text response:
+${activeWidgets.map(w => `• ${w}`).join('\n')}
+
+**NON-NEGOTIABLE RULES when a UI widget is showing:**
+1. Your text response MUST be SHORT (1-2 sentences max) — the widget does the heavy lifting
+2. NEVER list, enumerate, or describe the items/options that the widget already displays
+3. NEVER repeat service names, product names, dates, times, or prices that the widget shows
+4. Instead, write a brief, friendly prompt directing the user to interact with the widget
+
+**Examples of CORRECT short responses when widgets are active:**
+- Service Selector: "Here are our available services — just tap the one you'd like!"
+- Product Selector: "Here are our products — pick whatever catches your eye!"
+- Calendar: "Go ahead and choose a date that works best for you!"
+- Time Slots: "Here are the available time slots — tap the one you prefer!"
+- Confirmation: "Here's your summary — please confirm if everything looks good!"
+
+**Examples of WRONG responses (NEVER DO THIS):**
+- ❌ "We offer Haircut ($30, 30 min), Coloring ($80, 60 min)..." (widget already shows this)
+- ❌ "Available times are 9:00 AM, 10:00 AM, 11:00 AM..." (widget already shows this)
+- ❌ Long paragraph describing products when the product selector is visible
+` : ''}
 
 ## 📜 CORE RULES
 
