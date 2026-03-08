@@ -580,7 +580,7 @@ export default function Widget() {
           };
           
           setMessages(prev => [...prev, confirmationMessage]);
-          persistMessage('bot', `Your appointment has been confirmed! Here are your booking details:`);
+          persistMessage('ai', `Your appointment has been confirmed! Here are your booking details:`);
           
           // Reset booking state
           setBookingState({...defaultBookingState});
