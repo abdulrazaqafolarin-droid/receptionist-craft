@@ -794,20 +794,7 @@ export default function Widget() {
     setSessionId(newSid);
     
     // Reset local booking state
-    setBookingState({
-      serviceId: null,
-      serviceName: null,
-      date: null,
-      timeSlot: null,
-      customerName: null,
-      customerEmail: null,
-      customerPhone: null,
-      collectingInfo: null,
-      productId: null,
-      productName: null,
-      quantity: 1,
-      orderMode: false,
-    });
+    setBookingState({...defaultBookingState});
     
     // Reset session tracking
     setHasExistingSession(false);
