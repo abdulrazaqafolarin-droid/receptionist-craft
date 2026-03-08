@@ -815,7 +815,6 @@ export default function Widget() {
   }
 
   async function handleTimeSlotSelect(slot: any) {
-    // Handle both "start" and "startTime" property names for compatibility
     const startTime = slot.startTime || slot.start;
     setBookingState(prev => ({ 
       ...prev, 
@@ -826,19 +825,8 @@ export default function Widget() {
     const formattedTime = format(new Date(startTime), "h:mm a");
     const formattedDate = bookingState.date ? format(bookingState.date, "EEEE, MMMM d") : "";
     
-    // Add user message
-    const userMessage: Message = {
-      role: "user",
-      content: `I'll take the ${formattedTime} slot`,
-      timestamp: new Date(),
-    };
-    
-    const botMessage: Message = {
-      role: "assistant",
-      content: `Excellent! You've selected ${bookingState.serviceName} on ${formattedDate} at ${formattedTime}.\n\nTo complete your booking, may I have your name please?`,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, userMessage, botMessage]);
+    addUserMessage(`I'll take the ${formattedTime} slot`);
+    addBotMessage(`Excellent! You've selected ${bookingState.serviceName} on ${formattedDate} at ${formattedTime}.\n\nTo complete your booking, may I have your name please?`);
   }
 
   async function handleQuickReply(value: string) {
