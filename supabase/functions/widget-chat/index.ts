@@ -1995,7 +1995,7 @@ serve(async (req) => {
       receptionist_id: receptionistId,
       session_id: sessionId,
       user_id: sessionId,
-      sender: "bot",
+      sender: "ai",
       message: reply,
       metadata: { 
         timestamp: new Date().toISOString(), 
