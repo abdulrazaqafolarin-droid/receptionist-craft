@@ -473,13 +473,7 @@ export default function Widget() {
             orderMode: false,
           }));
           
-          const botMessage: Message = {
-            role: "assistant",
-            content: "No problem at all! Here are our products again — take your time and pick whatever you'd like.",
-            timestamp: new Date(),
-            showProducts: true,
-          };
-          setMessages(prev => [...prev, botMessage]);
+          addBotMessage("No problem at all! Here are our products again — take your time and pick whatever you'd like.", { showProducts: true });
           setLoading(false);
           return;
         } else if (isCancel) {
