@@ -1031,8 +1031,9 @@ export default function Widget() {
     localStorage.setItem(`widget_session_ts_${receptionistId}`, Date.now().toString());
     setSessionId(newSid);
     
-    // Reset local booking state
+    // Reset local booking state and clear persisted copy
     setBookingState({...defaultBookingState});
+    localStorage.removeItem(BOOKING_STATE_KEY);
     
     // Reset session tracking
     setHasExistingSession(false);
