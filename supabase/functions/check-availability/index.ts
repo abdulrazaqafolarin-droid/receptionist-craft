@@ -178,7 +178,14 @@ serve(async (req) => {
             return !(slotEndWithBuffer <= apptStart || slotStartWithBuffer >= apptEnd);
           });
 
-          if (!hasCollision) {
+          // Check manually blocked slots from appointment_slots table
+          const isManuallyBlocked = (blockedSlots || []).some((bs: any) => {
+            const bsStart = new Date(bs.start_time);
+            const bsEnd = new Date(bs.end_time);
+            return !(slotEnd <= bsStart || slotStart >= bsEnd);
+          });
+
+          if (!hasCollision && !isManuallyBlocked) {
             // Return ISO strings (UTC) — frontend converts to customer's local timezone
             slots.push({
               start: slotStart.toISOString(),
