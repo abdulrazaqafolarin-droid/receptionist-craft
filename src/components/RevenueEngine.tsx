@@ -28,7 +28,7 @@ export function RevenueEngine({ receptionistId, currentMode = 'booking', onModeC
     leads: 0,
     orders: 0,
     totalRevenue: 0,
-    currency: 'NGN'
+    currency: 'USD'
   });
 
   useEffect(() => {
