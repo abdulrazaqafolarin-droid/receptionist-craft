@@ -319,6 +319,7 @@ serve(async (req) => {
           appointment,
           service: service.name,
           booking_source: bookingSource,
+          conversation_id: metadata?.session_id || null,
         },
       });
     } catch (logErr) {
