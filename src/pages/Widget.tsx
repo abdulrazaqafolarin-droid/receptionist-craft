@@ -296,11 +296,14 @@ export default function Widget() {
       .eq("receptionist_id", receptionistId)
       .eq("active", true);
 
+    console.log("[Widget] loadServicesAndProducts:", { count: data?.length, error });
+
     if (!error && data) {
       // Separate services and products based on duration_minutes
       // Products have duration_minutes = 0, Services have duration_minutes > 0
       const serviceItems = data.filter(item => item.duration_minutes > 0);
       const productItems = data.filter(item => item.duration_minutes === 0);
+      console.log("[Widget] Services:", serviceItems.length, "Products:", productItems.length);
       setServices(serviceItems);
       setProducts(productItems);
     }
