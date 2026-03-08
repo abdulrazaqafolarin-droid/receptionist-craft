@@ -15,6 +15,7 @@ interface DailyData {
   date: string;
   conversations: number;
   appointments: number;
+  orders: number;
 }
 
 interface FunnelStep {
