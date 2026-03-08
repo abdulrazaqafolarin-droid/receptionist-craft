@@ -165,9 +165,7 @@ export default function QualityReview() {
   });
 
   return (
-    <>
-      <Navbar />
-      <div className="container mx-auto p-6 max-w-6xl">
+    <div className="container mx-auto p-6 max-w-6xl">
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2 text-foreground">Quality Review</h1>
           <p className="text-muted-foreground">Review AI responses and flag issues for improvement</p>
