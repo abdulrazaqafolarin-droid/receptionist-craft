@@ -96,7 +96,7 @@ export function OrderConfirmation({
             {displayTotal > 0 && (
               <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-green-200 dark:border-green-800 font-semibold">
                 <span>Total</span>
-                <span>₦{displayTotal.toLocaleString()}</span>
+                <span>{formatCurrency(displayTotal, currency)}</span>
               </div>
             )}
 

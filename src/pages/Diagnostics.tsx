@@ -198,7 +198,7 @@ export default function Diagnostics() {
               icon={<Package className="h-5 w-5" />}
               label="Orders (24h)"
               value={health.orders.total24h}
-              sub={health.orders.totalRevenue > 0 ? `₦${health.orders.totalRevenue.toLocaleString()}` : "no revenue"}
+              sub={health.orders.totalRevenue > 0 ? formatCurrency(health.orders.totalRevenue) : "no revenue"}
             />
           </div>
 

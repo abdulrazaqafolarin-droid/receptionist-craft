@@ -309,7 +309,7 @@ export default function Step2Services() {
                 />
               </div>
               <div>
-                <Label htmlFor="price">Price (₦)</Label>
+                <Label htmlFor="price">Price</Label>
                 <Input
                   id="price"
                   type="number"
