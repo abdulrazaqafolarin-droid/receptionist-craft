@@ -108,6 +108,7 @@ export interface EngineState {
     confirmation_sent: boolean;
     closing_offered: boolean;
     asked_if_need_more: boolean;
+    clarification_asked: boolean;  // Track if we already asked for clarification
   };
   
   // Flow control
