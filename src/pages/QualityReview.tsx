@@ -171,145 +171,144 @@ export default function QualityReview() {
         <p className="text-muted-foreground">Review AI responses and flag issues for improvement</p>
       </div>
 
-        <div className="mb-6">
-          <label className="text-sm font-medium mb-2 block text-foreground">Select Receptionist</label>
-          <Select value={selectedReceptionist} onValueChange={setSelectedReceptionist}>
-            <SelectTrigger className="w-full max-w-md">
-              <SelectValue placeholder="Choose a receptionist" />
-            </SelectTrigger>
-            <SelectContent>
-              {receptionists.map((r) => (
-                <SelectItem key={r.id} value={r.id}>
-                  {r.name} - {r.business_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="mb-6">
+        <label className="text-sm font-medium mb-2 block text-foreground">Select Receptionist</label>
+        <Select value={selectedReceptionist} onValueChange={setSelectedReceptionist}>
+          <SelectTrigger className="w-full max-w-md">
+            <SelectValue placeholder="Choose a receptionist" />
+          </SelectTrigger>
+          <SelectContent>
+            {receptionists.map((r) => (
+              <SelectItem key={r.id} value={r.id}>
+                {r.name} - {r.business_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-        {lowQualityItems.length > 0 && (
-          <Card className="mb-6 border-destructive">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-destructive">
-                <AlertCircle className="h-5 w-5" />
-                Low Quality Responses
-              </CardTitle>
-              <CardDescription>
-                {lowQualityItems.length} response{lowQualityItems.length !== 1 ? 's' : ''} with quality score below 0.8
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        )}
+      {lowQualityItems.length > 0 && (
+        <Card className="mb-6 border-destructive">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              Low Quality Responses
+            </CardTitle>
+            <CardDescription>
+              {lowQualityItems.length} response{lowQualityItems.length !== 1 ? 's' : ''} with quality score below 0.8
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
 
-        {loading ? (
-          <div className="text-center py-12 text-muted-foreground">Loading responses...</div>
-        ) : items.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              No responses found for this receptionist.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {items.map((item) => {
-              const overallScore = item.quality_score?.overall;
-              const isLowQuality = overallScore !== undefined && overallScore < 0.8;
+      {loading ? (
+        <div className="text-center py-12 text-muted-foreground">Loading responses...</div>
+      ) : items.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            No responses found for this receptionist.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {items.map((item) => {
+            const overallScore = item.quality_score?.overall;
+            const isLowQuality = overallScore !== undefined && overallScore < 0.8;
 
-              return (
-                <Card 
-                  key={item.id} 
-                  className={`transition-all hover:shadow-md ${
-                    item.flagged ? "border-destructive" : isLowQuality ? "border-warning" : ""
-                  }`}
-                >
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <CardTitle className="text-sm font-medium text-muted-foreground">
-                            {new Date(item.created_at).toLocaleString()}
-                          </CardTitle>
-                          {item.flagged && (
-                            <Badge variant="destructive" className="gap-1">
-                              <Flag className="h-3 w-3" />
-                              Flagged
-                            </Badge>
-                          )}
-                          {isLowQuality && !item.flagged && (
-                            <Badge variant="secondary" className="gap-1">
-                              <TrendingDown className="h-3 w-3" />
-                              Low Quality
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        {!item.flagged && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => flagResponse(item.id)}
-                            className="gap-2"
-                          >
-                            <Flag className="h-4 w-4" />
-                            Flag
-                          </Button>
+            return (
+              <Card 
+                key={item.id} 
+                className={`transition-all hover:shadow-md ${
+                  item.flagged ? "border-destructive" : isLowQuality ? "border-warning" : ""
+                }`}
+              >
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">
+                          {new Date(item.created_at).toLocaleString()}
+                        </CardTitle>
+                        {item.flagged && (
+                          <Badge variant="destructive" className="gap-1">
+                            <Flag className="h-3 w-3" />
+                            Flagged
+                          </Badge>
                         )}
+                        {isLowQuality && !item.flagged && (
+                          <Badge variant="secondary" className="gap-1">
+                            <TrendingDown className="h-3 w-3" />
+                            Low Quality
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {!item.flagged && (
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          onClick={() => copyToClipboard(item.reply_text)}
+                          onClick={() => flagResponse(item.id)}
                           className="gap-2"
                         >
-                          <Copy className="h-4 w-4" />
-                          Copy
+                          <Flag className="h-4 w-4" />
+                          Flag
                         </Button>
-                      </div>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copyToClipboard(item.reply_text)}
+                        className="gap-2"
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy
+                      </Button>
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1 text-foreground">User Message:</h4>
+                    <p className="text-sm text-muted-foreground">{item.request_message}</p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1 text-foreground">AI Reply:</h4>
+                    <p className="text-sm text-foreground">{item.reply_text}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-4 pt-2 border-t">
                     <div>
-                      <h4 className="font-semibold text-sm mb-1 text-foreground">User Message:</h4>
-                      <p className="text-sm text-muted-foreground">{item.request_message}</p>
+                      <span className="text-xs text-muted-foreground">Overall Quality:</span>
+                      <Badge 
+                        variant={getQualityBadgeVariant(overallScore)} 
+                        className="ml-2"
+                      >
+                        {overallScore ? (overallScore * 100).toFixed(0) : "—"}%
+                      </Badge>
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-sm mb-1 text-foreground">AI Reply:</h4>
-                      <p className="text-sm text-foreground">{item.reply_text}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-4 pt-2 border-t">
+                    {item.quality_score?.confidence !== undefined && (
                       <div>
-                        <span className="text-xs text-muted-foreground">Overall Quality:</span>
-                        <Badge 
-                          variant={getQualityBadgeVariant(overallScore)} 
-                          className="ml-2"
-                        >
-                          {overallScore ? (overallScore * 100).toFixed(0) : "—"}%
-                        </Badge>
+                        <span className="text-xs text-muted-foreground">Confidence:</span>
+                        <span className={`ml-2 text-sm font-medium ${getQualityColor(item.quality_score.confidence)}`}>
+                          {(item.quality_score.confidence * 100).toFixed(0)}%
+                        </span>
                       </div>
-                      {item.quality_score?.confidence !== undefined && (
-                        <div>
-                          <span className="text-xs text-muted-foreground">Confidence:</span>
-                          <span className={`ml-2 text-sm font-medium ${getQualityColor(item.quality_score.confidence)}`}>
-                            {(item.quality_score.confidence * 100).toFixed(0)}%
-                          </span>
-                        </div>
-                      )}
-                      {item.latency_ms !== null && (
-                        <div>
-                          <span className="text-xs text-muted-foreground">Latency:</span>
-                          <span className="ml-2 text-sm font-medium text-foreground">
-                            {item.latency_ms}ms
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                    )}
+                    {item.latency_ms !== null && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">Latency:</span>
+                        <span className="ml-2 text-sm font-medium text-foreground">
+                          {item.latency_ms}ms
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
