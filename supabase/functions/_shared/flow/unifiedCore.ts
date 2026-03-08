@@ -828,6 +828,7 @@ export function runUnifiedCore(
       askedIfNeedMore: false,
       locked: false,
       topicLock: null,
+      clarificationSent: false,
     },
     lastIntent: 'general',
     lastAction: null,
