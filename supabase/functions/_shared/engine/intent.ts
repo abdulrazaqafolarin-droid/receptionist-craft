@@ -155,15 +155,18 @@ export function detectIntent(
     };
   }
   
-  // P8: Booking
+  // P8: Booking — HIGHEST TASK PRIORITY
+  // Booking intent ALWAYS overrides any other active flow (ordering, browsing, etc.)
   if (capabilities.can_book && PATTERNS.book.test(msg)) {
     const alreadyInBooking = state?.task_type === 'booking';
+    const hasOtherActiveTask = hasActiveTask && state?.task_type !== 'booking';
     return {
       intent: 'book',
-      confidence: 0.9,
+      confidence: 0.95,
       should_start_task: !alreadyInBooking,
       target_task: 'booking',
-      should_cancel_task: false,
+      // Cancel any non-booking active flow so booking takes over
+      should_cancel_task: hasOtherActiveTask,
     };
   }
   
