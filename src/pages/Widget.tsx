@@ -710,7 +710,10 @@ export default function Widget() {
         const nextDay = new Date(bookingState.date);
         nextDay.setDate(nextDay.getDate() + 1);
         const endDateStr = format(nextDay, "yyyy-MM-dd");
-        const { data: slotsData } = await supabase.functions.invoke("check-availability", {
+        
+        console.log("[Widget] sendMessage fetching availability:", { receptionistId, serviceId: bookingState.serviceId, startDate: dateStr, endDate: endDateStr });
+        
+        const { data: slotsData, error: slotsError } = await supabase.functions.invoke("check-availability", {
           body: {
             receptionistId,
             serviceId: bookingState.serviceId,
@@ -720,9 +723,12 @@ export default function Widget() {
           }
         });
 
-        if (slotsData?.slots && slotsData.slots.length > 0) {
+        console.log("[Widget] sendMessage slots response:", { slotsData, slotsError });
+
+        const slots = slotsData?.slots || [];
+        if (slots.length > 0) {
           botMessage.showTimeSlots = true;
-          botMessage.timeSlots = slotsData.slots;
+          botMessage.timeSlots = slots;
         } else {
           // No slots available, tell user
           botMessage.content += "\n\nUnfortunately, no time slots are available for that date. Please select another date.";
