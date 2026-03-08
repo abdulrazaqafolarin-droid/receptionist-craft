@@ -732,6 +732,7 @@ export default function Widget() {
           
           // Reset booking state
           setBookingState({...defaultBookingState});
+          localStorage.removeItem(BOOKING_STATE_KEY);
           
           setLoading(false);
           return;

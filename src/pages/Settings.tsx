@@ -83,7 +83,29 @@ export default function Settings() {
         .eq("id", user.id);
 
       if (error) throw error;
-      toast.success("Profile updated successfully");
+
+      // Propagate timezone to all user's receptionists
+      const { data: recs } = await supabase
+        .from("receptionists")
+        .select("id")
+        .eq("user_id", user.id);
+      
+      if (recs && recs.length > 0) {
+        await supabase
+          .from("receptionists")
+          .update({ timezone: formData.timezone })
+          .eq("user_id", user.id);
+        
+        // Also update availability_rules timezone for all receptionists
+        for (const rec of recs) {
+          await supabase
+            .from("availability_rules")
+            .update({ timezone: formData.timezone })
+            .eq("receptionist_id", rec.id);
+        }
+      }
+
+      toast.success("Profile updated successfully — timezone synced to all receptionists");
     } catch (error: any) {
       console.error("Error saving profile:", error);
       toast.error(error.message || "Failed to save profile");
