@@ -468,7 +468,7 @@ export default function Appointments() {
                                 <span>{item.quantity}x {item.product_name}</span>
                                 {item.unit_price && (
                                   <span className="text-muted-foreground">
-                                    ${(item.unit_price * item.quantity).toFixed(2)}
+                                    ₦{(item.unit_price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                   </span>
                                 )}
                               </div>
@@ -477,7 +477,7 @@ export default function Appointments() {
                           {order.total_amount && (
                             <div className="flex justify-between font-medium mt-2 pt-2 border-t">
                               <span>Total:</span>
-                              <span>${order.total_amount.toFixed(2)}</span>
+                              <span>₦{order.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                           )}
                         </div>

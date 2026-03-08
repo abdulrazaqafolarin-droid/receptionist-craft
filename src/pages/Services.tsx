@@ -276,7 +276,7 @@ export default function Services() {
                   </div>
                 )}
                 <div>
-                  <Label>Price ($)</Label>
+                  <Label>Price (₦)</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -317,7 +317,7 @@ export default function Services() {
                   </Badge>
                   {item.price && item.price > 0 && (
                     <Badge variant="outline" className="flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" />
+                      ₦{item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       {item.price.toFixed(2)}
                     </Badge>
                   )}
@@ -506,7 +506,7 @@ export default function Services() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="price">Price ($)</Label>
+                        <Label htmlFor="price">Price (₦)</Label>
                         <Input
                           id="price"
                           type="number"
@@ -570,7 +570,7 @@ export default function Services() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="product-price">Price ($) *</Label>
+                        <Label htmlFor="product-price">Price (₦) *</Label>
                         <Input
                           id="product-price"
                           type="number"
