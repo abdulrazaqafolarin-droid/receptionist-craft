@@ -64,10 +64,8 @@ export function RevenueEngine({ receptionistId, currentMode = 'booking', onModeC
     }
   };
   
-  // Format currency with symbol
-  const fmtCurrency = (amount: number, currency: string) => {
-    return formatCurrencyUtil(amount, currency);
-  };
+  // Use shared formatCurrency
+  const fmtCurrency = (amount: number, cur: string) => formatCurrency(amount, cur);
 
   const handleModeChange = async (newMode: 'support' | 'booking' | 'sales') => {
     setLoading(true);
