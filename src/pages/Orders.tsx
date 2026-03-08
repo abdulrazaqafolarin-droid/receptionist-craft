@@ -341,7 +341,6 @@ export default function Orders() {
                               <Badge variant="outline" className="flex items-center gap-1">
                                 ₦{order.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </Badge>
-                              </Badge>
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-2">
