@@ -31,6 +31,7 @@ export function OrderConfirmation({
   orderId,
   totalAmount,
   deliveryAddress,
+  currency,
 }: OrderConfirmationProps) {
   const isEmail = contactInfo?.includes('@');
 
