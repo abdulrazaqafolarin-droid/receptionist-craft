@@ -911,6 +911,7 @@ export function createEmptyUnifiedState(): UnifiedState {
       askedIfNeedMore: false,
       locked: false,
       topicLock: null,
+      clarificationSent: false,
     },
     lastIntent: 'general',
     lastAction: null,
