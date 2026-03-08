@@ -468,7 +468,7 @@ export default function Appointments() {
                                 <span>{item.quantity}x {item.product_name}</span>
                                 {item.unit_price && (
                                   <span className="text-muted-foreground">
-                                    ${(item.unit_price * item.quantity).toFixed(2)}
+                                    ₦{(item.unit_price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                   </span>
                                 )}
                               </div>
