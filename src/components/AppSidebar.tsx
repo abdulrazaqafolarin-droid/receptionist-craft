@@ -20,6 +20,7 @@ const items = [
   { title: "Analytics", url: "/analytics", icon: BarChart },
   { title: "Conversations", url: "/conversations", icon: MessageSquare },
   { title: "Orders & Appointments", url: "/appointments", icon: Calendar },
+  { title: "Orders", url: "/orders", icon: ShoppingBag },
   { title: "Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Products & Services", url: "/services", icon: Briefcase },
   { title: "Availability", url: "/availability", icon: Clock },

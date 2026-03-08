@@ -15,6 +15,7 @@ interface DailyData {
   date: string;
   conversations: number;
   appointments: number;
+  orders: number;
 }
 
 interface FunnelStep {
@@ -40,7 +41,7 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
       const since = thirtyDaysAgo.toISOString();
 
       // Fetch conversations and appointments in parallel
-      const [convRes, apptRes] = await Promise.all([
+      const [convRes, apptRes, ordersRes] = await Promise.all([
         supabase
           .from("conversations")
           .select("created_at")
@@ -51,18 +52,24 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
           .select("created_at, status")
           .in("receptionist_id", receptionistIds)
           .gte("created_at", since),
+        supabase
+          .from("orders")
+          .select("created_at, status")
+          .in("receptionist_id", receptionistIds)
+          .gte("created_at", since),
       ]);
 
       const conversations = convRes.data || [];
       const appointments = apptRes.data || [];
+      const ordersData = ordersRes.data || [];
 
       // Build daily buckets
-      const dayMap: Record<string, { conversations: number; appointments: number }> = {};
+      const dayMap: Record<string, { conversations: number; appointments: number; orders: number }> = {};
       for (let i = 0; i < 30; i++) {
         const d = new Date();
         d.setDate(d.getDate() - (29 - i));
         const key = d.toISOString().split("T")[0];
-        dayMap[key] = { conversations: 0, appointments: 0 };
+        dayMap[key] = { conversations: 0, appointments: 0, orders: 0 };
       }
 
       conversations.forEach((c) => {
@@ -73,6 +80,11 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
       appointments.forEach((a) => {
         const key = new Date(a.created_at).toISOString().split("T")[0];
         if (dayMap[key]) dayMap[key].appointments++;
+      });
+
+      ordersData.forEach((o) => {
+        const key = new Date(o.created_at).toISOString().split("T")[0];
+        if (dayMap[key]) dayMap[key].orders++;
       });
 
       const daily = Object.entries(dayMap)
@@ -87,12 +99,15 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
       // Conversion funnel
       const totalConversations = conversations.length;
       const totalAppointments = appointments.length;
+      const totalOrders = ordersData.length;
       const completedAppointments = appointments.filter((a) => a.status === "completed").length;
+      const completedOrders = ordersData.filter((o) => o.status === "completed").length;
 
       setFunnel([
         { label: "Conversations", value: totalConversations, color: "hsl(var(--primary))" },
         { label: "Bookings", value: totalAppointments, color: "hsl(var(--chart-2))" },
-        { label: "Completed", value: completedAppointments, color: "hsl(var(--success))" },
+        { label: "Orders", value: totalOrders, color: "hsl(var(--chart-4, 280 65% 60%))" },
+        { label: "Completed", value: completedAppointments + completedOrders, color: "hsl(var(--success))" },
       ]);
     } catch (err) {
       console.error("Chart data error:", err);

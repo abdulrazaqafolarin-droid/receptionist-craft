@@ -280,7 +280,7 @@ export default function Orders() {
               </Card>
               <Card className="border-2 border-border/50 col-span-2 lg:col-span-1">
                 <CardContent className="p-4 text-center">
-                  <div className="text-2xl font-bold text-primary">${stats.revenue.toFixed(2)}</div>
+                  <div className="text-2xl font-bold text-primary">₦{stats.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                   <div className="text-sm text-muted-foreground">Revenue</div>
                 </CardContent>
               </Card>
@@ -339,8 +339,7 @@ export default function Orders() {
                             {getStatusBadge(order.status)}
                             {order.total_amount && (
                               <Badge variant="outline" className="flex items-center gap-1">
-                                <DollarSign className="h-3 w-3" />
-                                {order.total_amount.toFixed(2)}
+                                ₦{order.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </Badge>
                             )}
                           </div>
@@ -475,14 +474,14 @@ export default function Orders() {
                       <div key={item.id} className="flex justify-between text-sm">
                         <span>{item.product_name} x{item.quantity}</span>
                         {item.unit_price && (
-                          <span className="text-muted-foreground">${(item.unit_price * item.quantity).toFixed(2)}</span>
+                          <span className="text-muted-foreground">₦{(item.unit_price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         )}
                       </div>
                     ))}
                     {selectedOrder.total_amount && (
                       <div className="flex justify-between font-medium pt-2 border-t">
                         <span>Total</span>
-                        <span>${selectedOrder.total_amount.toFixed(2)}</span>
+                        <span>₦{selectedOrder.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     )}
                   </div>

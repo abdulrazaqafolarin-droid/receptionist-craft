@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageCircle, Calendar, CalendarDays, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign } from "lucide-react";
+import { MessageCircle, Calendar, CalendarDays, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign, ShoppingBag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { RevenueEngine } from "@/components/RevenueEngine";
@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({
     conversations: 0,
     appointments: 0,
+    orders: 0,
     activeReceptionists: 0,
   });
 
@@ -48,19 +49,16 @@ export default function Dashboard() {
     if (recs && recs.length > 0) {
       const receptionistIds = recs.map(r => r.id);
 
-      const { count: convCount } = await supabase
-        .from("conversations")
-        .select("*", { count: "exact", head: true })
-        .in("receptionist_id", receptionistIds);
-
-      const { count: apptCount } = await supabase
-        .from("appointments")
-        .select("*", { count: "exact", head: true })
-        .in("receptionist_id", receptionistIds);
+      const [convRes, apptRes, ordersRes] = await Promise.all([
+        supabase.from("conversations").select("*", { count: "exact", head: true }).in("receptionist_id", receptionistIds),
+        supabase.from("appointments").select("*", { count: "exact", head: true }).in("receptionist_id", receptionistIds),
+        supabase.from("orders").select("*", { count: "exact", head: true }).in("receptionist_id", receptionistIds),
+      ]);
 
       setStats({
-        conversations: convCount || 0,
-        appointments: apptCount || 0,
+        conversations: convRes.count || 0,
+        appointments: apptRes.count || 0,
+        orders: ordersRes.count || 0,
         activeReceptionists: recs.filter(r => r.active).length,
       });
     }
@@ -136,10 +134,11 @@ export default function Dashboard() {
         )}
 
         {/* Stats Grid */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-8 sm:mb-10" aria-label="Statistics overview">
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-8 sm:mb-10" aria-label="Statistics overview">
           {[
             { title: "Total Conversations", value: stats.conversations, icon: MessageCircle, desc: "All time", color: "from-primary to-primary-glow" },
             { title: "Appointments Booked", value: stats.appointments, icon: Calendar, desc: "All time", color: "from-success to-emerald-400" },
+            { title: "Orders", value: stats.orders, icon: ShoppingBag, desc: "All time", color: "from-violet-500 to-purple-400" },
             { title: "Active Receptionists", value: stats.activeReceptionists, icon: Zap, desc: "Ready to serve", color: "from-warning to-amber-400" },
           ].map((stat, idx) => (
             <Card 
@@ -244,11 +243,12 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <section aria-label="Quick actions">
-          <nav className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
+          <nav className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
             {[
               { title: "Conversations", desc: "View chat transcripts", icon: MessageCircle, path: "/conversations" },
               { title: "Calendar", desc: "Full schedule view", icon: CalendarDays, path: "/calendar" },
               { title: "Appointments", desc: "Manage bookings", icon: Calendar, path: "/appointments" },
+              { title: "Orders", desc: "Manage orders", icon: ShoppingBag, path: "/orders" },
               { title: "Analytics", desc: "Performance insights", icon: BarChart3, path: "/analytics" },
               { title: "Quality Review", desc: "Improve AI responses", icon: CheckCircle2, path: "/quality-review" },
             ].map((item) => (
