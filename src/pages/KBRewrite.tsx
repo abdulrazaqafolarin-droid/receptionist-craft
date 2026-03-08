@@ -308,7 +308,7 @@ export default function KBRewrite() {
             </Card>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
