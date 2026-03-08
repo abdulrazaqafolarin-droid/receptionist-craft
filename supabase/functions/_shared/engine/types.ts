@@ -32,6 +32,8 @@ export type UserIntent =
   | 'greeting'
   | 'farewell'
   | 'book'
+  | 'book_explicit'
+  | 'availability_casual'
   | 'order'
   | 'confirm'
   | 'deny'
@@ -44,6 +46,7 @@ export type UserIntent =
   | 'escalate'     // wants human
   | 'small_talk'
   | 'correction'   // correcting previous info
+  | 'ambiguous'    // unclear intent, needs clarification
   | 'continue';    // continuing current flow
 
 export type EmotionalTone = 'neutral' | 'positive' | 'negative' | 'urgent' | 'frustrated';
@@ -105,6 +108,7 @@ export interface EngineState {
     confirmation_sent: boolean;
     closing_offered: boolean;
     asked_if_need_more: boolean;
+    clarification_asked: boolean;  // Track if we already asked for clarification
   };
   
   // Flow control
@@ -225,6 +229,7 @@ export function createEmptyState(): EngineState {
       confirmation_sent: false,
       closing_offered: false,
       asked_if_need_more: false,
+      clarification_asked: false,
     },
     locked: false,
     topic_lock: null,

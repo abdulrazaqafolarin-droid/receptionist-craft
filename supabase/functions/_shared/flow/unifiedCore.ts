@@ -104,6 +104,7 @@ export interface UnifiedState {
     askedIfNeedMore: boolean;
     locked: boolean;
     topicLock: string | null;
+    clarificationSent: boolean;
   };
   lastIntent: UnifiedIntent;
   lastAction: string | null;
@@ -434,6 +435,21 @@ export function updateUnifiedState(
     newState.rules.closingOffered = true;
   }
   
+  // Clarification tracking: if intent is ambiguous/general, mark that we'll ask
+  // If intent becomes clear after a clarification, reset the flag
+  if (intent.intent === 'general' && intent.confidence < 0.6) {
+    // Low confidence — will trigger clarification in governor
+    if (newState.rules.clarificationSent) {
+      // Already asked once — governor will assume and proceed, then reset
+      newState.rules.clarificationSent = false; // Reset after second attempt
+    } else {
+      newState.rules.clarificationSent = true; // Mark that we're about to ask
+    }
+  } else if (intent.confidence >= 0.7) {
+    // Clear intent — reset clarification state
+    newState.rules.clarificationSent = false;
+  }
+  
   return newState;
 }
 
@@ -596,6 +612,21 @@ export function generateGovernorInstruction(
     return instruction;
   }
   
+  // AMBIGUITY HANDLING — Clarification Protocol
+  if (state.lastIntent === 'ambiguous' as any || state.lastIntent === 'general') {
+    if (!state.rules.clarificationSent) {
+      instruction.allowedActions.push('ask_clarifying_question');
+      instruction.forbiddenActions.push('guess_intent', 'start_task_without_confirmation');
+      instruction.promptInstruction = 'The customer\'s message is unclear. Ask ONE short, warm, context-aware clarifying question using your knowledge of the business. Do NOT guess and proceed.';
+      return instruction;
+    } else {
+      // Already asked for clarification once — assume and proceed
+      instruction.allowedActions.push('assume_and_proceed', 'answer_question');
+      instruction.promptInstruction = 'You already asked for clarification. Make a reasonable assumption, state it out loud (e.g. "I\'ll take that as..."), and proceed. Do NOT ask another clarifying question.';
+      return instruction;
+    }
+  }
+
   // No active task
   if (!state.task || !state.task.type) {
     instruction.allowedActions.push('ask_how_to_help');
@@ -812,6 +843,7 @@ export function runUnifiedCore(
       askedIfNeedMore: false,
       locked: false,
       topicLock: null,
+      clarificationSent: false,
     },
     lastIntent: 'general',
     lastAction: null,
@@ -894,6 +926,7 @@ export function createEmptyUnifiedState(): UnifiedState {
       askedIfNeedMore: false,
       locked: false,
       topicLock: null,
+      clarificationSent: false,
     },
     lastIntent: 'general',
     lastAction: null,
