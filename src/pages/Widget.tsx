@@ -98,7 +98,7 @@ export default function Widget() {
   function addBotMessage(content: string, extras?: Partial<Message>) {
     const msg: Message = { role: "assistant", content, timestamp: new Date(), ...extras };
     setMessages(prev => [...prev, msg]);
-    persistMessage('bot', content);
+    persistMessage('ai', content);
     return msg;
   }
 
