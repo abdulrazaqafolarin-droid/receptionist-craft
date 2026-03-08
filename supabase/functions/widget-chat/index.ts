@@ -1314,7 +1314,7 @@ serve(async (req) => {
         .select("id")
         .eq("receptionist_id", receptionistId)
         .eq("session_id", sessionId)
-        .eq("sender", "bot")
+        .eq("sender", "ai")
         .limit(1);
 
       // Level 3: Prompt-level enforcement - greeting already stored
