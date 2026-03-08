@@ -280,7 +280,7 @@ export default function Orders() {
               </Card>
               <Card className="border-2 border-border/50 col-span-2 lg:col-span-1">
                 <CardContent className="p-4 text-center">
-                  <div className="text-2xl font-bold text-primary">${stats.revenue.toFixed(2)}</div>
+                  <div className="text-2xl font-bold text-primary">₦{stats.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                   <div className="text-sm text-muted-foreground">Revenue</div>
                 </CardContent>
               </Card>
