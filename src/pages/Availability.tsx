@@ -121,6 +121,17 @@ export default function Availability() {
     }
   }
 
+  async function regenerateSlots(receptionistId: string) {
+    try {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      await supabase.functions.invoke("generate-slots", {
+        body: { receptionistId },
+      });
+    } catch (e) {
+      console.warn("Slot regeneration failed (non-blocking):", e);
+    }
+  }
+
   async function addRule() {
     if (!selectedReceptionist) {
       toast({ title: "Error", description: "Please select a receptionist", variant: "destructive" });
@@ -145,6 +156,7 @@ export default function Availability() {
     toast({ title: "Success", description: "Availability rule added" });
     // Sync timezone to receptionist record
     await supabase.from("receptionists").update({ timezone }).eq("id", selectedReceptionist);
+    await regenerateSlots(selectedReceptionist);
     loadAvailability(selectedReceptionist);
   }
 
@@ -157,6 +169,7 @@ export default function Availability() {
     }
 
     toast({ title: "Success", description: "Rule deleted" });
+    await regenerateSlots(selectedReceptionist);
     loadAvailability(selectedReceptionist);
   }
 
@@ -184,6 +197,7 @@ export default function Availability() {
     setExceptionStart("");
     setExceptionEnd("");
     setExceptionReason("");
+    await regenerateSlots(selectedReceptionist);
     loadAvailability(selectedReceptionist);
   }
 
@@ -196,6 +210,7 @@ export default function Availability() {
     }
 
     toast({ title: "Success", description: "Exception deleted" });
+    await regenerateSlots(selectedReceptionist);
     loadAvailability(selectedReceptionist);
   }
 
@@ -224,6 +239,7 @@ export default function Availability() {
     }
 
     toast({ title: "Success", description: "Default hours set (Mon-Fri, 9am-5pm)" });
+    await regenerateSlots(selectedReceptionist);
     loadAvailability(selectedReceptionist);
   }
 
