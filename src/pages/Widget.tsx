@@ -873,11 +873,13 @@ export default function Widget() {
 
   async function handleQuickReply(value: string) {
     if (value === "book_appointment") {
-      // Show services directly for booking flow
-      if (services.length > 0) {
+      if (services.length === 1) {
+        // Only one service — skip selection, go straight to calendar
+        await handleServiceSelect(services[0].id, services[0].name);
+      } else if (services.length > 1) {
         const botMessage: Message = {
           role: "assistant",
-          content: "Great! Which service would you like to book?",
+          content: "Which service would you like to book? Just tap one below!",
           timestamp: new Date(),
           showServices: true,
         };
