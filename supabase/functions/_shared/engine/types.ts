@@ -32,6 +32,8 @@ export type UserIntent =
   | 'greeting'
   | 'farewell'
   | 'book'
+  | 'book_explicit'
+  | 'availability_casual'
   | 'order'
   | 'confirm'
   | 'deny'
@@ -44,6 +46,7 @@ export type UserIntent =
   | 'escalate'     // wants human
   | 'small_talk'
   | 'correction'   // correcting previous info
+  | 'ambiguous'    // unclear intent, needs clarification
   | 'continue';    // continuing current flow
 
 export type EmotionalTone = 'neutral' | 'positive' | 'negative' | 'urgent' | 'frustrated';
