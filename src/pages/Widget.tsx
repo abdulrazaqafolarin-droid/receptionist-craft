@@ -632,7 +632,6 @@ export default function Widget() {
         // Detect back-references like "same name", "the name I gave you", "use my earlier name"
         const isBackReference = /\b(same\s+name|name\s+i\s+(?:gave|told|provided|said|mentioned)|(?:use|keep)\s+(?:my|the)\s+(?:earlier|previous|last|same)\s+name|already\s+(?:gave|told|said)|you\s+(?:already\s+)?have\s+(?:my|it|the)\s+name)\b/i.test(name);
         if (isBackReference) {
-          // Search conversation history for a previously extracted name
           const previousName = findPreviousNameInHistory(messages);
           if (previousName) {
             name = previousName;
@@ -641,6 +640,15 @@ export default function Widget() {
             setLoading(false);
             return;
           }
+        } else {
+          // Validate the input as a direct name — reject sentences, verbs, apologies
+          const validated = validateDirectNameInput(name);
+          if (!validated) {
+            addBotMessage("I didn't catch a valid name there. Could you please share just your first name or full name? For example: \"John\" or \"Jane Smith\"");
+            setLoading(false);
+            return;
+          }
+          name = validated;
         }
 
         if (name.length < 2) {
