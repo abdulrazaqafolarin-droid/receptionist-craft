@@ -596,12 +596,7 @@ export default function Widget() {
           return;
         } catch (bookErr: any) {
           console.error("Booking error:", bookErr);
-          const errorMessage: Message = {
-            role: "assistant",
-            content: "I apologize, but I encountered an issue while confirming your appointment. Please try again, or feel free to contact us directly for assistance.",
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, errorMessage]);
+          addBotMessage("I apologize, but I encountered an issue while confirming your appointment. Please try again, or feel free to contact us directly for assistance.");
           setLoading(false);
           return;
         }
