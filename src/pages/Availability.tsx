@@ -237,6 +237,7 @@ export default function Availability() {
     }
 
     toast({ title: "Success", description: "Default hours set (Mon-Fri, 9am-5pm)" });
+    await regenerateSlots(selectedReceptionist);
     loadAvailability(selectedReceptionist);
   }
 
