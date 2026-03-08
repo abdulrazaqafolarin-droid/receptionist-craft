@@ -45,7 +45,7 @@ export default function Widget() {
   const [services, setServices] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [businessModel, setBusinessModel] = useState<'services' | 'products' | 'both'>('services');
-  const [bookingState, setBookingState] = useState({
+  const defaultBookingState = {
     serviceId: null as string | null,
     serviceName: null as string | null,
     date: null as Date | null,
@@ -54,15 +54,14 @@ export default function Widget() {
     customerEmail: null as string | null,
     customerPhone: null as string | null,
     collectingInfo: null as 'name' | 'contact' | null,
-    // Product ordering state
     productId: null as string | null,
     productName: null as string | null,
     quantity: 1 as number,
     orderMode: false as boolean,
-    // Soft confirmation state
     awaitingOrderConfirmation: false as boolean,
     pendingProducts: [] as Array<{ productId: string; productName: string; quantity: number; price?: number }>,
-  });
+  };
+  const [bookingState, setBookingState] = useState(defaultBookingState);
   const [widgetColors, setWidgetColors] = useState({
     primaryColor: "#8B5CF6",
     secondaryColor: "#A78BFA",
