@@ -135,6 +135,39 @@ export default function Widget() {
     return msg;
   }
 
+  // Helper: find a previously provided customer name from conversation history
+  // Scans bot messages for "Thank you, <Name>" patterns and user messages for name declarations
+  function findPreviousNameInHistory(msgs: Message[]): string | null {
+    // 1. Check if we already have a name in booking state
+    if (bookingState.customerName && bookingState.customerName.length >= 2) {
+      return bookingState.customerName;
+    }
+    // 2. Scan bot messages for "Thank you, Name" acknowledgements
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const msg = msgs[i];
+      if (msg.role === 'assistant') {
+        const thankYouMatch = msg.content.match(/Thank you,?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[!.]/);
+        if (thankYouMatch?.[1]) return thankYouMatch[1];
+      }
+    }
+    // 3. Scan user messages for explicit name declarations
+    const NAME_PATTERNS = [
+      /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+      /(?:(?:you\s+can\s+)?call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+      /\bi'?m\s+([A-Z][a-z]+)\s*[.!?,]?\s*$/i,
+    ];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role !== 'user') continue;
+      for (const pattern of NAME_PATTERNS) {
+        const match = msgs[i].content.match(pattern);
+        if (match?.[1] && match[1].length >= 2 && match[1].length <= 20) {
+          return match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
+        }
+      }
+    }
+    return null;
+  }
+
   // Initialize persistent session ID and check for existing conversation
   useEffect(() => {
     if (!receptionistId) return;
