@@ -391,12 +391,7 @@ export default function Widget() {
       
       if (bookingIntentMatch) {
         const matchedService = matchServiceFromText(textToSend);
-        const userMessage: Message = {
-          role: "user",
-          content: textToSend,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, userMessage]);
+        addUserMessage(textToSend);
         setInput("");
         
         if (matchedService) {
