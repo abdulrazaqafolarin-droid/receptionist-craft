@@ -111,6 +111,16 @@ export function validateCandidateName(candidate: string | undefined | null): str
 }
 
 /**
+ * Detects if a message is a back-reference to a previously given name
+ * (e.g., "the same name I gave you", "use my earlier name", "you already have it").
+ */
+export const NAME_BACK_REFERENCE_PATTERN = /\b(same\s+name|name\s+i\s+(?:gave|told|provided|said|mentioned)|(?:use|keep)\s+(?:my|the)\s+(?:earlier|previous|last|same)\s+name|already\s+(?:gave|told|said|provided)\s+(?:you\s+)?(?:my\s+)?name|you\s+(?:already\s+)?have\s+(?:my|it|the)\s+name)\b/i;
+
+export function isNameBackReference(message: string): boolean {
+  return NAME_BACK_REFERENCE_PATTERN.test(message);
+}
+
+/**
  * Extract a validated name from a message using strict patterns + validation.
  * Returns null if no valid name found — the AI should then ask politely.
  */
@@ -122,5 +132,40 @@ export function extractValidatedName(message: string): string | null {
       if (validated) return validated;
     }
   }
+  return null;
+}
+
+/**
+ * Extract a name from a message, resolving back-references from conversation history.
+ * Pass the full history array (objects with `sender` and `message` fields).
+ * Returns null if no name can be resolved.
+ */
+export function extractNameWithHistory(message: string, history: Array<{ sender: string; message: string }>): string | null {
+  // First try direct extraction
+  const direct = extractValidatedName(message);
+  if (direct) return direct;
+
+  // Check for back-reference
+  if (isNameBackReference(message)) {
+    // Scan history in reverse for a previously extracted name
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].sender === 'user' || history[i].sender === 'bot' || history[i].sender === 'ai') {
+        // Check user messages for direct name declarations
+        if (history[i].sender === 'user') {
+          const name = extractValidatedName(history[i].message || '');
+          if (name) return name;
+        }
+        // Check bot messages for "Thank you, Name" acknowledgements
+        if (history[i].sender === 'bot' || history[i].sender === 'ai') {
+          const thankYou = (history[i].message || '').match(/Thank you,?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[!.]/);
+          if (thankYou?.[1]) {
+            const validated = validateCandidateName(thankYou[1]);
+            if (validated) return validated;
+          }
+        }
+      }
+    }
+  }
+
   return null;
 }
