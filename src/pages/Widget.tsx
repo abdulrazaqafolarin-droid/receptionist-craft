@@ -543,6 +543,7 @@ export default function Widget() {
           };
           
           setMessages(prev => [...prev, orderConfirmationMessage]);
+          persistMessage('bot', `Wonderful! Your order has been placed successfully. Here are the details:`);
           
           // Reset booking state
           setBookingState({...defaultBookingState});
