@@ -599,7 +599,7 @@ export default function Analytics() {
                           <TableCell className="text-right">{rec.bookings_completed}</TableCell>
                           <TableCell className="text-right">{rec.orders}</TableCell>
                           <TableCell className="text-right font-medium text-amber-600">
-                            {rec.revenue > 0 ? formatCurrency(rec.revenue, analytics.revenue_metrics?.currency || 'NGN') : "—"}
+                            {rec.revenue > 0 ? formatCurrency(rec.revenue, analytics.revenue_metrics?.currency || 'USD') : "—"}
                           </TableCell>
                           <TableCell className="text-right">{formatNumber(rec.avg_quality_score)}</TableCell>
                           <TableCell className="text-right">
