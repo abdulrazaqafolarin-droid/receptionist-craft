@@ -514,12 +514,7 @@ export default function Widget() {
         
         // Validate contact info
         if (!isEmail && !isPhone) {
-          const botMessage: Message = {
-            role: "assistant",
-            content: "I couldn't recognize that as an email or phone number. Could you please provide a valid email address (e.g., you@example.com) or phone number?",
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, botMessage]);
+          addBotMessage("I couldn't recognize that as an email or phone number. Could you please provide a valid email address (e.g., you@example.com) or phone number?");
           setLoading(false);
           return;
         }
