@@ -435,6 +435,21 @@ export function updateUnifiedState(
     newState.rules.closingOffered = true;
   }
   
+  // Clarification tracking: if intent is ambiguous/general, mark that we'll ask
+  // If intent becomes clear after a clarification, reset the flag
+  if (intent.intent === 'general' && intent.confidence < 0.6) {
+    // Low confidence — will trigger clarification in governor
+    if (newState.rules.clarificationSent) {
+      // Already asked once — governor will assume and proceed, then reset
+      newState.rules.clarificationSent = false; // Reset after second attempt
+    } else {
+      newState.rules.clarificationSent = true; // Mark that we're about to ask
+    }
+  } else if (intent.confidence >= 0.7) {
+    // Clear intent — reset clarification state
+    newState.rules.clarificationSent = false;
+  }
+  
   return newState;
 }
 
