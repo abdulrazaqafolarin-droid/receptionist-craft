@@ -41,7 +41,7 @@ const PATTERNS = {
   correction: /actually|i\s*meant|i\s*said\s*.+\s*not|correction|change\s*that\s*to|switch\s*(it|that)\s*to|no\s*i\s*(meant|said)/i,
   
   // P8: Booking — EXPANDED natural language triggers
-  book: /book|appointment|schedule|reserve|sign\s*(me\s*)?up|make\s*a\s*booking|set\s*up\s*an?\s*(appointment|session)|when\s*can\s*(i|we)\s*(come\s*in|visit|stop\s*by|see\s*you|swing\s*by|drop\s*by)|do\s*you\s*have\s*(any\s*)?(availability|time|opening|slot|free\s*time)|can\s*(i|you)\s*.*(fit\s*me\s*in|squeeze\s*me\s*in|see\s*me|take\s*me)|is\s*there\s*(a\s*|an\s*)?(slot|time|opening|spot)\s*(available|free|open)|what\s*(days?|times?)\s*(are|do)\s*(you|the)\s*.*(available|open|free)|i('d|\s*would)\s*like\s*to\s*(come\s*in|visit|set\s*up|arrange|plan)/i,
+  book: /book|appointment|schedule|reserve|sign\s*(me\s*)?up|make\s*a\s*booking|set\s*up\s*an?\s*(appointment|session)|when\s*can\s*(i|we)\s*(come\s*in|visit|stop\s*by|see\s*you|swing\s*by|drop\s*by)|do\s*you\s*have\s*(any\s*)?(availability|time|opening|slot|free\s*time)|can\s*(i|you)\s*.*(fit\s*me\s*in|squeeze\s*me\s*in|see\s*me|take\s*me)|is\s*there\s*(a\s*|an\s*)?(slot|time|opening|spot)\s*(available|free|open)|what\s*(days?|times?)\s*(are|do)\s*(you|the)\s*.*(available|open|free)|i('d|\s*would)\s*like\s*to\s*(come\s*in|visit|set\s*up|arrange|plan)|available\s*(days?|times?|slots?|appointments?|hours?)|next\s*available|earliest\s*available|soonest|when\s*(is|are)\s*(the\s*)?(next|earliest|soonest)|any\s*(openings?|availability|free\s*slots?|available\s*times?)|free\s*(slots?|times?|days?)|open\s*(slots?|times?|days?)|what\s*(times?|days?|slots?)\s*(are\s*)?available/i,
   
   // P9: Ordering — EXPANDED natural language triggers
   order: /buy|purchase|order|get|want\s*(to\s*)?get|i'?d\s*like|add\s*to\s*cart|checkout|shop|i\s*want|i\s*need|show\s*me\s*.*(product|item|menu|catalog)|can\s*i\s*(see|browse|look\s*at|check\s*out)\s*.*(product|item|menu|catalog|stock)|what('?s|\s*is)\s*(available|in\s*stock|on\s*the\s*menu|for\s*sale)|do\s*you\s*(sell|carry|stock|have|offer)\s|looking\s*(to|for)\s*.*(buy|purchase|order|pick\s*up|grab)|place\s*.*(order|purchase)|what\s*can\s*i\s*(buy|order|get)|what\s*(do\s*you|products?|items?)\s*.*(sell|have|offer|carry|stock)|pick\s*up|grab\s*(some|a|the)/i,
@@ -155,15 +155,18 @@ export function detectIntent(
     };
   }
   
-  // P8: Booking
+  // P8: Booking — HIGHEST TASK PRIORITY
+  // Booking intent ALWAYS overrides any other active flow (ordering, browsing, etc.)
   if (capabilities.can_book && PATTERNS.book.test(msg)) {
     const alreadyInBooking = state?.task_type === 'booking';
+    const hasOtherActiveTask = hasActiveTask && state?.task_type !== 'booking';
     return {
       intent: 'book',
-      confidence: 0.9,
+      confidence: 0.95,
       should_start_task: !alreadyInBooking,
       target_task: 'booking',
-      should_cancel_task: false,
+      // Cancel any non-booking active flow so booking takes over
+      should_cancel_task: hasOtherActiveTask,
     };
   }
   
