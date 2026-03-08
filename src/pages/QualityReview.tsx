@@ -310,6 +310,6 @@ export default function QualityReview() {
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }
