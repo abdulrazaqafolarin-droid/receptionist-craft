@@ -499,6 +499,7 @@ export default function Widget() {
       }
 
       if (bookingState.collectingInfo === 'contact') {
+        persistMessage('user', textToSend);
         // User provided contact info - complete the booking or order
         const contactInfo = textToSend.trim();
         const isEmail = contactInfo.includes('@');
