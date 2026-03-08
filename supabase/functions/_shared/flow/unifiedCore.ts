@@ -596,6 +596,21 @@ export function generateGovernorInstruction(
     return instruction;
   }
   
+  // AMBIGUITY HANDLING — Clarification Protocol
+  if (state.lastIntent === 'ambiguous' as any || state.lastIntent === 'general') {
+    if (!state.rules.clarificationSent) {
+      instruction.allowedActions.push('ask_clarifying_question');
+      instruction.forbiddenActions.push('guess_intent', 'start_task_without_confirmation');
+      instruction.promptInstruction = 'The customer\'s message is unclear. Ask ONE short, warm, context-aware clarifying question using your knowledge of the business. Do NOT guess and proceed.';
+      return instruction;
+    } else {
+      // Already asked for clarification once — assume and proceed
+      instruction.allowedActions.push('assume_and_proceed', 'answer_question');
+      instruction.promptInstruction = 'You already asked for clarification. Make a reasonable assumption, state it out loud (e.g. "I\'ll take that as..."), and proceed. Do NOT ask another clarifying question.';
+      return instruction;
+    }
+  }
+
   // No active task
   if (!state.task || !state.task.type) {
     instruction.allowedActions.push('ask_how_to_help');
