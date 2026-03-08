@@ -835,50 +835,29 @@ export default function Widget() {
         // Only one service — skip selection, go straight to calendar
         await handleServiceSelect(services[0].id, services[0].name);
       } else if (services.length > 1) {
-        const botMessage: Message = {
-          role: "assistant",
-          content: "Which service would you like to book? Just tap one below!",
-          timestamp: new Date(),
-          showServices: true,
-        };
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage("Which service would you like to book? Just tap one below!", { showServices: true });
       } else {
         await sendMessage("I'd like to book an appointment");
       }
     } else if (value === "view_services") {
-      // Show services list for information only
       if (services.length > 0) {
         const serviceList = services.map(s => 
           `• **${s.name}**${s.duration_minutes ? ` (${s.duration_minutes} min)` : ''}${s.price ? ` - $${s.price}` : ''}`
         ).join('\n');
-        const botMessage: Message = {
-          role: "assistant",
-          content: `Here are our available services:\n\n${serviceList}\n\nWould you like to book any of these?`,
-          timestamp: new Date(),
-          showServices: true,
-        };
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage(`Here are our available services:\n\n${serviceList}\n\nWould you like to book any of these?`, { showServices: true });
       } else {
         await sendMessage("What services do you offer?");
       }
     } else if (value === "view_products") {
-      // Show products directly
       if (products.length > 0) {
         const productList = products.map(p => 
           `• **${p.name}**${p.price ? ` - $${p.price}` : ''}`
         ).join('\n');
-        const botMessage: Message = {
-          role: "assistant",
-          content: `Here are our available products:\n\n${productList}\n\nWould you like to order any of these?`,
-          timestamp: new Date(),
-          showProducts: true,
-        };
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage(`Here are our available products:\n\n${productList}\n\nWould you like to order any of these?`, { showProducts: true });
       } else {
         await sendMessage("What products do you have?");
       }
     } else if (value === "contact") {
-      // Show contact information directly
       const contactInfo = receptionist?.business_info as any;
       let contactMessage = "Here's how you can reach us:\n\n";
       
@@ -901,12 +880,7 @@ export default function Widget() {
         contactMessage += "\nIs there anything else I can help you with?";
       }
       
-      const botMessage: Message = {
-        role: "assistant",
-        content: contactMessage,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, botMessage]);
+      addBotMessage(contactMessage);
     } else if (value === "view_prices") {
       await sendMessage("What are your prices?");
     } else {
