@@ -277,11 +277,18 @@ export default function Widget() {
     // Book Appointment intent → matches "book_appointment" button
     { pattern: /\b(book|schedule|make|set\s*up|arrange|reserve)\b.*\b(appointment|booking|visit|session|consultation|meeting|slot)\b/i, action: 'book_appointment' },
     { pattern: /\b(appointment|booking|visit|session|consultation)\b.*\b(book|schedule|make|set\s*up|arrange|reserve)\b/i, action: 'book_appointment' },
-    { pattern: /\b(i('d| would) like to (book|schedule|come in|make an appointment|set up))\b/i, action: 'book_appointment' },
+    { pattern: /\b(i('d| would| want to| wanna| need to) like to (book|schedule|come in|make an appointment|set up))\b/i, action: 'book_appointment' },
+    { pattern: /\bi('m| am) ready to book\b/i, action: 'book_appointment' },
     { pattern: /\bcan i (book|schedule|get|make)\b/i, action: 'book_appointment' },
     { pattern: /\b(when (can|could) (i|we) come in|when are you (available|free|open))\b/i, action: 'book_appointment' },
     { pattern: /\b(any (availability|openings|slots)|do you have (availability|openings))\b/i, action: 'book_appointment' },
     { pattern: /\bi need (an? )?(appointment|booking|slot|session)\b/i, action: 'book_appointment' },
+    { pattern: /\bwhat (days|dates|times?) (are |do you have )?(available|open|free)\b/i, action: 'book_appointment' },
+    { pattern: /\b(what times do you have|what time slots|show me (the |your )?(schedule|availability|calendar))\b/i, action: 'book_appointment' },
+    { pattern: /\bi('d| would) like to come in\b/i, action: 'book_appointment' },
+    { pattern: /\blet('s| us) (book|schedule|set up|make)\b/i, action: 'book_appointment' },
+    { pattern: /\b(sign me up|put me down|pencil me in)\b/i, action: 'book_appointment' },
+    { pattern: /\b(next available|earliest available|soonest)\b/i, action: 'book_appointment' },
     // View Products intent → matches "view_products" button
     { pattern: /\b(show|see|view|browse|look at|check out|what)\b.*\b(products?|items?|catalog|menu|stock|inventory|merchandise)\b/i, action: 'view_products' },
     { pattern: /\b(products?|items?|catalog|menu|stock|inventory|merchandise)\b.*\b(show|see|view|browse|available|have|offer|sell)\b/i, action: 'view_products' },
@@ -300,6 +307,19 @@ export default function Widget() {
     { pattern: /\b(contact|reach|call|phone|email|address|location|directions|where are you|how (do i|can i|to) (reach|contact|find|get to))\b/i, action: 'contact' },
   ];
 
+  // Try to match a typed service name from user input for direct booking
+  function matchServiceFromText(text: string): { id: string; name: string } | null {
+    if (services.length === 0) return null;
+    const lowerText = text.toLowerCase();
+    // Check if user typed "book a [service name]" or similar
+    for (const s of services) {
+      if (lowerText.includes(s.name.toLowerCase())) {
+        return { id: s.id, name: s.name };
+      }
+    }
+    return null;
+  }
+
   async function sendMessage(messageText?: string) {
     const textToSend = messageText || input.trim();
     if (!textToSend || !receptionistId) return;
@@ -314,9 +334,36 @@ export default function Widget() {
 
     if (!isInActiveFlow) {
       const lowerText = textToSend.toLowerCase();
+      
+      // First: check if user mentions a specific service name with booking intent
+      const bookingIntentMatch = QUICK_ACTION_INTENTS.some(({ pattern, action }) => 
+        action === 'book_appointment' && pattern.test(lowerText)
+      );
+      
+      if (bookingIntentMatch) {
+        const matchedService = matchServiceFromText(textToSend);
+        const userMessage: Message = {
+          role: "user",
+          content: textToSend,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, userMessage]);
+        setInput("");
+        
+        if (matchedService) {
+          // User mentioned a specific service — skip service selection, go to calendar
+          await handleServiceSelect(matchedService.id, matchedService.name);
+        } else {
+          // General booking intent — route to handleQuickReply
+          await handleQuickReply('book_appointment');
+        }
+        return;
+      }
+      
+      // Then check other intents
       for (const { pattern, action } of QUICK_ACTION_INTENTS) {
+        if (action === 'book_appointment') continue; // already handled above
         if (pattern.test(lowerText)) {
-          // Add user message to chat first
           const userMessage: Message = {
             role: "user",
             content: textToSend,
@@ -324,7 +371,6 @@ export default function Widget() {
           };
           setMessages(prev => [...prev, userMessage]);
           setInput("");
-          // Route to the same handler as the button click
           await handleQuickReply(action);
           return;
         }
