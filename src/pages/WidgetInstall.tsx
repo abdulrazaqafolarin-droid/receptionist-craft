@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -106,7 +105,6 @@ export function AIReceptionistWidget() {
   if (!receptionist) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="container mx-auto p-6">
           <p>Loading...</p>
         </div>
@@ -116,7 +114,7 @@ export function AIReceptionistWidget() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
+      
       
       <div className="container mx-auto p-6 max-w-6xl">
         <div className="mb-8">

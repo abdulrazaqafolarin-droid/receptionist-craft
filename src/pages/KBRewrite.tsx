@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle, Edit, AlertCircle, Brain, BarChart3, TrendingDown, MessageSquareWarning, ArrowUpCircle } from "lucide-react";
-import { Navbar } from "@/components/Navbar";
 import { FloatingBackground } from "@/components/FloatingBackground";
 
 interface KBRewriteLog {
@@ -188,12 +187,9 @@ export default function KBRewrite() {
 
   if (loading) {
     return (
-      <>
-        <Navbar />
-        <div className="container mx-auto p-6">
-          <p className="text-center text-muted-foreground">Loading KB suggestions...</p>
-        </div>
-      </>
+      <div className="container mx-auto p-6">
+        <p className="text-center text-muted-foreground">Loading KB suggestions...</p>
+      </div>
     );
   }
 
@@ -204,10 +200,8 @@ export default function KBRewrite() {
     const summary = selectedLog.changes?.gap_summary || selectedLog.rewritten?.summary || {};
     
     return (
-      <>
-        <Navbar />
-        <div className="relative min-h-screen">
-          <FloatingBackground variant="minimal" />
+      <div className="relative min-h-screen">
+        <FloatingBackground variant="minimal" />
           <div className="relative z-10 container mx-auto p-6 max-w-6xl">
             <Button variant="ghost" onClick={() => { setSelectedLog(null); setEditMode(false); }} className="mb-4">
               ← Back to suggestions
@@ -314,7 +308,6 @@ export default function KBRewrite() {
             </Card>
           </div>
         </div>
-      </>
     );
   }
 
@@ -322,10 +315,8 @@ export default function KBRewrite() {
   const receptionistList = Object.values(receptionists);
 
   return (
-    <>
-      <Navbar />
-      <div className="relative min-h-screen">
-        <FloatingBackground variant="minimal" />
+    <div className="relative min-h-screen">
+      <FloatingBackground variant="minimal" />
         <div className="relative z-10 container mx-auto p-6 max-w-5xl">
           <div className="mb-6">
             <h1 className="text-3xl font-bold">Knowledge Base Optimization</h1>
@@ -474,6 +465,5 @@ export default function KBRewrite() {
           )}
         </div>
       </div>
-    </>
   );
 }
