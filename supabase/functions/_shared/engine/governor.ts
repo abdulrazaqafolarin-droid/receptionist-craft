@@ -278,6 +278,7 @@ ${activeWidgets.map(w => `• ${w}`).join('\n')}
 3. **NO RE-CONFIRMATION**: If confirmation is sent, do NOT summarize again
 4. **BRIEF & NATURAL**: Keep responses short, warm, and human-like
 5. **STAY ON TOPIC**: If user goes off-topic, answer briefly then redirect
+6. **CONTEXTUAL FILTERING**: If the customer described a symptom, problem, or specific need, ONLY mention services/products relevant to that need. Never dump the full catalog when the customer has given you context.
 
 ${instruction.should_confirm ? `
 ## ⚡ CONFIRMATION FORMAT
