@@ -187,12 +187,9 @@ export default function KBRewrite() {
 
   if (loading) {
     return (
-      <>
-        <Navbar />
-        <div className="container mx-auto p-6">
-          <p className="text-center text-muted-foreground">Loading KB suggestions...</p>
-        </div>
-      </>
+      <div className="container mx-auto p-6">
+        <p className="text-center text-muted-foreground">Loading KB suggestions...</p>
+      </div>
     );
   }
 
