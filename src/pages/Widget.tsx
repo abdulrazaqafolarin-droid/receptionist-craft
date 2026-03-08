@@ -135,6 +135,39 @@ export default function Widget() {
     return msg;
   }
 
+  // Helper: find a previously provided customer name from conversation history
+  // Scans bot messages for "Thank you, <Name>" patterns and user messages for name declarations
+  function findPreviousNameInHistory(msgs: Message[]): string | null {
+    // 1. Check if we already have a name in booking state
+    if (bookingState.customerName && bookingState.customerName.length >= 2) {
+      return bookingState.customerName;
+    }
+    // 2. Scan bot messages for "Thank you, Name" acknowledgements
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const msg = msgs[i];
+      if (msg.role === 'assistant') {
+        const thankYouMatch = msg.content.match(/Thank you,?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[!.]/);
+        if (thankYouMatch?.[1]) return thankYouMatch[1];
+      }
+    }
+    // 3. Scan user messages for explicit name declarations
+    const NAME_PATTERNS = [
+      /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+      /(?:(?:you\s+can\s+)?call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+      /\bi'?m\s+([A-Z][a-z]+)\s*[.!?,]?\s*$/i,
+    ];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role !== 'user') continue;
+      for (const pattern of NAME_PATTERNS) {
+        const match = msgs[i].content.match(pattern);
+        if (match?.[1] && match[1].length >= 2 && match[1].length <= 20) {
+          return match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
+        }
+      }
+    }
+    return null;
+  }
+
   // Initialize persistent session ID and check for existing conversation
   useEffect(() => {
     if (!receptionistId) return;
@@ -594,8 +627,22 @@ export default function Widget() {
       // Handle booking info collection (client-side flow — persist user message)
       if (bookingState.collectingInfo === 'name') {
         persistMessage('user', textToSend);
-        // User provided their name - validate it's a reasonable name
-        const name = textToSend.trim();
+        let name = textToSend.trim();
+
+        // Detect back-references like "same name", "the name I gave you", "use my earlier name"
+        const isBackReference = /\b(same\s+name|name\s+i\s+(?:gave|told|provided|said|mentioned)|(?:use|keep)\s+(?:my|the)\s+(?:earlier|previous|last|same)\s+name|already\s+(?:gave|told|said)|you\s+(?:already\s+)?have\s+(?:my|it|the)\s+name)\b/i.test(name);
+        if (isBackReference) {
+          // Search conversation history for a previously extracted name
+          const previousName = findPreviousNameInHistory(messages);
+          if (previousName) {
+            name = previousName;
+          } else {
+            addBotMessage("I don't seem to have your name from earlier in our conversation. Could you please tell me your name?");
+            setLoading(false);
+            return;
+          }
+        }
+
         if (name.length < 2) {
           addBotMessage("I didn't quite catch that. Could you please provide your full name?");
           setLoading(false);

@@ -54,7 +54,7 @@ import {
   mergeSlots, 
   buildSlotSummary 
 } from "../_shared/flow/slotExtractor.ts";
-import { extractValidatedName } from "../_shared/nameValidator.ts";
+import { extractValidatedName, extractNameWithHistory, isNameBackReference } from "../_shared/nameValidator.ts";
 import { MemorySummarizer } from "../_shared/flow/memorySummarizer.ts";
 import type { ConversationState, FlowSlots, ActiveTask } from "../_shared/flow/types.ts";
 import { createEmptyActiveTask } from "../_shared/flow/types.ts";
@@ -450,11 +450,11 @@ function extractContextFromHistory(history: any[]): ConversationContext {
   const timeMatch = fullText.match(/(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm)|morning|afternoon|evening)/i);
   if (timeMatch) context.timeMentioned = timeMatch[0];
   
-  // STRICT name extraction — uses centralized validator
+  // STRICT name extraction — uses centralized validator with back-reference support
   // Scan each user message individually so end-of-string patterns work
   for (const h of history) {
     if (h.sender === 'user') {
-      const validatedName = extractValidatedName(h.message || '');
+      const validatedName = extractNameWithHistory(h.message || '', history);
       if (validatedName) {
         context.customerName = validatedName;
         break;
