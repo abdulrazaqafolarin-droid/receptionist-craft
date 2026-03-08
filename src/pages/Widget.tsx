@@ -707,12 +707,15 @@ export default function Widget() {
       
       if (shouldShowTimeSlots) {
         const dateStr = format(bookingState.date, "yyyy-MM-dd");
+        const nextDay = new Date(bookingState.date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        const endDateStr = format(nextDay, "yyyy-MM-dd");
         const { data: slotsData } = await supabase.functions.invoke("check-availability", {
           body: {
             receptionistId,
             serviceId: bookingState.serviceId,
             startDate: dateStr,
-            endDate: dateStr,
+            endDate: endDateStr,
             maxSlots: 6,
           }
         });
