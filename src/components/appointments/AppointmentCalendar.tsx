@@ -199,8 +199,6 @@ export function AppointmentCalendar({ appointments, onEdit, onRefresh }: Appoint
                       )}
                     </CardContent>
                   </Card>
-                    </CardContent>
-                  </Card>
                 ))}
             </div>
           )}
