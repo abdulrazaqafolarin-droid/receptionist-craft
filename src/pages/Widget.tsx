@@ -59,6 +59,9 @@ export default function Widget() {
     productName: null as string | null,
     quantity: 1 as number,
     orderMode: false as boolean,
+    // Soft confirmation state
+    awaitingOrderConfirmation: false as boolean,
+    pendingProducts: [] as Array<{ productId: string; productName: string; quantity: number; price?: number }>,
   });
   const [widgetColors, setWidgetColors] = useState({
     primaryColor: "#8B5CF6",
