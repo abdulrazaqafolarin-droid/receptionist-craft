@@ -56,7 +56,7 @@ export default function Settings() {
       setFormData({
         name: profileData.name || "",
         email: profileData.email || user.email || "",
-        timezone: profileData.timezone || "UTC",
+        timezone: profileData.timezone || findClosestTimezone(detectBrowserTimezone()),
         emailNotifications: true,
         pushNotifications: true,
       });
