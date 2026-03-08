@@ -41,7 +41,7 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
       const since = thirtyDaysAgo.toISOString();
 
       // Fetch conversations and appointments in parallel
-      const [convRes, apptRes] = await Promise.all([
+      const [convRes, apptRes, ordersRes] = await Promise.all([
         supabase
           .from("conversations")
           .select("created_at")
@@ -49,6 +49,11 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
           .gte("created_at", since),
         supabase
           .from("appointments")
+          .select("created_at, status")
+          .in("receptionist_id", receptionistIds)
+          .gte("created_at", since),
+        supabase
+          .from("orders")
           .select("created_at, status")
           .in("receptionist_id", receptionistIds)
           .gte("created_at", since),
