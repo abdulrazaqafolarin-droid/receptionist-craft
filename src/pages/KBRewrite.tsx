@@ -316,10 +316,8 @@ export default function KBRewrite() {
   const receptionistList = Object.values(receptionists);
 
   return (
-    <>
-      <Navbar />
-      <div className="relative min-h-screen">
-        <FloatingBackground variant="minimal" />
+    <div className="relative min-h-screen">
+      <FloatingBackground variant="minimal" />
         <div className="relative z-10 container mx-auto p-6 max-w-5xl">
           <div className="mb-6">
             <h1 className="text-3xl font-bold">Knowledge Base Optimization</h1>
