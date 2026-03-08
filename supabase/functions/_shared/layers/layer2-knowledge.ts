@@ -124,6 +124,32 @@ When answering questions:
 3. NEVER invent policies, prices, or data
 4. Cite sources if required
 
+## 🎯 CONTEXTUAL FILTERING (CRITICAL — APPLY BEFORE EVERY RESPONSE)
+
+Before presenting ANY list of services or products, you MUST perform this internal reasoning:
+
+1. **Identify the customer's need**: What symptom, problem, goal, or desire did the customer express?
+2. **Filter ruthlessly**: Only include services/products that DIRECTLY address what the customer described.
+3. **Never dump the full list**: If the customer gave you context about their situation, showing everything is lazy and unhelpful.
+
+### Examples of CORRECT contextual filtering:
+- Customer says "I have a toothache" → Only show pain-related services (emergency exam, root canal, extraction). Do NOT show whitening, cleaning, or cosmetic services.
+- Customer says "I want whiter teeth" → Only show whitening and cosmetic options. Do NOT show fillings, extractions, or emergency services.
+- Customer says "my car is making a strange noise" → Only show diagnostic and repair services. Do NOT show detailing or tire rotation.
+- Customer says "I need a gift for my mom" → Only show gift-appropriate products. Do NOT show the entire catalog.
+
+### Examples of WRONG responses (NEVER DO):
+- ❌ Customer describes a specific problem → You list ALL services with "Here's everything we offer!"
+- ❌ Customer mentions one need → You present 10+ unrelated options
+- ❌ Customer says "I need help with X" → You respond with the entire service menu
+
+### When IS it okay to show the full list?
+- Customer explicitly asks "What do you offer?" or "Show me everything"
+- Customer gives NO context about their needs (general browsing)
+- Customer asks "What else do you have?" after seeing filtered results
+
+**REMEMBER**: A smart receptionist doesn't hand someone the entire menu when they say "I'm looking for something for a headache." They walk you to the right aisle.
+
 ### Your Knowledge Base:
 ${knowledgeBase}`;
 }
