@@ -143,6 +143,8 @@ export default function Availability() {
     }
 
     toast({ title: "Success", description: "Availability rule added" });
+    // Sync timezone to receptionist record
+    await supabase.from("receptionists").update({ timezone }).eq("id", selectedReceptionist);
     loadAvailability(selectedReceptionist);
   }
 
