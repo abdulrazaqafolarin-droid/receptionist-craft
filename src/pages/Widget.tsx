@@ -479,23 +479,12 @@ export default function Widget() {
         } else if (isCancel) {
           // User not ready — back off completely
           setBookingState({...defaultBookingState});
-          
-          const botMessage: Message = {
-            role: "assistant",
-            content: "No worries at all! Feel free to browse or ask me anything whenever you're ready. I'm here to help! 😊",
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, botMessage]);
+          addBotMessage("No worries at all! Feel free to browse or ask me anything whenever you're ready. I'm here to help! 😊");
           setLoading(false);
           return;
         }
         // If none matched, treat as ambiguous — ask again gently
-        const botMessage: Message = {
-          role: "assistant",
-          content: "Just to be sure — would you like to go ahead with this order, make any changes to your selection, or take some more time to browse?",
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage("Just to be sure — would you like to go ahead with this order, make any changes to your selection, or take some more time to browse?");
         setLoading(false);
         return;
       }
