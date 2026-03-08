@@ -287,6 +287,75 @@ export default function Widget() {
     setLoading(true);
 
     try {
+      // Handle soft order confirmation step
+      if (bookingState.awaitingOrderConfirmation) {
+        const lowerText = textToSend.toLowerCase().trim();
+        const isConfirm = /^(yes|yep|yeah|sure|go ahead|proceed|confirm|let's do it|ready|ok|okay|place it|place the order|place order|do it|absolutely|definitely|yea|sounds good|let's go|i'm ready)/.test(lowerText);
+        const isChange = /^(change|modify|edit|update|different|swap|switch|actually|wait|hold on|let me change|i want to change|make changes|no.*change|want.*change)/.test(lowerText) || 
+                         /change|modify|different|swap|switch/.test(lowerText);
+        const isCancel = /^(no|nope|nah|cancel|never\s*mind|not really|not now|not ready|maybe later|i('ll| will) pass|forget it|stop|back off|leave me)/.test(lowerText);
+        
+        if (isConfirm) {
+          // User confirmed — NOW start collecting info
+          setBookingState(prev => ({ 
+            ...prev, 
+            awaitingOrderConfirmation: false,
+            collectingInfo: 'name',
+          }));
+          
+          const botMessage: Message = {
+            role: "assistant",
+            content: "Perfect, let's get your order placed! What's your name?",
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, botMessage]);
+          setLoading(false);
+          return;
+        } else if (isChange) {
+          // User wants to change — show product selector again
+          setBookingState(prev => ({ 
+            ...prev, 
+            awaitingOrderConfirmation: false,
+            pendingProducts: [],
+            productId: null,
+            productName: null,
+            quantity: 1,
+            orderMode: false,
+          }));
+          
+          const botMessage: Message = {
+            role: "assistant",
+            content: "No problem at all! Here are our products again — take your time and pick whatever you'd like.",
+            timestamp: new Date(),
+            showProducts: true,
+          };
+          setMessages(prev => [...prev, botMessage]);
+          setLoading(false);
+          return;
+        } else if (isCancel) {
+          // User not ready — back off completely
+          setBookingState({...defaultBookingState});
+          
+          const botMessage: Message = {
+            role: "assistant",
+            content: "No worries at all! Feel free to browse or ask me anything whenever you're ready. I'm here to help! 😊",
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, botMessage]);
+          setLoading(false);
+          return;
+        }
+        // If none matched, treat as ambiguous — ask again gently
+        const botMessage: Message = {
+          role: "assistant",
+          content: "Just to be sure — would you like to go ahead with this order, make any changes to your selection, or take some more time to browse?",
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, botMessage]);
+        setLoading(false);
+        return;
+      }
+
       // Handle booking info collection
       if (bookingState.collectingInfo === 'name') {
         // User provided their name - validate it's a reasonable name
