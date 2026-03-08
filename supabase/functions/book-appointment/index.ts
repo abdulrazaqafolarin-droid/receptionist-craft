@@ -281,6 +281,34 @@ serve(async (req) => {
 
     console.log(`[book-appointment] Created appointment ${appointment.id}`);
 
+    // Mark overlapping appointment_slots as unavailable
+    try {
+      const { data: markedSlots, error: slotErr } = await supabase
+        .from("appointment_slots")
+        .update({ 
+          is_available: false,
+          metadata: { 
+            booked_by_appointment: appointment.id,
+            booked_at: new Date().toISOString(),
+          }
+        })
+        .eq("receptionist_id", receptionistId)
+        .eq("is_available", true)
+        .lt("start_time", end.toISOString())
+        .gt("end_time", start.toISOString())
+        .select("id");
+
+      const count = markedSlots?.length || 0;
+      if (slotErr) {
+        console.error("[book-appointment] Slot marking error:", slotErr);
+      } else {
+        console.log(`[book-appointment] Marked ${count} slot(s) as unavailable`);
+      }
+    } catch (slotMarkErr) {
+      console.error("[book-appointment] Slot marking failed:", slotMarkErr);
+      // Non-fatal: don't fail the booking
+    }
+
     // Log audit trail
     try {
       await supabase.from("appointment_logs").insert({
@@ -291,6 +319,7 @@ serve(async (req) => {
           appointment,
           service: service.name,
           booking_source: bookingSource,
+          conversation_id: metadata?.session_id || null,
         },
       });
     } catch (logErr) {
