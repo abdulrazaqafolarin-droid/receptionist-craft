@@ -81,22 +81,31 @@ export default function Widget() {
   useEffect(() => {
     if (!receptionistId) return;
     
-    let sid = localStorage.getItem(`widget_session_${receptionistId}`);
-    const isNewSession = !sid;
+    const SESSION_KEY = `widget_session_${receptionistId}`;
+    const TIMESTAMP_KEY = `widget_session_ts_${receptionistId}`;
+    const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
     
-    if (!sid) {
+    let sid = localStorage.getItem(SESSION_KEY);
+    const sessionTimestamp = localStorage.getItem(TIMESTAMP_KEY);
+    const now = Date.now();
+    
+    // Check if session has expired (older than 24 hours)
+    const isExpired = sid && sessionTimestamp && (now - parseInt(sessionTimestamp, 10)) > SESSION_MAX_AGE_MS;
+    
+    if (!sid || isExpired) {
+      // No session or expired — create fresh
       sid = crypto.randomUUID();
-      localStorage.setItem(`widget_session_${receptionistId}`, sid);
+      localStorage.setItem(SESSION_KEY, sid);
+      localStorage.setItem(TIMESTAMP_KEY, now.toString());
+      setSessionId(sid);
+      setSessionCheckComplete(true);
+      return;
     }
+    
     setSessionId(sid);
     
-    // If this isn't a new session, check for existing messages
-    if (!isNewSession) {
-      checkExistingConversation(sid);
-    } else {
-      // New session - mark check as complete immediately
-      setSessionCheckComplete(true);
-    }
+    // Session exists and is within 24 hours — check for messages
+    checkExistingConversation(sid);
   }, [receptionistId]);
   
   // Check if there's an existing conversation for this session
@@ -110,8 +119,8 @@ export default function Widget() {
         .order('created_at', { ascending: true })
         .limit(50);
       
-      if (!error && data && data.length > 1) {
-        // Has existing conversation (more than just the greeting)
+      if (!error && data && data.length > 0) {
+        // Has existing conversation — show overlay
         setExistingMessages(data);
         setHasExistingSession(true);
         setShowSessionOverlay(true);
@@ -156,9 +165,10 @@ export default function Widget() {
     setHasExistingSession(false);
     setExistingMessages([]);
     
-    // Generate new session ID
+    // Generate new session ID with fresh timestamp
     const newSid = crypto.randomUUID();
     localStorage.setItem(`widget_session_${receptionistId}`, newSid);
+    localStorage.setItem(`widget_session_ts_${receptionistId}`, Date.now().toString());
     setSessionId(newSid);
     
     // Reset booking state
@@ -386,6 +396,11 @@ export default function Widget() {
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setLoading(true);
+    
+    // Refresh session timestamp on each interaction (keeps 24h window rolling)
+    if (receptionistId) {
+      localStorage.setItem(`widget_session_ts_${receptionistId}`, Date.now().toString());
+    }
 
     try {
       // Handle soft order confirmation step
@@ -960,9 +975,10 @@ export default function Widget() {
   async function handleRefreshConversation() {
     if (!receptionistId) return;
     
-    // Generate new session ID for a clean slate
+    // Generate new session ID with fresh timestamp
     const newSid = crypto.randomUUID();
     localStorage.setItem(`widget_session_${receptionistId}`, newSid);
+    localStorage.setItem(`widget_session_ts_${receptionistId}`, Date.now().toString());
     setSessionId(newSid);
     
     // Reset local booking state

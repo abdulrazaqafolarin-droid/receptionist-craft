@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { MessageSquare, RefreshCcw, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -15,23 +14,7 @@ export function ChatSessionOverlay({
   onNewChat,
   businessName = "our team"
 }: ChatSessionOverlayProps) {
-  const [isVisible, setIsVisible] = useState(hasExistingSession);
-
-  useEffect(() => {
-    setIsVisible(hasExistingSession);
-  }, [hasExistingSession]);
-
-  if (!isVisible) return null;
-
-  const handleContinue = () => {
-    setIsVisible(false);
-    onContinue();
-  };
-
-  const handleNewChat = () => {
-    setIsVisible(false);
-    onNewChat();
-  };
+  if (!hasExistingSession) return null;
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center">
@@ -52,33 +35,33 @@ export function ChatSessionOverlay({
               Welcome back! 👋
             </h3>
             <p className="text-sm text-muted-foreground mt-1">
-              You have an existing conversation with {businessName}. Would you like to continue or start fresh?
+              You have a recent conversation with {businessName}. Would you like to pick up where you left off?
             </p>
           </div>
           
           {/* Options */}
           <div className="space-y-3 pt-2">
             <Button
-              onClick={handleContinue}
+              onClick={onContinue}
               className="w-full gap-2 h-12"
               variant="default"
             >
               <ArrowRight className="w-4 h-4" />
-              Continue Chat
+              Continue our conversation
             </Button>
             
             <Button
-              onClick={handleNewChat}
+              onClick={onNewChat}
               className="w-full gap-2 h-12"
               variant="outline"
             >
               <RefreshCcw className="w-4 h-4" />
-              Start New Chat
+              Start fresh
             </Button>
           </div>
           
           <p className="text-xs text-muted-foreground">
-            Starting a new chat will clear your previous conversation
+            Starting fresh will begin a new conversation
           </p>
         </div>
       </div>
