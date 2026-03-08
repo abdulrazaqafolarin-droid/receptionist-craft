@@ -210,6 +210,7 @@ export default function Availability() {
     }
 
     toast({ title: "Success", description: "Exception deleted" });
+    await regenerateSlots(selectedReceptionist);
     loadAvailability(selectedReceptionist);
   }
 
