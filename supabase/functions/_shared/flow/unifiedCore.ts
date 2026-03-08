@@ -104,6 +104,7 @@ export interface UnifiedState {
     askedIfNeedMore: boolean;
     locked: boolean;
     topicLock: string | null;
+    clarificationSent: boolean;
   };
   lastIntent: UnifiedIntent;
   lastAction: string | null;
