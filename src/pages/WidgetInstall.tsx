@@ -105,7 +105,6 @@ export function AIReceptionistWidget() {
   if (!receptionist) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="container mx-auto p-6">
           <p>Loading...</p>
         </div>
