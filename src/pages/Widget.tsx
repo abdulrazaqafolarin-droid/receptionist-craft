@@ -785,13 +785,7 @@ export default function Widget() {
     const dateStr = format(date, "yyyy-MM-dd");
     const formattedDate = format(date, "EEEE, MMMM d");
     
-    // Add user message
-    const userMessage: Message = {
-      role: "user",
-      content: `I'd like an appointment on ${formattedDate}`,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, userMessage]);
+    addUserMessage(`I'd like an appointment on ${formattedDate}`);
     setLoading(true);
     
     try {
@@ -806,35 +800,15 @@ export default function Widget() {
       });
       
       if (slotsData?.slots && slotsData.slots.length > 0) {
-        const botMessage: Message = {
-          role: "assistant",
-          content: `Here are the available slots for ${formattedDate} — pick the one that works best for you!`,
-          timestamp: new Date(),
-          showTimeSlots: true,
-          timeSlots: slotsData.slots,
-        };
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage(`Here are the available slots for ${formattedDate} — pick the one that works best for you!`, { showTimeSlots: true, timeSlots: slotsData.slots });
       } else {
-        const botMessage: Message = {
-          role: "assistant",
-          content: `I'm sorry, but there are no available time slots on ${formattedDate}. Would you like to try a different date?`,
-          timestamp: new Date(),
-          showDatePicker: true,
-        };
-        // Reset date so user can pick another
         setBookingState(prev => ({ ...prev, date: null }));
-        setMessages(prev => [...prev, botMessage]);
+        addBotMessage(`I'm sorry, but there are no available time slots on ${formattedDate}. Would you like to try a different date?`, { showDatePicker: true });
       }
     } catch (error) {
       console.error("Error fetching availability:", error);
-      const botMessage: Message = {
-        role: "assistant",
-        content: "I had trouble checking availability. Please try selecting a date again.",
-        timestamp: new Date(),
-        showDatePicker: true,
-      };
       setBookingState(prev => ({ ...prev, date: null }));
-      setMessages(prev => [...prev, botMessage]);
+      addBotMessage("I had trouble checking availability. Please try selecting a date again.", { showDatePicker: true });
     } finally {
       setLoading(false);
     }
