@@ -121,6 +121,17 @@ export default function Availability() {
     }
   }
 
+  async function regenerateSlots(receptionistId: string) {
+    try {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      await supabase.functions.invoke("generate-slots", {
+        body: { receptionistId },
+      });
+    } catch (e) {
+      console.warn("Slot regeneration failed (non-blocking):", e);
+    }
+  }
+
   async function addRule() {
     if (!selectedReceptionist) {
       toast({ title: "Error", description: "Please select a receptionist", variant: "destructive" });
