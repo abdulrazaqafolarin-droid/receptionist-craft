@@ -30,10 +30,9 @@ export function updateState(
   next.last_intent = intent.intent;
   
   // ─────────────────────────────────────────────────────────────────────────
-  // HANDLE CANCEL (or flow override — e.g. booking overrides ordering)
+  // HANDLE CANCEL
   // ─────────────────────────────────────────────────────────────────────────
   if (intent.should_cancel_task) {
-    // Reset all task state
     next.task_type = null;
     next.task_step = null;
     next.task_started_at = null;
@@ -46,16 +45,8 @@ export function updateState(
     };
     next.locked = false;
     next.topic_lock = null;
-    next.rules.confirmation_sent = false;
-    next.rules.asked_if_need_more = false;
-    
-    // If this cancel is a flow override (booking overriding ordering),
-    // DON'T return early — fall through to "HANDLE NEW TASK START" below
-    if (!intent.should_start_task) {
-      next.summary = 'User cancelled. Ready for new task.';
-      return next;
-    }
-    next.summary = 'Flow overridden. Starting new task.';
+    next.summary = 'User cancelled. Ready for new task.';
+    return next;
   }
   
   // ─────────────────────────────────────────────────────────────────────────
