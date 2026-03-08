@@ -396,6 +396,11 @@ export default function Widget() {
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setLoading(true);
+    
+    // Refresh session timestamp on each interaction (keeps 24h window rolling)
+    if (receptionistId) {
+      localStorage.setItem(`widget_session_ts_${receptionistId}`, Date.now().toString());
+    }
 
     try {
       // Handle soft order confirmation step
