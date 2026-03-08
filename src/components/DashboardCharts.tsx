@@ -69,7 +69,7 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
         const d = new Date();
         d.setDate(d.getDate() - (29 - i));
         const key = d.toISOString().split("T")[0];
-        dayMap[key] = { conversations: 0, appointments: 0 };
+        dayMap[key] = { conversations: 0, appointments: 0, orders: 0 };
       }
 
       conversations.forEach((c) => {
