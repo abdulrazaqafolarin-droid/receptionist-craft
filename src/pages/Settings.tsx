@@ -177,14 +177,28 @@ export default function Settings() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="timezone">Timezone</Label>
-                      <Input
-                        id="timezone"
+                      <Label htmlFor="timezone" className="flex items-center gap-2">
+                        <Globe className="h-3.5 w-3.5 text-primary" />
+                        Timezone
+                      </Label>
+                      <Select
                         value={formData.timezone}
-                        onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
-                        placeholder="UTC"
-                        className="h-11"
-                      />
+                        onValueChange={(value) => setFormData({ ...formData, timezone: value })}
+                      >
+                        <SelectTrigger className="h-11">
+                          <SelectValue placeholder="Select your timezone" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60">
+                          {TIMEZONE_OPTIONS.map((tz) => (
+                            <SelectItem key={tz.value} value={tz.value}>
+                              {tz.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Auto-detected from your browser. Change if your business is in a different timezone.
+                      </p>
                     </div>
                   </div>
                   <div className="space-y-2">
