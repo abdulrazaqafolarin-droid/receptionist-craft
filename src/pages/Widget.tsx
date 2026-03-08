@@ -162,20 +162,7 @@ export default function Widget() {
     setSessionId(newSid);
     
     // Reset booking state
-    setBookingState({
-      serviceId: null,
-      serviceName: null,
-      date: null,
-      timeSlot: null,
-      customerName: null,
-      customerEmail: null,
-      customerPhone: null,
-      collectingInfo: null,
-      productId: null,
-      productName: null,
-      quantity: 1,
-      orderMode: false,
-    });
+    setBookingState({...defaultBookingState});
     
     // Show fresh greeting with a proper "Hi" conversation start
     if (receptionist?.greeting_message) {
