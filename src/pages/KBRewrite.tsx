@@ -200,10 +200,8 @@ export default function KBRewrite() {
     const summary = selectedLog.changes?.gap_summary || selectedLog.rewritten?.summary || {};
     
     return (
-      <>
-        <Navbar />
-        <div className="relative min-h-screen">
-          <FloatingBackground variant="minimal" />
+      <div className="relative min-h-screen">
+        <FloatingBackground variant="minimal" />
           <div className="relative z-10 container mx-auto p-6 max-w-6xl">
             <Button variant="ghost" onClick={() => { setSelectedLog(null); setEditMode(false); }} className="mb-4">
               ← Back to suggestions
