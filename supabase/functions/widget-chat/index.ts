@@ -1370,7 +1370,7 @@ serve(async (req) => {
         receptionist_id: receptionistId,
         session_id: sessionId,
         user_id: sessionId,
-        sender: "bot",
+        sender: "ai",
         message: safetyResponse,
         metadata: { safety_redirect: true, timestamp: new Date().toISOString() }
       });
