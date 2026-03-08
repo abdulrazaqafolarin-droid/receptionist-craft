@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatCurrency } from "@/lib/currency";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { AppointmentCalendar } from "@/components/appointments/AppointmentCalendar";
@@ -468,7 +469,7 @@ export default function Appointments() {
                                 <span>{item.quantity}x {item.product_name}</span>
                                 {item.unit_price && (
                                   <span className="text-muted-foreground">
-                                    ₦{(item.unit_price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    {formatCurrency(item.unit_price * item.quantity)}
                                   </span>
                                 )}
                               </div>
@@ -477,7 +478,7 @@ export default function Appointments() {
                           {order.total_amount && (
                             <div className="flex justify-between font-medium mt-2 pt-2 border-t">
                               <span>Total:</span>
-                              <span>₦{order.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              <span>{formatCurrency(order.total_amount)}</span>
                             </div>
                           )}
                         </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatCurrency } from "@/lib/currency";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -276,7 +277,7 @@ export default function Services() {
                   </div>
                 )}
                 <div>
-                  <Label>Price (₦)</Label>
+                  <Label>Price</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -316,10 +317,9 @@ export default function Services() {
                     {item.active ? "Active" : "Inactive"}
                   </Badge>
                   {item.price && item.price > 0 && (
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      ₦{item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      {item.price.toFixed(2)}
-                    </Badge>
+                     <Badge variant="outline" className="flex items-center gap-1">
+                       {formatCurrency(item.price)}
+                     </Badge>
                   )}
                   {/* Stock status for products */}
                   {!isService && item.stock_quantity !== null && (
@@ -506,7 +506,7 @@ export default function Services() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="price">Price (₦)</Label>
+                        <Label htmlFor="price">Price</Label>
                         <Input
                           id="price"
                           type="number"
@@ -570,7 +570,7 @@ export default function Services() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="product-price">Price (₦) *</Label>
+                        <Label htmlFor="product-price">Price *</Label>
                         <Input
                           id="product-price"
                           type="number"

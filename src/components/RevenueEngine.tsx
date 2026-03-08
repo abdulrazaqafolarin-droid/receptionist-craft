@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatCurrency } from "@/lib/currency";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +29,7 @@ export function RevenueEngine({ receptionistId, currentMode = 'booking', onModeC
     leads: 0,
     orders: 0,
     totalRevenue: 0,
-    currency: 'NGN'
+    currency: 'USD'
   });
 
   useEffect(() => {
@@ -54,7 +55,7 @@ export function RevenueEngine({ receptionistId, currentMode = 'booking', onModeC
         leads: data?.filter(e => e.event_type === 'lead_captured').length || 0,
         orders: data?.filter(e => e.event_type === 'order_completed').length || 0,
         totalRevenue: data?.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0) || 0,
-        currency: data?.[0]?.currency || 'NGN'
+        currency: data?.[0]?.currency || 'USD'
       };
 
       setConversionStats(stats);
@@ -63,17 +64,8 @@ export function RevenueEngine({ receptionistId, currentMode = 'booking', onModeC
     }
   };
   
-  // Format currency with symbol
-  const formatCurrency = (amount: number, currency: string) => {
-    const symbols: Record<string, string> = {
-      'NGN': '₦',
-      'USD': '$',
-      'EUR': '€',
-      'GBP': '£'
-    };
-    const symbol = symbols[currency] || currency;
-    return `${symbol}${amount.toLocaleString()}`;
-  };
+  // Use shared formatCurrency
+  const fmtCurrency = (amount: number, cur: string) => formatCurrency(amount, cur);
 
   const handleModeChange = async (newMode: 'support' | 'booking' | 'sales') => {
     setLoading(true);
@@ -236,7 +228,7 @@ export function RevenueEngine({ receptionistId, currentMode = 'booking', onModeC
               <div>
                 <div className="text-xs text-muted-foreground">AI Helped Generate</div>
                 <div className="text-2xl font-bold text-green-600">
-                  {formatCurrency(conversionStats.totalRevenue, conversionStats.currency)}
+                  {fmtCurrency(conversionStats.totalRevenue, conversionStats.currency)}
                 </div>
               </div>
             </div>

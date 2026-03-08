@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { ShoppingBag, User, Phone, Mail, CheckCircle, MapPin } from "lucide-react";
+import { formatCurrency } from "@/lib/currency";
 
 interface OrderProduct {
   name: string;
@@ -18,6 +19,7 @@ interface OrderConfirmationProps {
   orderId?: string;
   totalAmount?: number;
   deliveryAddress?: string;
+  currency?: string;
 }
 
 export function OrderConfirmation({
@@ -29,6 +31,7 @@ export function OrderConfirmation({
   orderId,
   totalAmount,
   deliveryAddress,
+  currency,
 }: OrderConfirmationProps) {
   const isEmail = contactInfo?.includes('@');
 
@@ -77,7 +80,7 @@ export function OrderConfirmation({
                   </div>
                   {product.price != null && product.price > 0 && (
                     <span className="text-muted-foreground flex-shrink-0 whitespace-nowrap font-medium">
-                      ₦{(product.price * product.quantity).toLocaleString()}
+                      {formatCurrency(product.price * product.quantity, currency)}
                     </span>
                   )}
                 </div>
@@ -93,7 +96,7 @@ export function OrderConfirmation({
             {displayTotal > 0 && (
               <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-green-200 dark:border-green-800 font-semibold">
                 <span>Total</span>
-                <span>₦{displayTotal.toLocaleString()}</span>
+                <span>{formatCurrency(displayTotal, currency)}</span>
               </div>
             )}
 

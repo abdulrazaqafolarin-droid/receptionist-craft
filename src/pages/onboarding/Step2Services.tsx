@@ -257,7 +257,7 @@ export default function Step2Services() {
                 </div>
               )}
               <div>
-                <Label htmlFor="service_price">Price ($ - Optional)</Label>
+                <Label htmlFor="service_price">Price (Optional)</Label>
                 <Input
                   id="service_price"
                   type="number"
@@ -309,7 +309,7 @@ export default function Step2Services() {
                 />
               </div>
               <div>
-                <Label htmlFor="price">Price (₦)</Label>
+                <Label htmlFor="price">Price</Label>
                 <Input
                   id="price"
                   type="number"

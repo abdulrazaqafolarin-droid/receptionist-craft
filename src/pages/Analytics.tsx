@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatCurrency as fmtCurrency } from "@/lib/currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,10 +138,7 @@ export default function Analytics() {
 
   const formatPercent = (value: number) => `${(value * 100).toFixed(1)}%`;
   const formatNumber = (value: number | null) => value != null ? value.toFixed(2) : "—";
-  const formatCurrency = (amount: number, currency: string) => {
-    const symbols: Record<string, string> = { NGN: '₦', USD: '$', EUR: '€', GBP: '£' };
-    return `${symbols[currency] || currency}${amount.toLocaleString()}`;
-  };
+  const formatCurrency = (amount: number, currency: string) => fmtCurrency(amount, currency);
 
   const conversationTrendData = analytics
     ? Object.entries(analytics.conversation_metrics.conversations_per_day)
@@ -601,7 +599,7 @@ export default function Analytics() {
                           <TableCell className="text-right">{rec.bookings_completed}</TableCell>
                           <TableCell className="text-right">{rec.orders}</TableCell>
                           <TableCell className="text-right font-medium text-amber-600">
-                            {rec.revenue > 0 ? formatCurrency(rec.revenue, analytics.revenue_metrics?.currency || 'NGN') : "—"}
+                            {rec.revenue > 0 ? formatCurrency(rec.revenue, analytics.revenue_metrics?.currency || 'USD') : "—"}
                           </TableCell>
                           <TableCell className="text-right">{formatNumber(rec.avg_quality_score)}</TableCell>
                           <TableCell className="text-right">

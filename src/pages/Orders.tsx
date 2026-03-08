@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatCurrency } from "@/lib/currency";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -280,7 +281,7 @@ export default function Orders() {
               </Card>
               <Card className="border-2 border-border/50 col-span-2 lg:col-span-1">
                 <CardContent className="p-4 text-center">
-                  <div className="text-2xl font-bold text-primary">₦{stats.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div className="text-2xl font-bold text-primary">{formatCurrency(stats.revenue)}</div>
                   <div className="text-sm text-muted-foreground">Revenue</div>
                 </CardContent>
               </Card>
@@ -339,7 +340,7 @@ export default function Orders() {
                             {getStatusBadge(order.status)}
                             {order.total_amount && (
                               <Badge variant="outline" className="flex items-center gap-1">
-                                ₦{order.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {formatCurrency(order.total_amount)}
                               </Badge>
                             )}
                           </div>
@@ -474,14 +475,14 @@ export default function Orders() {
                       <div key={item.id} className="flex justify-between text-sm">
                         <span>{item.product_name} x{item.quantity}</span>
                         {item.unit_price && (
-                          <span className="text-muted-foreground">₦{(item.unit_price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-muted-foreground">{formatCurrency(item.unit_price * item.quantity)}</span>
                         )}
                       </div>
                     ))}
                     {selectedOrder.total_amount && (
                       <div className="flex justify-between font-medium pt-2 border-t">
                         <span>Total</span>
-                        <span>₦{selectedOrder.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span>{formatCurrency(selectedOrder.total_amount)}</span>
                       </div>
                     )}
                   </div>
