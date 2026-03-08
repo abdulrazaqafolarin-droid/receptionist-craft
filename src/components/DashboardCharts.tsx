@@ -82,6 +82,11 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
         if (dayMap[key]) dayMap[key].appointments++;
       });
 
+      ordersData.forEach((o) => {
+        const key = new Date(o.created_at).toISOString().split("T")[0];
+        if (dayMap[key]) dayMap[key].orders++;
+      });
+
       const daily = Object.entries(dayMap)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, vals]) => ({
