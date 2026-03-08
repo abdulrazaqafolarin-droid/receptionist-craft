@@ -80,7 +80,7 @@ export function OrderConfirmation({
                   </div>
                   {product.price != null && product.price > 0 && (
                     <span className="text-muted-foreground flex-shrink-0 whitespace-nowrap font-medium">
-                      ₦{(product.price * product.quantity).toLocaleString()}
+                      {formatCurrency(product.price * product.quantity, currency)}
                     </span>
                   )}
                 </div>
