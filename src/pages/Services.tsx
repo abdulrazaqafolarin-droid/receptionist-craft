@@ -317,10 +317,9 @@ export default function Services() {
                     {item.active ? "Active" : "Inactive"}
                   </Badge>
                   {item.price && item.price > 0 && (
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      ₦{item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      {item.price.toFixed(2)}
-                    </Badge>
+                     <Badge variant="outline" className="flex items-center gap-1">
+                       {formatCurrency(item.price)}
+                     </Badge>
                   )}
                   {/* Stock status for products */}
                   {!isService && item.stock_quantity !== null && (
