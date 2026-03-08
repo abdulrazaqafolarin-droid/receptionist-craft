@@ -319,8 +319,9 @@ export default function Widget() {
     localStorage.setItem(`widget_session_ts_${receptionistId}`, Date.now().toString());
     setSessionId(newSid);
     
-    // Reset booking state
+    // Reset booking state and clear persisted copy
     setBookingState({...defaultBookingState});
+    localStorage.removeItem(BOOKING_STATE_KEY);
     
     // Show fresh greeting with a proper "Hi" conversation start
     if (receptionist?.greeting_message) {
