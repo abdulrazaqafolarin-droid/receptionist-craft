@@ -111,13 +111,19 @@ export default function Widget() {
   // Check if there's an existing conversation for this session
   async function checkExistingConversation(sid: string) {
     try {
+      // Set session header so RLS policy can match widget user's messages
       const { data, error } = await supabase
         .from('chat_messages')
         .select('message, sender, created_at')
         .eq('session_id', sid)
         .eq('receptionist_id', receptionistId)
         .order('created_at', { ascending: true })
-        .limit(50);
+        .limit(50)
+        .setHeader('x-session-id', sid);
+      
+      if (error) {
+        console.warn('Error loading conversation history:', error);
+      }
       
       if (!error && data && data.length > 0) {
         // Has existing conversation — show overlay
