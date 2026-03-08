@@ -413,8 +413,8 @@ function extractContextFromHistory(history: any[]): ConversationContext {
   if (history.length === 0) return context;
   
   const fullText = history.map(h => h.message).join(' ');
-  const botMessages = history.filter(h => h.sender === 'bot').map(h => h.message.toLowerCase()).join(' ');
-  const lastBotMessage = history.filter(h => h.sender === 'bot').slice(-1)[0];
+  const botMessages = history.filter(h => h.sender === 'ai' || h.sender === 'bot').map(h => h.message.toLowerCase()).join(' ');
+  const lastBotMessage = history.filter(h => h.sender === 'ai' || h.sender === 'bot').slice(-1)[0];
   const lastUserMessage = history.filter(h => h.sender === 'user').slice(-1)[0];
   
   // Check if services/products were shown in the last bot message
@@ -576,7 +576,7 @@ interface ConversationKPIs {
 function computeConversationKPIs(history: any[], context: ConversationContext): ConversationKPIs {
   const messages = history || [];
   const userMessages = messages.filter(m => m.sender === 'user');
-  const botMessages = messages.filter(m => m.sender === 'bot');
+  const botMessages = messages.filter(m => m.sender === 'ai' || m.sender === 'bot');
   
   const botResponses = botMessages.map(m => m.message?.substring(0, 50).toLowerCase());
   const uniqueResponses = new Set(botResponses);
@@ -1314,7 +1314,7 @@ serve(async (req) => {
         .select("id")
         .eq("receptionist_id", receptionistId)
         .eq("session_id", sessionId)
-        .eq("sender", "bot")
+        .eq("sender", "ai")
         .limit(1);
 
       // Level 3: Prompt-level enforcement - greeting already stored
@@ -1331,7 +1331,7 @@ serve(async (req) => {
         receptionist_id: receptionistId,
         session_id: sessionId,
         user_id: sessionId,
-        sender: "bot",
+        sender: "ai",
         message: greetingMessage,
         metadata: { greeting: true, source, timestamp: new Date().toISOString() },
       });
@@ -1370,7 +1370,7 @@ serve(async (req) => {
         receptionist_id: receptionistId,
         session_id: sessionId,
         user_id: sessionId,
-        sender: "bot",
+        sender: "ai",
         message: safetyResponse,
         metadata: { safety_redirect: true, timestamp: new Date().toISOString() }
       });
@@ -1863,7 +1863,7 @@ serve(async (req) => {
     const conversationMessages = [
       { role: "system", content: systemPrompt },
       ...(recentMessages || []).map((h: any) => ({
-        role: h.sender === "bot" ? "assistant" : "user",
+        role: (h.sender === "ai" || h.sender === "bot") ? "assistant" : "user",
         content: h.message
       })),
       { role: "user", content: message }
@@ -1995,7 +1995,7 @@ serve(async (req) => {
       receptionist_id: receptionistId,
       session_id: sessionId,
       user_id: sessionId,
-      sender: "bot",
+      sender: "ai",
       message: reply,
       metadata: { 
         timestamp: new Date().toISOString(), 

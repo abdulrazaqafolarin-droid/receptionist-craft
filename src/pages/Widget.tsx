@@ -78,7 +78,7 @@ export default function Widget() {
   const formLoadTimeRef = useRef<number>(Date.now());
 
   // Persist a message to chat_messages so conversation history restoration works
-  async function persistMessage(sender: 'user' | 'bot', text: string) {
+  async function persistMessage(sender: 'user' | 'ai', text: string) {
     if (!receptionistId || !sessionId || !text?.trim()) return;
     try {
       await supabase.from('chat_messages').insert({
@@ -98,7 +98,7 @@ export default function Widget() {
   function addBotMessage(content: string, extras?: Partial<Message>) {
     const msg: Message = { role: "assistant", content, timestamp: new Date(), ...extras };
     setMessages(prev => [...prev, msg]);
-    persistMessage('bot', content);
+    persistMessage('ai', content);
     return msg;
   }
 
@@ -536,7 +536,7 @@ export default function Widget() {
           };
           
           setMessages(prev => [...prev, orderConfirmationMessage]);
-          persistMessage('bot', `Wonderful! Your order has been placed successfully. Here are the details:`);
+          persistMessage('ai', `Wonderful! Your order has been placed successfully. Here are the details:`);
           
           // Reset booking state
           setBookingState({...defaultBookingState});
@@ -580,7 +580,7 @@ export default function Widget() {
           };
           
           setMessages(prev => [...prev, confirmationMessage]);
-          persistMessage('bot', `Your appointment has been confirmed! Here are your booking details:`);
+          persistMessage('ai', `Your appointment has been confirmed! Here are your booking details:`);
           
           // Reset booking state
           setBookingState({...defaultBookingState});
