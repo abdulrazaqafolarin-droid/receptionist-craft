@@ -749,22 +749,8 @@ export default function Widget() {
 
   async function handleServiceSelect(serviceId: string, serviceName: string) {
     setBookingState(prev => ({ ...prev, serviceId, serviceName, orderMode: false }));
-    
-    // Add user message and bot response asking for date
-    const userMessage: Message = {
-      role: "user",
-      content: `I'd like to book ${serviceName}`,
-      timestamp: new Date(),
-    };
-    
-    const botMessage: Message = {
-      role: "assistant",
-      content: `Great choice! Go ahead and pick a date that works for you.`,
-      timestamp: new Date(),
-      showDatePicker: true,
-    };
-    
-    setMessages(prev => [...prev, userMessage, botMessage]);
+    addUserMessage(`I'd like to book ${serviceName}`);
+    addBotMessage(`Great choice! Go ahead and pick a date that works for you.`, { showDatePicker: true });
   }
 
   async function handleProductsConfirm(selectedProducts: Array<{ productId: string; productName: string; quantity: number; price?: number }>) {
