@@ -54,7 +54,7 @@ import {
   mergeSlots, 
   buildSlotSummary 
 } from "../_shared/flow/slotExtractor.ts";
-import { extractValidatedName } from "../_shared/nameValidator.ts";
+import { extractValidatedName, extractNameWithHistory, isNameBackReference } from "../_shared/nameValidator.ts";
 import { MemorySummarizer } from "../_shared/flow/memorySummarizer.ts";
 import type { ConversationState, FlowSlots, ActiveTask } from "../_shared/flow/types.ts";
 import { createEmptyActiveTask } from "../_shared/flow/types.ts";
