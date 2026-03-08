@@ -288,11 +288,34 @@ function detectIntent(message: string, historyLength: number): IntentType {
   if (/^(no|nope|not really|that's wrong|incorrect)/i.test(lowerMsg)) return 'deny';
   if (/actually|i meant|i said .+ not|correction|change that to|switch (it|that) to/i.test(lowerMsg)) return 'correct_previous_info';
   
-  // Product ordering detection
+  // Product ordering detection — EXPANDED natural language triggers
   if (/buy|purchase|order|get|want to get|i'd like|i want/i.test(lowerMsg) && !/appointment|book|schedule/i.test(lowerMsg)) return 'order_product';
   if (/add to cart|checkout|shop|shopping/i.test(lowerMsg)) return 'order_product';
+  // Natural product browsing / buying intent
+  if (/what (do you|are your|products?|items?).*(sell|have|offer|carry|stock)/i.test(lowerMsg)) return 'order_product';
+  if (/show me.*(product|item|menu|catalog|what you (have|sell|offer))/i.test(lowerMsg)) return 'order_product';
+  if (/can i (see|browse|look at|check out).*(product|item|menu|catalog|stock|what)/i.test(lowerMsg)) return 'order_product';
+  if (/what('s| is) (available|in stock|on the menu|for sale)/i.test(lowerMsg)) return 'order_product';
+  if (/do you (sell|carry|stock|have|offer)\s/i.test(lowerMsg) && !/appointment|book/i.test(lowerMsg)) return 'order_product';
+  if (/looking (to|for).*(buy|purchase|order|pick up|grab)/i.test(lowerMsg)) return 'order_product';
+  if (/i (need|want|gotta get|wanna get|would like)\s+(some|a|the|one|two|three|\d+)\s/i.test(lowerMsg) && !/appointment|booking/i.test(lowerMsg)) return 'order_product';
+  if (/place.*(order|purchase)/i.test(lowerMsg)) return 'order_product';
+  if (/pick up|grab (some|a|the)/i.test(lowerMsg) && !/appointment|book/i.test(lowerMsg)) return 'order_product';
+  if (/what can i (buy|order|get)/i.test(lowerMsg)) return 'order_product';
   
+  // Booking / appointment detection — EXPANDED natural language triggers
   if (/book|schedule|appointment|reserve|sign (me )?up|make a booking/i.test(lowerMsg)) return 'book_appointment';
+  if (/when can (i|we) (come in|visit|stop by|see you|swing by|drop by)/i.test(lowerMsg)) return 'book_appointment';
+  if (/are (you|there).*(open|slot|opening|available|free)\s*(on|this|next|today|tomorrow)?/i.test(lowerMsg)) return 'book_appointment';
+  if (/i('d| would) like to (come in|visit|set up|get|arrange|plan)/i.test(lowerMsg) && !/order|buy|purchase/i.test(lowerMsg)) return 'book_appointment';
+  if (/do you have (any )?(availability|time|opening|slot|free time)/i.test(lowerMsg)) return 'book_appointment';
+  if (/can (i|you).*(fit me in|squeeze me in|see me|take me)/i.test(lowerMsg)) return 'book_appointment';
+  if (/i (need|want) to (come in|be seen|get an? |set up)/i.test(lowerMsg) && !/order|buy/i.test(lowerMsg)) return 'book_appointment';
+  if (/set up (an? )?(appointment|visit|session|consultation|meeting)/i.test(lowerMsg)) return 'book_appointment';
+  if (/is there (a |an )?(slot|time|opening|spot) (available|free|open)/i.test(lowerMsg)) return 'book_appointment';
+  if (/make (an? )?(appointment|reservation|booking)/i.test(lowerMsg)) return 'book_appointment';
+  if (/what (days?|times?) (are|do) (you|the).*(available|open|free)/i.test(lowerMsg)) return 'book_appointment';
+  
   if (/cancel|delete|remove|don't want/i.test(lowerMsg) && /appointment|booking/i.test(lowerMsg)) return 'cancel_appointment';
   if (/reschedule|change (the |my )?(date|time|appointment)|move (it|my appointment)/i.test(lowerMsg)) return 'reschedule';
   if (/price|cost|how much|fee|rate|charge|expensive/i.test(lowerMsg)) return 'ask_price';
@@ -302,6 +325,17 @@ function detectIntent(message: string, historyLength: number): IntentType {
   if (/thank|thanks|great|awesome|wonderful|amazing|love it|appreciate/i.test(lowerMsg)) return 'compliment';
   if (/speak to (a |someone|human|person|manager)|talk to someone|real person|human help/i.test(lowerMsg)) return 'escalation_request';
   if (/how are you|what's up|how's it going|nice to meet/i.test(lowerMsg)) return 'small_talk';
+  
+  // Service inquiry detection — EXPANDED natural language triggers
+  if (/what (do you|does the|services?).*(do|offer|provide|specialize)/i.test(lowerMsg)) return 'ask_info';
+  if (/what (services?|treatments?|options?) (do you|are|is)/i.test(lowerMsg)) return 'ask_info';
+  if (/what can you (do|help|offer|provide)/i.test(lowerMsg)) return 'ask_info';
+  if (/tell me (about|what).*(services?|options?|treatments?|you do|you offer)/i.test(lowerMsg)) return 'ask_info';
+  if (/what (would|could|might) (help|work|be good) for/i.test(lowerMsg)) return 'ask_info';
+  if (/i('m| am) (looking for|interested in|curious about).*(service|help|treatment|option)/i.test(lowerMsg)) return 'ask_info';
+  if (/what are (my |your |the )?(options|services|treatments|solutions)/i.test(lowerMsg)) return 'ask_info';
+  if (/can you (help me with|assist with|do)/i.test(lowerMsg)) return 'ask_info';
+  if (/what kind of (stuff|things|work) do you do/i.test(lowerMsg)) return 'ask_info';
   if (/what|which|tell me|info|information|about/i.test(lowerMsg)) return 'ask_info';
   
   return 'general_query';

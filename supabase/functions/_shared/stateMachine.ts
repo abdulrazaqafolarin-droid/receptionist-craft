@@ -423,12 +423,69 @@ export function detectEventFromInput(
     };
   }
 
-  // Check for booking intent from idle
+  // Check for booking intent from idle — EXPANDED natural language triggers
   if (currentState === 'idle') {
+    // Booking intent patterns
     if (/book|schedule|appointment|reserve|sign.?up/i.test(lowerMsg)) {
       return { event: 'START_BOOKING', data: {} };
     }
+    if (/when can (i|we) (come in|visit|stop by|see you|swing by|drop by)/i.test(lowerMsg)) {
+      return { event: 'START_BOOKING', data: {} };
+    }
+    if (/do you have (any )?(availability|time|opening|slot|free time)/i.test(lowerMsg)) {
+      return { event: 'START_BOOKING', data: {} };
+    }
+    if (/can (i|you).*(fit me in|squeeze me in|see me|take me)/i.test(lowerMsg)) {
+      return { event: 'START_BOOKING', data: {} };
+    }
+    if (/is there (a |an )?(slot|time|opening|spot) (available|free|open)/i.test(lowerMsg)) {
+      return { event: 'START_BOOKING', data: {} };
+    }
+    if (/i('d| would) like to (come in|visit|set up|arrange|plan)/i.test(lowerMsg) && !/order|buy|purchase/i.test(lowerMsg)) {
+      return { event: 'START_BOOKING', data: {} };
+    }
+    if (/set up (an? )?(appointment|visit|session|consultation|meeting)/i.test(lowerMsg)) {
+      return { event: 'START_BOOKING', data: {} };
+    }
+    if (/what (days?|times?) (are|do) (you|the).*(available|open|free)/i.test(lowerMsg)) {
+      return { event: 'START_BOOKING', data: {} };
+    }
+    if (/i (need|want) to (come in|be seen|get an? |set up)/i.test(lowerMsg) && !/order|buy/i.test(lowerMsg)) {
+      return { event: 'START_BOOKING', data: {} };
+    }
+    if (/make (an? )?(appointment|reservation|booking)/i.test(lowerMsg)) {
+      return { event: 'START_BOOKING', data: {} };
+    }
+    
+    // Product ordering intent patterns
     if (/buy|purchase|order|want to get|i'd like/i.test(lowerMsg) && !/appointment|book|schedule/i.test(lowerMsg)) {
+      return { event: 'START_ORDER', data: {} };
+    }
+    if (/show me.*(product|item|menu|catalog|what you (have|sell|offer))/i.test(lowerMsg)) {
+      return { event: 'START_ORDER', data: {} };
+    }
+    if (/can i (see|browse|look at|check out).*(product|item|menu|catalog|stock)/i.test(lowerMsg)) {
+      return { event: 'START_ORDER', data: {} };
+    }
+    if (/what('s| is) (available|in stock|on the menu|for sale)/i.test(lowerMsg)) {
+      return { event: 'START_ORDER', data: {} };
+    }
+    if (/do you (sell|carry|stock|have|offer)\s/i.test(lowerMsg) && !/appointment|book/i.test(lowerMsg)) {
+      return { event: 'START_ORDER', data: {} };
+    }
+    if (/looking (to|for).*(buy|purchase|order|pick up|grab)/i.test(lowerMsg)) {
+      return { event: 'START_ORDER', data: {} };
+    }
+    if (/what can i (buy|order|get)/i.test(lowerMsg)) {
+      return { event: 'START_ORDER', data: {} };
+    }
+    if (/what (do you|products?|items?).*(sell|have|offer|carry|stock)/i.test(lowerMsg)) {
+      return { event: 'START_ORDER', data: {} };
+    }
+    if (/place.*(order|purchase)/i.test(lowerMsg)) {
+      return { event: 'START_ORDER', data: {} };
+    }
+    if (/pick up|grab (some|a|the)/i.test(lowerMsg) && !/appointment|book/i.test(lowerMsg)) {
       return { event: 'START_ORDER', data: {} };
     }
   }

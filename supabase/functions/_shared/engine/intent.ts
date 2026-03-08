@@ -40,11 +40,11 @@ const PATTERNS = {
   // P7: Correction
   correction: /actually|i\s*meant|i\s*said\s*.+\s*not|correction|change\s*that\s*to|switch\s*(it|that)\s*to|no\s*i\s*(meant|said)/i,
   
-  // P8: Booking
-  book: /book|appointment|schedule|reserve|sign\s*(me\s*)?up|make\s*a\s*booking|set\s*up\s*an?\s*(appointment|session)/i,
+  // P8: Booking — EXPANDED natural language triggers
+  book: /book|appointment|schedule|reserve|sign\s*(me\s*)?up|make\s*a\s*booking|set\s*up\s*an?\s*(appointment|session)|when\s*can\s*(i|we)\s*(come\s*in|visit|stop\s*by|see\s*you|swing\s*by|drop\s*by)|do\s*you\s*have\s*(any\s*)?(availability|time|opening|slot|free\s*time)|can\s*(i|you)\s*.*(fit\s*me\s*in|squeeze\s*me\s*in|see\s*me|take\s*me)|is\s*there\s*(a\s*|an\s*)?(slot|time|opening|spot)\s*(available|free|open)|what\s*(days?|times?)\s*(are|do)\s*(you|the)\s*.*(available|open|free)|i('d|\s*would)\s*like\s*to\s*(come\s*in|visit|set\s*up|arrange|plan)/i,
   
-  // P9: Ordering
-  order: /buy|purchase|order|get|want\s*(to\s*)?get|i'?d\s*like|add\s*to\s*cart|checkout|shop|i\s*want|i\s*need/i,
+  // P9: Ordering — EXPANDED natural language triggers
+  order: /buy|purchase|order|get|want\s*(to\s*)?get|i'?d\s*like|add\s*to\s*cart|checkout|shop|i\s*want|i\s*need|show\s*me\s*.*(product|item|menu|catalog)|can\s*i\s*(see|browse|look\s*at|check\s*out)\s*.*(product|item|menu|catalog|stock)|what('?s|\s*is)\s*(available|in\s*stock|on\s*the\s*menu|for\s*sale)|do\s*you\s*(sell|carry|stock|have|offer)\s|looking\s*(to|for)\s*.*(buy|purchase|order|pick\s*up|grab)|place\s*.*(order|purchase)|what\s*can\s*i\s*(buy|order|get)|what\s*(do\s*you|products?|items?)\s*.*(sell|have|offer|carry|stock)|pick\s*up|grab\s*(some|a|the)/i,
   
   // P10: Escalation
   escalate: /speak\s*to|talk\s*to|human|manager|real\s*person|live\s*agent|representative|supervisor/i,
@@ -58,8 +58,8 @@ const PATTERNS = {
   // P13: Hours inquiry
   hours: /hour|open|close|when|available|timing|schedule|operation/i,
   
-  // P14: Info request
-  info: /what|where|which|tell\s*me|info|about|explain|describe|details?/i,
+  // P14: Info request — EXPANDED for service discovery
+  info: /what|where|which|tell\s*me|info|about|explain|describe|details?|what\s*(do\s*you|services?|can\s*you)\s*.*(do|offer|provide|help|specialize)|what\s*are\s*(my|your|the)\s*(options|services|treatments|solutions)|what\s*(would|could|might)\s*(help|work|be\s*good)\s*for|can\s*you\s*(help\s*me\s*with|assist\s*with)|what\s*kind\s*of\s*(stuff|things|work)\s*do\s*you\s*do/i,
   
   // P15: Small talk
   small_talk: /how\s*are\s*you|what'?s\s*up|how'?s\s*it\s*going|nice\s*to\s*meet|how\s*do\s*you\s*do/i,
