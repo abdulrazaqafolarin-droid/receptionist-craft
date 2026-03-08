@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { ShoppingBag, User, Phone, Mail, CheckCircle, MapPin } from "lucide-react";
+import { formatCurrency } from "@/lib/currency";
 
 interface OrderProduct {
   name: string;
