@@ -197,10 +197,14 @@ export default function Widget() {
     }
   }
   
-  // Handle continue existing chat - show BOTH user and assistant messages
+  // Handle continue existing chat - show BOTH user and assistant messages + resume booking flow
   function handleContinueChat() {
     setShowSessionOverlay(false);
     setGreetingStored(true); // Prevent re-storing greeting
+    
+    // Restore persisted booking state from localStorage
+    const restoredBooking = loadPersistedBookingState();
+    setBookingState(restoredBooking);
     
     // Restore messages from the existing conversation - include both user and AI messages
     if (existingMessages.length > 0) {
@@ -213,13 +217,93 @@ export default function Widget() {
           showQuickReplies: false,
         }));
       
-      // Add quick replies to the last assistant message
-      const lastIndex = restoredMessages.length - 1;
-      if (lastIndex >= 0 && restoredMessages[lastIndex].role === 'assistant') {
-        restoredMessages[lastIndex].showQuickReplies = true;
-      }
-      
       setMessages(restoredMessages);
+      
+      // After restoring messages, detect incomplete booking stage and auto-resume
+      // Use setTimeout to let state settle before appending resumption message
+      setTimeout(() => resumeBookingFlow(restoredBooking), 400);
+    }
+  }
+  
+  // Detect the last incomplete booking stage and re-render the appropriate UI widget
+  async function resumeBookingFlow(state: typeof defaultBookingState) {
+    // If collecting info (name or contact), just prompt again
+    if (state.collectingInfo === 'name') {
+      addBotMessage("Welcome back! 👋 We were just getting your details to complete the booking. What's your name?");
+      return;
+    }
+    if (state.collectingInfo === 'contact') {
+      addBotMessage(`Welcome back, ${state.customerName}! 👋 To finish your booking, could you share your email or phone number?`);
+      return;
+    }
+    // If awaiting order confirmation
+    if (state.awaitingOrderConfirmation && state.productName) {
+      addBotMessage(`Welcome back! 👋 You had selected ${state.productName}. Would you like to go ahead with this order, make changes, or start fresh?`);
+      return;
+    }
+    // If service + date selected but no time slot — fetch fresh slots and show
+    if (state.serviceId && state.date && !state.timeSlot) {
+      const formattedDate = format(state.date, "EEEE, MMMM d");
+      setLoading(true);
+      try {
+        const dateStr = format(state.date, "yyyy-MM-dd");
+        const nextDay = new Date(state.date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        const endDateStr = format(nextDay, "yyyy-MM-dd");
+        
+        const { data: slotsData, error: slotsError } = await supabase.functions.invoke("check-availability", {
+          body: { receptionistId, serviceId: state.serviceId, startDate: dateStr, endDate: endDateStr, maxSlots: 8 }
+        });
+        
+        const slots = slotsData?.slots || [];
+        if (slots.length > 0) {
+          addBotMessage(
+            `Welcome back! 👋 You were booking ${state.serviceName} for ${formattedDate}. Here are today's available times — pick one to continue!`,
+            { showTimeSlots: true, timeSlots: slots }
+          );
+        } else {
+          // Date no longer has slots — offer date picker again
+          setBookingState(prev => ({ ...prev, date: null }));
+          addBotMessage(
+            `Welcome back! 👋 You were booking ${state.serviceName}, but ${formattedDate} no longer has open slots. Please pick another date.`,
+            { showDatePicker: true }
+          );
+        }
+      } catch (e) {
+        console.error("[Widget] Error resuming booking flow:", e);
+        setBookingState(prev => ({ ...prev, date: null }));
+        addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName}. Please pick a date to continue.`, { showDatePicker: true });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+    // If service selected but no date — show date picker
+    if (state.serviceId && !state.date) {
+      addBotMessage(
+        `Welcome back! 👋 You were booking ${state.serviceName}. Go ahead and pick a date that works for you!`,
+        { showDatePicker: true }
+      );
+      return;
+    }
+    // If time slot selected but info not yet collected — start collecting
+    if (state.serviceId && state.date && state.timeSlot && !state.customerName) {
+      const formattedDate = format(state.date, "EEEE, MMMM d");
+      const formattedTime = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(state.timeSlot.startTime || state.timeSlot.start));
+      setBookingState(prev => ({ ...prev, collectingInfo: 'name' }));
+      addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName} on ${formattedDate} at ${formattedTime}. To complete your booking, may I have your name please?`);
+      return;
+    }
+    // No active booking flow — show quick replies
+    const lastMsg = messages[messages.length - 1];
+    if (!lastMsg || lastMsg.role !== 'assistant' || !lastMsg.showQuickReplies) {
+      setMessages(prev => {
+        const updated = [...prev];
+        if (updated.length > 0 && updated[updated.length - 1].role === 'assistant') {
+          updated[updated.length - 1] = { ...updated[updated.length - 1], showQuickReplies: true };
+        }
+        return updated;
+      });
     }
   }
   
