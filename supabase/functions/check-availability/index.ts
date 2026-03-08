@@ -115,32 +115,87 @@ serve(async (req) => {
     // Generate candidate slots
     // Slots are generated in the BUSINESS timezone (from availability_rules)
     // and returned as UTC ISO strings. The frontend converts to customer's local time.
+    //
+    // CRITICAL: We use Intl.DateTimeFormat to properly handle timezone offsets.
+    // The Deno runtime runs in UTC, so naive setHours() would produce UTC times,
+    // not business-local times. We must convert business-local → UTC correctly.
+
+    /**
+     * Convert a date + time-of-day in a specific IANA timezone to a UTC Date.
+     * E.g. "2026-03-10" + "09:00" in "Africa/Lagos" → UTC Date for 08:00 UTC.
+     */
+    function businessLocalToUTC(dateStr: string, timeStr: string, tz: string): Date {
+      // Build an ISO-like string and let the runtime parse it,
+      // then adjust for the timezone offset.
+      const [hours, minutes] = timeStr.split(":").map(Number);
+      
+      // Create a date in UTC first
+      const utcDate = new Date(`${dateStr}T${timeStr}:00Z`);
+      
+      // Find the offset of the business timezone at this moment
+      // by comparing UTC vs local representation
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: tz,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      });
+      
+      // Get what UTC midnight looks like in the target timezone
+      const testDate = new Date(`${dateStr}T12:00:00Z`);
+      const parts = formatter.formatToParts(testDate);
+      const getPart = (type: string) => parseInt(parts.find(p => p.type === type)?.value || "0");
+      
+      const localHour = getPart("hour");
+      const localMinute = getPart("minute");
+      // Offset in minutes: local = UTC + offset → offset = (localH*60+localM) - (12*60+0)
+      const offsetMinutes = (localHour * 60 + localMinute) - (12 * 60);
+      
+      // Business local time in UTC = local time - offset
+      const result = new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00Z`);
+      result.setMinutes(result.getMinutes() - offsetMinutes);
+      
+      return result;
+    }
+
     const slots: any[] = [];
     let currentDay = new Date(searchStart);
-    currentDay.setHours(0, 0, 0, 0);
+    currentDay.setUTCHours(0, 0, 0, 0);
 
     while (currentDay < searchEnd && slots.length < maxSlots) {
-      const dayOfWeek = currentDay.getDay(); // 0=Sunday, 6=Saturday
+      const dayOfWeek = currentDay.getUTCDay(); // Use UTC to avoid server-local issues
       
-      // Find rules for this day
-      const dayRules = (rules || []).filter((r: any) => Number(r.day_of_week) === dayOfWeek);
+      // Format date string for conversion helper
+      const year = currentDay.getUTCFullYear();
+      const month = String(currentDay.getUTCMonth() + 1).padStart(2, '0');
+      const dayStr = String(currentDay.getUTCDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${dayStr}`;
+
+      // We need to check rules for the LOCAL day-of-week in each rule's timezone
+      // For simplicity & correctness, iterate all rules and check if this UTC date
+      // corresponds to the right day_of_week in the rule's timezone
+      const dayRules = (rules || []).filter((r: any) => {
+        const ruleTz = r.timezone || 'UTC';
+        // Check what day_of_week this date is in the rule's timezone
+        const localDow = new Intl.DateTimeFormat("en-US", {
+          timeZone: ruleTz,
+          weekday: "short"
+        }).format(currentDay);
+        const dowMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+        const localDayNum = dowMap[localDow] ?? dayOfWeek;
+        return Number(r.day_of_week) === localDayNum;
+      });
       
       for (const rule of dayRules) {
         const ruleTz = rule.timezone || 'UTC';
-        const [startH, startM] = (rule.start_time || "09:00").split(":").map(Number);
-        const [endH, endM] = (rule.end_time || "17:00").split(":").map(Number);
         
-        // Build slot times relative to the business timezone
-        // We construct date strings and let the runtime handle conversion
-        const year = currentDay.getFullYear();
-        const month = String(currentDay.getMonth() + 1).padStart(2, '0');
-        const day = String(currentDay.getDate()).padStart(2, '0');
-        
-        let slotStart = new Date(currentDay);
-        slotStart.setHours(startH, startM, 0, 0);
-        
-        const dayEnd = new Date(currentDay);
-        dayEnd.setHours(endH, endM, 0, 0);
+        // Convert business-local start/end to UTC
+        let slotStart = businessLocalToUTC(dateStr, rule.start_time || "09:00", ruleTz);
+        const dayEnd = businessLocalToUTC(dateStr, rule.end_time || "17:00", ruleTz);
 
         // Iterate through time slots in 15-minute increments
         while (slotStart < dayEnd && slots.length < maxSlots) {
@@ -206,7 +261,7 @@ serve(async (req) => {
         }
       }
 
-      currentDay.setDate(currentDay.getDate() + 1);
+      currentDay.setUTCDate(currentDay.getUTCDate() + 1);
     }
 
     console.log(`[check-availability] Generated ${slots.length} available slots`);

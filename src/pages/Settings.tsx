@@ -6,6 +6,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Zap, Bell, User, Lock, CreditCard, Palette, Globe } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TIMEZONE_OPTIONS, detectBrowserTimezone, findClosestTimezone } from "@/lib/timezones";
 import { Badge } from "@/components/ui/badge";
 import { notify } from "@/lib/notify";
 import { toast } from "sonner";
@@ -54,7 +56,7 @@ export default function Settings() {
       setFormData({
         name: profileData.name || "",
         email: profileData.email || user.email || "",
-        timezone: profileData.timezone || "UTC",
+        timezone: profileData.timezone || findClosestTimezone(detectBrowserTimezone()),
         emailNotifications: true,
         pushNotifications: true,
       });
@@ -175,14 +177,28 @@ export default function Settings() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="timezone">Timezone</Label>
-                      <Input
-                        id="timezone"
+                      <Label htmlFor="timezone" className="flex items-center gap-2">
+                        <Globe className="h-3.5 w-3.5 text-primary" />
+                        Timezone
+                      </Label>
+                      <Select
                         value={formData.timezone}
-                        onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
-                        placeholder="UTC"
-                        className="h-11"
-                      />
+                        onValueChange={(value) => setFormData({ ...formData, timezone: value })}
+                      >
+                        <SelectTrigger className="h-11">
+                          <SelectValue placeholder="Select your timezone" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60">
+                          {TIMEZONE_OPTIONS.map((tz) => (
+                            <SelectItem key={tz.value} value={tz.value}>
+                              {tz.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Auto-detected from your browser. Change if your business is in a different timezone.
+                      </p>
                     </div>
                   </div>
                   <div className="space-y-2">
