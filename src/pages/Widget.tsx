@@ -632,25 +632,62 @@ export default function Widget() {
 
         // Check if this is a product order or appointment booking
         if (bookingState.orderMode && bookingState.productName) {
-          // Product order confirmation - more natural message
-          const orderConfirmationMessage: Message = {
-            role: "assistant",
-            content: `Wonderful! Your order has been placed successfully. Here are the details:`,
-            timestamp: new Date(),
-            orderConfirmation: {
-              productName: bookingState.productName,
-              quantity: bookingState.quantity || 1,
-              customerName: bookingState.customerName,
-              contactInfo: contactInfo,
-              orderId: crypto.randomUUID(),
+          // Write the order to the database via the create_widget_order RPC
+          try {
+            const orderItems = bookingState.pendingProducts.length > 0
+              ? bookingState.pendingProducts.map(p => ({
+                  product_id: p.productId,
+                  product_name: p.productName,
+                  quantity: p.quantity,
+                  unit_price: p.price || null,
+                }))
+              : [{
+                  product_id: bookingState.productId,
+                  product_name: bookingState.productName,
+                  quantity: bookingState.quantity || 1,
+                  unit_price: null,
+                }];
+
+            const totalAmount = orderItems.reduce((sum, item) => sum + ((item.unit_price || 0) * item.quantity), 0);
+
+            const { data: orderId, error: orderError } = await supabase.rpc('create_widget_order', {
+              p_receptionist_id: receptionistId,
+              p_customer_name: bookingState.customerName!,
+              p_items: orderItems,
+              p_customer_email: isEmail ? contactInfo : null,
+              p_customer_phone: !isEmail ? contactInfo : null,
+              p_notes: null,
+              p_metadata: { session_id: sessionId, source: 'widget' },
+            });
+
+            if (orderError) {
+              console.error("[Widget] Order creation error:", orderError);
+              throw orderError;
             }
-          };
-          
-          setMessages(prev => [...prev, orderConfirmationMessage]);
-          persistMessage('ai', `Wonderful! Your order has been placed successfully. Here are the details:`);
+
+            const orderConfirmationMessage: Message = {
+              role: "assistant",
+              content: `Wonderful! Your order has been placed successfully. Here are the details:`,
+              timestamp: new Date(),
+              orderConfirmation: {
+                products: orderItems.map(i => ({ name: i.product_name, quantity: i.quantity, price: i.unit_price })),
+                customerName: bookingState.customerName,
+                contactInfo: contactInfo,
+                orderId: orderId || crypto.randomUUID(),
+                totalAmount,
+              }
+            };
+            
+            setMessages(prev => [...prev, orderConfirmationMessage]);
+            persistMessage('ai', `Wonderful! Your order has been placed successfully. Here are the details:`);
+          } catch (orderErr: any) {
+            console.error("[Widget] Order error:", orderErr);
+            addBotMessage("I apologize, but I encountered an issue placing your order. Please try again or contact us directly.");
+          }
           
           // Reset booking state
           setBookingState({...defaultBookingState});
+          localStorage.removeItem(BOOKING_STATE_KEY);
           
           setLoading(false);
           return;
