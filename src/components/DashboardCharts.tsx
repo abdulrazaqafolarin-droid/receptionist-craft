@@ -61,6 +61,7 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
 
       const conversations = convRes.data || [];
       const appointments = apptRes.data || [];
+      const ordersData = ordersRes.data || [];
 
       // Build daily buckets
       const dayMap: Record<string, { conversations: number; appointments: number }> = {};
