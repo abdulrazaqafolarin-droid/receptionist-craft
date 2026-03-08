@@ -494,12 +494,7 @@ export default function Widget() {
         // User provided their name - validate it's a reasonable name
         const name = textToSend.trim();
         if (name.length < 2) {
-          const botMessage: Message = {
-            role: "assistant",
-            content: "I didn't quite catch that. Could you please provide your full name?",
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, botMessage]);
+          addBotMessage("I didn't quite catch that. Could you please provide your full name?");
           setLoading(false);
           return;
         }
