@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({
     conversations: 0,
     appointments: 0,
+    orders: 0,
     activeReceptionists: 0,
   });
 
