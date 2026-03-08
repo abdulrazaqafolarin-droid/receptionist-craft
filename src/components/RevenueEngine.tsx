@@ -64,15 +64,8 @@ export function RevenueEngine({ receptionistId, currentMode = 'booking', onModeC
   };
   
   // Format currency with symbol
-  const formatCurrency = (amount: number, currency: string) => {
-    const symbols: Record<string, string> = {
-      'NGN': '₦',
-      'USD': '$',
-      'EUR': '€',
-      'GBP': '£'
-    };
-    const symbol = symbols[currency] || currency;
-    return `${symbol}${amount.toLocaleString()}`;
+  const fmtCurrency = (amount: number, currency: string) => {
+    return formatCurrencyUtil(amount, currency);
   };
 
   const handleModeChange = async (newMode: 'support' | 'booking' | 'sales') => {
