@@ -745,7 +745,7 @@ export default function Widget() {
     
     const botMessage: Message = {
       role: "assistant",
-      content: `Great choice! ${serviceName} is a popular option. What date would you prefer for your appointment?`,
+      content: `Great choice! Go ahead and pick a date that works for you.`,
       timestamp: new Date(),
       showDatePicker: true,
     };
