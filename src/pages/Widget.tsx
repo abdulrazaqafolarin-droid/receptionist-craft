@@ -594,8 +594,22 @@ export default function Widget() {
       // Handle booking info collection (client-side flow — persist user message)
       if (bookingState.collectingInfo === 'name') {
         persistMessage('user', textToSend);
-        // User provided their name - validate it's a reasonable name
-        const name = textToSend.trim();
+        let name = textToSend.trim();
+
+        // Detect back-references like "same name", "the name I gave you", "use my earlier name"
+        const isBackReference = /\b(same\s+name|name\s+i\s+(?:gave|told|provided|said|mentioned)|(?:use|keep)\s+(?:my|the)\s+(?:earlier|previous|last|same)\s+name|already\s+(?:gave|told|said)|you\s+(?:already\s+)?have\s+(?:my|it|the)\s+name)\b/i.test(name);
+        if (isBackReference) {
+          // Search conversation history for a previously extracted name
+          const previousName = findPreviousNameInHistory(messages);
+          if (previousName) {
+            name = previousName;
+          } else {
+            addBotMessage("I don't seem to have your name from earlier in our conversation. Could you please tell me your name?");
+            setLoading(false);
+            return;
+          }
+        }
+
         if (name.length < 2) {
           addBotMessage("I didn't quite catch that. Could you please provide your full name?");
           setLoading(false);
