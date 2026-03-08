@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageCircle, Calendar, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign } from "lucide-react";
+import { MessageCircle, Calendar, CalendarDays, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { RevenueEngine } from "@/components/RevenueEngine";
@@ -244,10 +244,11 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <section aria-label="Quick actions">
-          <nav className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+          <nav className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
             {[
               { title: "Conversations", desc: "View chat transcripts", icon: MessageCircle, path: "/conversations" },
-              { title: "Appointments", desc: "Calendar view", icon: Calendar, path: "/appointments" },
+              { title: "Calendar", desc: "Full schedule view", icon: CalendarDays, path: "/calendar" },
+              { title: "Appointments", desc: "Manage bookings", icon: Calendar, path: "/appointments" },
               { title: "Analytics", desc: "Performance insights", icon: BarChart3, path: "/analytics" },
               { title: "Quality Review", desc: "Improve AI responses", icon: CheckCircle2, path: "/quality-review" },
             ].map((item) => (

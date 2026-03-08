@@ -1,4 +1,4 @@
-import { BarChart, Home, Calendar, MessageSquare, Settings, HelpCircle, ClipboardCheck, Lightbulb, Activity, Bell, Radio, Clock, Briefcase, MessageCircleQuestion, ShoppingBag, Building2 } from "lucide-react";
+import { BarChart, Home, Calendar, CalendarDays, MessageSquare, Settings, HelpCircle, ClipboardCheck, Lightbulb, Activity, Bell, Radio, Clock, Briefcase, MessageCircleQuestion, ShoppingBag, Building2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import rutexLogo from "@/assets/rutex-logo.jpg";
@@ -20,6 +20,7 @@ const items = [
   { title: "Analytics", url: "/analytics", icon: BarChart },
   { title: "Conversations", url: "/conversations", icon: MessageSquare },
   { title: "Orders & Appointments", url: "/appointments", icon: Calendar },
+  { title: "Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Products & Services", url: "/services", icon: Briefcase },
   { title: "Availability", url: "/availability", icon: Clock },
   { title: "FAQs", url: "/faqs", icon: MessageCircleQuestion },

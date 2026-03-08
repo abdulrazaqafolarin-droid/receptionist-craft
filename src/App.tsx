@@ -38,6 +38,7 @@ import ManageBooking from "./pages/ManageBooking";
 import WidgetInstall from "./pages/WidgetInstall";
 import FAQManagement from "./pages/FAQManagement";
 import OrganizationPage from "./pages/Organization";
+import CalendarView from "./pages/CalendarView";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -128,6 +129,7 @@ const App = () => {
                               <Route path="/services" element={<Services />} />
                               <Route path="/orders" element={<Orders />} />
                               <Route path="/availability" element={<Availability />} />
+                              <Route path="/calendar" element={<CalendarView />} />
                               <Route path="/faqs" element={<FAQManagement />} />
                               <Route path="/analytics" element={<Analytics />} />
                               <Route path="/quality-review" element={<QualityReview />} />
