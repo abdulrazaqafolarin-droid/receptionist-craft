@@ -317,7 +317,7 @@ export default function Services() {
                   </Badge>
                   {item.price && item.price > 0 && (
                     <Badge variant="outline" className="flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" />
+                      ₦{item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       {item.price.toFixed(2)}
                     </Badge>
                   )}
