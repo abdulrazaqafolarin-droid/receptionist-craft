@@ -480,8 +480,9 @@ export default function Widget() {
         return;
       }
 
-      // Handle booking info collection
+      // Handle booking info collection (client-side flow — persist user message)
       if (bookingState.collectingInfo === 'name') {
+        persistMessage('user', textToSend);
         // User provided their name - validate it's a reasonable name
         const name = textToSend.trim();
         if (name.length < 2) {
