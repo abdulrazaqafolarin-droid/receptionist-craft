@@ -228,7 +228,7 @@ export function RevenueEngine({ receptionistId, currentMode = 'booking', onModeC
               <div>
                 <div className="text-xs text-muted-foreground">AI Helped Generate</div>
                 <div className="text-2xl font-bold text-green-600">
-                  {formatCurrency(conversionStats.totalRevenue, conversionStats.currency)}
+                  {fmtCurrency(conversionStats.totalRevenue, conversionStats.currency)}
                 </div>
               </div>
             </div>
