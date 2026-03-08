@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle, Edit, AlertCircle, Brain, BarChart3, TrendingDown, MessageSquareWarning, ArrowUpCircle } from "lucide-react";
-import { Navbar } from "@/components/Navbar";
 import { FloatingBackground } from "@/components/FloatingBackground";
 
 interface KBRewriteLog {
