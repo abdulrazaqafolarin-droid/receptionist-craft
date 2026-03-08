@@ -277,7 +277,7 @@ export default function Services() {
                   </div>
                 )}
                 <div>
-                  <Label>Price (₦)</Label>
+                  <Label>Price</Label>
                   <Input
                     type="number"
                     step="0.01"
