@@ -19,6 +19,7 @@ interface OrderConfirmationProps {
   orderId?: string;
   totalAmount?: number;
   deliveryAddress?: string;
+  currency?: string;
 }
 
 export function OrderConfirmation({
