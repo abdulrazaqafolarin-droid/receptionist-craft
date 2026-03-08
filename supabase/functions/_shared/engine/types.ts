@@ -229,6 +229,7 @@ export function createEmptyState(): EngineState {
       confirmation_sent: false,
       closing_offered: false,
       asked_if_need_more: false,
+      clarification_asked: false,
     },
     locked: false,
     topic_lock: null,
