@@ -458,14 +458,7 @@ export default function Widget() {
             collectingInfo: 'name',
           }));
           
-          const botContent = "Perfect, let's get your order placed! What's your name?";
-          const botMessage: Message = {
-            role: "assistant",
-            content: botContent,
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, botMessage]);
-          persistMessage('bot', botContent);
+          addBotMessage("Perfect, let's get your order placed! What's your name?");
           setLoading(false);
           return;
         } else if (isChange) {
