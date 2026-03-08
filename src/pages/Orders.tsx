@@ -339,8 +339,8 @@ export default function Orders() {
                             {getStatusBadge(order.status)}
                             {order.total_amount && (
                               <Badge variant="outline" className="flex items-center gap-1">
-                                <DollarSign className="h-3 w-3" />
-                                {order.total_amount.toFixed(2)}
+                                ₦{order.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </Badge>
                               </Badge>
                             )}
                           </div>
