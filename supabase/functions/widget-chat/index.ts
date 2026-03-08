@@ -1863,7 +1863,7 @@ serve(async (req) => {
     const conversationMessages = [
       { role: "system", content: systemPrompt },
       ...(recentMessages || []).map((h: any) => ({
-        role: h.sender === "bot" ? "assistant" : "user",
+        role: (h.sender === "ai" || h.sender === "bot") ? "assistant" : "user",
         content: h.message
       })),
       { role: "user", content: message }
