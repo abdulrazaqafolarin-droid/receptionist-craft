@@ -1247,12 +1247,6 @@ export default function Widget() {
     setInput("");
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
 
   const handleSendClick = () => {
     sendMessage();
