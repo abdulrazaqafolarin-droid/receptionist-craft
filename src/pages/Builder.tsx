@@ -190,6 +190,7 @@ export default function BuilderPage() {
           ...data,
           primary_goal: (data.primary_goal as PrimaryGoal) || 'bookings',
           capabilities: (data.capabilities as BusinessCapabilities) || prev.capabilities,
+          currency: (data as any).currency || 'USD',
         }));
       } else {
         // not found
