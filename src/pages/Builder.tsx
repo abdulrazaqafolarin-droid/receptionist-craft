@@ -90,6 +90,7 @@ export default function BuilderPage() {
     system_prompt: "",
     temperature: 0.7,
     language: "English",
+    currency: "USD",
     goal: "",
     primary_goal: "bookings",
     capabilities: {
