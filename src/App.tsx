@@ -39,6 +39,7 @@ import WidgetInstall from "./pages/WidgetInstall";
 import FAQManagement from "./pages/FAQManagement";
 import OrganizationPage from "./pages/Organization";
 import CalendarView from "./pages/CalendarView";
+import Channels from "./pages/Channels";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
