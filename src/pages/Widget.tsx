@@ -1285,6 +1285,14 @@ export default function Widget() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-2 sm:p-4">
+      {/* Voice Chat Overlay */}
+      <VoiceChatOverlay
+        open={voiceChatOpen}
+        onClose={() => setVoiceChatOpen(false)}
+        onSendMessage={handleVoiceSendMessage}
+        primaryColor={widgetColors.primaryColor}
+        secondaryColor={widgetColors.secondaryColor}
+      />
       <Card className="w-full max-w-3xl h-[90vh] sm:h-[700px] flex flex-col shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-300 relative">
         {/* Chat Session Overlay - shown when returning with existing conversation */}
         <ChatSessionOverlay
