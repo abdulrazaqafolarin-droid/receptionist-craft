@@ -108,8 +108,9 @@ export default function Analytics() {
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke("analytics/compute", {
+      const { data, error } = await supabase.functions.invoke("analytics", {
         body: { 
+          action: "compute",
           userId: user.id,
           days: dateRange.days
         }
