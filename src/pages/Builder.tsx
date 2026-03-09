@@ -850,6 +850,32 @@ export default function BuilderPage() {
                 </div>
 
                 <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Currency</label>
+                  <select
+                    className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                    value={receptionist.currency || "USD"}
+                    onChange={(e) => onFieldChange("currency", e.target.value)}
+                  >
+                    <option value="USD">USD — US Dollar ($)</option>
+                    <option value="EUR">EUR — Euro (€)</option>
+                    <option value="GBP">GBP — British Pound (£)</option>
+                    <option value="NGN">NGN — Nigerian Naira (₦)</option>
+                    <option value="KES">KES — Kenyan Shilling (KSh)</option>
+                    <option value="GHS">GHS — Ghanaian Cedi (GH₵)</option>
+                    <option value="ZAR">ZAR — South African Rand (R)</option>
+                    <option value="CAD">CAD — Canadian Dollar (CA$)</option>
+                    <option value="AUD">AUD — Australian Dollar (A$)</option>
+                    <option value="INR">INR — Indian Rupee (₹)</option>
+                    <option value="JPY">JPY — Japanese Yen (¥)</option>
+                    <option value="BRL">BRL — Brazilian Real (R$)</option>
+                    <option value="MXN">MXN — Mexican Peso (MX$)</option>
+                    <option value="SGD">SGD — Singapore Dollar (S$)</option>
+                    <option value="AED">AED — UAE Dirham (د.إ)</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">Widget will display prices in this currency</p>
+                </div>
+
+                <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">Greeting Message</label>
                   <textarea className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none" rows={2} placeholder="Hi! Thanks for reaching out..." value={receptionist.greeting_message || ""} onChange={(e) => onFieldChange("greeting_message", e.target.value)} />
                 </div>
