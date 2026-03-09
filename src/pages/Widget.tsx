@@ -1224,6 +1224,40 @@ export default function Widget() {
     sendMessage();
   };
 
+  // Voice chat: send message and return AI reply text
+  const handleVoiceSendMessage = async (text: string): Promise<string> => {
+    if (!text || !receptionistId) return "";
+    
+    const userMessage: Message = { role: "user", content: text, timestamp: new Date() };
+    setMessages(prev => [...prev, userMessage]);
+    persistMessage('user', text);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("widget-chat", {
+        body: {
+          message: text,
+          receptionistId,
+          sessionId,
+          bookingContext: bookingState,
+          _hp_field: "",
+          _form_load_time: formLoadTimeRef.current,
+        }
+      });
+
+      if (error) throw error;
+      const reply = data.reply || "I'm sorry, I couldn't process that.";
+      
+      const botMessage: Message = { role: "assistant", content: reply, timestamp: new Date() };
+      setMessages(prev => [...prev, botMessage]);
+      persistMessage('ai', reply);
+      
+      return reply;
+    } catch (err) {
+      console.error("Voice chat error:", err);
+      return "Sorry, something went wrong. Please try again.";
+    }
+  };
+
   if (!receptionistId) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background p-4">
