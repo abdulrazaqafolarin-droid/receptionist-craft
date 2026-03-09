@@ -1548,7 +1548,7 @@ export default function Widget() {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendClick(); } }}
               placeholder={
                 bookingState.collectingInfo === 'name' 
                   ? "Enter your name..." 

@@ -341,7 +341,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-border py-8 sm:py-10 bg-muted/30">
         <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <p className="text-xs sm:text-sm">© 2025 Rutex FrontDesk Builder. Built with ❤️ for small businesses.</p>
+          <p className="text-xs sm:text-sm">© {new Date().getFullYear()} Rutex FrontDesk Builder. Built with ❤️ for small businesses.</p>
         </div>
       </footer>
     </div>
