@@ -1474,6 +1474,13 @@ export default function Widget() {
               className="flex-1 min-h-[44px] text-base rounded-xl border-border/50 focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
               autoFocus
             />
+            <VoiceInputButton
+              onTranscript={(text) => {
+                setInput(text);
+                sendMessage(text);
+              }}
+              disabled={loading}
+            />
             <Button 
               onClick={handleSendClick} 
               disabled={loading || !input.trim()}
