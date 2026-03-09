@@ -99,6 +99,7 @@ export default function Widget() {
   const [showSessionOverlay, setShowSessionOverlay] = useState(false);
   const [existingMessages, setExistingMessages] = useState<any[]>([]);
   const [sessionCheckComplete, setSessionCheckComplete] = useState(false);
+  const [voiceChatOpen, setVoiceChatOpen] = useState(false);
   
   // Abuse protection: honeypot field and form load timing
   const [honeypotValue, setHoneypotValue] = useState("");
