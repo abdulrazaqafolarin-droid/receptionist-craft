@@ -315,7 +315,10 @@ export default function Settings() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Button variant="outline" className="w-full h-11">Change Password</Button>
+                    <Button variant="outline" className="w-full h-11" onClick={() => setPasswordDialogOpen(true)}>
+                      <Lock className="mr-2 h-4 w-4" />
+                      Change Password
+                    </Button>
                   </CardContent>
                 </Card>
 
