@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Send, Loader2, MessageCircle, Phone, Mail, MapPin, RefreshCw } from "lucide-react";
+import VoiceInputButton from "@/components/widget/VoiceInputButton";
 import { useToast } from "@/hooks/use-toast";
 import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
 import { ServiceSelector } from "@/components/widget/ServiceSelector";
@@ -1472,6 +1473,13 @@ export default function Widget() {
               disabled={loading}
               className="flex-1 min-h-[44px] text-base rounded-xl border-border/50 focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
               autoFocus
+            />
+            <VoiceInputButton
+              onTranscript={(text) => {
+                setInput(text);
+                sendMessage(text);
+              }}
+              disabled={loading}
             />
             <Button 
               onClick={handleSendClick} 
