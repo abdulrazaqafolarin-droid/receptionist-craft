@@ -2,15 +2,15 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // PHASE 8: PRODUCTION HARDENING IMPORTS
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import { callAIWithCircuitBreaker } from "../_shared/circuitBreaker.ts";
 import { checkRateLimit as sharedRateLimit, RATE_LIMITS, rateLimitResponse as sharedRateLimitResponse } from "../_shared/rateLimiter.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // UNIFIED ENGINE v2 (PRIMARY AI CONTROL LAYER)
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import {
   runEngine,
   loadState as loadEngineState,
@@ -39,9 +39,9 @@ import {
   type AdaptedTone,
 } from "../_shared/engine/index.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // UNIFIED FLOW ENGINE IMPORTS (CANONICAL CONVERSATION FLOW)
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import { StateManager } from "../_shared/flow/stateManager.ts";
 import { 
   routeIntent, 
@@ -59,9 +59,9 @@ import { MemorySummarizer } from "../_shared/flow/memorySummarizer.ts";
 import type { ConversationState, FlowSlots, ActiveTask } from "../_shared/flow/types.ts";
 import { createEmptyActiveTask } from "../_shared/flow/types.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // TASK INTELLIGENCE MODULE (ACTIVE_TASK SYSTEM)
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import {
   startTask,
   updateTaskEntities,
@@ -75,24 +75,24 @@ import {
   buildSmartMemorySummary,
 } from "../_shared/flow/taskIntelligence.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // MEMORY PIPELINE - Kept for slot extraction & summarization only
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import {
   type PipelineResult,
   type IntentResult,
   type ExtractedEntities,
 } from "../_shared/flow/memoryPipeline.ts";
 
-// UnifiedCore consolidated into Engine v2 — imports kept for type compatibility only
+// UnifiedCore consolidated into Engine v2 â€” imports kept for type compatibility only
 import {
   type UnifiedState,
   type CoreResult,
 } from "../_shared/flow/unifiedCore.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CONVERSATION GOVERNOR (STATE-DRIVEN EXECUTION CONTROL)
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import {
   runGovernor,
   buildGovernorPrompt,
@@ -103,9 +103,9 @@ import {
   type GovernorResult,
 } from "../_shared/flow/conversationGovernor.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ACTION PERMISSION GATE (MIDDLEWARE VALIDATOR)
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import { 
   validateActionGate, 
   detectActionFromIntent,
@@ -116,9 +116,9 @@ import {
   type ActionType
 } from "../_shared/actionGate.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CONVERSATION STATE MACHINE (ENFORCED STATE TRANSITIONS)
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import {
   createMachineContext,
   transition,
@@ -133,9 +133,9 @@ import {
   type TransitionEvent,
 } from "../_shared/stateMachine.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // HALLUCINATION GUARD (DATA GROUNDING ENFORCEMENT)
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import {
   checkGroundingRequired,
   validateGroundedData,
@@ -145,9 +145,9 @@ import {
   type GroundingCheckResult,
 } from "../_shared/hallucinationGuard.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // INVENTORY VALIDATOR (COMMERCE ENGINE)
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import {
   createInventoryValidator,
   mapProductStock,
@@ -156,9 +156,9 @@ import {
   type InventoryValidationResult,
 } from "../_shared/inventoryValidator.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ABUSE PROTECTION SYSTEM (RATE LIMITING & BOT DETECTION)
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import {
   performAbuseCheck,
   recordFailedBooking,
@@ -170,9 +170,9 @@ import {
   type AbuseCheckResult,
 } from "../_shared/abuseProtection.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CAPABILITY-BASED ARCHITECTURE IMPORTS (UNIVERSAL BUSINESS OPERATOR)
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import { 
   classifyUniversalIntent, 
   validateIntentAgainstCapabilities,
@@ -184,25 +184,37 @@ import {
 } from "../_shared/capabilities/index.ts";
 import type { BusinessCapabilities, PrimaryGoal, UniversalIntent } from "../_shared/capabilities/types.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CORS HEADERS
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// CURRENCY SYMBOL HELPER
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+function getCurrencySymbol(currency: string | null | undefined): string {
+  const map: Record<string, string> = {
+    USD: '$', NGN: 'â‚¦', GBP: 'Â£', EUR: 'â‚¬',
+    KES: 'KSh', GHS: 'â‚µ', ZAR: 'R', CAD: 'CA$',
+    AUD: 'A$', INR: 'â‚¹', JPY: 'Â¥', CNY: 'Â¥',
+  };
+  return map[(currency || 'USD').toUpperCase()] || '$';
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // INPUT SANITIZATION
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 function sanitizeInput(input: string, maxLength: number = 2000): string {
   if (!input || typeof input !== 'string') return '';
   return input.slice(0, maxLength).replace(/[<>]/g, '').trim();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // 7-LAYER S-TIER MODULAR AI ARCHITECTURE
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Layer 1: Core Identity & Mission
 // Layer 2: Knowledge & Grounding (RAG)
 // Layer 3: Memory & Context Engine
@@ -210,11 +222,11 @@ function sanitizeInput(input: string, maxLength: number = 2000): string {
 // Layer 5: Execution (Booking / Actions)
 // Layer 6: Safety, Quality & Guardrails
 // Layer 7: Failure Prevention & Escalation
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // LAYER 6: SAFETY CLASSIFIER
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SAFETY_PATTERNS = {
   jailbreak: [
     /ignore (previous|all|your) instructions/i,
@@ -257,9 +269,9 @@ function runSafetyClassifier(message: string): { safe: boolean; violation?: stri
   return { safe: true, severity: 'low' };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // LAYER 4: INTENT DETECTION
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type IntentType = 
   | 'book_appointment' | 'cancel_appointment' | 'reschedule'
   | 'order_product' | 'ask_info' | 'ask_price' | 'ask_hours' | 'ask_location'
@@ -288,7 +300,7 @@ function detectIntent(message: string, historyLength: number): IntentType {
   if (/^(no|nope|not really|that's wrong|incorrect)/i.test(lowerMsg)) return 'deny';
   if (/actually|i meant|i said .+ not|correction|change that to|switch (it|that) to/i.test(lowerMsg)) return 'correct_previous_info';
   
-  // Product ordering detection — EXPANDED natural language triggers
+  // Product ordering detection â€” EXPANDED natural language triggers
   if (/buy|purchase|order|get|want to get|i'd like|i want/i.test(lowerMsg) && !/appointment|book|schedule/i.test(lowerMsg)) return 'order_product';
   if (/add to cart|checkout|shop|shopping/i.test(lowerMsg)) return 'order_product';
   // Natural product browsing / buying intent
@@ -303,7 +315,7 @@ function detectIntent(message: string, historyLength: number): IntentType {
   if (/pick up|grab (some|a|the)/i.test(lowerMsg) && !/appointment|book/i.test(lowerMsg)) return 'order_product';
   if (/what can i (buy|order|get)/i.test(lowerMsg)) return 'order_product';
   
-  // Booking / appointment detection — EXPANDED natural language triggers
+  // Booking / appointment detection â€” EXPANDED natural language triggers
   if (/book|schedule|appointment|reserve|sign (me )?up|make a booking/i.test(lowerMsg)) return 'book_appointment';
   if (/when can (i|we) (come in|visit|stop by|see you|swing by|drop by)/i.test(lowerMsg)) return 'book_appointment';
   if (/are (you|there).*(open|slot|opening|available|free)\s*(on|this|next|today|tomorrow)?/i.test(lowerMsg)) return 'book_appointment';
@@ -326,7 +338,7 @@ function detectIntent(message: string, historyLength: number): IntentType {
   if (/speak to (a |someone|human|person|manager)|talk to someone|real person|human help/i.test(lowerMsg)) return 'escalation_request';
   if (/how are you|what's up|how's it going|nice to meet/i.test(lowerMsg)) return 'small_talk';
   
-  // Service inquiry detection — EXPANDED natural language triggers
+  // Service inquiry detection â€” EXPANDED natural language triggers
   if (/what (do you|does the|services?).*(do|offer|provide|specialize)/i.test(lowerMsg)) return 'ask_info';
   if (/what (services?|treatments?|options?) (do you|are|is)/i.test(lowerMsg)) return 'ask_info';
   if (/what can you (do|help|offer|provide)/i.test(lowerMsg)) return 'ask_info';
@@ -341,9 +353,9 @@ function detectIntent(message: string, historyLength: number): IntentType {
   return 'general_query';
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // LAYER 4: MESSAGE ANALYSIS
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const ACKNOWLEDGMENTS = ['okay', 'ok', 'kk', 'k', 'yes', 'yep', 'yeah', 'sure', 'alright', 'got it', 'cool', 'fine', 'good', 'great', 'perfect', 'understood', 'i see', 'uh huh', 'mhm', 'right'];
 const CORRECTION_PATTERNS = [/i said (.+) not (.+)/i, /i meant (.+)/i, /actually it's (.+)/i, /no, (.+)/i, /correction:? (.+)/i];
 
@@ -364,9 +376,9 @@ function analyzeMessage(message: string, historyLength: number): MessageAnalysis
   return { isAcknowledgment, isCorrection, hasUncertainty, detectedIntent };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // LAYER 3: CONVERSATION CONTEXT
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface ConversationContext {
   serviceMentioned: string | null;
   serviceId: string | null;
@@ -450,7 +462,7 @@ function extractContextFromHistory(history: any[]): ConversationContext {
   const timeMatch = fullText.match(/(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm)|morning|afternoon|evening)/i);
   if (timeMatch) context.timeMentioned = timeMatch[0];
   
-  // STRICT name extraction — uses centralized validator with back-reference support
+  // STRICT name extraction â€” uses centralized validator with back-reference support
   // Scan each user message individually so end-of-string patterns work
   for (const h of history) {
     if (h.sender === 'user') {
@@ -556,9 +568,9 @@ function generateRollingSummary(history: any[], verbatimCount: number = 30): { s
   return { summary: summaryParts.join('\n'), recentMessages };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // LAYER 6: QUALITY METRICS & ESCALATION
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface ConversationKPIs {
   total_messages: number;
   is_engaged: boolean;
@@ -685,9 +697,9 @@ function checkEscalationNeeded(message: string, context: ConversationContext, hi
   return { shouldEscalate: false, reason: null, escalationType: null, escalationMessage: null };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // LAYER 2: KNOWLEDGE BASE BUILDER (RAG)
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], products: any[] = []): string {
   const sections: string[] = [];
   
@@ -721,18 +733,18 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
   });
   const currentTime = timeOnlyFormatter.format(now);
   
-  sections.push(`## 🕐 CURRENT DATE & TIME AWARENESS [CRITICAL]`);
+  sections.push(`## ðŸ• CURRENT DATE & TIME AWARENESS [CRITICAL]`);
   sections.push(`Current Date/Time: ${currentDateTime}`);
   sections.push(`Current Date: ${currentDate}`);
   sections.push(`Current Time: ${currentTime}`);
   sections.push(`Business Timezone: ${timezone}`);
   sections.push(`Today is: ${new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long' }).format(now)}`);
   sections.push(`\n**Time-Awareness Rules:**`);
-  sections.push(`- If customer asks "what time is it?" or "what's the time?" → Tell them: "${currentTime}"`);
-  sections.push(`- If customer asks "what day is it?" or "what's today's date?" → Tell them: "${currentDate}"`);
-  sections.push(`- If customer gives a PAST date for booking → Politely correct them and suggest valid future dates`);
-  sections.push(`- If customer gives a PAST time today → Politely say that time has passed and suggest later times`);
-  sections.push(`- "Yesterday" or past dates → Cannot book in the past, suggest today or future dates`);
+  sections.push(`- If customer asks "what time is it?" or "what's the time?" â†’ Tell them: "${currentTime}"`);
+  sections.push(`- If customer asks "what day is it?" or "what's today's date?" â†’ Tell them: "${currentDate}"`);
+  sections.push(`- If customer gives a PAST date for booking â†’ Politely correct them and suggest valid future dates`);
+  sections.push(`- If customer gives a PAST time today â†’ Politely say that time has passed and suggest later times`);
+  sections.push(`- "Yesterday" or past dates â†’ Cannot book in the past, suggest today or future dates`);
   sections.push(`- Validate all booking times are in the FUTURE before confirming`);
   
   sections.push(`\n## VERIFIED BUSINESS INFORMATION [HIGH CONFIDENCE]`);
@@ -773,14 +785,14 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
       // Inventory status
       if (p.stock_quantity !== null && p.stock_quantity !== undefined) {
         if (p.stock_quantity === 0) {
-          productDesc += ` [❌ OUT OF STOCK]`;
+          productDesc += ` [âŒ OUT OF STOCK]`;
         } else if (p.stock_quantity <= (p.low_stock_threshold || 5)) {
-          productDesc += ` [⚠️ LOW STOCK: ${p.stock_quantity} left]`;
+          productDesc += ` [âš ï¸ LOW STOCK: ${p.stock_quantity} left]`;
         } else {
-          productDesc += ` [✓ In Stock: ${p.stock_quantity} available]`;
+          productDesc += ` [âœ“ In Stock: ${p.stock_quantity} available]`;
         }
       } else {
-        productDesc += ` [✓ In Stock]`;
+        productDesc += ` [âœ“ In Stock]`;
       }
       
       if (p.description) productDesc += `: ${p.description}`;
@@ -788,9 +800,9 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
     });
     
     sections.push(`\n**Inventory Rules:**`);
-    sections.push(`- If product is OUT OF STOCK → Apologize and suggest alternatives or ask if they'd like to be notified when back in stock`);
-    sections.push(`- If product is LOW STOCK → Mention limited availability and encourage quick decision`);
-    sections.push(`- If quantity requested exceeds available stock → Inform customer of available quantity and ask if they want that amount instead`);
+    sections.push(`- If product is OUT OF STOCK â†’ Apologize and suggest alternatives or ask if they'd like to be notified when back in stock`);
+    sections.push(`- If product is LOW STOCK â†’ Mention limited availability and encourage quick decision`);
+    sections.push(`- If quantity requested exceeds available stock â†’ Inform customer of available quantity and ask if they want that amount instead`);
   }
   
   if (faqs && faqs.length > 0) {
@@ -809,32 +821,32 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
   return sections.join('\n');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // MONEY MODE / SALES MODE PROMPT (REVENUE-FOCUSED BEHAVIOR)
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function buildMoneyModePrompt(receptionist: any): string {
-  return `# 📌 MONEY MODE — REVENUE AGENT BEHAVIOR (ACTIVE)
+  return `# ðŸ“Œ MONEY MODE â€” REVENUE AGENT BEHAVIOR (ACTIVE)
 
 **You are an AI Revenue Agent. Your primary objective is to INCREASE REVENUE.**
 
 Success metrics:
-- ✅ Booked appointments
-- ✅ Completed purchases  
-- ✅ Captured qualified leads (name + contact)
+- âœ… Booked appointments
+- âœ… Completed purchases  
+- âœ… Captured qualified leads (name + contact)
 
 ## MONEY MODE RULES (NON-NEGOTIABLE)
 
-1. **Never chat endlessly** — Every message should move toward ONE money action
-2. **Reduce choices, not expand them** — Guide decisively, don't overwhelm with options
-3. **Handle objections calmly and confidently** — "I understand. Here's why this is worth it..."
-4. **If user hesitates twice** — Introduce urgency: "This time slot is popular" or "Limited availability"
-5. **Before conversation ends** — ALWAYS capture contact details (email or phone)
-6. **Close with action** — Don't let conversations drift without booking/purchase/lead capture
+1. **Never chat endlessly** â€” Every message should move toward ONE money action
+2. **Reduce choices, not expand them** â€” Guide decisively, don't overwhelm with options
+3. **Handle objections calmly and confidently** â€” "I understand. Here's why this is worth it..."
+4. **If user hesitates twice** â€” Introduce urgency: "This time slot is popular" or "Limited availability"
+5. **Before conversation ends** â€” ALWAYS capture contact details (email or phone)
+6. **Close with action** â€” Don't let conversations drift without booking/purchase/lead capture
 
 ## CONVERSION TACTICS
 
 ### For Appointments:
-- "Let me get you booked right now — what day works best?"
+- "Let me get you booked right now â€” what day works best?"
 - "I have a great opening at [time]. Should I reserve it for you?"
 - If hesitation: "This slot tends to fill up quickly. Want me to hold it?"
 
@@ -845,21 +857,21 @@ Success metrics:
 
 ### For Lead Capture:
 - "Just in case we get disconnected, can I get your phone number?"
-- "I'll send you a confirmation — what's the best email for you?"
+- "I'll send you a confirmation â€” what's the best email for you?"
 - If they resist: "No worries! Is there anything else I can help you with today?"
 
 ## BEHAVIORAL GUIDELINES
 
-- Be polite but CONFIDENT — you're helping them, not pestering them
+- Be polite but CONFIDENT â€” you're helping them, not pestering them
 - Use assumptive closes: "So I'll book that for 3pm?" vs "Would you like to book?"
 - Mirror their energy but stay sales-oriented
-- NEVER sound desperate — be professional and helpful
+- NEVER sound desperate â€” be professional and helpful
 - After securing a conversion, ask ONCE if they need anything else, then close warmly`;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // MASTER SYSTEM PROMPT BUILDER (COMPOSABLE BLOCKS)
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function buildMasterSystemPrompt(
   receptionist: any,
   knowledgeBase: string,
@@ -886,7 +898,7 @@ function buildMasterSystemPrompt(
   };
 
   // BLOCK 1: CORE IDENTITY (IMMUTABLE)
-  const identityBlock = `# 📌 BLOCK 1 — CORE IDENTITY (IMMUTABLE)
+  const identityBlock = `# ðŸ“Œ BLOCK 1 â€” CORE IDENTITY (IMMUTABLE)
 
 **You are ${receptionist.name}, an S-tier, human-like AI receptionist for ${receptionist.business_name}.**
 ${receptionist.business_type ? `Business Type: ${receptionist.business_type}` : ''}
@@ -902,14 +914,14 @@ You are:
 This identity NEVER changes during a session.`;
 
   // BLOCK 2: SESSION & GREETING INVARIANT (HARD RULE)
-  const sessionBlock = isFirstMessage ? `# 📌 BLOCK 2 — SESSION RULES (NON-NEGOTIABLE)
+  const sessionBlock = isFirstMessage ? `# ðŸ“Œ BLOCK 2 â€” SESSION RULES (NON-NEGOTIABLE)
 
 **THIS IS THE FIRST MESSAGE** - Greet the visitor warmly:
 ${receptionist.greeting_message || `"Hello! Welcome to ${receptionist.business_name}. I'm ${receptionist.name}, and I'm here to help. What can I do for you today?"`}
 
 - **ONLY** greet once
 - **NEVER** greet again during this session
-- **NEVER** restart unless user restarts` : `# 📌 BLOCK 2 — SESSION RULES (NON-NEGOTIABLE)
+- **NEVER** restart unless user restarts` : `# ðŸ“Œ BLOCK 2 â€” SESSION RULES (NON-NEGOTIABLE)
 
 **THIS IS A FOLLOW-UP MESSAGE (message #${messageCount + 1})** - Greeting has ALREADY occurred.
 - **DO NOT** say "Hello", "Hi", "Hey", "Welcome", "Thanks for reaching out", or any greeting phrase
@@ -922,7 +934,7 @@ ${receptionist.greeting_message || `"Hello! Welcome to ${receptionist.business_n
 Violation of this rule is a **CRITICAL FAILURE**. Starting with a greeting on a follow-up message will damage the user experience.`;
 
   // BLOCK 3: MEMORY & CONTEXT
-  const memoryBlock = `# 📌 BLOCK 3 — MEMORY & CONTEXT
+  const memoryBlock = `# ðŸ“Œ BLOCK 3 â€” MEMORY & CONTEXT
 
 ${rollingSummary ? `## Summarized Earlier Context\n${rollingSummary}\n` : ''}
 
@@ -944,7 +956,7 @@ ${emotionalGuidance[context.emotionalState]}
 - Track booking details, preferences, emotional cues`;
 
   // BLOCK 4: INTENT & DECISION
-  const intentBlock = `# 📌 BLOCK 4 — INTENT & DECISION ENGINE
+  const intentBlock = `# ðŸ“Œ BLOCK 4 â€” INTENT & DECISION ENGINE
 
 Current detected intent: **${messageAnalysis.detectedIntent}**
 Is acknowledgment: ${messageAnalysis.isAcknowledgment}
@@ -958,30 +970,30 @@ Is correction: ${messageAnalysis.isCorrection}
 - For escalation requests: Connect to human immediately`;
 
   // BLOCK 5: BOOKING & ORDERING INTELLIGENCE
-  const bookingBlock = `# 📌 BLOCK 5 — BOOKING & ORDERING INTELLIGENCE
+  const bookingBlock = `# ðŸ“Œ BLOCK 5 â€” BOOKING & ORDERING INTELLIGENCE
 
 ## APPOINTMENT BOOKING
 Booking requires ALL of: Service, Date, Time, Contact (email or phone), Name
 
 Current booking status:
-- Service: ${context.serviceMentioned ? '✓' : '✗'} ${context.serviceMentioned || 'Missing'}
-- Date: ${context.dateMentioned ? '✓' : '✗'} ${context.dateMentioned || 'Missing'}
-- Time: ${context.timeMentioned ? '✓' : '✗'} ${context.timeMentioned || 'Missing'}
-- Name: ${context.customerName ? '✓' : '✗'} ${context.customerName || 'Missing'}
-- Contact: ${context.customerEmail || context.customerPhone ? '✓' : '✗'} ${context.customerEmail || context.customerPhone || 'Missing'}
+- Service: ${context.serviceMentioned ? 'âœ“' : 'âœ—'} ${context.serviceMentioned || 'Missing'}
+- Date: ${context.dateMentioned ? 'âœ“' : 'âœ—'} ${context.dateMentioned || 'Missing'}
+- Time: ${context.timeMentioned ? 'âœ“' : 'âœ—'} ${context.timeMentioned || 'Missing'}
+- Name: ${context.customerName ? 'âœ“' : 'âœ—'} ${context.customerName || 'Missing'}
+- Contact: ${context.customerEmail || context.customerPhone ? 'âœ“' : 'âœ—'} ${context.customerEmail || context.customerPhone || 'Missing'}
 
-Booking already confirmed: ${context.bookingConfirmed ? 'YES ✓' : 'NO'}
+Booking already confirmed: ${context.bookingConfirmed ? 'YES âœ“' : 'NO'}
 
 ## PRODUCT ORDERING
 Product orders require: Product name, Quantity (default 1), Contact info
 
 Current order status:
-- Product: ${context.productMentioned ? '✓' : '✗'} ${context.productMentioned || 'Not selected'}
-- Quantity: ${context.quantity ? '✓ ' + context.quantity : 'Default 1'}
-- Name: ${context.customerName ? '✓' : '✗'} ${context.customerName || 'Missing'}
-- Contact: ${context.customerEmail || context.customerPhone ? '✓' : '✗'} ${context.customerEmail || context.customerPhone || 'Missing'}
+- Product: ${context.productMentioned ? 'âœ“' : 'âœ—'} ${context.productMentioned || 'Not selected'}
+- Quantity: ${context.quantity ? 'âœ“ ' + context.quantity : 'Default 1'}
+- Name: ${context.customerName ? 'âœ“' : 'âœ—'} ${context.customerName || 'Missing'}
+- Contact: ${context.customerEmail || context.customerPhone ? 'âœ“' : 'âœ—'} ${context.customerEmail || context.customerPhone || 'Missing'}
 
-Order already confirmed: ${context.orderConfirmed ? 'YES ✓' : 'NO'}
+Order already confirmed: ${context.orderConfirmed ? 'YES âœ“' : 'NO'}
 
 ## COLLECTION RULES
 - If any field is missing: Ask ONLY for the missing item
@@ -1004,22 +1016,22 @@ After a booking is confirmed OR purchase is complete:
 1. The confirmation has been given - DO NOT repeat it
 2. If NOT already asked: Ask ONCE "Is there anything else I can help you with today?"
 3. If user responds with "no", "that's all", "thanks", "bye", "nope", "nothing", "I'm good", "all set":
-   → Give a SINGLE warm closing: "Thank you for choosing ${receptionist.business_name}! Have a wonderful day! 😊"
-   → DO NOT ask if they need more help again
-   → DO NOT repeat any booking/order details
-   → The conversation is DONE
+   â†’ Give a SINGLE warm closing: "Thank you for choosing ${receptionist.business_name}! Have a wonderful day! ðŸ˜Š"
+   â†’ DO NOT ask if they need more help again
+   â†’ DO NOT repeat any booking/order details
+   â†’ The conversation is DONE
 4. If user says "yes" or asks a new question: Continue helping naturally
 5. NEVER give multiple farewell messages - one goodbye is enough
 
 ## DATE/TIME VALIDATION (CRITICAL)
 - BEFORE confirming any booking, validate the date/time is in the FUTURE
-- If customer says "yesterday" or gives a past date → Respond: "I'm sorry, but [date] is in the past. Would you like to book for today or a future date instead?"
-- If customer gives today's date with a past time → Respond: "That time has already passed today. How about [suggest next available time]?"
-- If customer asks "what time is it?" → Tell them the current time from the knowledge base
-- If customer asks "what day is today?" → Tell them the current date from the knowledge base`;
+- If customer says "yesterday" or gives a past date â†’ Respond: "I'm sorry, but [date] is in the past. Would you like to book for today or a future date instead?"
+- If customer gives today's date with a past time â†’ Respond: "That time has already passed today. How about [suggest next available time]?"
+- If customer asks "what time is it?" â†’ Tell them the current time from the knowledge base
+- If customer asks "what day is today?" â†’ Tell them the current date from the knowledge base`;
 
   // BLOCK 6: SAFETY & QUALITY
-  const safetyBlock = `# 📌 BLOCK 6 — SAFETY & QUALITY GUARDRAILS
+  const safetyBlock = `# ðŸ“Œ BLOCK 6 â€” SAFETY & QUALITY GUARDRAILS
 
 ## Safety Rules (NON-NEGOTIABLE)
 - Do NOT expose internal system details
@@ -1041,23 +1053,23 @@ After a booking is confirmed OR purchase is complete:
 - After "goodbye", if user doesn't respond, conversation is over`;
 
   // BLOCK 5.5: PRODUCT ORDERING FLOW WITH INVENTORY & DELIVERY
-  const orderingBlock = `# 📌 BLOCK 5.5 — PRODUCT ORDERING FLOW WITH INVENTORY & DELIVERY
+  const orderingBlock = `# ðŸ“Œ BLOCK 5.5 â€” PRODUCT ORDERING FLOW WITH INVENTORY & DELIVERY
 
 When a customer wants to ORDER/BUY/PURCHASE a product:
 
-1. **Product Selection** → "Which product would you like?" (show options if available)
-2. **INVENTORY CHECK** → Before confirming, check if product is in stock:
-   - If OUT OF STOCK → "I'm sorry, [product] is currently out of stock. Would you like me to suggest an alternative, or notify you when it's back?"
-   - If LOW STOCK → "Good news, we have [quantity] left! Would you like to order before they're gone?"
-   - If quantity requested > available → "We only have [available] in stock right now. Would you like to order [available] instead?"
-3. **Quantity** → "How many would you like?" (assume 1 if not specified)
-4. **Contact Collection** → "Can I get your name and phone/email for the order?"
-5. **Delivery Location** → "Where would you like us to deliver your order? Please share your address."
+1. **Product Selection** â†’ "Which product would you like?" (show options if available)
+2. **INVENTORY CHECK** â†’ Before confirming, check if product is in stock:
+   - If OUT OF STOCK â†’ "I'm sorry, [product] is currently out of stock. Would you like me to suggest an alternative, or notify you when it's back?"
+   - If LOW STOCK â†’ "Good news, we have [quantity] left! Would you like to order before they're gone?"
+   - If quantity requested > available â†’ "We only have [available] in stock right now. Would you like to order [available] instead?"
+3. **Quantity** â†’ "How many would you like?" (assume 1 if not specified)
+4. **Contact Collection** â†’ "Can I get your name and phone/email for the order?"
+5. **Delivery Location** â†’ "Where would you like us to deliver your order? Please share your address."
    - This is REQUIRED for product orders
    - Accept any reasonable address format
    - If pickup is preferred, customer can say "I'll pick it up" and skip delivery address
-6. **Confirmation** → Summarize: product, quantity, contact info, AND delivery address
-7. **Close** → Ask if they need anything else, then say goodbye
+6. **Confirmation** â†’ Summarize: product, quantity, contact info, AND delivery address
+7. **Close** â†’ Ask if they need anything else, then say goodbye
 
 ### Product Order Confirmation Format:
 "Perfect! I've placed your order for [quantity] x [product]. We'll deliver to [address] and contact you at [contact] to confirm. Is there anything else I can help you with?"
@@ -1065,14 +1077,14 @@ When a customer wants to ORDER/BUY/PURCHASE a product:
 ### Important:
 - ALWAYS check inventory status from the knowledge base before confirming orders
 - ALWAYS collect delivery address before confirming (unless customer opts for pickup)
-- If product shows [❌ OUT OF STOCK] → Do NOT confirm the order, offer alternatives
-- If product shows [⚠️ LOW STOCK: X left] → Mention limited availability
+- If product shows [âŒ OUT OF STOCK] â†’ Do NOT confirm the order, offer alternatives
+- If product shows [âš ï¸ LOW STOCK: X left] â†’ Mention limited availability
 - Keep it simple and conversational
 - Don't repeat order details after confirmation
 - One confirmation, one follow-up question, one goodbye`;
 
   // BLOCK 7: FAILURE PREVENTION
-  const failureBlock = `# 📌 BLOCK 7 — FAILURE PREVENTION & ESCALATION
+  const failureBlock = `# ðŸ“Œ BLOCK 7 â€” FAILURE PREVENTION & ESCALATION
 
 ## Escalate when:
 - Knowledge is missing
@@ -1082,7 +1094,7 @@ When a customer wants to ORDER/BUY/PURCHASE a product:
 - User frustration detected
 
 ## Escalation response:
-"I want to make sure you get the exact help you need — I can connect you to a staff member right now. Would you like me to do that?"
+"I want to make sure you get the exact help you need â€” I can connect you to a staff member right now. Would you like me to do that?"
 
 ## Self-Healing Rules
 - If you detect a mistake, correct it immediately
@@ -1099,7 +1111,7 @@ When user indicates they're done (thanks, bye, no that's all, etc.):
 - Do NOT repeat previously stated information`;
 
   // KNOWLEDGE BASE
-  const knowledgeBlock = `# 📌 KNOWLEDGE BASE (RAG)
+  const knowledgeBlock = `# ðŸ“Œ KNOWLEDGE BASE (RAG)
 
 ${knowledgeBase}`;
 
@@ -1108,15 +1120,15 @@ ${knowledgeBase}`;
 
   // FINAL DIRECTIVE
   const finalBlock = aiMode === 'sales' 
-    ? `# 📌 FINAL DIRECTIVE (MONEY MODE)
+    ? `# ðŸ“Œ FINAL DIRECTIVE (MONEY MODE)
 
 You are a Revenue Agent. Every interaction should move toward a booking, purchase, or lead capture.
 Be confident, be helpful, and always close. The business depends on you.
 
-**Now respond to the user in Money Mode—helpful, confident, and conversion-focused.**`
-    : `# 📌 FINAL DIRECTIVE
+**Now respond to the user in Money Modeâ€”helpful, confident, and conversion-focused.**`
+    : `# ðŸ“Œ FINAL DIRECTIVE
 
-You are not just answering questions—you are creating a positive experience.
+You are not just answering questionsâ€”you are creating a positive experience.
 Every interaction should leave them thinking "Wow, that was easy and pleasant."
 Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and genuinely caring.
 
@@ -1186,9 +1198,9 @@ Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and g
   return blocks.join('\n\n');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // MAIN SERVER HANDLER
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1207,9 +1219,9 @@ serve(async (req) => {
     const formLoadTime = payload._form_load_time ?? null;
     const formSubmitTime = formLoadTime ? (Date.now() - formLoadTime) : undefined;
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // SECURITY: Validate required fields
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     if (!receptionistId || !sessionId) {
       return new Response(
         JSON.stringify({ error: "receptionistId and sessionId are required" }),
@@ -1217,9 +1229,9 @@ serve(async (req) => {
       );
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // ABUSE PROTECTION: Rate Limiting, Honeypot, & Suspicious Pattern Detection
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const message = rawMessage ? sanitizeInput(rawMessage, 2000) : "";
     
     const abuseCheck: AbuseCheckResult = performAbuseCheck(
@@ -1278,9 +1290,9 @@ serve(async (req) => {
       );
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // UNIFIED FLOW ENGINE: INITIALIZE STATE MANAGER
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const stateManager = new StateManager(supabase);
     const memorySummarizer = new MemorySummarizer(supabase);
     
@@ -1288,9 +1300,9 @@ serve(async (req) => {
     let conversationState = await stateManager.load(sessionId, receptionistId);
     console.log(`[Flow Engine] State loaded - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, Greeting: ${conversationState.greeting_sent}`);
     
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // RE-GREETING PREVENTION (3-LEVEL ENFORCEMENT)
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // Level 1: Database check - Use session_id consistently
     const { data: existingMessages, error: historyErr } = await supabase
       .from("chat_messages")
@@ -1305,9 +1317,9 @@ serve(async (req) => {
     const isFirstMessage = (!existingMessages || existingMessages.length === 0) && !conversationState.greeting_sent;
     console.log(`[Widget Chat] Is first message: ${isFirstMessage}, session: ${sessionId}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // GREETING STORAGE FLOW (empty message = store greeting)
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     if (message === "") {
       const { data: existing } = await supabase
         .from("chat_messages")
@@ -1346,9 +1358,9 @@ serve(async (req) => {
       });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // LAYER 6: SAFETY CHECK
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const safetyResult = runSafetyClassifier(message);
     if (!safetyResult.safe) {
       console.warn(`[Safety] Violation detected: ${safetyResult.violation}, severity: ${safetyResult.severity}`);
@@ -1381,9 +1393,9 @@ serve(async (req) => {
       );
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // FETCH CONVERSATION HISTORY
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const { data: history } = await supabase
       .from("chat_messages")
       .select("sender, message, metadata, created_at")
@@ -1394,16 +1406,16 @@ serve(async (req) => {
     
     console.log(`[Widget Chat] Loaded ${history?.length || 0} messages from session ${sessionId}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // LAYER 4: MESSAGE ANALYSIS
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const messageAnalysis = analyzeMessage(message, history?.length || 0);
     console.log(`[Analysis] Intent: ${messageAnalysis.detectedIntent}, Ack: ${messageAnalysis.isAcknowledgment}, Correction: ${messageAnalysis.isCorrection}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // UNIFIED ENGINE v2 — SINGLE SOURCE OF TRUTH (PRIMARY CONTROL LAYER)
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // UNIFIED ENGINE v2 â€” SINGLE SOURCE OF TRUTH (PRIMARY CONTROL LAYER)
     // Consolidates: intent detection, entity extraction, state, governor
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     // Fetch services/products early for entity extraction
     const { data: services } = await supabase
@@ -1430,9 +1442,9 @@ serve(async (req) => {
       canOrder: productItems.length > 0,
     };
     
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // ENGINE v2: LOAD STATE FROM CONVERSATION STATE
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     let engineState: EngineState | null = null;
     
     // Try to load from conversation state slots
@@ -1455,10 +1467,10 @@ serve(async (req) => {
       }
     }
     
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // ENGINE v2: RUN MAIN PIPELINE
-    // Input → Clean → Detect Intent → Extract Entities → Update State → Govern
-    // ═══════════════════════════════════════════════════════════════════════
+    // Input â†’ Clean â†’ Detect Intent â†’ Extract Entities â†’ Update State â†’ Govern
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const engineInput: EngineInput = {
       message,
       session_id: sessionId,
@@ -1511,7 +1523,7 @@ serve(async (req) => {
     console.log(`[Engine v2] UI Hints: ${JSON.stringify(engineResult?.ui_hints || {})}`);
     
     if (engineResult?.illegal) {
-      console.warn(`[Engine v2] ⚠️ ILLEGAL STATE: ${engineResult.illegal_reason}`);
+      console.warn(`[Engine v2] âš ï¸ ILLEGAL STATE: ${engineResult.illegal_reason}`);
     }
     
     // Persist engine state in conversation slots
@@ -1523,11 +1535,11 @@ serve(async (req) => {
     // Build Engine v2 governor prompt block (PRIMARY - highest priority)
     const enginePromptBlock = engineResult.prompt_block;
     
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // ENGINE v2 IS NOW THE SINGLE SOURCE OF TRUTH
     // Legacy UnifiedCore and MemoryPipeline have been consolidated into Engine v2
     // ActiveTask is now derived from Engine v2 state
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     // Derive activeTask from Engine v2 state for backward compatibility
     let activeTask: ActiveTask | null = conversationState.active_task || null;
@@ -1546,9 +1558,9 @@ serve(async (req) => {
     }
     conversationState.active_task = activeTask;
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // LAYER 3: CONTEXT EXTRACTION & ROLLING SUMMARY
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const conversationContext = extractContextFromHistory(history || []);
     const { summary: rollingSummary, recentMessages } = generateRollingSummary(history || [], 30);
 
@@ -1559,9 +1571,9 @@ serve(async (req) => {
       .eq("receptionist_id", receptionistId)
       .order("priority", { ascending: false });
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // UNIFIED FLOW ENGINE: SLOT EXTRACTION & STATE UPDATE
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const extractedSlots = extractSlots(message, conversationState.slots || {}, serviceItems || [], productItems || []);
     if (extractedSlots && extractedSlots.slots && Object.keys(extractedSlots.slots).length > 0) {
       console.log(`[Flow Engine] Extracted slots:`, extractedSlots.slots);
@@ -1597,9 +1609,9 @@ serve(async (req) => {
       conversationState.flow_step = null;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // UNIFIED FLOW ENGINE: LONG-TERM MEMORY
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // Get relevant memory summaries
     const memorySummaries = await memorySummarizer.getRelevantSummaries(receptionistId, sessionId);
     const memoryContext = memorySummarizer.buildMemoryContext(memorySummaries);
@@ -1611,14 +1623,14 @@ serve(async (req) => {
       ? `\n## Active Flow: ${conversationState.active_flow}\nCurrent Step: ${conversationState.flow_step || 'none'}\n${slotSummary ? `Collected Info:\n${slotSummary}` : ''}`
       : '';
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // LAYER 2: BUILD KNOWLEDGE BASE (RAG) WITH TIME & INVENTORY AWARENESS
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const knowledgeBase = buildKnowledgeBase(receptionist, faqs || [], services || [], productItems);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // CAPABILITY-BASED ARCHITECTURE: RESOLVE CAPABILITIES & VALIDATE INTENT
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const capabilities = resolveCapabilities(receptionist);
     const primaryGoal = resolvePrimaryGoal(receptionist);
     
@@ -1632,15 +1644,15 @@ serve(async (req) => {
     // Build capability-aware prompt section
     const capabilityPrompt = buildCapabilityPrompt(capabilities, primaryGoal, universalIntent, intentValidation);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // GET AI MODE FOR BEHAVIOR SWITCHING
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const aiMode = receptionist.ai_mode || 'booking';
     console.log(`[Widget Chat] AI Mode: ${aiMode}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // CONVERSATION STATE MACHINE: LOAD AND PROCESS STATE
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // Load existing machine context from conversation state slots
     let machineContext: MachineContext = deserializeMachineContext(
       conversationState.slots?.machineContext as string | null
@@ -1671,7 +1683,7 @@ serve(async (req) => {
       const transitionResult = transition(machineContext, detectedEvent, eventData);
       if (transitionResult.success) {
         machineContext = transitionResult.context;
-        console.log(`[State Machine] Transitioned: ${transitionResult.context.previousState} → ${transitionResult.newState} (${detectedEvent})`);
+        console.log(`[State Machine] Transitioned: ${transitionResult.context.previousState} â†’ ${transitionResult.newState} (${detectedEvent})`);
       } else {
         console.log(`[State Machine] Transition blocked: ${transitionResult.error}`);
       }
@@ -1699,10 +1711,10 @@ serve(async (req) => {
     // Build state machine prompt block
     const stateMachineBlock = buildStateMachinePrompt(machineContext);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // ACTION PERMISSION GATE: PRE-VALIDATE CURRENT ACTION STATE
     // Build gate block for system prompt based on detected intent
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const detectedAction = detectActionFromIntent(messageAnalysis.detectedIntent);
     let preActionGateResult: ActionGateResult | null = null;
     
@@ -1728,9 +1740,9 @@ serve(async (req) => {
     // Build action gate prompt block
     const actionGateBlock = buildActionGatePrompt(preActionGateResult);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // HALLUCINATION GUARD: EXTRACT GROUNDED DATA & BUILD GUARD PROMPT
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const groundedData = extractGroundedData(services || [], receptionist, receptionist.knowledge_base);
     const hallucinationGuardBlock = buildHallucinationGuardPrompt(groundedData);
     
@@ -1742,19 +1754,19 @@ serve(async (req) => {
       console.log(`[Hallucination Guard] Data available: ${groundingValidation.dataAvailable}, Missing: ${groundingValidation.missingData.join(', ') || 'none'}`);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // TASK INTELLIGENCE: BUILD TASK CONTINUITY & FLOW LOCK PROMPTS
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const taskContinuityBlock = buildTaskContinuityPrompt(activeTask);
     const flowLockBlock = buildFlowLockPrompt(activeTask);
     const smartMemorySummary = buildSmartMemorySummary(activeTask);
     
     console.log(`[Task Intelligence] Smart memory: ${smartMemorySummary.substring(0, 100)}...`);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // CONVERSATION GOVERNOR: STATE-DRIVEN EXECUTION CONTROL
     // Now powered by UnifiedCore (single source of truth)
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     // Use unified governor block as PRIMARY (from UnifiedCore)
     // Keep legacy governor for backward compatibility logging only
@@ -1799,10 +1811,10 @@ serve(async (req) => {
     // Update governor state for persistence
     conversationState.governor_state = governorState;
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // PHASE 2: CONVERSATION QUALITY ENHANCEMENT
     // Advanced Empathy, Tone Adaptation, Memory Awareness
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     // 1. Deep Emotional Analysis
     const emotionalContext: EmotionalContext = analyzeEmotionalContext(
@@ -1836,9 +1848,9 @@ serve(async (req) => {
     // 6. Build Quality Standards Block
     const qualityStandardsBlock = buildQualityPrompt();
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + ENGINE v2 GOVERNOR + PHASE 2)
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const systemPrompt = buildMasterSystemPrompt(
       receptionist,
       knowledgeBase,
@@ -1869,9 +1881,9 @@ serve(async (req) => {
       { role: "user", content: message }
     ];
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // PHASE 2: ADAPTIVE MODEL PARAMETERS (BASED ON TONE & CONTEXT)
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const toneParams = getModelParamsForTone(adaptedTone);
     const temperature = messageAnalysis.isAcknowledgment ? 0.7 : 
                        messageAnalysis.isCorrection ? 0.75 : 
@@ -1880,9 +1892,9 @@ serve(async (req) => {
     
     console.log(`[Model Params] Temp: ${temperature}, MaxTokens: ${maxTokens} (from tone adaptation)`);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // PHASE 8: AI CALL WITH CIRCUIT BREAKER + TIMEOUT
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const aiData = await callAIWithCircuitBreaker(
       receptionist.model || "google/gemini-2.5-flash",
       async () => {
@@ -1923,16 +1935,16 @@ serve(async (req) => {
     let reply = aiData.choices?.[0]?.message?.content || "I'm sorry, I couldn't process that.";
     const latencyMs = Date.now() - startTime;
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // PHASE 2: ENHANCED PERSONALITY POLISHING
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const sentiment = detectSentiment(message);
     reply = polishResponse(reply);
     console.log(`[Personality Engine] Sentiment: ${sentiment}, Response polished`);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // PHASE 2: ENHANCED QUALITY EVALUATION
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const responseQuality = evaluateResponseQuality(
       reply,
       message,
@@ -1944,13 +1956,13 @@ serve(async (req) => {
     console.log(`[Quality Evaluator] Score: ${responseQuality?.score ?? 'N/A'}/100, Grade: ${responseQuality?.grade ?? 'N/A'}, Issues: ${responseQuality?.issues?.length ?? 0}`);
     
     if (responseQuality && !responseQuality.passesThreshold) {
-      console.warn(`[Quality Evaluator] ⚠️ Below threshold! Issues: ${(responseQuality.issues || []).map((i: any) => i.type).join(', ')}`);
+      console.warn(`[Quality Evaluator] âš ï¸ Below threshold! Issues: ${(responseQuality.issues || []).map((i: any) => i.type).join(', ')}`);
       console.warn(`[Quality Evaluator] Improvements: ${(responseQuality.improvements || []).join('; ')}`);
     }
     
     // Check if response should be flagged for regeneration (critical issues only)
     if (shouldRegenerateResponse(responseQuality)) {
-      console.warn(`[Quality Evaluator] ⚠️ CRITICAL ISSUE - Response flagged (not regenerating in production to avoid loops)`);
+      console.warn(`[Quality Evaluator] âš ï¸ CRITICAL ISSUE - Response flagged (not regenerating in production to avoid loops)`);
       // In future: could trigger regeneration with stricter prompt
     }
     
@@ -2045,37 +2057,47 @@ serve(async (req) => {
       }
     });
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // KB GAP DETECTION: Log low-confidence responses for KB optimization
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const isLowConfidence = qualityRubric.overall_score < 0.6;
     const isUnanswered = /i don't have that information|i'm not sure|let me check|i can't find/i.test(reply);
     const isEscalation = escalationCheck.shouldEscalate;
-    
-    if (isLowConfidence || isUnanswered || isEscalation) {
-      try {
-        await supabase.from("ai_responses").insert({
-          receptionist_id: receptionistId,
-          user_id: sessionId,
-          request_message: message,
-          reply_text: reply,
-          confidence: qualityRubric.overall_score,
-          quality_score: qualityRubric,
-          model: receptionist.model || "google/gemini-2.5-flash",
-          latency_ms: latencyMs,
-          channel: "widget",
-          tags: [
-            isLowConfidence ? "low_confidence" : null,
-            isUnanswered ? "unanswered" : null,
-            isEscalation ? "escalation" : null,
-            messageAnalysis.detectedIntent,
-          ].filter(Boolean),
-          flagged: isUnanswered || isEscalation,
-        });
-        console.log(`[KB Gap] Logged gap: confidence=${qualityRubric.overall_score}, unanswered=${isUnanswered}, escalation=${isEscalation}`);
-      } catch (gapErr) {
-        console.warn("[KB Gap] Failed to log gap:", gapErr);
-      }
+
+    // Log ALL responses to ai_responses for analytics (not just bad ones)
+    try {
+      await supabase.from("ai_responses").insert({
+        receptionist_id: receptionistId,
+        user_id: sessionId,
+        request_message: message,
+        reply_text: reply,
+        confidence: qualityRubric.overall_score,
+        quality_score: {
+          overall: qualityRubric.overall_score,       // analytics reads "overall"
+          overall_score: qualityRubric.overall_score, // keep new field too
+          empathy: qualityRubric.empathy,
+          grade: qualityRubric.grade,
+          passes_threshold: qualityRubric.passes_threshold,
+          issues: qualityRubric.issues,
+          faqMatch: false,
+          semanticMatch: false,
+          fallback: isLowConfidence,
+          unanswered: isUnanswered,
+        },
+        model: receptionist.model || "google/gemini-2.5-flash",
+        latency_ms: latencyMs,
+        channel: "widget",
+        tags: [
+          isLowConfidence ? "low_confidence" : null,
+          isUnanswered ? "unanswered" : null,
+          isEscalation ? "escalation" : null,
+          messageAnalysis.detectedIntent,
+        ].filter(Boolean),
+        flagged: isUnanswered || isEscalation,
+      });
+      console.log(`[Analytics] Response logged: confidence=${qualityRubric.overall_score}, flagged=${isUnanswered || isEscalation}`);
+    } catch (gapErr) {
+      console.warn("[Analytics] Failed to log response:", gapErr);
     }
 
     const hasBookingIntent = messageAnalysis.detectedIntent === 'book_appointment' || 
@@ -2084,10 +2106,10 @@ serve(async (req) => {
     const hasOrderIntent = messageAnalysis.detectedIntent === 'order_product' ||
       /buy|purchase|order|get|want/i.test(message);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // LAYER 5: SYNC SLOTS WITH CONVERSATION CONTEXT
     // Ensure flow engine slots and context extraction are synchronized
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // Merge slot data into context for booking (slots take priority as they're from structured UI)
     const mergedServiceId = conversationState.slots?.serviceId || conversationContext.serviceId;
     const mergedServiceName = conversationState.slots?.serviceName || conversationContext.serviceMentioned;
@@ -2097,10 +2119,10 @@ serve(async (req) => {
     const mergedCustomerPhone = conversationState.slots?.customerPhone || conversationContext.customerPhone;
     const mergedCustomerEmail = conversationState.slots?.customerEmail || conversationContext.customerEmail;
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // ACTION PERMISSION GATE: BOOKING VALIDATION
     // AI NEVER books until all required slots are collected and verified
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     let bookingResult = null;
     
     // Use Action Gate to validate booking requirements
@@ -2193,10 +2215,10 @@ serve(async (req) => {
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // ACTION PERMISSION GATE: ORDER VALIDATION + INVENTORY VALIDATION
     // AI NEVER creates orders until all required slots are collected and verified
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     let orderResult = null;
     let orderValidation: InventoryValidationResult | null = null;
     
@@ -2297,7 +2319,7 @@ serve(async (req) => {
                 type: 'order.created',
                 title: `New Order: ${customerName}`,
                 body: `Order placed via AI receptionist`,
-                message: `${cartItems.length} item(s) ordered — ₦${orderExecution.validation.total_amount.toLocaleString()}`,
+                message: `${cartItems.length} item(s) ordered â€” ${getCurrencySymbol(receptionist.currency)}${orderExecution.validation.total_amount.toLocaleString()}`,
                 receptionist_id: receptionistId,
                 user_id: receptionist2.user_id,
                 severity: 'info',
@@ -2314,7 +2336,7 @@ serve(async (req) => {
             }
           } else {
             console.warn(`[Commerce Engine] Order validation failed:`, orderExecution.errors);
-            // Stock issues — don't create order, let AI handle the error messaging
+            // Stock issues â€” don't create order, let AI handle the error messaging
           }
         }
       } catch (orderErr) {
@@ -2322,9 +2344,11 @@ serve(async (req) => {
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // CONVERSION EVENT LOGGING (MONEY MODE ANALYTICS)
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    const receptionistCurrency = receptionist.currency || 'USD';
+
     if (bookingResult) {
       // Estimate revenue from booking - use service price if available
       let estimatedRevenue = 0;
@@ -2342,7 +2366,7 @@ serve(async (req) => {
         session_id: sessionId,
         event_type: 'booking_completed',
         revenue_value: estimatedRevenue,
-        currency: 'NGN',
+        currency: receptionistCurrency,
         metadata: {
           booking_id: bookingResult.id,
           service: conversationContext.serviceMentioned,
@@ -2368,7 +2392,7 @@ serve(async (req) => {
         session_id: sessionId,
         event_type: 'order_completed',
         revenue_value: orderRevenue,
-        currency: 'NGN',
+        currency: receptionistCurrency,
         metadata: {
           order_id: orderResult.id,
           customer_name: conversationContext.customerName,
@@ -2391,7 +2415,7 @@ serve(async (req) => {
         session_id: sessionId,
         event_type: 'lead_captured',
         revenue_value: 0, // Leads don't have immediate revenue
-        currency: 'NGN',
+        currency: receptionistCurrency,
         metadata: {
           customer_name: conversationContext.customerName,
           has_email: !!conversationContext.customerEmail,
@@ -2402,9 +2426,9 @@ serve(async (req) => {
       console.log(`[Conversion] Logged lead_captured event`);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // UNIFIED FLOW ENGINE: PERSIST STATE (INCLUDING STATE MACHINE)
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // Update booking/order confirmed flags based on response
     if (bookingResult) {
       conversationState.booking_confirmed = true;
