@@ -44,16 +44,14 @@ export default function WidgetInstall() {
   style="border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"
 ></iframe>`;
 
-  const floatingButtonCode = `<!-- Floating AI Receptionist Button -->
-<script>
-  (function() {
-    const btn = document.createElement('button');
-    btn.innerHTML = '💬';
-    btn.style.cssText = 'position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;background:#667eea;color:white;border:none;font-size:24px;cursor:pointer;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
-    btn.onclick = () => window.open('${widgetUrl}', 'AIChat', 'width=400,height=600');
-    document.body.appendChild(btn);
-  })();
-</script>`;
+  const scriptEmbedCode = `<!-- AI Receptionist Floating Chat Bubble -->
+<script 
+  src="${window.location.origin}/widget-embed.js" 
+  data-receptionist-id="${receptionistId}"
+  defer
+></script>`;
+
+  const floatingButtonCode = scriptEmbedCode;
 
   const reactCode = `// React Component Integration
 import { useState } from 'react';

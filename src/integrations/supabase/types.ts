@@ -1349,6 +1349,7 @@ export type Database = {
           business_type: string | null
           capabilities: Json | null
           created_at: string
+          currency: string
           default_response: string | null
           goal: string | null
           greeting_message: string | null
@@ -1386,6 +1387,7 @@ export type Database = {
           business_type?: string | null
           capabilities?: Json | null
           created_at?: string
+          currency?: string
           default_response?: string | null
           goal?: string | null
           greeting_message?: string | null
@@ -1423,6 +1425,7 @@ export type Database = {
           business_type?: string | null
           capabilities?: Json | null
           created_at?: string
+          currency?: string
           default_response?: string | null
           goal?: string | null
           greeting_message?: string | null
@@ -1936,6 +1939,36 @@ export type Database = {
       deduct_stock: {
         Args: { p_product_id: string; p_quantity: number }
         Returns: Json
+      }
+      get_appointment_by_token: {
+        Args: { p_token: string }
+        Returns: {
+          booking_source: string | null
+          cancellation_token: string | null
+          confirmation_token: string | null
+          created_at: string
+          created_by: string | null
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string | null
+          end_time: string
+          google_event_id: string | null
+          id: string
+          idempotency_key: string | null
+          metadata: Json | null
+          notes: string | null
+          receptionist_id: string
+          service: string
+          service_id: string | null
+          start_time: string
+          status: Database["public"]["Enums"]["appointment_status"] | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "appointments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_public_receptionist: {
         Args: { p_receptionist_id: string }

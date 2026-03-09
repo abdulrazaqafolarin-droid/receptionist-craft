@@ -29,39 +29,25 @@ export default function CancelAppointment() {
 
   async function loadAppointment() {
     try {
-      // Try new column first, fall back to metadata
-      let query = supabase
-        .from("appointments")
-        .select("*");
-      
-      const { data: byColumn } = await query.eq("cancellation_token", token).maybeSingle();
-      
-      if (byColumn) {
-        if (byColumn.status === "cancelled") {
-          setError("This appointment has already been cancelled");
-          return;
-        }
-        setAppointment(byColumn);
+      // Use the secure RPC function that works without auth
+      const { data, error: rpcError } = await supabase
+        .rpc("get_appointment_by_token", { p_token: token });
+
+      if (rpcError) throw rpcError;
+
+      const appt = Array.isArray(data) ? data[0] : data;
+
+      if (!appt) {
+        setError("Appointment not found or token expired");
         return;
       }
 
-      // Fallback to metadata check
-      const { data: byMetadata } = await supabase
-        .from("appointments")
-        .select("*")
-        .eq("metadata->>cancellation_token", token)
-        .maybeSingle();
-
-      if (byMetadata) {
-        if (byMetadata.status === "cancelled") {
-          setError("This appointment has already been cancelled");
-          return;
-        }
-        setAppointment(byMetadata);
+      if (appt.status === "cancelled") {
+        setError("This appointment has already been cancelled");
         return;
       }
 
-      setError("Appointment not found or token expired");
+      setAppointment(appt);
     } catch (err: any) {
       console.error("Load appointment error:", err);
       setError("Failed to load appointment");

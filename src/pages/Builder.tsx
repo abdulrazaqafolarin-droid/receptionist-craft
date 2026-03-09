@@ -57,6 +57,7 @@ type Receptionist = {
   system_prompt?: string;
   temperature?: number;
   language?: string;
+  currency?: string;
   goal?: string;
   created_at?: string;
   primary_goal?: PrimaryGoal;
@@ -89,6 +90,7 @@ export default function BuilderPage() {
     system_prompt: "",
     temperature: 0.7,
     language: "English",
+    currency: "USD",
     goal: "",
     primary_goal: "bookings",
     capabilities: {
@@ -176,7 +178,7 @@ export default function BuilderPage() {
       const { data, error } = await supabase
         .from("receptionists")
         .select(
-          "id, name, business_name, business_type, phone, tone, greeting_message, default_response, knowledge_base, system_prompt, temperature, language, goal, created_at, primary_goal, capabilities"
+          "id, name, business_name, business_type, phone, tone, greeting_message, default_response, knowledge_base, system_prompt, temperature, language, currency, goal, created_at, primary_goal, capabilities"
         )
         .eq("id", id)
         .maybeSingle();
@@ -188,6 +190,7 @@ export default function BuilderPage() {
           ...data,
           primary_goal: (data.primary_goal as PrimaryGoal) || 'bookings',
           capabilities: (data.capabilities as BusinessCapabilities) || prev.capabilities,
+          currency: (data as any).currency || 'USD',
         }));
       } else {
         // not found
@@ -256,6 +259,7 @@ export default function BuilderPage() {
           system_prompt: receptionist.system_prompt,
           temperature: receptionist.temperature,
           language: receptionist.language,
+          currency: receptionist.currency || 'USD',
           goal: receptionist.goal,
           primary_goal: receptionist.primary_goal,
           capabilities: receptionist.capabilities,
@@ -283,6 +287,7 @@ export default function BuilderPage() {
           system_prompt: receptionist.system_prompt,
           temperature: receptionist.temperature,
           language: receptionist.language,
+          currency: receptionist.currency || 'USD',
           goal: receptionist.goal,
           primary_goal: receptionist.primary_goal,
           capabilities: receptionist.capabilities,
@@ -842,6 +847,32 @@ export default function BuilderPage() {
                     <option value="Italian">Italian</option>
                     <option value="Portuguese">Portuguese</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Currency</label>
+                  <select
+                    className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                    value={receptionist.currency || "USD"}
+                    onChange={(e) => onFieldChange("currency", e.target.value)}
+                  >
+                    <option value="USD">USD — US Dollar ($)</option>
+                    <option value="EUR">EUR — Euro (€)</option>
+                    <option value="GBP">GBP — British Pound (£)</option>
+                    <option value="NGN">NGN — Nigerian Naira (₦)</option>
+                    <option value="KES">KES — Kenyan Shilling (KSh)</option>
+                    <option value="GHS">GHS — Ghanaian Cedi (GH₵)</option>
+                    <option value="ZAR">ZAR — South African Rand (R)</option>
+                    <option value="CAD">CAD — Canadian Dollar (CA$)</option>
+                    <option value="AUD">AUD — Australian Dollar (A$)</option>
+                    <option value="INR">INR — Indian Rupee (₹)</option>
+                    <option value="JPY">JPY — Japanese Yen (¥)</option>
+                    <option value="BRL">BRL — Brazilian Real (R$)</option>
+                    <option value="MXN">MXN — Mexican Peso (MX$)</option>
+                    <option value="SGD">SGD — Singapore Dollar (S$)</option>
+                    <option value="AED">AED — UAE Dirham (د.إ)</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">Widget will display prices in this currency</p>
                 </div>
 
                 <div>
