@@ -117,10 +117,16 @@ serve(async (req) => {
           : resp.quality_score;
         
         if (qs) {
-          if (qs.overall != null) { totalQuality += qs.overall; qualityCount++; }
-          if (qs.clarity != null) { totalClarity += qs.clarity; clarityCount++; }
-          if (qs.accuracy != null) { totalAccuracy += qs.accuracy; accuracyCount++; }
-          if (qs.confidence != null) { totalConfidence += qs.confidence; confidenceCount++; }
+          // Support both field names: overall_score (new) and overall (old)
+          const overall = qs.overall_score ?? qs.overall ?? null;
+          const clarity = qs.clarity_score ?? qs.clarity ?? null;
+          const accuracy = qs.accuracy_score ?? qs.accuracy ?? null;
+          const confidence = qs.confidence_score ?? qs.confidence ?? null;
+
+          if (overall != null) { totalQuality += overall; qualityCount++; }
+          if (clarity != null) { totalClarity += clarity; clarityCount++; }
+          if (accuracy != null) { totalAccuracy += accuracy; accuracyCount++; }
+          if (confidence != null) { totalConfidence += confidence; confidenceCount++; }
           if (qs.faqMatch) faqMatches++;
           if (qs.semanticMatch) semanticMatches++;
           if (qs.fallback) fallbacks++;
