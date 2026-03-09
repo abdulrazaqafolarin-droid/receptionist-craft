@@ -434,14 +434,40 @@ export default function Widget() {
   }, [messages]);
 
   async function loadReceptionist() {
-    const { data, error } = await supabase
-      .from("receptionists")
-      .select("name, business_name, greeting_message, active, business_info, business_model")
+    // First try the public-safe view (works for unauthenticated widget users)
+    let data: any = null;
+    let error: any = null;
+    
+    const viewResult = await supabase
+      .from("widget_receptionists")
+      .select("id, name, business_name, greeting_message, timezone, tone")
       .eq("id", receptionistId)
-      .eq("active", true)
       .maybeSingle();
+    
+    if (viewResult.data) {
+      data = viewResult.data;
+    } else {
+      // Fallback: try RPC function for additional fields
+      const rpcResult = await supabase.rpc("get_public_receptionist", { p_receptionist_id: receptionistId });
+      if (rpcResult.data && rpcResult.data.length > 0) {
+        data = rpcResult.data[0];
+      } else {
+        error = viewResult.error || rpcResult.error;
+      }
+    }
+    
+    // Also try to get business_info and business_model (authenticated owners only, will silently fail for widget)
+    const fullResult = await supabase
+      .from("receptionists")
+      .select("business_info, business_model")
+      .eq("id", receptionistId!)
+      .maybeSingle();
+    
+    if (fullResult.data) {
+      data = { ...data, ...fullResult.data };
+    }
 
-    if (error || !data) {
+    if (!data) {
       toast({ title: "Error", description: "Receptionist not found", variant: "destructive" });
       return;
     }
@@ -493,17 +519,25 @@ export default function Widget() {
   }
 
   async function loadServicesAndProducts() {
-    const { data, error } = await supabase
-      .from("services")
-      .select("*")
-      .eq("receptionist_id", receptionistId)
-      .eq("active", true);
+    // Use the public_catalog view or RPC for unauthenticated widget access
+    const { data: rpcData, error: rpcError } = await supabase
+      .rpc("get_services_for_receptionist", { p_receptionist_id: receptionistId! });
+    
+    let items = rpcData;
+    
+    // Fallback to direct table query (works if user is authenticated owner)
+    if (rpcError || !items) {
+      const { data, error } = await supabase
+        .from("services")
+        .select("*")
+        .eq("receptionist_id", receptionistId)
+        .eq("active", true);
+      if (!error) items = data;
+    }
 
-    if (!error && data) {
-      // Separate services and products based on duration_minutes
-      // Products have duration_minutes = 0, Services have duration_minutes > 0
-      const serviceItems = data.filter(item => item.duration_minutes > 0);
-      const productItems = data.filter(item => item.duration_minutes === 0);
+    if (items) {
+      const serviceItems = items.filter((item: any) => item.duration_minutes > 0);
+      const productItems = items.filter((item: any) => item.duration_minutes === 0 || item.is_product === true);
       console.log("[Widget] Services:", serviceItems.length, "Products:", productItems.length);
       setServices(serviceItems);
       setProducts(productItems);

@@ -432,8 +432,9 @@ export default function BuilderPage() {
       
       // Ingest analytics data with detailed metrics
       if (currentUserId && receptionistId) {
-        supabase.functions.invoke("analytics/ingest", {
+        supabase.functions.invoke("analytics", {
           body: {
+            action: "ingest",
             receptionist_id: receptionistId,
             user_id: currentUserId,
             request_message: text,
@@ -452,8 +453,8 @@ export default function BuilderPage() {
         }).catch(err => console.warn("Analytics ingest failed:", err));
 
         // Trigger analytics computation (non-blocking)
-        supabase.functions.invoke("analytics/compute", {
-          body: { userId: currentUserId }
+        supabase.functions.invoke("analytics", {
+          body: { action: "compute", userId: currentUserId }
         }).catch(err => console.warn("Analytics compute failed:", err));
       }
       
