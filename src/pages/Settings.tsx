@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Zap, Bell, User, Lock, CreditCard, Palette, Globe } from "lucide-react";
+import { ArrowLeft, Zap, Bell, User, Lock, CreditCard, Palette, Globe, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TIMEZONE_OPTIONS, detectBrowserTimezone, findClosestTimezone } from "@/lib/timezones";
@@ -15,6 +15,14 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "next-themes";
 import { FloatingBackground } from "@/components/FloatingBackground";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -23,7 +31,12 @@ export default function Settings() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ newPassword: "", confirmPassword: "" });
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -111,6 +124,29 @@ export default function Settings() {
       toast.error(error.message || "Failed to save profile");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const changePassword = async () => {
+    if (passwordForm.newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: passwordForm.newPassword });
+      if (error) throw error;
+      toast.success("Password updated successfully");
+      setPasswordDialogOpen(false);
+      setPasswordForm({ newPassword: "", confirmPassword: "" });
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update password");
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -279,7 +315,10 @@ export default function Settings() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Button variant="outline" className="w-full h-11">Change Password</Button>
+                    <Button variant="outline" className="w-full h-11" onClick={() => setPasswordDialogOpen(true)}>
+                      <Lock className="mr-2 h-4 w-4" />
+                      Change Password
+                    </Button>
                   </CardContent>
                 </Card>
 
@@ -383,6 +422,76 @@ export default function Settings() {
           </Tabs>
         )}
       </div>
+
+      {/* Password Change Dialog */}
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5 text-primary" />
+              Change Password
+            </DialogTitle>
+            <DialogDescription>
+              Enter a new password for your account. Must be at least 8 characters.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <div className="relative">
+                <Input
+                  id="new-password"
+                  type={showNewPw ? "text" : "password"}
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                  placeholder="Min. 8 characters"
+                  className="h-11 pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPw(!showNewPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm New Password</Label>
+              <div className="relative">
+                <Input
+                  id="confirm-password"
+                  type={showConfirmPw ? "text" : "password"}
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                  placeholder="Re-enter new password"
+                  className="h-11 pr-10"
+                  onKeyDown={(e) => e.key === "Enter" && changePassword()}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPw(!showConfirmPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showConfirmPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {passwordForm.confirmPassword && passwordForm.newPassword !== passwordForm.confirmPassword && (
+                <p className="text-xs text-destructive">Passwords do not match</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasswordDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={changePassword}
+              disabled={changingPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}
+            >
+              {changingPassword ? "Updating..." : "Update Password"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
