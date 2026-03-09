@@ -2069,7 +2069,13 @@ export type Database = {
       ai_mode: "support" | "booking" | "sales"
       app_role: "owner" | "admin" | "member" | "viewer"
       appointment_status: "booked" | "cancelled" | "completed"
-      integration_type: "twilio" | "openai" | "google_calendar" | "stripe"
+      integration_type:
+        | "twilio"
+        | "openai"
+        | "google_calendar"
+        | "stripe"
+        | "whatsapp"
+        | "phone"
       receptionist_tone: "friendly" | "professional" | "playful"
       user_plan: "free" | "pro" | "enterprise"
     }
@@ -2202,7 +2208,14 @@ export const Constants = {
       ai_mode: ["support", "booking", "sales"],
       app_role: ["owner", "admin", "member", "viewer"],
       appointment_status: ["booked", "cancelled", "completed"],
-      integration_type: ["twilio", "openai", "google_calendar", "stripe"],
+      integration_type: [
+        "twilio",
+        "openai",
+        "google_calendar",
+        "stripe",
+        "whatsapp",
+        "phone",
+      ],
       receptionist_tone: ["friendly", "professional", "playful"],
       user_plan: ["free", "pro", "enterprise"],
     },
