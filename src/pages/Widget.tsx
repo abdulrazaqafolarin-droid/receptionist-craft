@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Send, Loader2, MessageCircle, Phone, Mail, MapPin, RefreshCw } from "lucide-react";
+import VoiceInputButton from "@/components/widget/VoiceInputButton";
 import { useToast } from "@/hooks/use-toast";
 import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
 import { ServiceSelector } from "@/components/widget/ServiceSelector";

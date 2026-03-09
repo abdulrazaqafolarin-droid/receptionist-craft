@@ -1,41 +1,43 @@
-import { supabase } from "@/integrations/supabase/client";
-
 let currentAudio: HTMLAudioElement | null = null;
 
-export async function speakText(text: string, voice: string = "Sarah"): Promise<void> {
+export async function speakText(text: string, voiceId: string = "EXAVITQu4vr4xnSDxMaL"): Promise<void> {
   try {
-    // Stop any currently playing audio
     if (currentAudio) {
       currentAudio.pause();
       currentAudio = null;
     }
 
-    const { data, error } = await supabase.functions.invoke('text-to-speech', {
-      body: { text, voice }
-    });
-
-    if (error) throw error;
-
-    if (data?.audioContent) {
-      // Convert base64 to blob
-      const binaryString = atob(data.audioContent);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+    // Use fetch directly for binary audio (not supabase.functions.invoke which expects JSON)
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ text, voiceId }),
       }
-      const blob = new Blob([bytes], { type: 'audio/mpeg' });
-      const url = URL.createObjectURL(blob);
-      
-      currentAudio = new Audio(url);
-      currentAudio.onended = () => {
-        URL.revokeObjectURL(url);
-        currentAudio = null;
-      };
-      
-      await currentAudio.play();
+    );
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: "TTS failed" }));
+      throw new Error(err.error || `TTS request failed: ${response.status}`);
     }
+
+    const audioBlob = await response.blob();
+    const url = URL.createObjectURL(audioBlob);
+
+    currentAudio = new Audio(url);
+    currentAudio.onended = () => {
+      URL.revokeObjectURL(url);
+      currentAudio = null;
+    };
+
+    await currentAudio.play();
   } catch (error) {
-    console.error('Error speaking text:', error);
+    console.error("Error speaking text:", error);
     throw error;
   }
 }

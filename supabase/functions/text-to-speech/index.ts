@@ -1,9 +1,8 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 serve(async (req) => {
@@ -12,43 +11,43 @@ serve(async (req) => {
   }
 
   try {
-    const { text, voice = 'aura-asteria-en' } = await req.json();
-    
-    // Input validation
+    const { text, voiceId = 'EXAVITQu4vr4xnSDxMaL' } = await req.json();
+
     if (!text || typeof text !== 'string') {
-      console.error('[TTS] Invalid text input');
       throw new Error('Valid text string is required');
     }
 
     if (text.length > 5000) {
-      console.error('[TTS] Text too long:', text.length);
       throw new Error('Text exceeds maximum length of 5000 characters');
     }
 
-    console.log('[TTS] Processing text:', text.substring(0, 50) + '...');
+    console.log('[TTS] Processing with ElevenLabs, voice:', voiceId);
 
-    const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
-    
-    if (!DEEPGRAM_API_KEY) {
-      throw new Error('DEEPGRAM_API_KEY not configured');
+    const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
+    if (!ELEVENLABS_API_KEY) {
+      throw new Error('ELEVENLABS_API_KEY not configured');
     }
 
-    console.log('[TTS] Generating speech with Deepgram Aura, voice:', voice);
-
-    // Call Deepgram TTS API with timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(
-      `https://api.deepgram.com/v1/speak?model=${voice}`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
       {
         method: 'POST',
         headers: {
-          'Authorization': `Token ${DEEPGRAM_API_KEY}`,
+          'xi-api-key': ELEVENLABS_API_KEY,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          text: text,
+          text,
+          model_id: 'eleven_turbo_v2_5',
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.3,
+            use_speaker_boost: true,
+          },
         }),
         signal: controller.signal,
       }
@@ -58,50 +57,32 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[TTS] Deepgram API error:', errorText);
-      throw new Error(`Deepgram API error: ${response.status} ${errorText}`);
+      console.error('[TTS] ElevenLabs API error:', errorText);
+      throw new Error(`ElevenLabs API error: ${response.status} ${errorText}`);
     }
 
-    // Get audio buffer
     const audioBuffer = await response.arrayBuffer();
-    console.log('[TTS] Deepgram TTS successful, audio size:', audioBuffer.byteLength);
+    console.log('[TTS] ElevenLabs TTS successful, audio size:', audioBuffer.byteLength);
 
-    // Convert audio buffer to base64
-    const base64Audio = btoa(
-      String.fromCharCode(...new Uint8Array(audioBuffer))
-    );
-
-    return new Response(
-      JSON.stringify({ audioContent: base64Audio }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    // Return raw binary audio for proper playback
+    return new Response(audioBuffer, {
+      headers: { ...corsHeaders, 'Content-Type': 'audio/mpeg' },
+    });
 
   } catch (error) {
-    console.error('[TTS] Error in text-to-speech:', error);
-    
-    // Handle timeout specifically
+    console.error('[TTS] Error:', error);
+
     if (error instanceof Error && error.name === 'AbortError') {
       return new Response(
         JSON.stringify({ error: 'Request timeout - please try again with shorter text' }),
-        {
-          status: 504,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
+        { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    const errorDetails = error instanceof Error ? error.stack : undefined;
-    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ 
-        error: errorMessage,
-        details: errorDetails 
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      JSON.stringify({ error: errorMessage }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
