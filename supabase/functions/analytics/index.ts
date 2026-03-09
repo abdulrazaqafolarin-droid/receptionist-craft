@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 serve(async (req) => {
@@ -15,18 +15,19 @@ serve(async (req) => {
   );
 
   try {
-    const url = new URL(req.url);
+    const body = await req.json();
     
-    // POST /compute - compute comprehensive analytics for a user
-    if (req.method === "POST" && url.pathname.endsWith("/compute")) {
+    // Route based on body.action field instead of URL path
+    const action = body.action || "compute";
+
+    if (action === "compute") {
       console.log("Analytics compute request received");
-      const body = await req.json();
       const userId = body.userId;
       
       if (!userId) {
         return new Response(
           JSON.stringify({ error: "userId required" }), 
-          { status: 400, headers: CORS }
+          { status: 400, headers: { ...CORS, "Content-Type": "application/json" } }
         );
       }
 
@@ -37,35 +38,32 @@ serve(async (req) => {
         .eq("user_id", userId)
         .maybeSingle();
 
-      // If cache is fresh (less than 5 minutes old), return it
       if (cached && cached.updated_at) {
         const cacheAge = Date.now() - new Date(cached.updated_at).getTime();
         if (cacheAge < 5 * 60 * 1000) {
-          console.log("Returning cached analytics");
           return new Response(JSON.stringify({
             analytics: cached.data,
             cached: true
-          }), { headers: CORS, status: 200 });
+          }), { headers: { ...CORS, "Content-Type": "application/json" }, status: 200 });
         }
       }
 
-      // Get user's receptionists
       const { data: receptionists } = await supabase
         .from("receptionists")
         .select("id, name, business_name")
         .eq("user_id", userId);
 
       if (!receptionists || receptionists.length === 0) {
-        const emptyAnalytics = { error: "No receptionists found" };
         return new Response(JSON.stringify({
-          analytics: emptyAnalytics,
+          analytics: null,
           cached: false
-        }), { headers: CORS, status: 200 });
+        }), { headers: { ...CORS, "Content-Type": "application/json" }, status: 200 });
       }
 
       const receptionistIds = receptionists.map(r => r.id);
+      const days = body.days || 30;
+      const daysAgo = Date.now() - (days * 24 * 60 * 60 * 1000);
 
-      // Compute conversation metrics
       const { data: conversations } = await supabase
         .from("conversations")
         .select("id, created_at, receptionist_id")
@@ -88,38 +86,26 @@ serve(async (req) => {
         .order("created_at", { ascending: false })
         .limit(1000);
 
-      // Fetch conversion events for revenue attribution
       const { data: conversionEvents } = await supabase
         .from("conversion_events")
         .select("event_type, revenue_value, currency, receptionist_id, created_at, session_id, metadata")
         .in("receptionist_id", receptionistIds);
 
-      // Fetch orders for commerce metrics
       const { data: orders } = await supabase
         .from("orders")
         .select("id, total_amount, status, receptionist_id, created_at")
         .in("receptionist_id", receptionistIds);
 
-      // Calculate metrics
-      const now = Date.now();
-      const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
-
       const recentConversations = conversations?.filter(c => 
-        new Date(c.created_at).getTime() > thirtyDaysAgo
+        new Date(c.created_at).getTime() > daysAgo
       ) || [];
 
-      const recentMessages = chatMessages?.filter(m => 
-        new Date(m.created_at).getTime() > thirtyDaysAgo
-      ) || [];
-
-      // Conversations per day (last 30 days)
       const conversationsPerDay: Record<string, number> = {};
       recentConversations.forEach(c => {
         const date = new Date(c.created_at).toISOString().split('T')[0];
         conversationsPerDay[date] = (conversationsPerDay[date] || 0) + 1;
       });
 
-      // AI Quality metrics
       let totalQuality = 0, totalClarity = 0, totalAccuracy = 0, totalConfidence = 0;
       let qualityCount = 0, clarityCount = 0, accuracyCount = 0, confidenceCount = 0;
       let faqMatches = 0, semanticMatches = 0, fallbacks = 0, unanswered = 0;
@@ -140,24 +126,17 @@ serve(async (req) => {
           if (qs.fallback) fallbacks++;
           if (qs.unanswered) unanswered++;
         }
-
-        if (resp.latency_ms) {
-          totalLatency += resp.latency_ms;
-          latencyCount++;
-        }
+        if (resp.latency_ms) { totalLatency += resp.latency_ms; latencyCount++; }
       });
 
       const totalAIResponses = aiResponses?.length || 0;
 
-      // Revenue attribution metrics
       const totalRevenue = conversionEvents?.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0) || 0;
       const bookingEvents = conversionEvents?.filter(e => e.event_type === 'booking_completed') || [];
       const orderEvents = conversionEvents?.filter(e => e.event_type === 'order_completed') || [];
       const leadEvents = conversionEvents?.filter(e => e.event_type === 'lead_captured') || [];
-      const checkoutEvents = conversionEvents?.filter(e => e.event_type === 'checkout_started') || [];
       const primaryCurrency = conversionEvents?.[0]?.currency || 'NGN';
 
-      // Revenue over time (daily)
       const revenueByDay: Record<string, number> = {};
       conversionEvents?.forEach(e => {
         if (e.revenue_value && Number(e.revenue_value) > 0) {
@@ -166,12 +145,10 @@ serve(async (req) => {
         }
       });
 
-      // Conversion funnel
       const totalSessions = new Set(conversionEvents?.map(e => e.session_id) || []).size;
       const sessionsWithBooking = new Set(bookingEvents.map(e => e.session_id)).size;
       const sessionsWithOrder = new Set(orderEvents.map(e => e.session_id)).size;
 
-      // Per-receptionist breakdown
       const receptionistBreakdown = receptionists.map(rec => {
         const recConvs = conversations?.filter(c => c.receptionist_id === rec.id).length || 0;
         const recAppts = appointments?.filter(a => a.receptionist_id === rec.id).length || 0;
@@ -179,29 +156,17 @@ serve(async (req) => {
         const recConversionEvents = conversionEvents?.filter(e => e.receptionist_id === rec.id) || [];
         const recOrders = orders?.filter(o => o.receptionist_id === rec.id) || [];
         
-        let recQuality = 0, recQualityCount = 0;
-        let recFaqMatches = 0;
-        
+        let recQuality = 0, recQualityCount = 0, recFaqMatches = 0;
         recResponses.forEach(resp => {
-          const qs = typeof resp.quality_score === 'string' 
-            ? JSON.parse(resp.quality_score) 
-            : resp.quality_score;
-          if (qs?.overall != null) {
-            recQuality += qs.overall;
-            recQualityCount++;
-          }
+          const qs = typeof resp.quality_score === 'string' ? JSON.parse(resp.quality_score) : resp.quality_score;
+          if (qs?.overall != null) { recQuality += qs.overall; recQualityCount++; }
           if (qs?.faqMatch) recFaqMatches++;
         });
 
         const recRevenue = recConversionEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0);
-
         return {
-          id: rec.id,
-          name: rec.name,
-          business_name: rec.business_name,
-          conversations: recConvs,
-          appointments: recAppts,
-          orders: recOrders.length,
+          id: rec.id, name: rec.name, business_name: rec.business_name,
+          conversations: recConvs, appointments: recAppts, orders: recOrders.length,
           avg_quality_score: recQualityCount > 0 ? (recQuality / recQualityCount) : null,
           faq_match_rate: recResponses.length > 0 ? (recFaqMatches / recResponses.length) : 0,
           revenue: recRevenue,
@@ -216,9 +181,7 @@ serve(async (req) => {
           total_messages: chatMessages?.length || 0,
           conversations_per_receptionist: (conversations?.length || 0) / receptionists.length,
           conversations_per_day: conversationsPerDay,
-          average_conversation_length: chatMessages?.length && conversations?.length 
-            ? (chatMessages.length / conversations.length) 
-            : 0,
+          average_conversation_length: chatMessages?.length && conversations?.length ? (chatMessages.length / conversations.length) : 0,
         },
         ai_quality_metrics: {
           avg_quality_score: qualityCount > 0 ? (totalQuality / qualityCount) : null,
@@ -233,27 +196,16 @@ serve(async (req) => {
         business_metrics: {
           appointments_booked: appointments?.length || 0,
           lead_captures: leadEvents.length,
-          booking_conversion_rate: conversations?.length 
-            ? ((appointments?.length || 0) / conversations.length) 
-            : 0,
+          booking_conversion_rate: conversations?.length ? ((appointments?.length || 0) / conversations.length) : 0,
         },
         revenue_metrics: {
-          total_revenue: totalRevenue,
-          currency: primaryCurrency,
+          total_revenue: totalRevenue, currency: primaryCurrency,
           bookings_revenue: bookingEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0),
           orders_revenue: orderEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0),
-          bookings_count: bookingEvents.length,
-          orders_count: orderEvents.length,
-          leads_count: leadEvents.length,
-          avg_booking_value: bookingEvents.length > 0
-            ? bookingEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0) / bookingEvents.length
-            : 0,
-          avg_order_value: orderEvents.length > 0
-            ? orderEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0) / orderEvents.length
-            : 0,
-          revenue_over_time: Object.entries(revenueByDay)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([date, amount]) => ({ date, amount })),
+          bookings_count: bookingEvents.length, orders_count: orderEvents.length, leads_count: leadEvents.length,
+          avg_booking_value: bookingEvents.length > 0 ? bookingEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0) / bookingEvents.length : 0,
+          avg_order_value: orderEvents.length > 0 ? orderEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0) / orderEvents.length : 0,
+          revenue_over_time: Object.entries(revenueByDay).sort(([a], [b]) => a.localeCompare(b)).map(([date, amount]) => ({ date, amount })),
         },
         conversion_funnel: {
           total_conversations: conversations?.length || 0,
@@ -271,34 +223,17 @@ serve(async (req) => {
         computed_at: new Date().toISOString()
       };
 
-      // Cache the result
-      const { error: cacheError } = await supabase
-        .from("analytics_cache")
-        .upsert({
-          user_id: userId,
-          data: analytics,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: "user_id"
-        });
+      // Cache
+      await supabase.from("analytics_cache").upsert({
+        user_id: userId, data: analytics, updated_at: new Date().toISOString()
+      }, { onConflict: "user_id" });
 
-      if (cacheError) {
-        console.error("Error caching analytics:", cacheError);
-      }
-
-      console.log("Analytics computed successfully");
-      return new Response(JSON.stringify({
-        analytics,
-        cached: false
-      }), { headers: CORS, status: 200 });
+      return new Response(JSON.stringify({ analytics, cached: false }), {
+        headers: { ...CORS, "Content-Type": "application/json" }, status: 200
+      });
     }
-    
-    // POST /ingest - persist analytics data
-    if (req.method === "POST" && url.pathname.endsWith("/ingest")) {
-      console.log("Analytics ingest request received");
-      const body = await req.json();
-      
-      // expected body: { receptionist_id, user_id, request_message, reply_text, model, latency_ms, temperature, quality_score, channel }
+
+    if (action === "ingest") {
       const payload = {
         receptionist_id: body.receptionist_id,
         user_id: body.user_id || null,
@@ -313,21 +248,15 @@ serve(async (req) => {
         flagged: false
       };
       
-      console.log("Inserting analytics payload:", payload);
       const { error } = await supabase.from("ai_responses").insert([payload]);
-      if (error) {
-        console.error("Error inserting analytics:", error);
-        throw error;
-      }
+      if (error) throw error;
       
-      console.log("Analytics ingested successfully");
-      return new Response(JSON.stringify({ ok: true }), { headers: CORS, status: 200 });
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...CORS, "Content-Type": "application/json" }, status: 200
+      });
     }
 
-    // POST /stats - retrieve aggregate statistics for a receptionist
-    if (req.method === "POST" && url.pathname.endsWith("/stats")) {
-      console.log("Stats request received");
-      const body = await req.json();
+    if (action === "stats") {
       const receptionistId = body.receptionistId;
       const startDate = body.startDate;
       const endDate = body.endDate;
@@ -335,141 +264,70 @@ serve(async (req) => {
       if (!receptionistId) {
         return new Response(
           JSON.stringify({ error: "receptionistId required" }), 
-          { status: 400, headers: CORS }
+          { status: 400, headers: { ...CORS, "Content-Type": "application/json" } }
         );
       }
 
-      console.log("Fetching stats for receptionist:", receptionistId, { startDate, endDate });
+      let countQuery = supabase.from("ai_responses").select("id", { count: "exact", head: true }).eq("receptionist_id", receptionistId);
+      let dataQuery = supabase.from("ai_responses").select("quality_score, latency_ms, created_at, request_message, reply_text").eq("receptionist_id", receptionistId).order("created_at", { ascending: false }).limit(1000);
 
-      // Build query with date filters
-      let countQuery = supabase
-        .from("ai_responses")
-        .select("id", { count: "exact", head: true })
-        .eq("receptionist_id", receptionistId);
+      if (startDate) { countQuery = countQuery.gte("created_at", startDate); dataQuery = dataQuery.gte("created_at", startDate); }
+      if (endDate) { countQuery = countQuery.lte("created_at", endDate); dataQuery = dataQuery.lte("created_at", endDate); }
 
-      let dataQuery = supabase
-        .from("ai_responses")
-        .select("quality_score, latency_ms, created_at, request_message, reply_text")
-        .eq("receptionist_id", receptionistId)
-        .order("created_at", { ascending: false })
-        .limit(1000);
-
-      if (startDate) {
-        countQuery = countQuery.gte("created_at", startDate);
-        dataQuery = dataQuery.gte("created_at", startDate);
-      }
-      if (endDate) {
-        countQuery = countQuery.lte("created_at", endDate);
-        dataQuery = dataQuery.lte("created_at", endDate);
-      }
-
-      // Basic aggregates
       const totalRes = await countQuery;
-
-      // Fetch rows to compute averages for quality and latency
       const rows = await dataQuery;
 
-      let avgQualityScore = null;
-      let avgLatency = null;
+      let avgQualityScore = null, avgLatency = null;
       const recentResponses: Array<{created_at: string, quality_score: number, latency_ms: number}> = [];
 
       if (rows?.data?.length) {
-        // Calculate average quality score
-        const qualityScores = rows.data
-          .map(r => {
-            try {
-              const score = typeof r.quality_score === 'string' 
-                ? JSON.parse(r.quality_score) 
-                : r.quality_score;
-              
-              // Extract overall score or compute average of sub-scores
-              if (score?.overall) return score.overall;
-              if (score?.coherence && score?.relevance && score?.completeness) {
-                return (score.coherence + score.relevance + score.completeness) / 3;
-              }
-              return null;
-            } catch {
-              return null;
-            }
-          })
-          .filter((val): val is number => val !== null);
+        const qualityScores = rows.data.map(r => {
+          try {
+            const score = typeof r.quality_score === 'string' ? JSON.parse(r.quality_score) : r.quality_score;
+            if (score?.overall) return score.overall;
+            if (score?.coherence && score?.relevance && score?.completeness) return (score.coherence + score.relevance + score.completeness) / 3;
+            return null;
+          } catch { return null; }
+        }).filter((val): val is number => val !== null);
         
-        if (qualityScores.length) {
-          avgQualityScore = qualityScores.reduce((a, b) => a + b, 0) / qualityScores.length;
-        }
+        if (qualityScores.length) avgQualityScore = qualityScores.reduce((a, b) => a + b, 0) / qualityScores.length;
 
-        // Calculate average latency
-        const latencies = rows.data
-          .map(r => r.latency_ms)
-          .filter((val): val is number => val !== null && val > 0);
-        
-        if (latencies.length) {
-          avgLatency = latencies.reduce((a, b) => a + b, 0) / latencies.length;
-        }
+        const latencies = rows.data.map(r => r.latency_ms).filter((val): val is number => val !== null && val > 0);
+        if (latencies.length) avgLatency = latencies.reduce((a, b) => a + b, 0) / latencies.length;
 
-        // Prepare recent responses with all needed data
         recentResponses.push(...rows.data.slice(0, 10).map(r => {
           let qualityScore = 0;
           try {
-            const score = typeof r.quality_score === 'string' 
-              ? JSON.parse(r.quality_score) 
-              : r.quality_score;
+            const score = typeof r.quality_score === 'string' ? JSON.parse(r.quality_score) : r.quality_score;
             if (score?.overall) qualityScore = score.overall;
-            else if (score?.coherence && score?.relevance && score?.completeness) {
-              qualityScore = (score.coherence + score.relevance + score.completeness) / 3;
-            }
-          } catch {
-            qualityScore = 0;
-          }
-
-          return {
-            created_at: r.created_at,
-            quality_score: qualityScore,
-            latency_ms: r.latency_ms || 0
-          };
+            else if (score?.coherence && score?.relevance && score?.completeness) qualityScore = (score.coherence + score.relevance + score.completeness) / 3;
+          } catch { qualityScore = 0; }
+          return { created_at: r.created_at, quality_score: qualityScore, latency_ms: r.latency_ms || 0 };
         }));
       }
 
-      let flaggedQuery = supabase
-        .from("ai_responses")
-        .select("id", { count: "exact", head: true })
-        .eq("receptionist_id", receptionistId)
-        .eq("flagged", true);
-
-      if (startDate) {
-        flaggedQuery = flaggedQuery.gte("created_at", startDate);
-      }
-      if (endDate) {
-        flaggedQuery = flaggedQuery.lte("created_at", endDate);
-      }
-
+      let flaggedQuery = supabase.from("ai_responses").select("id", { count: "exact", head: true }).eq("receptionist_id", receptionistId).eq("flagged", true);
+      if (startDate) flaggedQuery = flaggedQuery.gte("created_at", startDate);
+      if (endDate) flaggedQuery = flaggedQuery.lte("created_at", endDate);
       const flagged = await flaggedQuery;
 
-      // Calculate chart data
       const messageVolume: Record<string, number> = {};
-      let exactMatches = 0, semanticMatches = 0, fallbacks = 0;
+      let exactMatches = 0, semanticMatchesCount = 0, fallbacksCount = 0;
       const qualityBuckets = { "0-0.3": 0, "0.3-0.6": 0, "0.6-0.9": 0, "0.9-1.0": 0 };
       const latencyByDate: Record<string, { total: number; count: number }> = {};
 
       rows?.data?.forEach(r => {
-        // Message volume
         const date = new Date(r.created_at).toISOString().split('T')[0];
         messageVolume[date] = (messageVolume[date] || 0) + 1;
-
-        // Match rates
         const score = typeof r.quality_score === 'string' ? JSON.parse(r.quality_score) : r.quality_score;
         if (score?.faqMatch) exactMatches++;
-        else if (score?.semanticMatch) semanticMatches++;
-        else fallbacks++;
-
-        // Quality distribution
+        else if (score?.semanticMatch) semanticMatchesCount++;
+        else fallbacksCount++;
         const overall = score?.overall || 0;
         if (overall < 0.3) qualityBuckets["0-0.3"]++;
         else if (overall < 0.6) qualityBuckets["0.3-0.6"]++;
         else if (overall < 0.9) qualityBuckets["0.6-0.9"]++;
         else qualityBuckets["0.9-1.0"]++;
-
-        // Latency over time
         if (r.latency_ms) {
           if (!latencyByDate[date]) latencyByDate[date] = { total: 0, count: 0 };
           latencyByDate[date].total += r.latency_ms;
@@ -479,20 +337,17 @@ serve(async (req) => {
 
       const totalMessages = rows?.data?.length || 1;
 
-      console.log("Stats computed successfully");
       return new Response(JSON.stringify({
         total_responses: totalRes.count ?? 0,
         avg_quality_score: avgQualityScore,
         flagged_count: flagged.count ?? 0,
         avg_latency: avgLatency,
         recent_responses: recentResponses,
-        message_volume: Object.entries(messageVolume)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([date, count]) => ({ date, count })),
+        message_volume: Object.entries(messageVolume).sort(([a], [b]) => a.localeCompare(b)).map(([date, count]) => ({ date, count })),
         match_rates: {
           exact: Math.round((exactMatches / totalMessages) * 100),
-          semantic: Math.round((semanticMatches / totalMessages) * 100),
-          fallback: Math.round((fallbacks / totalMessages) * 100)
+          semantic: Math.round((semanticMatchesCount / totalMessages) * 100),
+          fallback: Math.round((fallbacksCount / totalMessages) * 100)
         },
         quality_distribution: [
           { range: "0-0.3", count: qualityBuckets["0-0.3"] },
@@ -500,22 +355,20 @@ serve(async (req) => {
           { range: "0.6-0.9", count: qualityBuckets["0.6-0.9"] },
           { range: "0.9-1.0", count: qualityBuckets["0.9-1.0"] }
         ],
-        latency_over_time: Object.entries(latencyByDate)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([date, { total, count }]) => ({ date, latency: Math.round(total / count) }))
-      }), { headers: CORS, status: 200 });
+        latency_over_time: Object.entries(latencyByDate).sort(([a], [b]) => a.localeCompare(b)).map(([date, { total, count }]) => ({ date, latency: Math.round(total / count) }))
+      }), { headers: { ...CORS, "Content-Type": "application/json" }, status: 200 });
     }
 
     return new Response(
-      JSON.stringify({ error: "unsupported endpoint" }), 
-      { status: 400, headers: CORS }
+      JSON.stringify({ error: "unsupported action" }), 
+      { status: 400, headers: { ...CORS, "Content-Type": "application/json" } }
     );
   } catch (err) {
     console.error("Analytics function error:", err);
     const errorMessage = err instanceof Error ? err.message : String(err);
     return new Response(
       JSON.stringify({ error: errorMessage }), 
-      { status: 500, headers: CORS }
+      { status: 500, headers: { ...CORS, "Content-Type": "application/json" } }
     );
   }
 });
