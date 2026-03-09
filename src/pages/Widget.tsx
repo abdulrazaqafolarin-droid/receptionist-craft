@@ -1247,12 +1247,6 @@ export default function Widget() {
     setInput("");
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
 
   const handleSendClick = () => {
     sendMessage();
@@ -1361,7 +1355,7 @@ export default function Widget() {
               <h2 className="text-xl sm:text-2xl font-bold truncate">{receptionist.name}</h2>
               <p className="text-sm opacity-90 truncate">{receptionist.business_name}</p>
               <div className="flex items-center gap-1 mt-1">
-                <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse"></div>
+                <div className="h-2 w-2 rounded-full bg-success animate-pulse"></div>
                 <span className="text-xs opacity-80">Online</span>
               </div>
             </div>
@@ -1548,7 +1542,7 @@ export default function Widget() {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendClick(); } }}
               placeholder={
                 bookingState.collectingInfo === 'name' 
                   ? "Enter your name..." 

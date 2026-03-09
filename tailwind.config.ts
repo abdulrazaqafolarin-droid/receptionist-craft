@@ -101,6 +101,7 @@ export default {
         glow: "var(--shadow-glow)",
         neon: "var(--shadow-neon)",
         card: "var(--shadow-card)",
+        elevated: "var(--shadow-elevated)",
         premium: "0 20px 40px -12px hsl(217 91% 60% / 0.15)",
       },
       keyframes: {
