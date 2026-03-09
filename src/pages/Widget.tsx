@@ -4,8 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Send, Loader2, MessageCircle, Phone, Mail, MapPin, RefreshCw } from "lucide-react";
+import { Send, Loader2, MessageCircle, Phone, Mail, MapPin, RefreshCw, Mic } from "lucide-react";
 import VoiceInputButton from "@/components/widget/VoiceInputButton";
+import VoiceChatOverlay from "@/components/widget/VoiceChatOverlay";
 import { useToast } from "@/hooks/use-toast";
 import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
 import { ServiceSelector } from "@/components/widget/ServiceSelector";
@@ -98,6 +99,7 @@ export default function Widget() {
   const [showSessionOverlay, setShowSessionOverlay] = useState(false);
   const [existingMessages, setExistingMessages] = useState<any[]>([]);
   const [sessionCheckComplete, setSessionCheckComplete] = useState(false);
+  const [voiceChatOpen, setVoiceChatOpen] = useState(false);
   
   // Abuse protection: honeypot field and form load timing
   const [honeypotValue, setHoneypotValue] = useState("");
@@ -1222,6 +1224,40 @@ export default function Widget() {
     sendMessage();
   };
 
+  // Voice chat: send message and return AI reply text
+  const handleVoiceSendMessage = async (text: string): Promise<string> => {
+    if (!text || !receptionistId) return "";
+    
+    const userMessage: Message = { role: "user", content: text, timestamp: new Date() };
+    setMessages(prev => [...prev, userMessage]);
+    persistMessage('user', text);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("widget-chat", {
+        body: {
+          message: text,
+          receptionistId,
+          sessionId,
+          bookingContext: bookingState,
+          _hp_field: "",
+          _form_load_time: formLoadTimeRef.current,
+        }
+      });
+
+      if (error) throw error;
+      const reply = data.reply || "I'm sorry, I couldn't process that.";
+      
+      const botMessage: Message = { role: "assistant", content: reply, timestamp: new Date() };
+      setMessages(prev => [...prev, botMessage]);
+      persistMessage('ai', reply);
+      
+      return reply;
+    } catch (err) {
+      console.error("Voice chat error:", err);
+      return "Sorry, something went wrong. Please try again.";
+    }
+  };
+
   if (!receptionistId) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background p-4">
@@ -1249,6 +1285,14 @@ export default function Widget() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-2 sm:p-4">
+      {/* Voice Chat Overlay */}
+      <VoiceChatOverlay
+        open={voiceChatOpen}
+        onClose={() => setVoiceChatOpen(false)}
+        onSendMessage={handleVoiceSendMessage}
+        primaryColor={widgetColors.primaryColor}
+        secondaryColor={widgetColors.secondaryColor}
+      />
       <Card className="w-full max-w-3xl h-[90vh] sm:h-[700px] flex flex-col shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-300 relative">
         {/* Chat Session Overlay - shown when returning with existing conversation */}
         <ChatSessionOverlay
@@ -1287,6 +1331,14 @@ export default function Widget() {
                 <span className="text-xs opacity-80">Online</span>
               </div>
             </div>
+            {/* Voice Chat Button */}
+            <button
+              onClick={() => setVoiceChatOpen(true)}
+              className="h-10 w-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-all hover:scale-105 ring-1 ring-white/20"
+              aria-label="Start voice chat"
+            >
+              <Mic className="h-5 w-5" />
+            </button>
           </div>
         </div>
 

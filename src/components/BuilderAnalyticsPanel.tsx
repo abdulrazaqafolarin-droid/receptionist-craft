@@ -100,8 +100,9 @@ export function BuilderAnalyticsPanel({ receptionistId, userId }: BuilderAnalyti
     setError(null);
     
     try {
-      const { data, error } = await supabase.functions.invoke("analytics/stats", {
+      const { data, error } = await supabase.functions.invoke("analytics", {
         body: { 
+          action: "stats",
           receptionistId,
           startDate: startDate?.toISOString(),
           endDate: endDate?.toISOString()
