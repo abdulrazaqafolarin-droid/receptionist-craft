@@ -1,4 +1,4 @@
-import { BarChart, Home, Calendar, CalendarDays, MessageSquare, Settings, HelpCircle, ClipboardCheck, Lightbulb, Activity, Bell, Radio, Clock, Briefcase, MessageCircleQuestion, Building2 } from "lucide-react";
+import { BarChart, Home, Calendar, CalendarDays, MessageSquare, Settings, HelpCircle, ClipboardCheck, Lightbulb, Activity, Bell, Radio, Clock, Briefcase, MessageCircleQuestion, Building2, Plug } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import rutexLogo from "@/assets/rutex-logo.jpg";
