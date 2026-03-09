@@ -519,17 +519,25 @@ export default function Widget() {
   }
 
   async function loadServicesAndProducts() {
-    const { data, error } = await supabase
-      .from("services")
-      .select("*")
-      .eq("receptionist_id", receptionistId)
-      .eq("active", true);
+    // Use the public_catalog view or RPC for unauthenticated widget access
+    const { data: rpcData, error: rpcError } = await supabase
+      .rpc("get_services_for_receptionist", { p_receptionist_id: receptionistId! });
+    
+    let items = rpcData;
+    
+    // Fallback to direct table query (works if user is authenticated owner)
+    if (rpcError || !items) {
+      const { data, error } = await supabase
+        .from("services")
+        .select("*")
+        .eq("receptionist_id", receptionistId)
+        .eq("active", true);
+      if (!error) items = data;
+    }
 
-    if (!error && data) {
-      // Separate services and products based on duration_minutes
-      // Products have duration_minutes = 0, Services have duration_minutes > 0
-      const serviceItems = data.filter(item => item.duration_minutes > 0);
-      const productItems = data.filter(item => item.duration_minutes === 0);
+    if (items) {
+      const serviceItems = items.filter((item: any) => item.duration_minutes > 0);
+      const productItems = items.filter((item: any) => item.duration_minutes === 0 || item.is_product === true);
       console.log("[Widget] Services:", serviceItems.length, "Products:", productItems.length);
       setServices(serviceItems);
       setProducts(productItems);
