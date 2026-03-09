@@ -57,6 +57,7 @@ type Receptionist = {
   system_prompt?: string;
   temperature?: number;
   language?: string;
+  currency?: string;
   goal?: string;
   created_at?: string;
   primary_goal?: PrimaryGoal;
