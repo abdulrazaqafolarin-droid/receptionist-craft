@@ -259,6 +259,7 @@ export default function BuilderPage() {
           system_prompt: receptionist.system_prompt,
           temperature: receptionist.temperature,
           language: receptionist.language,
+          currency: receptionist.currency || 'USD',
           goal: receptionist.goal,
           primary_goal: receptionist.primary_goal,
           capabilities: receptionist.capabilities,
