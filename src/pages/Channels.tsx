@@ -79,12 +79,25 @@ export default function Channels() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { error } = await supabase.from("integrations").upsert(
-      { type, user_id: user.id, config_json: config, enabled },
-      { onConflict: "type,user_id" }
-    );
+    const { data: existing } = await supabase
+      .from("integrations")
+      .select("id")
+      .eq("type", type)
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-    if (error) throw error;
+    if (existing) {
+      const { error } = await supabase
+        .from("integrations")
+        .update({ config_json: config as Record<string, string>, enabled })
+        .eq("id", existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from("integrations")
+        .insert({ type, user_id: user.id, config_json: config as Record<string, string>, enabled });
+      if (error) throw error;
+    }
   }
 
   async function handleSaveWhatsApp() {
