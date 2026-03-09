@@ -127,6 +127,29 @@ export default function Settings() {
     }
   };
 
+  const changePassword = async () => {
+    if (passwordForm.newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: passwordForm.newPassword });
+      if (error) throw error;
+      toast.success("Password updated successfully");
+      setPasswordDialogOpen(false);
+      setPasswordForm({ newPassword: "", confirmPassword: "" });
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update password");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   const integrations = [
     { id: "twilio", name: "Twilio", description: "Connect your phone number for real calls", status: "Not Connected" },
     { id: "openai", name: "OpenAI", description: "Advanced AI capabilities", status: "Not Connected" },
