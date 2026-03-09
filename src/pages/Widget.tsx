@@ -1331,6 +1331,14 @@ export default function Widget() {
                 <span className="text-xs opacity-80">Online</span>
               </div>
             </div>
+            {/* Voice Chat Button */}
+            <button
+              onClick={() => setVoiceChatOpen(true)}
+              className="h-10 w-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-all hover:scale-105 ring-1 ring-white/20"
+              aria-label="Start voice chat"
+            >
+              <Mic className="h-5 w-5" />
+            </button>
           </div>
         </div>
 
