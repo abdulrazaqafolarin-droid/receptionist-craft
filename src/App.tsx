@@ -139,6 +139,7 @@ const App = () => {
                               <Route path="/notifications" element={<Notifications />} />
                               <Route path="/realtime-logs" element={<RealtimeLogs />} />
                               <Route path="/organization" element={<OrganizationPage />} />
+                              <Route path="/channels" element={<Channels />} />
                               <Route path="/settings" element={<Settings />} />
                               <Route path="/widget-install/:id" element={<WidgetInstall />} />
                               <Route path="*" element={<NotFound />} />

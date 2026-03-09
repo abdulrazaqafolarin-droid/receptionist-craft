@@ -30,6 +30,7 @@ const items = [
   { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Realtime Logs", url: "/realtime-logs", icon: Radio },
   { title: "Organization", url: "/organization", icon: Building2 },
+  { title: "Channels", url: "/channels", icon: Plug },
   { title: "Settings", url: "/settings", icon: Settings },
   { title: "Help", url: "/help", icon: HelpCircle },
 ];
