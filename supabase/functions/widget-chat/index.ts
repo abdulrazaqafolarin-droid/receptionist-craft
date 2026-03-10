@@ -193,6 +193,18 @@ const corsHeaders = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CURRENCY SYMBOL HELPER
+// ═══════════════════════════════════════════════════════════════════════════
+function getCurrencySymbol(currency: string | null | undefined): string {
+  const map: Record<string, string> = {
+    USD: '$', NGN: '₦', GBP: '£', EUR: '€',
+    KES: 'KSh', GHS: '₵', ZAR: 'R', CAD: 'CA$',
+    AUD: 'A$', INR: '₹', JPY: '¥', CNY: '¥',
+  };
+  return map[(currency || 'USD').toUpperCase()] || '$';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // INPUT SANITIZATION
 // ═══════════════════════════════════════════════════════════════════════════
 function sanitizeInput(input: string, maxLength: number = 2000): string {
@@ -2051,31 +2063,41 @@ serve(async (req) => {
     const isLowConfidence = qualityRubric.overall_score < 0.6;
     const isUnanswered = /i don't have that information|i'm not sure|let me check|i can't find/i.test(reply);
     const isEscalation = escalationCheck.shouldEscalate;
-    
-    if (isLowConfidence || isUnanswered || isEscalation) {
-      try {
-        await supabase.from("ai_responses").insert({
-          receptionist_id: receptionistId,
-          user_id: sessionId,
-          request_message: message,
-          reply_text: reply,
-          confidence: qualityRubric.overall_score,
-          quality_score: qualityRubric,
-          model: receptionist.model || "google/gemini-2.5-flash",
-          latency_ms: latencyMs,
-          channel: "widget",
-          tags: [
-            isLowConfidence ? "low_confidence" : null,
-            isUnanswered ? "unanswered" : null,
-            isEscalation ? "escalation" : null,
-            messageAnalysis.detectedIntent,
-          ].filter(Boolean),
-          flagged: isUnanswered || isEscalation,
-        });
-        console.log(`[KB Gap] Logged gap: confidence=${qualityRubric.overall_score}, unanswered=${isUnanswered}, escalation=${isEscalation}`);
-      } catch (gapErr) {
-        console.warn("[KB Gap] Failed to log gap:", gapErr);
-      }
+
+    // Log ALL responses to ai_responses for analytics (not just bad ones)
+    try {
+      await supabase.from("ai_responses").insert({
+        receptionist_id: receptionistId,
+        user_id: sessionId,
+        request_message: message,
+        reply_text: reply,
+        confidence: qualityRubric.overall_score,
+        quality_score: {
+          overall: qualityRubric.overall_score,       // analytics reads "overall"
+          overall_score: qualityRubric.overall_score, // keep new field too
+          empathy: qualityRubric.empathy,
+          grade: qualityRubric.grade,
+          passes_threshold: qualityRubric.passes_threshold,
+          issues: qualityRubric.issues,
+          faqMatch: false,
+          semanticMatch: false,
+          fallback: isLowConfidence,
+          unanswered: isUnanswered,
+        },
+        model: receptionist.model || "google/gemini-2.5-flash",
+        latency_ms: latencyMs,
+        channel: "widget",
+        tags: [
+          isLowConfidence ? "low_confidence" : null,
+          isUnanswered ? "unanswered" : null,
+          isEscalation ? "escalation" : null,
+          messageAnalysis.detectedIntent,
+        ].filter(Boolean),
+        flagged: isUnanswered || isEscalation,
+      });
+      console.log(`[Analytics] Response logged: confidence=${qualityRubric.overall_score}, flagged=${isUnanswered || isEscalation}`);
+    } catch (gapErr) {
+      console.warn("[Analytics] Failed to log response:", gapErr);
     }
 
     const hasBookingIntent = messageAnalysis.detectedIntent === 'book_appointment' || 
@@ -2297,7 +2319,7 @@ serve(async (req) => {
                 type: 'order.created',
                 title: `New Order: ${customerName}`,
                 body: `Order placed via AI receptionist`,
-                message: `${cartItems.length} item(s) ordered — ₦${orderExecution.validation.total_amount.toLocaleString()}`,
+                message: `${cartItems.length} item(s) ordered — ${getCurrencySymbol(receptionist.currency)}${orderExecution.validation.total_amount.toLocaleString()}`,
                 receptionist_id: receptionistId,
                 user_id: receptionist2.user_id,
                 severity: 'info',
@@ -2325,6 +2347,8 @@ serve(async (req) => {
     // ═══════════════════════════════════════════════════════════════════════
     // CONVERSION EVENT LOGGING (MONEY MODE ANALYTICS)
     // ═══════════════════════════════════════════════════════════════════════
+    const receptionistCurrency = receptionist.currency || 'USD';
+
     if (bookingResult) {
       // Estimate revenue from booking - use service price if available
       let estimatedRevenue = 0;
@@ -2342,7 +2366,7 @@ serve(async (req) => {
         session_id: sessionId,
         event_type: 'booking_completed',
         revenue_value: estimatedRevenue,
-        currency: 'NGN',
+        currency: receptionistCurrency,
         metadata: {
           booking_id: bookingResult.id,
           service: conversationContext.serviceMentioned,
@@ -2368,7 +2392,7 @@ serve(async (req) => {
         session_id: sessionId,
         event_type: 'order_completed',
         revenue_value: orderRevenue,
-        currency: 'NGN',
+        currency: receptionistCurrency,
         metadata: {
           order_id: orderResult.id,
           customer_name: conversationContext.customerName,
@@ -2391,7 +2415,7 @@ serve(async (req) => {
         session_id: sessionId,
         event_type: 'lead_captured',
         revenue_value: 0, // Leads don't have immediate revenue
-        currency: 'NGN',
+        currency: receptionistCurrency,
         metadata: {
           customer_name: conversationContext.customerName,
           has_email: !!conversationContext.customerEmail,
