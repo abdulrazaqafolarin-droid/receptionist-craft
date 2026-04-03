@@ -115,7 +115,7 @@ const App = () => {
             )}
             
             {/* Protected routes - wrapped in sidebar for authenticated users */}
-            {session && (
+            {!authLoading && session && (
               <>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/auth" element={<Navigate to="/dashboard" replace />} />
