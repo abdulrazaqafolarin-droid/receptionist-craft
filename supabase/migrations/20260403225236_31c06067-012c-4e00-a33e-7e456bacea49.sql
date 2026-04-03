@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Public can only access receptionists via secure view functions" ON public.receptionists;
