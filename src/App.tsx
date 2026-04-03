@@ -54,19 +54,22 @@ const ProtectedRoute = ({ children, session }: { children: React.ReactNode; sess
 
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-      }
-    );
-
-    // Check for existing session
+    // Check for existing session FIRST to prevent flash
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      setAuthLoading(false);
     });
+
+    // Set up auth state listener for subsequent changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+        setAuthLoading(false);
+      }
+    );
 
     return () => subscription.unsubscribe();
   }, []);
@@ -90,8 +93,20 @@ const App = () => {
             <Route path="/confirm/:id" element={<ConfirmAppointment />} />
             <Route path="/help" element={<Help />} />
             
+            {/* Show loading while checking auth */}
+            {authLoading && (
+              <Route path="*" element={
+                <div className="flex min-h-screen items-center justify-center bg-background">
+                  <div className="text-center">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
+                    <p className="text-muted-foreground">Loading...</p>
+                  </div>
+                </div>
+              } />
+            )}
+
             {/* Auth routes - for non-authenticated users */}
-            {!session && (
+            {!authLoading && !session && (
               <>
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<Auth />} />
@@ -100,7 +115,7 @@ const App = () => {
             )}
             
             {/* Protected routes - wrapped in sidebar for authenticated users */}
-            {session && (
+            {!authLoading && session && (
               <>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/auth" element={<Navigate to="/dashboard" replace />} />
