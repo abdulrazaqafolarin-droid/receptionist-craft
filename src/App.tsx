@@ -54,19 +54,22 @@ const ProtectedRoute = ({ children, session }: { children: React.ReactNode; sess
 
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-      }
-    );
-
-    // Check for existing session
+    // Check for existing session FIRST to prevent flash
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      setAuthLoading(false);
     });
+
+    // Set up auth state listener for subsequent changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+        setAuthLoading(false);
+      }
+    );
 
     return () => subscription.unsubscribe();
   }, []);
