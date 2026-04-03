@@ -93,8 +93,20 @@ const App = () => {
             <Route path="/confirm/:id" element={<ConfirmAppointment />} />
             <Route path="/help" element={<Help />} />
             
+            {/* Show loading while checking auth */}
+            {authLoading && (
+              <Route path="*" element={
+                <div className="flex min-h-screen items-center justify-center bg-background">
+                  <div className="text-center">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
+                    <p className="text-muted-foreground">Loading...</p>
+                  </div>
+                </div>
+              } />
+            )}
+
             {/* Auth routes - for non-authenticated users */}
-            {!session && (
+            {!authLoading && !session && (
               <>
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<Auth />} />
