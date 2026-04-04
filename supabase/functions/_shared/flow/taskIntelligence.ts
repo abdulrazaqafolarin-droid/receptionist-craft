@@ -221,90 +221,64 @@ export function buildTaskContinuityPrompt(task: ActiveTask | null): string {
   const parts: string[] = [];
   
   parts.push(`
-# 📌 ACTIVE TASK — TASK CONTINUITY RULES (CRITICAL)
+# 📌 ACTIVE TASK — INTELLIGENT TASK TRACKING
 
-**There is an ACTIVE TASK in progress. You MUST continue this task.**
+There is a ${task.type} in progress. Guide the customer toward completing it — but STAY CONVERSATIONAL.
 
 ## Current Task State
 \`\`\`
 ${buildTaskSummary(task)}
 \`\`\`
 
-## Task Continuity Rules (NON-NEGOTIABLE)
-
-1. **PRIORITIZE TASK COMPLETION** — Every response should move toward completing the current task
-2. **DO NOT RESTART** — Never re-ask for information already collected
-3. **DO NOT SWITCH TOPICS** — Unless user explicitly cancels (says "cancel", "never mind", "start over")
-4. **USE COLLECTED DATA** — Reference already-selected service/product/date naturally
-5. **ASK FOR NEXT MISSING INFO** — Focus on collecting: ${task.memory.pending_info.join(', ') || 'confirmation'}
-
+## Still Needed: ${task.memory.pending_info.join(', ') || 'confirmation'}
 ## Current Step: ${task.step || 'not started'}
 
-## What to Do Next:
+## Task Awareness Rules
+
+1. **NEVER RE-ASK** for information already collected (see list below)
+2. **STAY HUMAN** — You are tracking progress internally, but outwardly you are a friendly receptionist having a conversation
+3. **ACCEPT INFO IN ANY ORDER** — If they give you their name before you ask, store it and skip asking later
+4. **EXTRACT EVERYTHING** — If one message contains multiple pieces of info, grab them all
+5. **HANDLE INTERRUPTIONS GRACEFULLY** — If they ask a question mid-flow, answer it, then smoothly return
+6. **EXIT ONLY ON EXPLICIT CANCEL** — "cancel", "never mind", "start over", or request for a human
 `);
 
-  // Step-specific instructions
+  // Step-specific GENTLE guidance (not robotic instructions)
   switch (task.step) {
     case 'selecting_service':
-      parts.push(`- Present available services and ask which one they'd like`);
-      parts.push(`- If user mentions a service, confirm it and move to date selection`);
+      parts.push(`\nNext: Help them choose a service. If they already mentioned one, confirm it.`);
       break;
     case 'selecting_date':
-      parts.push(`- Ask "What date works best for you?" or similar`);
-      parts.push(`- When user provides date, confirm and move to time selection`);
+      parts.push(`\nNext: Find out what date works. Be casual about it.`);
       break;
     case 'selecting_time':
-      parts.push(`- Show available time slots for the selected date`);
-      parts.push(`- When user picks a time, move to contact collection`);
+      parts.push(`\nNext: Find out their preferred time.`);
       break;
     case 'selecting_product':
-      parts.push(`- Show products and ask what they'd like to order`);
-      parts.push(`- Confirm product selection and ask about quantity if needed`);
+      parts.push(`\nNext: Help them choose a product.`);
       break;
     case 'selecting_quantity':
-      parts.push(`- Confirm quantity for selected product(s)`);
-      parts.push(`- Ask if they want to add more items or proceed to checkout`);
+      parts.push(`\nNext: Confirm quantity. Ask if they want to add anything else.`);
       break;
     case 'collecting_contact':
-      parts.push(`- Ask for their name and contact (phone or email)`);
-      parts.push(`- Be conversational: "May I have your name?" then "And the best way to reach you?"`);
+      parts.push(`\nNext: Get their name and a way to reach them (phone or email). Be warm about it.`);
       break;
     case 'confirming':
-      parts.push(`- Summarize all collected information clearly`);
-      parts.push(`- Ask for explicit confirmation: "Shall I confirm this booking?"`);
+      parts.push(`\nNext: Summarize everything once and ask if it looks good.`);
       break;
   }
 
-  parts.push(`
-## If User Goes Off-Topic:
-- For quick questions: Answer briefly, then redirect back: "Great question! [brief answer]. Now, back to your ${task.type === 'booking' ? 'appointment' : 'order'} — ${getRedirectPhrase(task)}"
-- For persistent off-topic: Gently remind them of the active task
-- ONLY abandon task if user explicitly says "cancel", "never mind", or "start over"
+  parts.push(`\n## Already Collected (DO NOT RE-ASK):`);
 
-## Already Collected Data (DO NOT RE-ASK):
-`);
-
-  if (task.entities.service.name) {
-    parts.push(`- Service: ${task.entities.service.name}`);
-  }
-  if (task.entities.appointment.date) {
-    parts.push(`- Date: ${task.entities.appointment.date}`);
-  }
-  if (task.entities.appointment.time) {
-    parts.push(`- Time: ${task.entities.appointment.time}`);
-  }
+  if (task.entities.service.name) parts.push(`- Service: ${task.entities.service.name}`);
+  if (task.entities.appointment.date) parts.push(`- Date: ${task.entities.appointment.date}`);
+  if (task.entities.appointment.time) parts.push(`- Time: ${task.entities.appointment.time}`);
   if (task.entities.product_cart.length > 0) {
     parts.push(`- Products: ${task.entities.product_cart.map(p => `${p.name} x${p.quantity}`).join(', ')}`);
   }
-  if (task.entities.customer.name) {
-    parts.push(`- Customer Name: ${task.entities.customer.name}`);
-  }
-  if (task.entities.customer.phone) {
-    parts.push(`- Phone: ${task.entities.customer.phone}`);
-  }
-  if (task.entities.customer.email) {
-    parts.push(`- Email: ${task.entities.customer.email}`);
-  }
+  if (task.entities.customer.name) parts.push(`- Customer Name: ${task.entities.customer.name}`);
+  if (task.entities.customer.phone) parts.push(`- Phone: ${task.entities.customer.phone}`);
+  if (task.entities.customer.email) parts.push(`- Email: ${task.entities.customer.email}`);
 
   return parts.join('\n');
 }
