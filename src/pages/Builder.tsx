@@ -837,7 +837,6 @@ export default function BuilderPage() {
                     setHasUnsavedChanges(true);
                   }}
                 />
-                </div>
 
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">Business Phone</label>
