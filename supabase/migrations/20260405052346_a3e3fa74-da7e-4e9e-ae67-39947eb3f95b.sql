@@ -1,0 +1,2 @@
+ALTER TABLE public.receptionists 
+ADD COLUMN customer_fields jsonb DEFAULT '[{"key":"full_name","label":"Full Name","type":"standard","required":true,"order":0},{"key":"email","label":"Email Address","type":"standard","required":false,"order":1},{"key":"phone","label":"Phone Number","type":"standard","required":false,"order":2}]'::jsonb;
