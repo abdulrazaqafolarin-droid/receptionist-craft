@@ -1903,8 +1903,9 @@ serve(async (req) => {
       hallucinationGuardBlock,
       taskContinuityBlock,
       flowLockBlock,
-      governorBlock, // Now using Engine v2 + unifiedGovernorBlock
-      history?.length || 0
+      governorBlock,
+      history?.length || 0,
+      receptionist.customer_fields
     ) + '\n\n' + empathyPromptBlock + '\n\n' + tonePromptBlock + '\n\n' + memoryAwarenessBlock + '\n\n' + qualityStandardsBlock;
 
     const startTime = Date.now();
