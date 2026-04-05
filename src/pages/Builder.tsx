@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
 import { FAQManager } from "@/components/FAQManager";
 import { WidgetEmbedCode } from "@/components/WidgetEmbedCode";
+import { CustomerFieldsConfig, DEFAULT_CUSTOMER_FIELDS, type CustomerField } from "@/components/CustomerFieldsConfig";
 import { useToast } from "@/hooks/use-toast";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import {
