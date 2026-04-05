@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
 import { FAQManager } from "@/components/FAQManager";
 import { WidgetEmbedCode } from "@/components/WidgetEmbedCode";
+import { CustomerFieldsConfig, DEFAULT_CUSTOMER_FIELDS, type CustomerField } from "@/components/CustomerFieldsConfig";
 import { useToast } from "@/hooks/use-toast";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import {
@@ -62,6 +63,7 @@ type Receptionist = {
   created_at?: string;
   primary_goal?: PrimaryGoal;
   capabilities?: BusinessCapabilities;
+  customer_fields?: CustomerField[];
 };
 
 type ChatMessage = {
@@ -178,7 +180,7 @@ export default function BuilderPage() {
       const { data, error } = await supabase
         .from("receptionists")
         .select(
-          "id, name, business_name, business_type, phone, tone, greeting_message, default_response, knowledge_base, system_prompt, temperature, language, currency, goal, created_at, primary_goal, capabilities"
+        "id, name, business_name, business_type, phone, tone, greeting_message, default_response, knowledge_base, system_prompt, temperature, language, currency, goal, created_at, primary_goal, capabilities, customer_fields"
         )
         .eq("id", id)
         .maybeSingle();
@@ -191,6 +193,7 @@ export default function BuilderPage() {
           primary_goal: (data.primary_goal as PrimaryGoal) || 'bookings',
           capabilities: (data.capabilities as BusinessCapabilities) || prev.capabilities,
           currency: (data as any).currency || 'USD',
+          customer_fields: Array.isArray(data.customer_fields) ? (data.customer_fields as unknown as CustomerField[]) : DEFAULT_CUSTOMER_FIELDS,
         }));
       } else {
         // not found
@@ -263,6 +266,7 @@ export default function BuilderPage() {
           goal: receptionist.goal,
           primary_goal: receptionist.primary_goal,
           capabilities: receptionist.capabilities,
+          customer_fields: (receptionist.customer_fields || DEFAULT_CUSTOMER_FIELDS) as unknown as any,
         }).eq("id", receptionistId).eq("user_id", currentUserId);
 
         if (error) {
@@ -291,6 +295,7 @@ export default function BuilderPage() {
           goal: receptionist.goal,
           primary_goal: receptionist.primary_goal,
           capabilities: receptionist.capabilities,
+          customer_fields: (receptionist.customer_fields || DEFAULT_CUSTOMER_FIELDS) as unknown as any,
         }]).select().single();
 
         if (error) {
@@ -823,6 +828,15 @@ export default function BuilderPage() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">AI will only offer features your business supports</p>
                 </div>
+
+                {/* Customer Information Fields */}
+                <CustomerFieldsConfig
+                  fields={receptionist.customer_fields || DEFAULT_CUSTOMER_FIELDS}
+                  onChange={(fields) => {
+                    setReceptionist(prev => ({ ...prev, customer_fields: fields }));
+                    setHasUnsavedChanges(true);
+                  }}
+                />
 
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">Business Phone</label>

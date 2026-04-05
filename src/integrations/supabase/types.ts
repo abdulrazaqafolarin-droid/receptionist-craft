@@ -1350,6 +1350,7 @@ export type Database = {
           capabilities: Json | null
           created_at: string
           currency: string
+          customer_fields: Json | null
           default_response: string | null
           goal: string | null
           greeting_message: string | null
@@ -1388,6 +1389,7 @@ export type Database = {
           capabilities?: Json | null
           created_at?: string
           currency?: string
+          customer_fields?: Json | null
           default_response?: string | null
           goal?: string | null
           greeting_message?: string | null
@@ -1426,6 +1428,7 @@ export type Database = {
           capabilities?: Json | null
           created_at?: string
           currency?: string
+          customer_fields?: Json | null
           default_response?: string | null
           goal?: string | null
           greeting_message?: string | null
