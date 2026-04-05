@@ -887,7 +887,8 @@ function buildMasterSystemPrompt(
   taskContinuityBlock: string = '',
   flowLockBlock: string = '',
   governorBlock: string = '',
-  messageCount: number = 0
+  messageCount: number = 0,
+  customerFields: any[] | null = null
 ): string {
   const emotionalGuidance: Record<string, string> = {
     neutral: 'Maintain a warm, professional tone.',
