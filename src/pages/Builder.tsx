@@ -63,6 +63,7 @@ type Receptionist = {
   created_at?: string;
   primary_goal?: PrimaryGoal;
   capabilities?: BusinessCapabilities;
+  customer_fields?: CustomerField[];
 };
 
 type ChatMessage = {
