@@ -180,7 +180,7 @@ export default function BuilderPage() {
       const { data, error } = await supabase
         .from("receptionists")
         .select(
-          "id, name, business_name, business_type, phone, tone, greeting_message, default_response, knowledge_base, system_prompt, temperature, language, currency, goal, created_at, primary_goal, capabilities"
+        "id, name, business_name, business_type, phone, tone, greeting_message, default_response, knowledge_base, system_prompt, temperature, language, currency, goal, created_at, primary_goal, capabilities, customer_fields"
         )
         .eq("id", id)
         .maybeSingle();
