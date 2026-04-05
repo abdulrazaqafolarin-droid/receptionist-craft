@@ -972,29 +972,59 @@ Is correction: ${messageAnalysis.isCorrection}
 - For questions mid-flow: Answer fully, then return to the task naturally
 - For hesitation ("hold on", "let me check"): Respond warmly and wait`;
 
+  // Build dynamic customer fields config
+  const defaultFields = [
+    { key: 'full_name', label: 'Full Name', required: true, order: 0 },
+    { key: 'email', label: 'Email Address', required: false, order: 1 },
+    { key: 'phone', label: 'Phone Number', required: false, order: 2 },
+  ];
+  const fields = (customerFields && Array.isArray(customerFields) && customerFields.length > 0) 
+    ? [...customerFields].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+    : defaultFields;
+  
+  const requiredFields = fields.filter((f: any) => f.required).map((f: any) => f.label);
+  const optionalFields = fields.filter((f: any) => !f.required).map((f: any) => f.label);
+  
+  // Build status lines for each configured field
+  const fieldStatusLines = fields.map((f: any) => {
+    const key = f.key;
+    let value: string | null = null;
+    if (key === 'full_name' || key === 'first_name') value = context.customerName;
+    else if (key === 'email') value = context.customerEmail;
+    else if (key === 'phone' || key === 'whatsapp') value = context.customerPhone;
+    // Custom/other fields won't have automatic extraction — AI infers from conversation
+    const collected = value ? `✓ ${value}` : '✗ Missing';
+    return `- ${f.label}: ${collected}${f.required ? ' (required)' : ' (optional)'}`;
+  }).join('\n');
+
   // BLOCK 5: BOOKING & ORDERING INTELLIGENCE
   const bookingBlock = `# 📌 BLOCK 5 — BOOKING & ORDERING INTELLIGENCE
 
 ## APPOINTMENT BOOKING
-Booking requires ALL of: Service, Date, Time, Contact (email or phone), Name
+Booking requires: Service, Date, Time, plus customer information fields listed below.
 
-Current booking status:
+## CUSTOMER INFORMATION TO COLLECT
+Collect these fields in this exact order:
+${fields.map((f: any, i: number) => `${i + 1}. **${f.label}**${f.required ? ' (REQUIRED)' : ' (optional)'}`).join('\n')}
+
+${requiredFields.length > 0 ? `Required fields that MUST be collected before confirming: ${requiredFields.join(', ')}` : ''}
+${optionalFields.length > 0 ? `Optional fields — ask for them but don't block confirmation if skipped: ${optionalFields.join(', ')}` : ''}
+
+Current collection status:
 - Service: ${context.serviceMentioned ? '✓' : '✗'} ${context.serviceMentioned || 'Missing'}
 - Date: ${context.dateMentioned ? '✓' : '✗'} ${context.dateMentioned || 'Missing'}
 - Time: ${context.timeMentioned ? '✓' : '✗'} ${context.timeMentioned || 'Missing'}
-- Name: ${context.customerName ? '✓' : '✗'} ${context.customerName || 'Missing'}
-- Contact: ${context.customerEmail || context.customerPhone ? '✓' : '✗'} ${context.customerEmail || context.customerPhone || 'Missing'}
+${fieldStatusLines}
 
 Booking already confirmed: ${context.bookingConfirmed ? 'YES ✓' : 'NO'}
 
 ## PRODUCT ORDERING
-Product orders require: Product name, Quantity (default 1), Contact info
+Product orders require: Product name, Quantity (default 1), plus the same customer information fields above.
 
 Current order status:
 - Product: ${context.productMentioned ? '✓' : '✗'} ${context.productMentioned || 'Not selected'}
 - Quantity: ${context.quantity ? '✓ ' + context.quantity : 'Default 1'}
-- Name: ${context.customerName ? '✓' : '✗'} ${context.customerName || 'Missing'}
-- Contact: ${context.customerEmail || context.customerPhone ? '✓' : '✗'} ${context.customerEmail || context.customerPhone || 'Missing'}
+${fieldStatusLines}
 
 Order already confirmed: ${context.orderConfirmed ? 'YES ✓' : 'NO'}
 
