@@ -193,6 +193,7 @@ export default function BuilderPage() {
           primary_goal: (data.primary_goal as PrimaryGoal) || 'bookings',
           capabilities: (data.capabilities as BusinessCapabilities) || prev.capabilities,
           currency: (data as any).currency || 'USD',
+          customer_fields: (data.customer_fields as CustomerField[]) || DEFAULT_CUSTOMER_FIELDS,
         }));
       } else {
         // not found
