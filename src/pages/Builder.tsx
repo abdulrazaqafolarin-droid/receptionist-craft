@@ -829,6 +829,16 @@ export default function BuilderPage() {
                   <p className="text-xs text-muted-foreground mt-1">AI will only offer features your business supports</p>
                 </div>
 
+                {/* Customer Information Fields */}
+                <CustomerFieldsConfig
+                  fields={receptionist.customer_fields || DEFAULT_CUSTOMER_FIELDS}
+                  onChange={(fields) => {
+                    setReceptionist(prev => ({ ...prev, customer_fields: fields }));
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+                </div>
+
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">Business Phone</label>
                   <input className="w-full border border-border bg-background rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" type="tel" placeholder="+1 (555) 000-0000" value={receptionist.phone || ""} onChange={(e) => onFieldChange("phone", e.target.value)} />
