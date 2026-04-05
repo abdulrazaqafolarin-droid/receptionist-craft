@@ -295,7 +295,7 @@ export default function BuilderPage() {
           goal: receptionist.goal,
           primary_goal: receptionist.primary_goal,
           capabilities: receptionist.capabilities,
-          customer_fields: receptionist.customer_fields || DEFAULT_CUSTOMER_FIELDS,
+          customer_fields: (receptionist.customer_fields || DEFAULT_CUSTOMER_FIELDS) as unknown as any,
         }]).select().single();
 
         if (error) {
