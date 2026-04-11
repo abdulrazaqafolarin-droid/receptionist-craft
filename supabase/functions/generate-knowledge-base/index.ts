@@ -5,6 +5,44 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// ─── Gemini direct API call (replaces Lovable gateway) ───────────────────────
+async function callGemini(systemPrompt: string, userPrompt: string, temperature = 0.7): Promise<string> {
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: `${systemPrompt}\n\n${userPrompt}` }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature,
+          maxOutputTokens: 2048,
+        }
+      })
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error("[generate-knowledge-base] Gemini error:", res.status, err);
+    throw new Error(`Gemini API failed: ${res.status}`);
+  }
+
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("No content returned from Gemini");
+  return text;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -12,7 +50,7 @@ serve(async (req) => {
 
   try {
     const { receptionistData } = await req.json();
-    
+
     if (!receptionistData) {
       return new Response(
         JSON.stringify({ error: 'Receptionist data is required' }),
@@ -20,12 +58,6 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
-
-    // Build structured data summary
     const dataForAI = JSON.stringify(receptionistData, null, 2);
 
     const systemPrompt = `You are a smart system that rewrites structured business data into a clean, conversational, and professional knowledge base for use by an AI receptionist.
@@ -43,35 +75,7 @@ Output ONLY the knowledge base text, no additional commentary.`;
 
     const userPrompt = `Here is the business data to rewrite into a conversational knowledge base:\n\n${dataForAI}`;
 
-    // Call Lovable AI
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.7,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Lovable AI error:', response.status, errorText);
-      throw new Error(`AI generation failed: ${response.status}`);
-    }
-
-    const aiData = await response.json();
-    const generatedKnowledgeBase = aiData.choices?.[0]?.message?.content;
-
-    if (!generatedKnowledgeBase) {
-      throw new Error('No content generated from AI');
-    }
+    const generatedKnowledgeBase = await callGemini(systemPrompt, userPrompt, 0.7);
 
     return new Response(
       JSON.stringify({ knowledge_base: generatedKnowledgeBase }),
