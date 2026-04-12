@@ -1296,14 +1296,14 @@ serve(async (req) => {
       console.log(`[Abuse Protection] Suspicious activity (score: ${abuseCheck.suspiciousScore}), but allowing request`);
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("[Widget Chat] LOVABLE_API_KEY missing");
-      return new Response(
-        JSON.stringify({ reply: "I'm temporarily unavailable. Please try again shortly or contact us directly.", hasBookingIntent: false }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+if (!GEMINI_API_KEY) {
+  console.error("[Widget Chat] GEMINI_API_KEY missing");
+  return new Response(
+    JSON.stringify({ reply: "I'm temporarily unavailable. Please try again shortly or contact us directly.", hasBookingIntent: false }),
+    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
 
     console.log(`[Widget Chat] Processing message for receptionist ${receptionistId}, session: ${sessionId}`);
 
