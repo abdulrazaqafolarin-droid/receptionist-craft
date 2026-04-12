@@ -8,12 +8,15 @@ const CORS = {
 
 /**
  * Protected Autonomous KB Rewrite Engine
- * 
+ *
  * SAFETY GUARANTEES:
  * 1. NEVER applies rewrites automatically
  * 2. NEVER modifies business-critical fields (services, prices, addresses, hours)
  * 3. ALWAYS logs suggestions to kb_rewrite_log with auto_suggest=true
  * 4. Requires explicit user approval to apply
+ *
+ * MIGRATION NOTE: Replaced Lovable AI gateway with direct Gemini API call.
+ * Only handleAnalyze() uses AI — handleApply() and handleGapReport() are pure Supabase.
  */
 
 const PROTECTED_KEYS = [
@@ -21,6 +24,46 @@ const PROTECTED_KEYS = [
   "phone", "hours", "hours_of_operation", "policies",
   "services_and_prices", "business_phone"
 ];
+
+// ─── Gemini direct API call (replaces Lovable gateway) ───────────────────────
+async function callGeminiJSON(prompt: string, temperature = 0.3): Promise<any> {
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature,
+          maxOutputTokens: 4096,
+          responseMimeType: "application/json", // Gemini JSON mode — clean output, no markdown fences
+        }
+      })
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error("[KB] Gemini error:", res.status, err);
+    throw new Error(`Gemini API failed: ${res.status}`);
+  }
+
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("No content returned from Gemini");
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Fallback strip any stray fences
+    const clean = text.replace(/```json\n?|\n?```/g, "").trim();
+    return JSON.parse(clean);
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -67,7 +110,6 @@ async function handleAnalyze(supabase: any, receptionistId: string, userId: stri
 
   if (!receptionist) throw new Error("Receptionist not found");
 
-  // Get low-quality responses (last 7 days)
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data: lowQualityResponses } = await supabase
     .from("ai_responses")
@@ -80,7 +122,6 @@ async function handleAnalyze(supabase: any, receptionistId: string, userId: stri
     return jsonResponse({ suggestions: [], message: "No low-quality responses found - KB is performing well!" });
   }
 
-  // Filter for actually low quality (< 0.6) or tagged as gaps
   const poorResponses = lowQualityResponses.filter((r: any) => {
     const qs = typeof r.quality_score === 'string' ? JSON.parse(r.quality_score) : r.quality_score;
     const score = qs?.overall || qs?.confidence || r.confidence || 0;
@@ -94,16 +135,11 @@ async function handleAnalyze(supabase: any, receptionistId: string, userId: stri
 
   console.log(`[KB] Found ${poorResponses.length} low-quality responses`);
 
-  // Get FAQ gaps - questions asked but not in FAQs
   const { data: existingFaqs } = await supabase
     .from("receptionist_faqs")
     .select("question, answer")
     .eq("receptionist_id", receptionistId);
 
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-
-  // Categorize gaps
   const unanswered = poorResponses.filter((r: any) => r.tags?.includes("unanswered"));
   const lowConfidence = poorResponses.filter((r: any) => r.tags?.includes("low_confidence"));
   const escalations = poorResponses.filter((r: any) => r.tags?.includes("escalation"));
@@ -138,59 +174,31 @@ CRITICAL RULES:
 - Group related questions into single FAQ entries
 - Keep suggestions concise and actionable
 
-Return JSON:
+Return JSON in this exact format:
 {
   "suggestions": [
     {
-      "type": "kb_addition" | "faq",
-      "priority": "high" | "medium" | "low",
+      "type": "kb_addition or faq",
+      "priority": "high or medium or low",
       "section": "section_name",
       "content": "what to add",
       "faq_question": "question if type is faq",
       "faq_answer": "answer if type is faq",
       "reason": "why this helps",
-      "addresses_count": number
+      "addresses_count": 0
     }
   ],
   "summary": {
-    "total_gaps": number,
-    "unanswered_count": number,
-    "low_confidence_count": number,
-    "escalation_count": number,
+    "total_gaps": 0,
+    "unanswered_count": 0,
+    "low_confidence_count": 0,
+    "escalation_count": 0,
     "top_missing_topics": ["topic1", "topic2"]
   }
 }`;
 
-  const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { role: "system", content: "You are a KB optimization expert. Return valid JSON only." },
-        { role: "user", content: analysisPrompt }
-      ],
-      temperature: 0.3,
-    }),
-  });
-
-  if (!aiRes.ok) throw new Error(`AI request failed: ${aiRes.status}`);
-
-  const aiData = await aiRes.json();
-  const content = aiData.choices?.[0]?.message?.content || "{}";
-  
-  let suggestions;
-  try {
-    const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/```\n([\s\S]*?)\n```/);
-    const jsonStr = jsonMatch ? jsonMatch[1] : content;
-    suggestions = JSON.parse(jsonStr);
-  } catch (_e) {
-    console.warn("[KB] Failed to parse AI response as JSON:", content);
-    suggestions = { suggestions: [], summary: {} };
-  }
+  // ─── MIGRATED: Direct Gemini call (previously used third-party gateway) ────
+  const suggestions = await callGeminiJSON(analysisPrompt, 0.3);
 
   // Store suggestions in kb_rewrite_log
   if (suggestions.suggestions && suggestions.suggestions.length > 0) {
@@ -204,9 +212,9 @@ Return JSON:
       .insert({
         receptionist_id: receptionistId,
         user_id: userId,
-        original: original,
+        original,
         rewritten: suggestions,
-        changes: { 
+        changes: {
           suggested_additions: suggestions.suggestions.length,
           gap_summary: suggestions.summary || {}
         },
@@ -239,7 +247,7 @@ Return JSON:
     }
   }
 
-  return jsonResponse({ 
+  return jsonResponse({
     success: true,
     analyzed: poorResponses.length,
     suggestions: suggestions.suggestions || [],
@@ -254,6 +262,7 @@ Return JSON:
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ACTION: APPLY - Apply a KB rewrite (requires explicit approval)
+// No AI calls — pure Supabase. Unchanged from original.
 // ═══════════════════════════════════════════════════════════════════════════
 async function handleApply(supabase: any, logId: string, _receptionistId: string, userId: string) {
   if (!logId) throw new Error("logId required for apply action");
@@ -268,7 +277,6 @@ async function handleApply(supabase: any, logId: string, _receptionistId: string
 
   if (!log) throw new Error("Rewrite log not found");
 
-  // Verify ownership
   const { data: receptionist } = await supabase
     .from("receptionists")
     .select("user_id, knowledge_base")
@@ -281,7 +289,6 @@ async function handleApply(supabase: any, logId: string, _receptionistId: string
 
   const rewritten = log.rewritten;
 
-  // If suggestions contain FAQ entries, insert them
   const faqSuggestions = rewritten?.suggestions?.filter((s: any) => s.type === "faq") || [];
   if (faqSuggestions.length > 0) {
     const faqInserts = faqSuggestions
@@ -302,7 +309,6 @@ async function handleApply(supabase: any, logId: string, _receptionistId: string
     }
   }
 
-  // If suggestions contain KB additions, append to knowledge base
   const kbAdditions = rewritten?.suggestions?.filter((s: any) => s.type === "kb_addition") || [];
   if (kbAdditions.length > 0) {
     const currentKB = receptionist?.knowledge_base || "";
@@ -318,15 +324,12 @@ async function handleApply(supabase: any, logId: string, _receptionistId: string
     console.log(`[KB] Appended ${kbAdditions.length} KB sections`);
   }
 
-  // Mark log as applied
   await supabase
     .from("kb_rewrite_log")
     .update({ auto_suggest: false })
     .eq("id", logId);
 
-  console.log(`[KB] Rewrite applied successfully`);
-
-  return jsonResponse({ 
+  return jsonResponse({
     success: true,
     message: "KB rewrite applied successfully",
     faqs_added: faqSuggestions.length,
@@ -335,11 +338,11 @@ async function handleApply(supabase: any, logId: string, _receptionistId: string
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ACTION: GAP-REPORT - Quick gap analysis without generating suggestions
+// ACTION: GAP-REPORT - Quick gap analysis without AI. Unchanged from original.
 // ═══════════════════════════════════════════════════════════════════════════
 async function handleGapReport(supabase: any, receptionistId: string) {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  
+
   const { data: responses } = await supabase
     .from("ai_responses")
     .select("request_message, confidence, tags, created_at")
@@ -349,10 +352,10 @@ async function handleGapReport(supabase: any, receptionistId: string) {
     .limit(100);
 
   if (!responses || responses.length === 0) {
-    return jsonResponse({ 
+    return jsonResponse({
       gaps: [],
       total_responses: 0,
-      message: "No responses logged yet" 
+      message: "No responses logged yet"
     });
   }
 
@@ -360,7 +363,6 @@ async function handleGapReport(supabase: any, receptionistId: string) {
   const lowConf = responses.filter((r: any) => r.tags?.includes("low_confidence"));
   const escalated = responses.filter((r: any) => r.tags?.includes("escalation"));
 
-  // Group unanswered questions by topic
   const questionTopics: Record<string, { count: number; examples: string[] }> = {};
   for (const r of unanswered) {
     const topic = r.request_message?.toLowerCase().replace(/[^a-z\s]/g, '').trim().split(/\s+/).slice(0, 4).join(' ') || 'unknown';
@@ -397,3 +399,74 @@ function jsonResponse(data: any, status = 200) {
     headers: { ...CORS, "Content-Type": "application/json" }
   });
 }
+({
+    success: true,
+    message: "KB rewrite applied successfully",
+    faqs_added: faqSuggestions.length,
+    kb_sections_added: kbAdditions.length,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ACTION: GAP-REPORT - Quick gap analysis without AI. Unchanged from original.
+// ═══════════════════════════════════════════════════════════════════════════
+async function handleGapReport(supabase: any, receptionistId: string) {
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: responses } = await supabase
+    .from("ai_responses")
+    .select("request_message, confidence, tags, created_at")
+    .eq("receptionist_id", receptionistId)
+    .gte("created_at", weekAgo)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (!responses || responses.length === 0) {
+    return jsonResponse({
+      gaps: [],
+      total_responses: 0,
+      message: "No responses logged yet"
+    });
+  }
+
+  const unanswered = responses.filter((r: any) => r.tags?.includes("unanswered"));
+  const lowConf = responses.filter((r: any) => r.tags?.includes("low_confidence"));
+  const escalated = responses.filter((r: any) => r.tags?.includes("escalation"));
+
+  const questionTopics: Record<string, { count: number; examples: string[] }> = {};
+  for (const r of unanswered) {
+    const topic = r.request_message?.toLowerCase().replace(/[^a-z\s]/g, '').trim().split(/\s+/).slice(0, 4).join(' ') || 'unknown';
+    if (!questionTopics[topic]) questionTopics[topic] = { count: 0, examples: [] };
+    questionTopics[topic].count++;
+    if (questionTopics[topic].examples.length < 3) {
+      questionTopics[topic].examples.push(r.request_message);
+    }
+  }
+
+  const topGaps = Object.entries(questionTopics)
+    .sort(([, a], [, b]) => b.count - a.count)
+    .slice(0, 10)
+    .map(([topic, data]) => ({ topic, ...data }));
+
+  return jsonResponse({
+    total_responses: responses.length,
+    unanswered_count: unanswered.length,
+    low_confidence_count: lowConf.length,
+    escalation_count: escalated.length,
+    gap_rate: responses.length > 0 ? ((unanswered.length / responses.length) * 100).toFixed(1) + "%" : "0%",
+    top_gaps: topGaps,
+    recent_unanswered: unanswered.slice(0, 5).map((r: any) => ({
+      question: r.request_message,
+      confidence: r.confidence,
+      date: r.created_at,
+    })),
+  });
+}
+
+function jsonResponse(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS, "Content-Type": "application/json" }
+  });
+  }
+    
