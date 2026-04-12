@@ -1937,34 +1937,47 @@ if (!GEMINI_API_KEY) {
     const aiData = await callAIWithCircuitBreaker(
       receptionist.model || "google/gemini-2.5-flash",
       async () => {
-        const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: receptionist.model || "google/gemini-2.5-flash",
-            messages: conversationMessages,
-            temperature,
-            max_tokens: maxTokens
-          })
+        const aiRes = await fetch(
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: (() => {
+        const systemMsg = conversationMessages.find((m: any) => m.role === "system");
+        const chatMessages = conversationMessages.filter((m: any) => m.role !== "system");
+        return chatMessages.map((m: any, idx: number) => {
+          let text = m.content;
+          if (idx === 0 && systemMsg) {
+            text = `${systemMsg.content}\n\n---\n\n${text}`;
+          }
+          return {
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text }]
+          };
         });
+      })(),
+      generationConfig: {
+        temperature,
+        maxOutputTokens: maxTokens,
+      }
+    })
+  }
+);
 
-        if (!aiRes.ok) {
-          const errTxt = await aiRes.text();
-          console.error("AI API error:", aiRes.status, errTxt);
-          
-          if (aiRes.status === 429) {
-            throw new Error("AI_RATE_LIMITED");
-          }
-          if (aiRes.status === 402) {
-            throw new Error("AI_QUOTA_EXCEEDED");
-          }
-          throw new Error(`AI request failed: ${aiRes.status}`);
-        }
+if (!aiRes.ok) {
+  const errTxt = await aiRes.text();
+  console.error("Gemini API error:", aiRes.status, errTxt);
+  if (aiRes.status === 429) throw new Error("AI_RATE_LIMITED");
+  if (aiRes.status === 402) throw new Error("AI_QUOTA_EXCEEDED");
+  throw new Error(`Gemini request failed: ${aiRes.status}`);
+}
 
-        return await aiRes.json();
+const geminiData = await aiRes.json();
+const geminiText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+return {
+  choices: [{ message: { content: geminiText } }]
+};
       },
       // Graceful fallback response when circuit is open
       { choices: [{ message: { content: "I'm experiencing a temporary issue. Please try again in a moment, or feel free to call us directly for immediate assistance." } }] },
