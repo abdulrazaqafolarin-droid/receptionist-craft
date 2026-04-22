@@ -136,35 +136,4 @@ Output ONLY the structured system prompt following this exact format, no additio
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.7,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Lovable AI error:', response.status, errorText);
-      throw new Error(`AI generation failed: ${response.status}`);
-    }
-
-    const aiData = await response.json();
-    const generatedSystemPrompt = aiData.choices?.[0]?.message?.content;
-
-    if (!generatedSystemPrompt) {
-      throw new Error('No content generated from AI');
-    }
-
-    return new Response(
-      JSON.stringify({ system_prompt: generatedSystemPrompt }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
-  } catch (error) {
-    console.error('Error in generate-system-prompt:', error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
 });
