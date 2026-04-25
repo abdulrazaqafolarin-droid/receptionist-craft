@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,11 +7,15 @@ import { FloatingBackground } from "@/components/FloatingBackground";
 import { RevenueEngine } from "@/components/RevenueEngine";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, DollarSign, Sparkles } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type ReceptionistRow = { id: string; name: string; ai_mode?: string; active?: boolean | null };
 
 export default function MoneyModePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; ai_mode?: string; active?: boolean }>>([]);
+  const [receptionists, setReceptionists] = useState<ReceptionistRow[]>([]);
+  const [selectedReceptionistId, setSelectedReceptionistId] = useState<string>("");
 
   useEffect(() => {
     let mounted = true;
@@ -30,7 +34,9 @@ export default function MoneyModePage() {
           .order("created_at", { ascending: true });
 
         if (!mounted) return;
-        setReceptionists(data || []);
+        const items = data || [];
+        setReceptionists(items);
+        setSelectedReceptionistId((prev) => prev || items[0]?.id || "");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -41,6 +47,11 @@ export default function MoneyModePage() {
       mounted = false;
     };
   }, []);
+
+  const selectedReceptionist = useMemo(
+    () => receptionists.find((r) => r.id === selectedReceptionistId) || receptionists[0],
+    [receptionists, selectedReceptionistId],
+  );
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-background via-background to-accent/20">
@@ -86,17 +97,30 @@ export default function MoneyModePage() {
             <Card className="border-amber-500/20 bg-amber-500/5">
               <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
                 <div className="text-sm text-muted-foreground">
-                  Now controlling: <span className="font-semibold text-foreground">{receptionists[0]?.name || "Receptionist"}</span>
+                  Now controlling:
+                  <span className="ml-1 font-semibold text-foreground">{selectedReceptionist?.name || "Receptionist"}</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <Select value={selectedReceptionist?.id} onValueChange={setSelectedReceptionistId}>
+                    <SelectTrigger className="h-8 min-w-[220px] bg-background">
+                      <SelectValue placeholder="Select receptionist" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {receptionists.map((rec) => (
+                        <SelectItem key={rec.id} value={rec.id}>{rec.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <DollarSign className="h-4 w-4 text-amber-500" />
                   <span className="text-muted-foreground">Current AI mode:</span>
-                  <Badge variant="outline" className="capitalize">{receptionists[0]?.ai_mode || "booking"}</Badge>
+                  <Badge variant="outline" className="capitalize">{selectedReceptionist?.ai_mode || "booking"}</Badge>
                 </div>
               </CardContent>
             </Card>
 
-            <RevenueEngine receptionistId={receptionists[0].id} currentMode={receptionists[0]?.ai_mode || "booking"} />
+            {selectedReceptionist ? (
+              <RevenueEngine receptionistId={selectedReceptionist.id} currentMode={selectedReceptionist?.ai_mode || "booking"} />
+            ) : null}
           </div>
         )}
       </main>
