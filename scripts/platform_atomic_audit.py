@@ -93,9 +93,11 @@ def cloud_findings() -> list[Finding]:
 
 def main() -> int:
     findings: list[Finding] = []
+    deployment_blockers = 0
 
     remotes = find_remote_imports()
     if remotes:
+        deployment_blockers += 1
         findings.append(Finding(
             "deployment", "critical", "Remote imports detected in edge functions",
             f"Remote imports found in {len(remotes)} function files: {', '.join(remotes[:6])}",
@@ -166,6 +168,9 @@ def main() -> int:
     DOC_OUT.parent.mkdir(parents=True, exist_ok=True)
     DOC_OUT.write_text("\n".join(lines), encoding="utf-8")
     print(f"Wrote {DOC_OUT.relative_to(ROOT)} with {len(findings)} finding(s).")
+    if deployment_blockers:
+        print(f"FAIL: {deployment_blockers} deployment blocker(s) detected.")
+        return 1
     return 0
 
 
