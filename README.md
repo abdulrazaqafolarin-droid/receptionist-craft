@@ -71,3 +71,22 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## How to check contradictory pull requests locally
+
+If you have multiple PR branches that may conflict with each other, use:
+
+```sh
+scripts/check_pr_contradictions.sh <base_branch> <pr_branch_1> <pr_branch_2> [more_branches...]
+```
+
+Example:
+
+```sh
+scripts/check_pr_contradictions.sh main pr/101 pr/102 pr/103
+```
+
+What it reports:
+- Whether each PR branch merges cleanly into the base branch.
+- Whether PR branches conflict with each other (pairwise contradiction check).
+- Suggested follow-up actions when conflicts are detected.
