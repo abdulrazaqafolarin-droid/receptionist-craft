@@ -27,6 +27,13 @@ import {
   Sparkles,
   AlertTriangle,
   Bot,
+  CalendarX2,
+  MoonStar,
+  CircleAlert,
+  HandCoins,
+  BellRing,
+  PhoneCall,
+  ArrowUpRight,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -50,6 +57,95 @@ interface MoneyModeConfig {
   threshold: number;
   lastSavedAt: string | null;
 }
+
+type AutomationPriority = "primary" | "secondary";
+
+interface AutomationModule {
+  key: string;
+  title: string;
+  description: string;
+  priority: AutomationPriority;
+  icon: React.ComponentType<{ className?: string }>;
+  trigger: string;
+  flow: string[];
+  defaultRevenueImpact: number;
+}
+
+interface AutomationSettings {
+  [key: string]: boolean;
+}
+
+interface AutomationOutcomeSummary {
+  key: string;
+  runs: number;
+  converted: number;
+  revenueImpact: number;
+}
+
+const automationModules: AutomationModule[] = [
+  {
+    key: "missed_booking_recovery",
+    title: "Missed booking recovery",
+    description: "Re-engage abandoned booking attempts with multi-touch follow-up.",
+    priority: "primary",
+    icon: CalendarX2,
+    trigger: "Lead exits booking flow without confirmation in-session.",
+    flow: [
+      "Immediate SMS/email recovery message with one-tap resume link.",
+      "2-hour follow-up with urgency framing and alternate slots.",
+      "24-hour final outreach with concierge callback option.",
+    ],
+    defaultRevenueImpact: 140,
+  },
+  {
+    key: "after_hours_lead_capture",
+    title: "After-hours lead capture",
+    description: "Capture intent after closing time and schedule next-open callback.",
+    priority: "primary",
+    icon: MoonStar,
+    trigger: "Inbound lead detected outside configured business hours.",
+    flow: [
+      "Collect preferred callback window and service intent.",
+      "Offer next-open slot hold and confirmation handoff.",
+      "Dispatch callback task to front-desk queue at open.",
+    ],
+    defaultRevenueImpact: 95,
+  },
+  {
+    key: "no_show_reduction",
+    title: "No-show reduction",
+    description: "Reduce no-shows via deposit requests, reminders, and escalation.",
+    priority: "primary",
+    icon: CircleAlert,
+    trigger: "Appointment booked with no confirmation/deposit signals.",
+    flow: [
+      "Request policy-aligned deposit when risk score is elevated.",
+      "Send 24h + 3h reminder cadence with confirm/cancel shortcuts.",
+      "Escalate high-risk no-response bookings to team outreach.",
+    ],
+    defaultRevenueImpact: 180,
+  },
+  {
+    key: "upsell_nudge",
+    title: "Upsell nudge",
+    description: "Suggest add-ons based on selected service context.",
+    priority: "secondary",
+    icon: HandCoins,
+    trigger: "Booking reaches review step with add-on eligible service.",
+    flow: ["Present 1 contextual add-on", "Capture acceptance or decline"],
+    defaultRevenueImpact: 45,
+  },
+  {
+    key: "post_visit_review_request",
+    title: "Post-visit review request",
+    description: "Prompt satisfied customers for review and referral.",
+    priority: "secondary",
+    icon: BellRing,
+    trigger: "Visit marked complete with positive sentiment indicators.",
+    flow: ["Send review request", "Offer referral incentive follow-up"],
+    defaultRevenueImpact: 25,
+  },
+];
 
 const conversionData = [
   { day: "Mon", revenue: 1200, conversations: 34, bookings: 8 },
@@ -129,6 +225,11 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   });
   const [configLoading, setConfigLoading] = useState(false);
   const [configDirty, setConfigDirty] = useState(false);
+  const [automationSaving, setAutomationSaving] = useState(false);
+  const [automationSettings, setAutomationSettings] = useState<AutomationSettings>(() =>
+    Object.fromEntries(automationModules.map((module) => [module.key, module.priority === "primary"])),
+  );
+  const [automationOutcomes, setAutomationOutcomes] = useState<Record<string, AutomationOutcomeSummary>>({});
   const [conversionStats, setConversionStats] = useState<ConversionStats>({
     bookings: 0,
     leads: 0,
@@ -187,11 +288,58 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
         threshold,
         lastSavedAt: null,
       });
+
+      const engineCfg = (capabilities.action_engine as Record<string, unknown> | undefined) || {};
+      const toggles = (engineCfg.toggles as Record<string, boolean> | undefined) || {};
+      setAutomationSettings(
+        Object.fromEntries(
+          automationModules.map((module) => [
+            module.key,
+            typeof toggles[module.key] === "boolean" ? toggles[module.key] : module.priority === "primary",
+          ]),
+        ),
+      );
       setConfigDirty(false);
     } catch (error) {
       console.error("Error loading money mode config:", error);
     } finally {
       setConfigLoading(false);
+    }
+  }, [receptionistId]);
+
+  const loadAutomationOutcomes = useCallback(async () => {
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const { data, error } = await supabase
+        .from("conversion_events")
+        .select("event_type, revenue_value, metadata")
+        .eq("receptionist_id", receptionistId)
+        .in("event_type", ["automation_outcome", "automation_conversion"])
+        .gte("created_at", thirtyDaysAgo.toISOString());
+
+      if (error) throw error;
+
+      const summary: Record<string, AutomationOutcomeSummary> = {};
+      for (const module of automationModules) {
+        summary[module.key] = { key: module.key, runs: 0, converted: 0, revenueImpact: 0 };
+      }
+
+      for (const event of data || []) {
+        const metadata = (event.metadata as Record<string, unknown> | null) || {};
+        const key = typeof metadata.automation_key === "string" ? metadata.automation_key : "";
+        if (!summary[key]) continue;
+        summary[key].runs += 1;
+        if (event.event_type === "automation_conversion") {
+          summary[key].converted += 1;
+        }
+        summary[key].revenueImpact += Number(event.revenue_value) || 0;
+      }
+
+      setAutomationOutcomes(summary);
+    } catch (error) {
+      console.error("Error loading automation outcomes:", error);
     }
   }, [receptionistId]);
 
@@ -202,6 +350,10 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   useEffect(() => {
     loadMoneyModeConfig();
   }, [loadMoneyModeConfig]);
+
+  useEffect(() => {
+    loadAutomationOutcomes();
+  }, [loadAutomationOutcomes]);
 
   useEffect(() => {
     setMoneyModeConfig((prev) => ({ ...prev, enabled: aiMode === "sales" }));
@@ -239,6 +391,70 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
       toast.error("Failed to save Money Mode settings");
     } finally {
       setConfigLoading(false);
+    }
+  };
+
+  const saveActionEngineSettings = async () => {
+    setAutomationSaving(true);
+    try {
+      const { data, error: readErr } = await supabase
+        .from("receptionists")
+        .select("capabilities")
+        .eq("id", receptionistId)
+        .maybeSingle();
+      if (readErr) throw readErr;
+
+      const capabilities = (data?.capabilities as Record<string, unknown> | null) || {};
+      const prevEngineCfg = (capabilities.action_engine as Record<string, unknown> | undefined) || {};
+      const nextCapabilities = {
+        ...capabilities,
+        action_engine: {
+          ...prevEngineCfg,
+          toggles: automationSettings,
+          updated_at: new Date().toISOString(),
+        },
+      };
+
+      const { error: writeErr } = await supabase
+        .from("receptionists")
+        .update({ capabilities: nextCapabilities })
+        .eq("id", receptionistId);
+      if (writeErr) throw writeErr;
+
+      toast.success("Action engine settings saved");
+    } catch (error) {
+      console.error("Error saving action engine settings:", error);
+      toast.error("Failed to save action engine settings");
+    } finally {
+      setAutomationSaving(false);
+    }
+  };
+
+  const logAutomationOutcome = async (module: AutomationModule, converted: boolean) => {
+    try {
+      const revenue = converted ? module.defaultRevenueImpact : 0;
+      const { error } = await supabase.from("conversion_events").insert({
+        receptionist_id: receptionistId,
+        event_type: converted ? "automation_conversion" : "automation_outcome",
+        session_id: crypto.randomUUID(),
+        currency: "USD",
+        revenue_value: revenue,
+        metadata: {
+          automation_key: module.key,
+          automation_name: module.title,
+          priority: module.priority,
+          converted,
+          logged_from: "money_mode_action_engine",
+        },
+      });
+      if (error) throw error;
+
+      await loadAutomationOutcomes();
+      await loadConversionStats();
+      toast.success(`${module.title}: ${converted ? "conversion logged" : "run logged"}`);
+    } catch (error) {
+      console.error("Error logging automation outcome:", error);
+      toast.error("Could not log automation outcome");
     }
   };
 
@@ -290,9 +506,10 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
 
       <CardContent className="pt-6">
         <Tabs defaultValue="dashboard" className="space-y-5">
-          <TabsList className="grid grid-cols-4 w-full">
+          <TabsList className="grid grid-cols-5 w-full">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="moneymode">Money Mode</TabsTrigger>
+            <TabsTrigger value="actions">Action Engine</TabsTrigger>
             <TabsTrigger value="meo">MEO</TabsTrigger>
             <TabsTrigger value="audit">Audit</TabsTrigger>
           </TabsList>
@@ -438,6 +655,119 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
                 <li>• Reduce options and guide to close when intent ≥ {moneyModeConfig.threshold}.</li>
                 <li>• If hesitation appears repeatedly, introduce urgency.</li>
               </ul>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="actions" className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-4">
+              <div>
+                <div className="text-sm font-semibold">Revenue Action Engine</div>
+                <div className="text-xs text-muted-foreground">
+                  Primary automations handle highest revenue leakage first. Secondary automations run with reduced prominence.
+                </div>
+              </div>
+              <Button size="sm" onClick={saveActionEngineSettings} disabled={automationSaving}>
+                {automationSaving ? "Saving..." : "Save action engine"}
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              {automationModules.map((module) => {
+                const Icon = module.icon;
+                const outcome = automationOutcomes[module.key];
+                const enabled = !!automationSettings[module.key];
+
+                return (
+                  <div
+                    key={module.key}
+                    className={`rounded-xl border p-4 transition ${
+                      module.priority === "primary"
+                        ? "bg-card border-border"
+                        : "bg-muted/20 border-dashed border-muted-foreground/40 opacity-90"
+                    }`}
+                  >
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="rounded-lg bg-primary/10 p-2">
+                          <Icon className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-semibold">{module.title}</div>
+                            {module.priority === "primary" ? (
+                              <Badge className="bg-emerald-500 text-white">Primary</Badge>
+                            ) : (
+                              <Badge variant="outline">Secondary</Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{module.description}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor={`toggle-${module.key}`} className="text-xs text-muted-foreground">
+                          Enabled
+                        </Label>
+                        <Switch
+                          id={`toggle-${module.key}`}
+                          checked={enabled}
+                          onCheckedChange={(value) =>
+                            setAutomationSettings((prev) => ({ ...prev, [module.key]: value }))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 text-xs xl:grid-cols-[1fr_240px]">
+                      <div>
+                        <div className="mb-1 font-semibold text-foreground">Trigger condition</div>
+                        <div className="mb-2 rounded-md border bg-muted/30 p-2 text-muted-foreground">
+                          {module.trigger}
+                        </div>
+                        <div className="space-y-1">
+                          {module.flow.map((step, idx) => (
+                            <div key={`${module.key}-step-${idx}`} className="flex gap-2 text-muted-foreground">
+                              <ArrowUpRight className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
+                              <span>{step}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border bg-background/60 p-3">
+                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Outcome logging (30d)
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Runs</span>
+                            <span className="font-semibold">{outcome?.runs || 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Conversions</span>
+                            <span className="font-semibold">{outcome?.converted || 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Revenue impact</span>
+                            <span className="font-semibold">{fmtCurrency(outcome?.revenueImpact || 0, conversionStats.currency)}</span>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <Button size="sm" variant="outline" onClick={() => logAutomationOutcome(module, false)} disabled={!enabled}>
+                            <PhoneCall className="mr-1 h-3 w-3" />
+                            Log run
+                          </Button>
+                          <Button size="sm" onClick={() => logAutomationOutcome(module, true)} disabled={!enabled}>
+                            <DollarSign className="mr-1 h-3 w-3" />
+                            Log convert
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </TabsContent>
 
