@@ -38,6 +38,10 @@ SET
     money_mode_hold_until,
     CASE
       WHEN jsonb_typeof(capabilities -> 'money_mode_hold_until') = 'string'
+        AND pg_input_is_valid(
+          capabilities ->> 'money_mode_hold_until',
+          'timestamp with time zone'::regtype
+        )
         THEN (capabilities ->> 'money_mode_hold_until')::timestamptz
       ELSE NULL
     END
