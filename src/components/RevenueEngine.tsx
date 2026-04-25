@@ -51,39 +51,55 @@ interface MoneyModeConfig {
   lastSavedAt: string | null;
 }
 
-const conversionData = [
-  { day: "Mon", revenue: 1200, conversations: 34, bookings: 8 },
-  { day: "Tue", revenue: 1850, conversations: 41, bookings: 12 },
-  { day: "Wed", revenue: 980, conversations: 28, bookings: 6 },
-  { day: "Thu", revenue: 2340, conversations: 55, bookings: 18 },
-  { day: "Fri", revenue: 3100, conversations: 62, bookings: 24 },
-  { day: "Sat", revenue: 2670, conversations: 48, bookings: 19 },
-  { day: "Sun", revenue: 1440, conversations: 31, bookings: 10 },
-];
+interface RevenueDayPoint {
+  day: string;
+  revenue: number;
+  conversations: number;
+  bookings: number;
+}
 
-const funnelData = [
-  { stage: "Visitors", value: 1240, pct: 100 },
-  { stage: "Engaged", value: 744, pct: 60 },
-  { stage: "Intent", value: 372, pct: 30 },
-  { stage: "Converted", value: 149, pct: 12 },
-];
+interface FunnelStage {
+  stage: string;
+  value: number;
+  pct: number;
+}
 
-const meoAlerts = [
-  { id: 1, type: "lost", msg: "3 hot buyers left without booking", amount: "£840", time: "2h ago" },
-  { id: 2, type: "suggest", msg: "Add deposit request - reduces no-shows 40%", amount: "+£220/wk", time: "AI tip" },
-  { id: 3, type: "lost", msg: "Missed 7 leads after hours yesterday", amount: "£1,260", time: "Yesterday" },
-];
+interface LeakageAlert {
+  id: string;
+  type: "lost" | "suggest";
+  msg: string;
+  amount: string;
+  time: string;
+}
 
-const liveConversations = [
-  { id: 1, name: "Sarah M.", intent: 9, status: "HOT", msg: "I'd like to book for next Tuesday", time: "now", mode: "money" },
-  { id: 2, name: "James O.", intent: 6, status: "WARM", msg: "What are your prices for whitening?", time: "2m", mode: "booking" },
-  { id: 3, name: "Aisha K.", intent: 3, status: "COLD", msg: "Just browsing for now", time: "5m", mode: "support" },
-];
+interface LiveConversation {
+  id: string;
+  name: string;
+  intent: number;
+  status: "HOT" | "WARM" | "COLD";
+  msg: string;
+  time: string;
+  mode: "money" | "booking" | "support";
+}
 
 const statusClass: Record<string, string> = {
   HOT: "bg-amber-500/15 text-amber-600 border-amber-500/30",
   WARM: "bg-cyan-500/15 text-cyan-600 border-cyan-500/30",
   COLD: "bg-muted text-muted-foreground border-border",
+};
+
+const weekdayFormatter = new Intl.DateTimeFormat("en-US", { weekday: "short" });
+const shortDateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+
+const toRelativeTime = (iso: string) => {
+  const deltaMs = Date.now() - new Date(iso).getTime();
+  if (deltaMs < 60_000) return "now";
+  const mins = Math.floor(deltaMs / 60_000);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
 };
 
 function StatTile({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
@@ -136,6 +152,19 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     totalRevenue: 0,
     currency: "USD",
   });
+  const [revenueByWeek, setRevenueByWeek] = useState<RevenueDayPoint[]>([]);
+  const [revenueByMonth, setRevenueByMonth] = useState<RevenueDayPoint[]>([]);
+  const [funnelStages, setFunnelStages] = useState<FunnelStage[]>([]);
+  const [leakageAlerts, setLeakageAlerts] = useState<LeakageAlert[]>([]);
+  const [liveFeed, setLiveFeed] = useState<LiveConversation[]>([]);
+  const [revenueLoading, setRevenueLoading] = useState(false);
+  const [funnelLoading, setFunnelLoading] = useState(false);
+  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [revenueError, setRevenueError] = useState<string | null>(null);
+  const [funnelError, setFunnelError] = useState<string | null>(null);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
 
   const loadConversionStats = useCallback(async () => {
     try {
@@ -195,9 +224,259 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     }
   }, [receptionistId]);
 
+  const loadRevenueByDay = useCallback(
+    async (days: 7 | 30): Promise<RevenueDayPoint[]> => {
+      const start = new Date();
+      start.setDate(start.getDate() - (days - 1));
+      const { data, error } = await supabase
+        .from("conversion_events")
+        .select("created_at, revenue_value, event_type, session_id")
+        .eq("receptionist_id", receptionistId)
+        .gte("created_at", start.toISOString())
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+
+      const bucket = new Map<string, RevenueDayPoint>();
+      for (let i = days - 1; i >= 0; i -= 1) {
+        const date = new Date();
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() - i);
+        const key = date.toISOString().slice(0, 10);
+        bucket.set(key, {
+          day: days === 7 ? weekdayFormatter.format(date) : shortDateFormatter.format(date),
+          revenue: 0,
+          conversations: 0,
+          bookings: 0,
+        });
+      }
+
+      const conversationSets = new Map<string, Set<string>>();
+      (data || []).forEach((row) => {
+        const key = row.created_at.slice(0, 10);
+        if (!bucket.has(key)) return;
+        const point = bucket.get(key)!;
+        point.revenue += Number(row.revenue_value) || 0;
+        if (row.event_type === "booking_completed") point.bookings += 1;
+        if (!conversationSets.has(key)) conversationSets.set(key, new Set<string>());
+        conversationSets.get(key)!.add(row.session_id);
+      });
+
+      conversationSets.forEach((sessions, key) => {
+        const point = bucket.get(key);
+        if (point) point.conversations = sessions.size;
+      });
+
+      return Array.from(bucket.values());
+    },
+    [receptionistId],
+  );
+
+  const loadFunnelStages = useCallback(async () => {
+    setFunnelLoading(true);
+    setFunnelError(null);
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const [{ data: stateData, error: stateError }, { data: eventData, error: eventError }] = await Promise.all([
+        supabase
+          .from("conversation_state")
+          .select("session_id")
+          .eq("receptionist_id", receptionistId)
+          .gte("last_message_at", thirtyDaysAgo.toISOString()),
+        supabase
+          .from("conversion_events")
+          .select("session_id, event_type")
+          .eq("receptionist_id", receptionistId)
+          .gte("created_at", thirtyDaysAgo.toISOString()),
+      ]);
+
+      if (stateError) throw stateError;
+      if (eventError) throw eventError;
+
+      const visitorSessions = new Set((stateData || []).map((row) => row.session_id));
+      const engagedSessions = new Set<string>();
+      const intentSessions = new Set<string>();
+      const convertedSessions = new Set<string>();
+
+      (eventData || []).forEach((row) => {
+        engagedSessions.add(row.session_id);
+        if (row.event_type === "lead_captured" || row.event_type === "booking_started" || row.event_type === "quote_requested") {
+          intentSessions.add(row.session_id);
+        }
+        if (row.event_type === "booking_completed" || row.event_type === "order_completed") {
+          convertedSessions.add(row.session_id);
+        }
+      });
+
+      const visitors = visitorSessions.size;
+      const safePct = (value: number) => (visitors > 0 ? Math.round((value / visitors) * 100) : 0);
+      setFunnelStages([
+        { stage: "Visitors", value: visitors, pct: 100 },
+        { stage: "Engaged", value: engagedSessions.size, pct: safePct(engagedSessions.size) },
+        { stage: "Intent", value: intentSessions.size, pct: safePct(intentSessions.size) },
+        { stage: "Converted", value: convertedSessions.size, pct: safePct(convertedSessions.size) },
+      ]);
+    } catch (error) {
+      console.error("Error loading funnel stages:", error);
+      setFunnelError("Failed to load funnel stages.");
+    } finally {
+      setFunnelLoading(false);
+    }
+  }, [receptionistId]);
+
+  const loadLeakageAlerts = useCallback(async () => {
+    setAlertsLoading(true);
+    setAlertsError(null);
+    try {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const [{ data: stateData, error: stateErr }, { data: eventData, error: eventErr }] = await Promise.all([
+        supabase
+          .from("conversation_state")
+          .select("session_id, flow_step, last_message_at")
+          .eq("receptionist_id", receptionistId)
+          .gte("last_message_at", sevenDaysAgo.toISOString()),
+        supabase
+          .from("conversion_events")
+          .select("session_id, event_type, revenue_value, currency")
+          .eq("receptionist_id", receptionistId)
+          .gte("created_at", sevenDaysAgo.toISOString()),
+      ]);
+      if (stateErr) throw stateErr;
+      if (eventErr) throw eventErr;
+
+      const completedSessions = new Set(
+        (eventData || [])
+          .filter((event) => event.event_type === "booking_completed" || event.event_type === "order_completed")
+          .map((event) => event.session_id),
+      );
+      const openStates = (stateData || []).filter((state) => !completedSessions.has(state.session_id));
+      const missingContact = openStates.filter((s) => (s.flow_step || "").toLowerCase().includes("contact"));
+      const missingSchedule = openStates.filter((s) => {
+        const step = (s.flow_step || "").toLowerCase();
+        return step.includes("availability") || step.includes("schedule") || step.includes("booking");
+      });
+      const avgRevenue =
+        (eventData || []).filter((event) => Number(event.revenue_value) > 0).reduce((sum, event) => sum + (Number(event.revenue_value) || 0), 0) /
+          Math.max(1, (eventData || []).filter((event) => Number(event.revenue_value) > 0).length) || 120;
+      const currency = eventData?.[0]?.currency || "USD";
+
+      const alerts: LeakageAlert[] = [];
+      if (missingSchedule.length > 0) {
+        alerts.push({
+          id: "missing-schedule",
+          type: "lost",
+          msg: `${missingSchedule.length} conversations stalled before schedule confirmation`,
+          amount: formatCurrency(Math.round(missingSchedule.length * avgRevenue), currency),
+          time: "Last 7d",
+        });
+      }
+      if (missingContact.length > 0) {
+        alerts.push({
+          id: "missing-contact",
+          type: "lost",
+          msg: `${missingContact.length} conversations reached contact step but no details captured`,
+          amount: formatCurrency(Math.round(missingContact.length * avgRevenue * 0.5), currency),
+          time: "Last 7d",
+        });
+      }
+      if (alerts.length === 0) {
+        alerts.push({
+          id: "healthy-funnel",
+          type: "suggest",
+          msg: "No major funnel leakage detected in the last 7 days",
+          amount: "Healthy",
+          time: "AI check",
+        });
+      }
+      setLeakageAlerts(alerts);
+    } catch (error) {
+      console.error("Error loading leakage alerts:", error);
+      setAlertsError("Failed to load leakage alerts.");
+    } finally {
+      setAlertsLoading(false);
+    }
+  }, [receptionistId]);
+
+  const loadLiveConversations = useCallback(async () => {
+    setLiveLoading(true);
+    setLiveError(null);
+    try {
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .select("id, session_id, message, created_at")
+        .eq("receptionist_id", receptionistId)
+        .eq("sender", "user")
+        .order("created_at", { ascending: false })
+        .limit(80);
+      if (error) throw error;
+
+      const { data: states, error: statesError } = await supabase
+        .from("conversation_state")
+        .select("session_id, active_flow, flow_step, topic_confidence")
+        .eq("receptionist_id", receptionistId);
+      if (statesError) throw statesError;
+
+      const stateMap = new Map((states || []).map((s) => [s.session_id, s]));
+      const seenSessions = new Set<string>();
+      const liveItems: LiveConversation[] = [];
+      (data || []).forEach((row) => {
+        if (!row.session_id || seenSessions.has(row.session_id) || liveItems.length >= 6) return;
+        seenSessions.add(row.session_id);
+        const state = stateMap.get(row.session_id);
+        const confidence = Math.max(0, Math.min(1, Number(state?.topic_confidence) || 0.45));
+        const intent = Math.max(1, Math.min(10, Math.round(confidence * 10)));
+        const status: LiveConversation["status"] = intent >= 8 ? "HOT" : intent >= 5 ? "WARM" : "COLD";
+        const flow = (state?.active_flow || "").toLowerCase();
+        const mode: LiveConversation["mode"] = flow.includes("sales") ? "money" : flow.includes("book") ? "booking" : "support";
+        liveItems.push({
+          id: row.id,
+          name: `Session ${row.session_id.slice(0, 6)}`,
+          intent,
+          status,
+          msg: row.message,
+          time: toRelativeTime(row.created_at),
+          mode,
+        });
+      });
+
+      setLiveFeed(liveItems);
+    } catch (error) {
+      console.error("Error loading live conversations:", error);
+      setLiveError("Failed to load live conversations.");
+    } finally {
+      setLiveLoading(false);
+    }
+  }, [receptionistId]);
+
   useEffect(() => {
     loadConversionStats();
   }, [loadConversionStats]);
+
+  useEffect(() => {
+    const run = async () => {
+      setRevenueLoading(true);
+      setRevenueError(null);
+      try {
+        const [week, month] = await Promise.all([loadRevenueByDay(7), loadRevenueByDay(30)]);
+        setRevenueByWeek(week);
+        setRevenueByMonth(month);
+      } catch (error) {
+        console.error("Error loading revenue chart:", error);
+        setRevenueError("Failed to load revenue trend.");
+      } finally {
+        setRevenueLoading(false);
+      }
+    };
+    run();
+  }, [loadRevenueByDay]);
+
+  useEffect(() => {
+    loadFunnelStages();
+    loadLeakageAlerts();
+    loadLiveConversations();
+  }, [loadFunnelStages, loadLeakageAlerts, loadLiveConversations]);
 
   useEffect(() => {
     loadMoneyModeConfig();
@@ -263,9 +542,17 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     }
   };
 
-  const weekRevenue = useMemo(() => conversionData.reduce((sum, d) => sum + d.revenue, 0), []);
-  const leakedRevenue = 2720;
+  const weekRevenue = useMemo(() => revenueByWeek.reduce((sum, d) => sum + d.revenue, 0), [revenueByWeek]);
+  const monthConversations = useMemo(() => revenueByMonth.reduce((sum, d) => sum + d.conversations, 0), [revenueByMonth]);
+  const leakedRevenue = useMemo(
+    () =>
+      leakageAlerts
+        .filter((a) => a.type === "lost")
+        .reduce((sum, alert) => sum + Number(alert.amount.replace(/[^0-9.-]+/g, "")), 0),
+    [leakageAlerts],
+  );
   const fmtCurrency = (amount: number, cur: string) => formatCurrency(amount, cur);
+  const hasMockedSection = false;
 
   return (
     <Card className="border-2 border-border/50 shadow-lg overflow-hidden">
@@ -299,77 +586,101 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
 
           <TabsContent value="dashboard" className="space-y-4">
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <StatTile icon={<TrendingUp className="h-4 w-4" />} label="Revenue This Week" value={`£${weekRevenue.toLocaleString()}`} sub="↑ 23% vs last week" />
+              <StatTile icon={<TrendingUp className="h-4 w-4" />} label="Revenue This Week" value={fmtCurrency(weekRevenue, conversionStats.currency)} sub="Last 7 days" />
               <StatTile icon={<Target className="h-4 w-4" />} label="Conversions" value={`${conversionStats.bookings + conversionStats.orders}`} sub="Money mode assisted" />
-              <StatTile icon={<Users className="h-4 w-4" />} label="Conversations" value={`${conversionData.reduce((s, d) => s + d.conversations, 0)}`} />
+              <StatTile icon={<Users className="h-4 w-4" />} label="Conversations (30d)" value={`${monthConversations}`} />
               <StatTile icon={<Sparkles className="h-4 w-4" />} label="AI Revenue (30d)" value={fmtCurrency(conversionStats.totalRevenue, conversionStats.currency)} />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600">LIVE: 30d revenue + conversion counts</Badge>
-              <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600">DEMO: weekly trend + funnel + live feed</Badge>
-            </div>
+            {hasMockedSection ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600">DEMO</Badge>
+                <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600">LIVE</Badge>
+              </div>
+            ) : null}
 
             <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
               <div className="rounded-xl border bg-card p-4">
                 <div className="mb-3 text-sm font-semibold">Revenue trend</div>
-                <ResponsiveContainer width="100%" height={180}>
-                  <AreaChart data={conversionData}>
-                    <defs>
-                      <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="day" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="url(#revGrad)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {revenueLoading ? <div className="text-xs text-muted-foreground">Loading revenue trend…</div> : null}
+                {revenueError ? <div className="text-xs text-red-500">{revenueError}</div> : null}
+                {!revenueLoading && !revenueError && revenueByWeek.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No revenue events in the last 7 days.</div>
+                ) : null}
+                {!revenueLoading && !revenueError && revenueByWeek.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={180}>
+                    <AreaChart data={revenueByWeek}>
+                      <defs>
+                        <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="day" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="url(#revGrad)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : null}
               </div>
 
               <div className="rounded-xl border bg-card p-4">
                 <div className="mb-3 text-sm font-semibold">Conversion funnel</div>
-                <div className="space-y-3">
-                  {funnelData.map((item) => (
-                    <div key={item.stage}>
-                      <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">{item.stage}</span>
-                        <span className="font-semibold">{item.value} · {item.pct}%</span>
+                {funnelLoading ? <div className="text-xs text-muted-foreground">Loading funnel stages…</div> : null}
+                {funnelError ? <div className="text-xs text-red-500">{funnelError}</div> : null}
+                {!funnelLoading && !funnelError && funnelStages.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No funnel data available yet.</div>
+                ) : null}
+                {!funnelLoading && !funnelError && funnelStages.length > 0 ? (
+                  <div className="space-y-3">
+                    {funnelStages.map((item) => (
+                      <div key={item.stage}>
+                        <div className="mb-1 flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">{item.stage}</span>
+                          <span className="font-semibold">{item.value} · {item.pct}%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted">
+                          <div className="h-2 rounded-full bg-primary/70" style={{ width: `${item.pct}%` }} />
+                        </div>
                       </div>
-                      <div className="h-2 rounded-full bg-muted">
-                        <div className="h-2 rounded-full bg-primary/70" style={{ width: `${item.pct}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
 
             <div className="rounded-xl border bg-card p-4">
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-sm font-semibold">Live conversations</div>
-                <Badge variant="outline">{liveConversations.length} active</Badge>
+                <Badge variant="outline">{liveFeed.length} active</Badge>
               </div>
-              <div className="space-y-2">
-                {liveConversations.map((c) => (
-                  <div key={c.id} className="rounded-lg border bg-muted/30 p-3">
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <div className="truncate text-sm font-semibold">{c.name}</div>
-                      <Badge className={statusClass[c.status] || statusClass.COLD}>{c.status}</Badge>
-                    </div>
-                    <div className="mb-2 truncate text-xs text-muted-foreground">{c.msg}</div>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="h-2 w-full rounded-full bg-muted">
-                        <div className="h-2 rounded-full bg-amber-500" style={{ width: `${c.intent * 10}%` }} />
+              {liveLoading ? <div className="text-xs text-muted-foreground">Loading live conversations…</div> : null}
+              {liveError ? <div className="text-xs text-red-500">{liveError}</div> : null}
+              {!liveLoading && !liveError && liveFeed.length === 0 ? (
+                <div className="text-xs text-muted-foreground">No recent active conversations.</div>
+              ) : null}
+              {!liveLoading && !liveError && liveFeed.length > 0 ? (
+                <div className="space-y-2">
+                  {liveFeed.map((c) => (
+                    <div key={c.id} className="rounded-lg border bg-muted/30 p-3">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <div className="truncate text-sm font-semibold">{c.name}</div>
+                        <Badge className={statusClass[c.status] || statusClass.COLD}>{c.status}</Badge>
                       </div>
-                      <div className="w-10 text-right text-xs font-semibold">{c.intent}/10</div>
+                      <div className="mb-2 truncate text-xs text-muted-foreground">{c.msg}</div>
+                      <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">{c.mode} · {c.time}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="h-2 w-full rounded-full bg-muted">
+                          <div className="h-2 rounded-full bg-amber-500" style={{ width: `${c.intent * 10}%` }} />
+                        </div>
+                        <div className="w-10 text-right text-xs font-semibold">{c.intent}/10</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </TabsContent>
 
@@ -444,7 +755,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
           <TabsContent value="meo" className="space-y-4">
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-500">Revenue leaked this week</div>
-              <div className="font-mono text-4xl font-bold text-red-500">£{leakedRevenue.toLocaleString()}</div>
+              <div className="font-mono text-4xl font-bold text-red-500">{fmtCurrency(leakedRevenue, conversionStats.currency)}</div>
               <div className="text-xs text-muted-foreground">Across missed leads, abandoned flows and lost upsells.</div>
             </div>
 
@@ -459,32 +770,46 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
 
             <div className="rounded-xl border bg-card p-4">
               <div className="mb-3 text-sm font-semibold">AI revenue intelligence feed</div>
-              <div className="space-y-2">
-                {meoAlerts.map((alert) => (
-                  <div key={alert.id} className="flex items-center justify-between rounded-lg border bg-muted/30 p-3 text-xs">
-                    <div>
-                      <div className="font-semibold">{alert.msg}</div>
-                      <div className="text-muted-foreground">{alert.time}</div>
+              {alertsLoading ? <div className="text-xs text-muted-foreground">Loading leakage alerts…</div> : null}
+              {alertsError ? <div className="text-xs text-red-500">{alertsError}</div> : null}
+              {!alertsLoading && !alertsError && leakageAlerts.length === 0 ? (
+                <div className="text-xs text-muted-foreground">No leakage alerts generated yet.</div>
+              ) : null}
+              {!alertsLoading && !alertsError && leakageAlerts.length > 0 ? (
+                <div className="space-y-2">
+                  {leakageAlerts.map((alert) => (
+                    <div key={alert.id} className="flex items-center justify-between rounded-lg border bg-muted/30 p-3 text-xs">
+                      <div>
+                        <div className="font-semibold">{alert.msg}</div>
+                        <div className="text-muted-foreground">{alert.time}</div>
+                      </div>
+                      <Badge className={alert.type === "lost" ? "bg-red-500/20 text-red-600 border-red-500/30" : "bg-emerald-500/20 text-emerald-600 border-emerald-500/30"}>
+                        {alert.amount}
+                      </Badge>
                     </div>
-                    <Badge className={alert.type === "lost" ? "bg-red-500/20 text-red-600 border-red-500/30" : "bg-emerald-500/20 text-emerald-600 border-emerald-500/30"}>
-                      {alert.amount}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             <div className="rounded-xl border bg-card p-4">
               <div className="mb-3 text-sm font-semibold">Conversation-to-cash scoring</div>
-              <ResponsiveContainer width="100%" height={170}>
-                <BarChart data={conversionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="day" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="bookings" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {revenueLoading ? <div className="text-xs text-muted-foreground">Loading scoring trend…</div> : null}
+              {revenueError ? <div className="text-xs text-red-500">{revenueError}</div> : null}
+              {!revenueLoading && !revenueError && revenueByWeek.length === 0 ? (
+                <div className="text-xs text-muted-foreground">No booking activity in the last 7 days.</div>
+              ) : null}
+              {!revenueLoading && !revenueError && revenueByWeek.length > 0 ? (
+                <ResponsiveContainer width="100%" height={170}>
+                  <BarChart data={revenueByWeek}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="day" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="bookings" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : null}
             </div>
           </TabsContent>
 
