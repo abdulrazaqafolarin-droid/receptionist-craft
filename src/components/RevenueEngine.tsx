@@ -331,7 +331,12 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
         .map((row) => {
           const metadata = (row.metadata as Record<string, unknown> | null) || {};
           const fromMode = typeof metadata.from_mode === "string" ? metadata.from_mode : null;
-          const toMode = typeof metadata.to_mode === "string" ? metadata.to_mode : null;
+          const toMode =
+            typeof metadata.to_mode === "string"
+              ? metadata.to_mode
+              : typeof metadata.ai_mode === "string"
+                ? metadata.ai_mode
+                : null;
           const reason = typeof metadata.mode_switch_reason === "string" ? metadata.mode_switch_reason : null;
           if (!fromMode && !toMode && !reason) return null;
           return {
