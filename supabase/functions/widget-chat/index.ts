@@ -421,6 +421,140 @@ function analyzeMessage(message: string, historyLength: number): MessageAnalysis
   return { isAcknowledgment, isCorrection, hasUncertainty, detectedIntent };
 }
 
+interface SalesModeConfig {
+  threshold: number;
+  hysteresis: number;
+  minHoldTurns: number;
+  exitConsecutiveTurns: number;
+}
+
+interface SalesModeState {
+  score: number;
+  effectiveMode: 'sales' | 'booking' | 'support';
+  inSales: boolean;
+  holdUntilTurn: number;
+  belowExitCount: number;
+  turnCounter: number;
+  threshold: number;
+  hysteresis: number;
+  minHoldTurns: number;
+  exitConsecutiveTurns: number;
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function readSalesModeConfig(receptionist: any): SalesModeConfig {
+  const cfg = receptionist?.business_info?.sales_mode || receptionist?.capabilities?.sales_mode || {};
+
+  const threshold = Number(cfg.threshold ?? 0.65);
+  const hysteresis = Number(cfg.hysteresis ?? 0.1);
+  const minHoldTurns = Number(cfg.min_hold_turns ?? cfg.minHoldTurns ?? 3);
+  const exitConsecutiveTurns = Number(cfg.exit_consecutive_turns ?? cfg.exitConsecutiveTurns ?? 2);
+
+  return {
+    threshold: clamp01(Number.isFinite(threshold) ? threshold : 0.65),
+    hysteresis: clamp01(Number.isFinite(hysteresis) ? hysteresis : 0.1),
+    minHoldTurns: Math.max(1, Number.isFinite(minHoldTurns) ? Math.floor(minHoldTurns) : 3),
+    exitConsecutiveTurns: Math.max(1, Number.isFinite(exitConsecutiveTurns) ? Math.floor(exitConsecutiveTurns) : 2),
+  };
+}
+
+function computeIntentScore(
+  message: string,
+  messageAnalysis: MessageAnalysis,
+  context: ConversationContext,
+): number {
+  const lowerMsg = message.toLowerCase();
+
+  const intentBaseScores: Record<string, number> = {
+    order_product: 0.85,
+    book_appointment: 0.8,
+    ask_price: 0.72,
+    confirm: 0.7,
+    ask_info: 0.52,
+    ask_hours: 0.3,
+    ask_location: 0.28,
+    compliment: 0.4,
+    acknowledgment: 0.22,
+    greeting: 0.12,
+    follow_up: 0.2,
+    general_query: 0.2,
+    deny: 0.1,
+    complaint: 0.08,
+    conversation_end: 0.02,
+    farewell: 0.02,
+  };
+
+  let score = intentBaseScores[messageAnalysis.detectedIntent] ?? 0.25;
+
+  if (/buy|purchase|order|checkout|cart|price|cost|deal|quote|availability|book|schedule|reserve|today|now/i.test(lowerMsg)) {
+    score += 0.1;
+  }
+  if (/just looking|not ready|later|maybe later|no thanks|not interested|stop|unsubscribe/i.test(lowerMsg)) {
+    score -= 0.25;
+  }
+  if (context.productMentioned || context.serviceMentioned) score += 0.05;
+  if (context.customerName && (context.customerPhone || context.customerEmail)) score += 0.05;
+  if (messageAnalysis.hasUncertainty) score -= 0.08;
+
+  return Number(clamp01(score).toFixed(3));
+}
+
+function resolveEffectiveMode(
+  receptionist: any,
+  slots: Record<string, any> | null | undefined,
+  intentScore: number,
+): SalesModeState {
+  const { threshold, hysteresis, minHoldTurns, exitConsecutiveTurns } = readSalesModeConfig(receptionist);
+  const previousEffectiveMode = (slots?.effective_mode === 'sales' || slots?.effective_mode === 'support')
+    ? slots.effective_mode
+    : (receptionist.ai_mode === 'support' ? 'support' : 'booking');
+  const previousInSales = slots?.sales_mode_active === true || previousEffectiveMode === 'sales';
+
+  const turnCounter = Number(slots?.sales_mode_turn_counter ?? 0) + 1;
+  let inSales = previousInSales;
+  let holdUntilTurn = Number(slots?.sales_mode_hold_until_turn ?? 0);
+  let belowExitCount = Number(slots?.sales_mode_below_exit_count ?? 0);
+  const exitThreshold = threshold - hysteresis;
+
+  if (!inSales && intentScore >= threshold) {
+    inSales = true;
+    holdUntilTurn = turnCounter + minHoldTurns - 1;
+    belowExitCount = 0;
+  } else if (inSales) {
+    const holdExpired = turnCounter >= holdUntilTurn;
+    if (!holdExpired) {
+      belowExitCount = 0;
+    } else if (intentScore < exitThreshold) {
+      belowExitCount += 1;
+      if (belowExitCount >= exitConsecutiveTurns) {
+        inSales = false;
+        belowExitCount = 0;
+      }
+    } else {
+      belowExitCount = 0;
+    }
+  }
+
+  const fallbackMode = receptionist.ai_mode === 'support' ? 'support' : 'booking';
+  const effectiveMode: 'sales' | 'booking' | 'support' = inSales ? 'sales' : fallbackMode;
+
+  return {
+    score: intentScore,
+    effectiveMode,
+    inSales,
+    holdUntilTurn,
+    belowExitCount,
+    turnCounter,
+    threshold,
+    hysteresis,
+    minHoldTurns,
+    exitConsecutiveTurns,
+  };
+}
+
 //                                                                              
 // LAYER 3: CONVERSATION CONTEXT
 //                                                                              
@@ -1728,10 +1862,16 @@ if (!GEMINI_API_KEY) {
     const capabilityPrompt = buildCapabilityPrompt(capabilities, primaryGoal, universalIntent, intentValidation);
 
     //                                                                        
-    // GET AI MODE FOR BEHAVIOR SWITCHING
+    // DYNAMIC SALES MODE: compute intent score each turn and resolve effective mode
     //                                                                        
-    const aiMode = receptionist.ai_mode || 'booking';
-    console.log(`[Widget Chat] AI Mode: ${aiMode}`);
+    const intentScore = computeIntentScore(message, messageAnalysis, conversationContext);
+    const salesModeState = resolveEffectiveMode(receptionist, conversationState.slots as Record<string, any>, intentScore);
+    const effectiveMode = salesModeState.effectiveMode;
+    console.log(
+      `[Widget Chat] Effective Mode=${effectiveMode}, IntentScore=${intentScore}, ` +
+      `Threshold=${salesModeState.threshold}, HoldUntilTurn=${salesModeState.holdUntilTurn}, ` +
+      `BelowExitCount=${salesModeState.belowExitCount}`
+    );
 
     //                                                                        
     // CONVERSATION STATE MACHINE: LOAD AND PROCESS STATE
@@ -1941,7 +2081,7 @@ if (!GEMINI_API_KEY) {
       messageAnalysis,
       isFirstMessage,
       rollingSummary,
-      aiMode,
+      effectiveMode,
       capabilityPrompt,
       actionGateBlock,
       stateMachineBlock,
@@ -2090,6 +2230,8 @@ return {
       metadata: { 
         timestamp: new Date().toISOString(),
         intent: messageAnalysis.detectedIntent,
+        intent_score: intentScore,
+        effective_mode: effectiveMode,
         is_acknowledgment: messageAnalysis.isAcknowledgment,
         is_correction: messageAnalysis.isCorrection
       }
@@ -2114,7 +2256,9 @@ return {
           service: conversationContext.serviceMentioned,
           date: conversationContext.dateMentioned,
           time: conversationContext.timeMentioned,
-          emotional_state: conversationContext.emotionalState
+          emotional_state: conversationContext.emotionalState,
+          effective_mode: effectiveMode,
+          intent_score: intentScore
         }
       }
     });
@@ -2149,6 +2293,8 @@ return {
           type: escalationCheck.escalationType
         } : { triggered: false },
         intent: messageAnalysis.detectedIntent,
+        intent_score: intentScore,
+        effective_mode: effectiveMode,
         emotional_state: conversationContext.emotionalState,
         conversation_phase: conversationContext.conversationPhase
       }
@@ -2185,6 +2331,7 @@ return {
         latency_ms: latencyMs,
         channel: "widget",
         tags: [
+          effectiveMode === "sales" ? "effective_sales_mode" : null,
           isLowConfidence ? "low_confidence" : null,
           isUnanswered ? "unanswered" : null,
           isEscalation ? "escalation" : null,
@@ -2515,7 +2662,9 @@ return {
           booking_id: bookingResult.id,
           service: conversationContext.serviceMentioned,
           customer_name: conversationContext.customerName,
-          ai_mode: aiMode,
+          ai_mode: effectiveMode,
+          effective_mode: effectiveMode,
+          intent_score: intentScore,
           estimated_value: estimatedRevenue
         }
       });
@@ -2541,7 +2690,9 @@ return {
           order_id: orderResult.id,
           customer_name: conversationContext.customerName,
           item_count: conversationContext.selectedProducts?.length || 1,
-          ai_mode: aiMode,
+          ai_mode: effectiveMode,
+          effective_mode: effectiveMode,
+          intent_score: intentScore,
           order_total: orderRevenue
         }
       });
@@ -2553,7 +2704,7 @@ return {
                           conversationContext.customerName &&
                           !conversationContext.bookingConfirmed && 
                           !conversationContext.orderConfirmed;
-    if (hasNewContact && aiMode === 'sales') {
+    if (hasNewContact && effectiveMode === 'sales') {
       await supabase.from('conversion_events').insert({
         receptionist_id: receptionistId,
         session_id: sessionId,
@@ -2564,7 +2715,9 @@ return {
           customer_name: conversationContext.customerName,
           has_email: !!conversationContext.customerEmail,
           has_phone: !!conversationContext.customerPhone,
-          ai_mode: aiMode
+          ai_mode: effectiveMode,
+          effective_mode: effectiveMode,
+          intent_score: intentScore
         }
       });
       console.log(`[Conversion] Logged lead_captured event`);
@@ -2597,6 +2750,16 @@ return {
     conversationState.slots = {
       ...conversationState.slots,
       machineContext: serializeMachineContext(machineContext),
+      effective_mode: effectiveMode,
+      intent_score: intentScore,
+      sales_mode_active: salesModeState.inSales,
+      sales_mode_hold_until_turn: salesModeState.holdUntilTurn,
+      sales_mode_below_exit_count: salesModeState.belowExitCount,
+      sales_mode_turn_counter: salesModeState.turnCounter,
+      sales_mode_threshold: salesModeState.threshold,
+      sales_mode_hysteresis: salesModeState.hysteresis,
+      sales_mode_min_hold_turns: salesModeState.minHoldTurns,
+      sales_mode_exit_consecutive_turns: salesModeState.exitConsecutiveTurns,
       // Sync machine data back to slots
       serviceId: machineContext.serviceId || conversationState.slots?.serviceId,
       serviceName: machineContext.serviceName || conversationState.slots?.serviceName,
@@ -2659,6 +2822,8 @@ return {
         hasOrderIntent,
         receptionistName: receptionist.name,
         businessName: receptionist.business_name,
+        effectiveMode,
+        intentScore,
         qualityScore: qualityRubric.overall_score,
         bookingCreated: bookingResult ? true : false,
         bookingId: bookingResult?.id || null,
