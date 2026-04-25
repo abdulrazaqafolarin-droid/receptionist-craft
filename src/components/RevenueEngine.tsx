@@ -161,6 +161,13 @@ export function RevenueEngine({ receptionistIds, receptionistNames = {}, scopeLa
 
   const loadLiveFeeds = useCallback(async () => {
     if (!receptionistIds.length) {
+      setConversionStats({
+        bookings: 0,
+        leads: 0,
+        orders: 0,
+        totalRevenue: 0,
+        currency: "USD",
+      });
       setConversionData([]);
       setFunnelData([]);
       setMeoAlerts([]);
