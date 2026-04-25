@@ -51,6 +51,13 @@ interface MoneyModeConfig {
   lastSavedAt: string | null;
 }
 
+interface MoneyModeDbConfig {
+  enabled: boolean;
+  threshold: number;
+  holdUntil: string | null;
+  hysteresis: number;
+}
+
 const conversionData = [
   { day: "Mon", revenue: 1200, conversations: 34, bookings: 8 },
   { day: "Tue", revenue: 1850, conversations: 41, bookings: 12 },
@@ -137,6 +144,42 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     currency: "USD",
   });
 
+  const resolveMoneyModeDbConfig = useCallback(
+    (
+      row: {
+        ai_mode?: string | null;
+        capabilities?: Record<string, unknown> | null;
+        money_mode_enabled?: boolean | null;
+        money_mode_threshold?: number | null;
+        money_mode_hold_until?: string | null;
+        money_mode_hysteresis?: number | null;
+      } | null,
+    ): MoneyModeDbConfig => {
+      const capabilities = row?.capabilities || {};
+      const enabledFromJson =
+        typeof capabilities.money_mode_enabled === "boolean" ? capabilities.money_mode_enabled : null;
+      const thresholdFromJson =
+        typeof capabilities.money_mode_threshold === "number"
+          ? Math.max(1, Math.min(10, Math.round(capabilities.money_mode_threshold)))
+          : null;
+      const holdUntilFromJson =
+        typeof capabilities.money_mode_hold_until === "string" ? capabilities.money_mode_hold_until : null;
+      const hysteresisFromJson =
+        typeof capabilities.money_mode_hysteresis === "number"
+          ? Math.max(0, Math.round(capabilities.money_mode_hysteresis))
+          : null;
+
+      return {
+        // Source of truth: dedicated columns. JSON remains a compatibility mirror.
+        enabled: row?.money_mode_enabled ?? enabledFromJson ?? row?.ai_mode === "sales",
+        threshold: Math.max(1, Math.min(10, row?.money_mode_threshold ?? thresholdFromJson ?? 7)),
+        holdUntil: row?.money_mode_hold_until ?? holdUntilFromJson ?? null,
+        hysteresis: Math.max(0, row?.money_mode_hysteresis ?? hysteresisFromJson ?? 0),
+      };
+    },
+    [],
+  );
+
   const loadConversionStats = useCallback(async () => {
     try {
       const thirtyDaysAgo = new Date();
@@ -167,24 +210,23 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     try {
       const { data, error } = await supabase
         .from("receptionists")
-        .select("ai_mode, capabilities")
+        .select("ai_mode, capabilities, money_mode_enabled, money_mode_threshold, money_mode_hold_until, money_mode_hysteresis")
         .eq("id", receptionistId)
         .maybeSingle();
       if (error) throw error;
 
-      const capabilities = (data?.capabilities as Record<string, unknown> | null) || {};
-      const enabled =
-        typeof capabilities.money_mode_enabled === "boolean"
-          ? capabilities.money_mode_enabled
-          : data?.ai_mode === "sales";
-      const threshold =
-        typeof capabilities.money_mode_threshold === "number"
-          ? Math.max(1, Math.min(10, capabilities.money_mode_threshold))
-          : 7;
+      const dbConfig = resolveMoneyModeDbConfig({
+        ai_mode: data?.ai_mode,
+        capabilities: (data?.capabilities as Record<string, unknown> | null) || {},
+        money_mode_enabled: data?.money_mode_enabled,
+        money_mode_threshold: data?.money_mode_threshold,
+        money_mode_hold_until: data?.money_mode_hold_until,
+        money_mode_hysteresis: data?.money_mode_hysteresis,
+      });
 
       setMoneyModeConfig({
-        enabled,
-        threshold,
+        enabled: dbConfig.enabled,
+        threshold: dbConfig.threshold,
         lastSavedAt: null,
       });
       setConfigDirty(false);
@@ -193,7 +235,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     } finally {
       setConfigLoading(false);
     }
-  }, [receptionistId]);
+  }, [receptionistId, resolveMoneyModeDbConfig]);
 
   useEffect(() => {
     loadConversionStats();
@@ -212,21 +254,39 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     try {
       const { data, error: readErr } = await supabase
         .from("receptionists")
-        .select("capabilities")
+        .select("capabilities, ai_mode, money_mode_enabled, money_mode_threshold, money_mode_hold_until, money_mode_hysteresis")
         .eq("id", receptionistId)
         .maybeSingle();
       if (readErr) throw readErr;
 
+      const dbConfig = resolveMoneyModeDbConfig({
+        ai_mode: data?.ai_mode,
+        capabilities: (data?.capabilities as Record<string, unknown> | null) || {},
+        money_mode_enabled: data?.money_mode_enabled,
+        money_mode_threshold: data?.money_mode_threshold,
+        money_mode_hold_until: data?.money_mode_hold_until,
+        money_mode_hysteresis: data?.money_mode_hysteresis,
+      });
+
       const capabilities = (data?.capabilities as Record<string, unknown> | null) || {};
       const updatedCapabilities = {
         ...capabilities,
+        // Compatibility mirror during transition.
         money_mode_enabled: moneyModeConfig.enabled,
         money_mode_threshold: moneyModeConfig.threshold,
+        money_mode_hold_until: dbConfig.holdUntil,
+        money_mode_hysteresis: dbConfig.hysteresis,
       };
 
       const { error: writeErr } = await supabase
         .from("receptionists")
-        .update({ capabilities: updatedCapabilities })
+        .update({
+          money_mode_enabled: moneyModeConfig.enabled,
+          money_mode_threshold: moneyModeConfig.threshold,
+          money_mode_hold_until: dbConfig.holdUntil,
+          money_mode_hysteresis: dbConfig.hysteresis,
+          capabilities: updatedCapabilities,
+        })
         .eq("id", receptionistId);
       if (writeErr) throw writeErr;
 
