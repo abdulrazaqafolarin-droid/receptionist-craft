@@ -3,15 +3,19 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { RevenueEngine } from "@/components/RevenueEngine";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, DollarSign, Sparkles } from "lucide-react";
 
+const MONEY_MODE_SELECTED_RECEPTIONIST_KEY = "moneyMode:selectedReceptionistId";
+
 export default function MoneyModePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; ai_mode?: string; active?: boolean }>>([]);
+  const [selectedReceptionistId, setSelectedReceptionistId] = useState<string>("");
 
   useEffect(() => {
     let mounted = true;
@@ -41,6 +45,22 @@ export default function MoneyModePage() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (receptionists.length === 0) {
+      setSelectedReceptionistId("");
+      return;
+    }
+
+    const storedReceptionistId = localStorage.getItem(MONEY_MODE_SELECTED_RECEPTIONIST_KEY);
+    const hasStoredSelection = storedReceptionistId && receptionists.some((receptionist) => receptionist.id === storedReceptionistId);
+    const nextSelection = hasStoredSelection ? storedReceptionistId : receptionists[0].id;
+
+    setSelectedReceptionistId(nextSelection);
+    localStorage.setItem(MONEY_MODE_SELECTED_RECEPTIONIST_KEY, nextSelection);
+  }, [receptionists]);
+
+  const selectedReceptionist = receptionists.find((receptionist) => receptionist.id === selectedReceptionistId) || receptionists[0];
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-background via-background to-accent/20">
@@ -85,18 +105,42 @@ export default function MoneyModePage() {
           <div className="space-y-4">
             <Card className="border-amber-500/20 bg-amber-500/5">
               <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-                <div className="text-sm text-muted-foreground">
-                  Now controlling: <span className="font-semibold text-foreground">{receptionists[0]?.name || "Receptionist"}</span>
+                <div className="flex-1 min-w-[220px] space-y-1">
+                  <div className="text-sm text-muted-foreground">
+                    Now controlling: <span className="font-semibold text-foreground">{selectedReceptionist?.name || "Receptionist"}</span>
+                  </div>
+                  {receptionists.length > 1 && (
+                    <Select
+                      value={selectedReceptionistId}
+                      onValueChange={(value) => {
+                        setSelectedReceptionistId(value);
+                        localStorage.setItem(MONEY_MODE_SELECTED_RECEPTIONIST_KEY, value);
+                      }}
+                    >
+                      <SelectTrigger className="max-w-sm">
+                        <SelectValue placeholder="Select receptionist" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {receptionists.map((receptionist) => (
+                          <SelectItem key={receptionist.id} value={receptionist.id}>
+                            {receptionist.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <DollarSign className="h-4 w-4 text-amber-500" />
                   <span className="text-muted-foreground">Current AI mode:</span>
-                  <Badge variant="outline" className="capitalize">{receptionists[0]?.ai_mode || "booking"}</Badge>
+                  <Badge variant="outline" className="capitalize">{selectedReceptionist?.ai_mode || "booking"}</Badge>
                 </div>
               </CardContent>
             </Card>
 
-            <RevenueEngine receptionistId={receptionists[0].id} currentMode={receptionists[0]?.ai_mode || "booking"} />
+            {selectedReceptionist && (
+              <RevenueEngine receptionistId={selectedReceptionist.id} currentMode={selectedReceptionist?.ai_mode || "booking"} />
+            )}
           </div>
         )}
       </main>

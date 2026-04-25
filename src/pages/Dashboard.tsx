@@ -3,17 +3,20 @@ import type { User } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { MessageCircle, Calendar, CalendarDays, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign, ShoppingBag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
-import { RevenueEngine } from "@/components/RevenueEngine";
 import { DashboardCharts } from "@/components/DashboardCharts";
+
+const MONEY_MODE_SELECTED_RECEPTIONIST_KEY = "moneyMode:selectedReceptionistId";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string; active: boolean; mock_mode?: boolean; ai_mode?: string }>>([]);
+  const [selectedReceptionistId, setSelectedReceptionistId] = useState<string>("");
   const [stats, setStats] = useState({
     conversations: 0,
     appointments: 0,
@@ -33,6 +36,22 @@ export default function Dashboard() {
       return () => clearTimeout(timer);
     }
   }, [receptionists, user, navigate]);
+
+  useEffect(() => {
+    if (receptionists.length === 0) {
+      setSelectedReceptionistId("");
+      return;
+    }
+
+    const storedReceptionistId = localStorage.getItem(MONEY_MODE_SELECTED_RECEPTIONIST_KEY);
+    const hasStoredSelection = storedReceptionistId && receptionists.some((receptionist) => receptionist.id === storedReceptionistId);
+    const nextSelection = hasStoredSelection ? storedReceptionistId : receptionists[0].id;
+
+    setSelectedReceptionistId(nextSelection);
+    localStorage.setItem(MONEY_MODE_SELECTED_RECEPTIONIST_KEY, nextSelection);
+  }, [receptionists]);
+
+  const selectedReceptionist = receptionists.find((receptionist) => receptionist.id === selectedReceptionistId);
 
   const loadData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -300,52 +319,66 @@ export default function Dashboard() {
 
         {/* Revenue Engine Section */}
         {receptionists.length > 0 && (
-          <section className="mt-6 sm:mt-8" aria-labelledby="revenue-engine-title">
-            <div className="mb-4">
-              <h2 id="revenue-engine-title" className="sr-only">Revenue Engine</h2>
-            </div>
-            <div className="grid lg:grid-cols-2 gap-4 lg:gap-6">
-              {/* Revenue Engine for first receptionist */}
-              <RevenueEngine 
-                receptionistId={receptionists[0]?.id} 
-                currentMode={receptionists[0]?.ai_mode || 'booking'}
-              />
-              
-              {/* Setup Quick Actions */}
-              <div className="space-y-4">
-                <Card 
-                  className="cursor-pointer hover:shadow-lg hover:border-primary/20 transition-all duration-300 focus-within:ring-2 focus-within:ring-ring" 
-                  onClick={() => navigate("/services")}
-                  role="link"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === 'Enter' && navigate("/services")}
-                >
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                      <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-primary" aria-hidden="true" />
-                      Manage Services
+          <section className="mt-6 sm:mt-8" aria-labelledby="money-mode-preview-title">
+            <Card className="border-amber-500/25 bg-gradient-to-r from-amber-500/10 via-card to-card">
+              <CardHeader className="space-y-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <CardTitle id="money-mode-preview-title" className="flex items-center gap-2">
+                      <DollarSign className="h-5 w-5 text-amber-500" aria-hidden="true" />
+                      Money Mode Preview
                     </CardTitle>
-                    <CardDescription className="text-xs sm:text-sm">Add and manage the services customers can book</CardDescription>
-                  </CardHeader>
-                </Card>
-                
-                <Card 
-                  className="cursor-pointer hover:shadow-lg hover:border-primary/20 transition-all duration-300 focus-within:ring-2 focus-within:ring-ring" 
-                  onClick={() => navigate("/availability")}
-                  role="link"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === 'Enter' && navigate("/availability")}
-                >
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                      <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-primary" aria-hidden="true" />
-                      Set Business Hours
-                    </CardTitle>
-                    <CardDescription className="text-xs sm:text-sm">Configure when your AI can accept bookings</CardDescription>
-                  </CardHeader>
-                </Card>
-              </div>
-            </div>
+                    <CardDescription>
+                      Dashboard stays focused on summary metrics. Open Money Mode for full operator controls.
+                    </CardDescription>
+                  </div>
+                  <Button onClick={() => navigate("/money-mode")} className="bg-amber-500 text-white hover:bg-amber-600">
+                    Open Full Console
+                  </Button>
+                </div>
+                {receptionists.length > 1 && (
+                  <div className="max-w-sm">
+                    <label htmlFor="dashboard-money-mode-receptionist" className="mb-2 block text-xs text-muted-foreground">
+                      Receptionist context
+                    </label>
+                    <Select
+                      value={selectedReceptionistId}
+                      onValueChange={(value) => {
+                        setSelectedReceptionistId(value);
+                        localStorage.setItem(MONEY_MODE_SELECTED_RECEPTIONIST_KEY, value);
+                      }}
+                    >
+                      <SelectTrigger id="dashboard-money-mode-receptionist">
+                        <SelectValue placeholder="Select receptionist" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {receptionists.map((receptionist) => (
+                          <SelectItem key={receptionist.id} value={receptionist.id}>
+                            {receptionist.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border bg-background/60 p-3">
+                    <p className="text-xs text-muted-foreground">Selected receptionist</p>
+                    <p className="mt-1 text-sm font-semibold">{selectedReceptionist?.name || "—"}</p>
+                  </div>
+                  <div className="rounded-lg border bg-background/60 p-3">
+                    <p className="text-xs text-muted-foreground">Current AI mode</p>
+                    <p className="mt-1 text-sm font-semibold capitalize">{selectedReceptionist?.ai_mode || "booking"}</p>
+                  </div>
+                  <div className="rounded-lg border bg-background/60 p-3">
+                    <p className="text-xs text-muted-foreground">Active status</p>
+                    <p className="mt-1 text-sm font-semibold">{selectedReceptionist?.active ? "Active" : "Inactive"}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </section>
         )}
       </main>
