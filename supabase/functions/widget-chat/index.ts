@@ -440,8 +440,14 @@ function parseMoneyModeSettings(capabilities: unknown): MoneyModeSettings {
     : typeof rawThreshold === 'string'
       ? parseFloat(rawThreshold)
       : NaN;
-  const threshold = Number.isFinite(parsedThreshold)
-    ? Math.max(0, Math.min(1, parsedThreshold))
+  const normalizedThreshold = Number.isFinite(parsedThreshold)
+    ? parsedThreshold > 1
+      // Persisted UI values are stored on a 1..10 scale; normalize to 0..1.
+      ? parsedThreshold / 10
+      : parsedThreshold
+    : NaN;
+  const threshold = Number.isFinite(normalizedThreshold)
+    ? Math.max(0, Math.min(1, normalizedThreshold))
     : 0.7;
 
   return { enabled, threshold };
