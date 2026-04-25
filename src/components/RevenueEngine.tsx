@@ -32,7 +32,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface RevenueEngineProps {
-  receptionistId: string;
+  receptionistIds: string[];
   currentMode?: string;
   onModeChange?: (mode: string) => void;
 }
@@ -119,7 +119,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   );
 }
 
-export function RevenueEngine({ receptionistId, currentMode = "booking", onModeChange }: RevenueEngineProps) {
+export function RevenueEngine({ receptionistIds, currentMode = "booking", onModeChange }: RevenueEngineProps) {
   const [aiMode, setAiMode] = useState<"support" | "booking" | "sales">(currentMode as "support" | "booking" | "sales");
   const [loading, setLoading] = useState(false);
   const [moneyModeConfig, setMoneyModeConfig] = useState<MoneyModeConfig>({
@@ -138,6 +138,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   });
 
   const loadConversionStats = useCallback(async () => {
+    if (receptionistIds.length === 0) return;
     try {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -145,8 +146,8 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
       const { data, error } = await supabase
         .from("conversion_events")
         .select("event_type, revenue_value, currency")
-        .eq("receptionist_id", receptionistId)
-        .gte("created_at", thirtyDaysAgo.toISOString());
+          .in("receptionist_id", receptionistIds)
+          .gte("created_at", thirtyDaysAgo.toISOString());
 
       if (error) throw error;
 
@@ -160,23 +161,25 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     } catch (error) {
       console.error("Error loading conversion stats:", error);
     }
-  }, [receptionistId]);
+  }, [receptionistIds]);
 
   const loadMoneyModeConfig = useCallback(async () => {
+    if (receptionistIds.length === 0) return;
     setConfigLoading(true);
     try {
       const { data, error } = await supabase
         .from("receptionists")
         .select("ai_mode, capabilities")
-        .eq("id", receptionistId)
-        .maybeSingle();
+        .in("id", receptionistIds);
       if (error) throw error;
 
-      const capabilities = (data?.capabilities as Record<string, unknown> | null) || {};
+      const records = data || [];
+      const first = records[0];
+      const capabilities = (first?.capabilities as Record<string, unknown> | null) || {};
       const enabled =
         typeof capabilities.money_mode_enabled === "boolean"
           ? capabilities.money_mode_enabled
-          : data?.ai_mode === "sales";
+          : first?.ai_mode === "sales";
       const threshold =
         typeof capabilities.money_mode_threshold === "number"
           ? Math.max(1, Math.min(10, capabilities.money_mode_threshold))
@@ -193,11 +196,15 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     } finally {
       setConfigLoading(false);
     }
-  }, [receptionistId]);
+  }, [receptionistIds]);
 
   useEffect(() => {
     loadConversionStats();
   }, [loadConversionStats]);
+
+  useEffect(() => {
+    setAiMode(currentMode as "support" | "booking" | "sales");
+  }, [currentMode]);
 
   useEffect(() => {
     loadMoneyModeConfig();
@@ -208,16 +215,16 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   }, [aiMode]);
 
   const saveMoneyModeConfig = async () => {
+    if (receptionistIds.length === 0) return;
     setConfigLoading(true);
     try {
       const { data, error: readErr } = await supabase
         .from("receptionists")
         .select("capabilities")
-        .eq("id", receptionistId)
-        .maybeSingle();
+        .in("id", receptionistIds);
       if (readErr) throw readErr;
 
-      const capabilities = (data?.capabilities as Record<string, unknown> | null) || {};
+      const capabilities = ((data || [])[0]?.capabilities as Record<string, unknown> | null) || {};
       const updatedCapabilities = {
         ...capabilities,
         money_mode_enabled: moneyModeConfig.enabled,
@@ -227,7 +234,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
       const { error: writeErr } = await supabase
         .from("receptionists")
         .update({ capabilities: updatedCapabilities })
-        .eq("id", receptionistId);
+        .in("id", receptionistIds);
       if (writeErr) throw writeErr;
 
       const stamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -243,18 +250,20 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   };
 
   const handleModeChange = async (newMode: "support" | "booking" | "sales") => {
+    if (receptionistIds.length === 0) return;
     setLoading(true);
     try {
       const { error } = await supabase
         .from("receptionists")
         .update({ ai_mode: newMode })
-        .eq("id", receptionistId);
+        .in("id", receptionistIds);
 
       if (error) throw error;
 
       setAiMode(newMode);
       onModeChange?.(newMode);
-      toast.success(`Switched to ${newMode === "sales" ? "Money Mode" : `${newMode} mode`}`);
+      const scopeLabel = receptionistIds.length === 1 ? "receptionist" : `${receptionistIds.length} receptionists`;
+      toast.success(`Switched ${scopeLabel} to ${newMode === "sales" ? "Money Mode" : `${newMode} mode`}`);
     } catch (error) {
       console.error("Error updating AI mode:", error);
       toast.error("Failed to update AI mode");
@@ -266,6 +275,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   const weekRevenue = useMemo(() => conversionData.reduce((sum, d) => sum + d.revenue, 0), []);
   const leakedRevenue = 2720;
   const fmtCurrency = (amount: number, cur: string) => formatCurrency(amount, cur);
+  const scopeSummary = receptionistIds.length === 1 ? "1 receptionist" : `${receptionistIds.length} receptionists`;
 
   return (
     <Card className="border-2 border-border/50 shadow-lg overflow-hidden">
@@ -286,6 +296,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
         <CardDescription>
           Money mode controls + MEO analytics + live conversion intelligence
         </CardDescription>
+        <div className="text-xs text-muted-foreground">Scope: {scopeSummary}</div>
       </CardHeader>
 
       <CardContent className="pt-6">
