@@ -167,20 +167,24 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     try {
       const { data, error } = await supabase
         .from("receptionists")
-        .select("ai_mode, capabilities")
+        .select("ai_mode, capabilities, money_mode_enabled, money_mode_threshold")
         .eq("id", receptionistId)
         .maybeSingle();
       if (error) throw error;
 
       const capabilities = (data?.capabilities as Record<string, unknown> | null) || {};
       const enabled =
-        typeof capabilities.money_mode_enabled === "boolean"
-          ? capabilities.money_mode_enabled
-          : data?.ai_mode === "sales";
+        typeof data?.money_mode_enabled === "boolean"
+          ? data.money_mode_enabled
+          : typeof capabilities.money_mode_enabled === "boolean"
+            ? capabilities.money_mode_enabled
+            : data?.ai_mode === "sales";
       const threshold =
-        typeof capabilities.money_mode_threshold === "number"
-          ? Math.max(1, Math.min(10, capabilities.money_mode_threshold))
-          : 7;
+        typeof data?.money_mode_threshold === "number"
+          ? Math.max(1, Math.min(10, data.money_mode_threshold))
+          : typeof capabilities.money_mode_threshold === "number"
+            ? Math.max(1, Math.min(10, capabilities.money_mode_threshold))
+            : 7;
 
       setMoneyModeConfig({
         enabled,
@@ -212,7 +216,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     try {
       const { data, error: readErr } = await supabase
         .from("receptionists")
-        .select("capabilities")
+        .select("capabilities, money_mode_hold_until, money_mode_hysteresis")
         .eq("id", receptionistId)
         .maybeSingle();
       if (readErr) throw readErr;
@@ -226,7 +230,15 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
 
       const { error: writeErr } = await supabase
         .from("receptionists")
-        .update({ capabilities: updatedCapabilities })
+        .update({
+          money_mode_enabled: moneyModeConfig.enabled,
+          money_mode_threshold: moneyModeConfig.threshold,
+          capabilities: {
+            ...updatedCapabilities,
+            money_mode_hold_until: data?.money_mode_hold_until ?? null,
+            money_mode_hysteresis: data?.money_mode_hysteresis ?? 2,
+          },
+        })
         .eq("id", receptionistId);
       if (writeErr) throw writeErr;
 
