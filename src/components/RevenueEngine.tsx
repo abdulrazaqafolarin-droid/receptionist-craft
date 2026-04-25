@@ -161,6 +161,13 @@ export function RevenueEngine({ receptionistIds, receptionistNames = {}, scopeLa
 
   const loadLiveFeeds = useCallback(async () => {
     if (!receptionistIds.length) {
+      setConversionStats({
+        bookings: 0,
+        leads: 0,
+        orders: 0,
+        totalRevenue: 0,
+        currency: "USD",
+      });
       setConversionData([]);
       setFunnelData([]);
       setMeoAlerts([]);
@@ -174,12 +181,21 @@ export function RevenueEngine({ receptionistIds, receptionistNames = {}, scopeLa
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     try {
-      const [{ data: events, error: eventsError }, { data: conversations, error: convoError }] = await Promise.all([
+      const [
+        { data: events, error: eventsError },
+        { data: aggregateConversations, error: aggregateConvoError },
+        { data: recentConversationsFeed, error: recentConvoError },
+      ] = await Promise.all([
         supabase
           .from("conversion_events")
           .select("event_type, revenue_value, currency, created_at, receptionist_id, metadata, session_id")
           .in("receptionist_id", receptionistIds)
           .gte("created_at", thirtyDaysAgo.toISOString()),
+        supabase
+          .from("conversations")
+          .select("id, created_at, receptionist_id")
+          .in("receptionist_id", receptionistIds)
+          .gte("created_at", sevenDaysAgo.toISOString()),
         supabase
           .from("conversations")
           .select("id, created_at, user_message, receptionist_id, metadata")
@@ -190,10 +206,12 @@ export function RevenueEngine({ receptionistIds, receptionistNames = {}, scopeLa
       ]);
 
       if (eventsError) throw eventsError;
-      if (convoError) throw convoError;
+      if (aggregateConvoError) throw aggregateConvoError;
+      if (recentConvoError) throw recentConvoError;
 
       const eventRows = events || [];
-      const conversationRows = conversations || [];
+      const conversationRows = aggregateConversations || [];
+      const liveConversationRows = recentConversationsFeed || [];
 
       const totalRevenue = eventRows.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0);
       const converted = eventRows.filter((e) => ["booking_completed", "order_completed"].includes(e.event_type)).length;
@@ -249,7 +267,7 @@ export function RevenueEngine({ receptionistIds, receptionistNames = {}, scopeLa
         { stage: "Converted", value: converted, pct: pct(converted) },
       ]);
 
-      const recentConversations = conversationRows.slice(0, 6).map((c) => {
+      const recentConversations = liveConversationRows.slice(0, 6).map((c) => {
         const md = (c.metadata as Record<string, unknown> | null) || {};
         const rawIntent = typeof md.intent_score === "number" ? md.intent_score : 5;
         const intent = Math.max(1, Math.min(10, Math.round(rawIntent)));
