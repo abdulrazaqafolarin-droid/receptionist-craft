@@ -40,6 +40,7 @@ import FAQManagement from "./pages/FAQManagement";
 import OrganizationPage from "./pages/Organization";
 import CalendarView from "./pages/CalendarView";
 import Channels from "./pages/Channels";
+import MoneyModePage from "./pages/MoneyMode";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -57,21 +58,45 @@ const App = () => {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing session FIRST to prevent flash
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthLoading(false);
-    });
+    let isMounted = true;
+
+    const initializeAuth = async () => {
+      try {
+        // Guard against indefinite loading when auth/network stalls.
+        const authTimeoutMs = 8000;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Auth initialization timed out")), authTimeoutMs);
+        });
+
+        const sessionPromise = supabase.auth.getSession();
+        const result = await Promise.race([sessionPromise, timeoutPromise]);
+        if (!isMounted) return;
+
+        setSession(result.data.session ?? null);
+      } catch (error) {
+        console.error("Auth initialization failed:", error);
+        if (!isMounted) return;
+        setSession(null);
+      } finally {
+        if (isMounted) setAuthLoading(false);
+      }
+    };
+
+    initializeAuth();
 
     // Set up auth state listener for subsequent changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
+        if (!isMounted) return;
         setSession(session);
         setAuthLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
@@ -155,6 +180,7 @@ const App = () => {
                               <Route path="/realtime-logs" element={<RealtimeLogs />} />
                               <Route path="/organization" element={<OrganizationPage />} />
                               <Route path="/channels" element={<Channels />} />
+                              <Route path="/money-mode" element={<MoneyModePage />} />
                               <Route path="/settings" element={<Settings />} />
                               <Route path="/widget-install/:id" element={<WidgetInstall />} />
                               <Route path="*" element={<NotFound />} />

@@ -1,6 +1,4 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 import { assignVariant, mergeVariantConfig } from "../_shared/abTesting.ts";
 import { 
   buildIdempotencyKey, 
@@ -17,7 +15,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -32,9 +30,9 @@ serve(async (req) => {
       throw new Error("Receptionist ID is required");
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY missing");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY missing");
     }
 
     console.log(`[Chat] Processing message for receptionist ${receptionistId}, user ${userId}`);
@@ -279,21 +277,27 @@ Return ONLY valid JSON, no explanations or markdown.`;
       let slotOut: any;
       try {
         slotOut = await retryWithBackoff(async () => {
-          const slotRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${LOVABLE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
-              messages: [
-                { role: "system", content: slotPrompt },
-                { role: "user", content: userMessageRaw }
-              ],
-              temperature: 0.0
-            })
-          });
+          const slotRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    role: "user",
+                    parts: [{ text: `${slotPrompt}\n\n---\n\n${userMessageRaw}` }],
+                  },
+                ],
+                generationConfig: {
+                  temperature: 0.0,
+                  maxOutputTokens: 1024,
+                },
+              }),
+            }
+          );
 
           if (!slotRes.ok) {
             if (slotRes.status === 429) {
@@ -306,7 +310,11 @@ Return ONLY valid JSON, no explanations or markdown.`;
             throw new Error(`Slot extraction failed: ${slotRes.status} ${errtxt}`);
           }
 
-          return await slotRes.json();
+          const slotData = await slotRes.json();
+          const slotText = slotData?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+          return {
+            choices: [{ message: { content: slotText } }]
+          };
         });
       } catch (err: any) {
         console.error(`[${correlationId}] Slot extraction error:`, err);
@@ -524,17 +532,18 @@ Return ONLY valid JSON, no explanations or markdown.`;
     } else {
       console.log(`[Chat] Calling AI with model ${receptionistConfig.model || 'google/gemini-2.5-flash'}`);
       const aiRes = await fetch(
-        "https://ai.gateway.lovable.dev/v1/chat/completions",
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: receptionistConfig.model || "google/gemini-2.5-flash",
-            temperature: receptionistConfig.temperature || 0.9,
-            messages: finalMessages,
+            contents: toGeminiContents(finalMessages),
+            generationConfig: {
+              temperature: receptionistConfig.temperature || 0.9,
+              maxOutputTokens: 2048,
+            },
           }),
         }
       );
@@ -545,7 +554,10 @@ Return ONLY valid JSON, no explanations or markdown.`;
         throw new Error(`AI request failed: ${aiRes.status} ${errorText}`);
       }
 
-      const out = await aiRes.json();
+      const outRaw = await aiRes.json();
+      const out = {
+        choices: [{ message: { content: outRaw?.candidates?.[0]?.content?.parts?.[0]?.text || "" } }]
+      };
       
       if (!out?.choices?.[0]?.message?.content) {
         console.warn(`[Chat] Unexpected AI response structure:`, out);
@@ -576,6 +588,22 @@ Return ONLY valid JSON, no explanations or markdown.`;
 });
 
 // Helper functions
+function toGeminiContents(messages: Array<{ role: string; content: string }>) {
+  const systemMsg = messages.find((m) => m.role === "system");
+  const chatMessages = messages.filter((m) => m.role !== "system");
+
+  return chatMessages.map((m, idx) => {
+    let text = m.content;
+    if (idx === 0 && systemMsg) {
+      text = `${systemMsg.content}\n\n---\n\n${text}`;
+    }
+    return {
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text }],
+    };
+  });
+}
+
 function jsonResponse(obj: any) {
   return new Response(JSON.stringify(obj), {
     status: 200,
