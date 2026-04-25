@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +12,8 @@ import { DashboardCharts } from "@/components/DashboardCharts";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
-  const [receptionists, setReceptionists] = useState<any[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string; active: boolean; mock_mode?: boolean; ai_mode?: string }>>([]);
   const [stats, setStats] = useState({
     conversations: 0,
     appointments: 0,
@@ -75,6 +76,7 @@ export default function Dashboard() {
               Dashboard
             </h1>
             <p className="text-muted-foreground text-sm sm:text-base lg:text-lg">Your AI-powered appointment booking system</p>
+            <p className="text-[10px] text-muted-foreground/80 mt-1">Build {import.meta.env.VITE_APP_BUILD_SHA || "unknown"}</p>
           </div>
           <Button 
             onClick={() => navigate("/onboarding-wizard")} 
@@ -130,6 +132,28 @@ export default function Dashboard() {
                 ))}
               </ol>
             </div>
+          </section>
+        )}
+
+
+        {receptionists.length > 0 && (
+          <section className="mb-6 animate-fade-in" aria-label="Revenue control center">
+            <Card className="border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-card to-card">
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                <div>
+                  <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
+                    <DollarSign className="h-4 w-4 text-amber-500" aria-hidden="true" />
+                    Money Mode & Revenue Engine
+                  </div>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Open the dedicated workspace to control AI mode, threshold, and conversion performance.
+                  </p>
+                </div>
+                <Button onClick={() => navigate('/money-mode')} className="bg-amber-500 text-white hover:bg-amber-600">
+                  Open Money Mode
+                </Button>
+              </CardContent>
+            </Card>
           </section>
         )}
 
@@ -243,8 +267,9 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <section aria-label="Quick actions">
-          <nav className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
+          <nav className="grid grid-cols-2 lg:grid-cols-7 gap-3 sm:gap-4 lg:gap-6">
             {[
+              { title: "Money Mode", desc: "Revenue control center", icon: DollarSign, path: "/money-mode" },
               { title: "Conversations", desc: "View chat transcripts", icon: MessageCircle, path: "/conversations" },
               { title: "Calendar", desc: "Full schedule view", icon: CalendarDays, path: "/calendar" },
               { title: "Appointments", desc: "Manage bookings", icon: Calendar, path: "/appointments" },

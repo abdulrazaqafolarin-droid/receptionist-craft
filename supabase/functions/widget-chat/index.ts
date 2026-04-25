@@ -1,16 +1,14 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // PHASE 8: PRODUCTION HARDENING IMPORTS
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 import { callAIWithCircuitBreaker } from "../_shared/circuitBreaker.ts";
 import { checkRateLimit as sharedRateLimit, RATE_LIMITS, rateLimitResponse as sharedRateLimitResponse } from "../_shared/rateLimiter.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // UNIFIED ENGINE v2 (PRIMARY AI CONTROL LAYER)
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 import {
   runEngine,
   loadState as loadEngineState,
@@ -39,9 +37,9 @@ import {
   type AdaptedTone,
 } from "../_shared/engine/index.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // UNIFIED FLOW ENGINE IMPORTS (CANONICAL CONVERSATION FLOW)
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 import { StateManager } from "../_shared/flow/stateManager.ts";
 import { 
   routeIntent, 
@@ -59,9 +57,9 @@ import { MemorySummarizer } from "../_shared/flow/memorySummarizer.ts";
 import type { ConversationState, FlowSlots, ActiveTask } from "../_shared/flow/types.ts";
 import { createEmptyActiveTask } from "../_shared/flow/types.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // TASK INTELLIGENCE MODULE (ACTIVE_TASK SYSTEM)
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 import {
   startTask,
   updateTaskEntities,
@@ -75,24 +73,24 @@ import {
   buildSmartMemorySummary,
 } from "../_shared/flow/taskIntelligence.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // MEMORY PIPELINE - Kept for slot extraction & summarization only
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 import {
   type PipelineResult,
   type IntentResult,
   type ExtractedEntities,
 } from "../_shared/flow/memoryPipeline.ts";
 
-// UnifiedCore consolidated into Engine v2 — imports kept for type compatibility only
+// UnifiedCore consolidated into Engine v2 -- imports kept for type compatibility only
 import {
   type UnifiedState,
   type CoreResult,
 } from "../_shared/flow/unifiedCore.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // CONVERSATION GOVERNOR (STATE-DRIVEN EXECUTION CONTROL)
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 import {
   runGovernor,
   buildGovernorPrompt,
@@ -103,9 +101,9 @@ import {
   type GovernorResult,
 } from "../_shared/flow/conversationGovernor.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // ACTION PERMISSION GATE (MIDDLEWARE VALIDATOR)
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 import { 
   validateActionGate, 
   detectActionFromIntent,
@@ -116,9 +114,9 @@ import {
   type ActionType
 } from "../_shared/actionGate.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // CONVERSATION STATE MACHINE (ENFORCED STATE TRANSITIONS)
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 import {
   createMachineContext,
   transition,
@@ -133,9 +131,9 @@ import {
   type TransitionEvent,
 } from "../_shared/stateMachine.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // HALLUCINATION GUARD (DATA GROUNDING ENFORCEMENT)
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 import {
   checkGroundingRequired,
   validateGroundedData,
@@ -145,9 +143,9 @@ import {
   type GroundingCheckResult,
 } from "../_shared/hallucinationGuard.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // INVENTORY VALIDATOR (COMMERCE ENGINE)
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 import {
   createInventoryValidator,
   mapProductStock,
@@ -156,9 +154,9 @@ import {
   type InventoryValidationResult,
 } from "../_shared/inventoryValidator.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // ABUSE PROTECTION SYSTEM (RATE LIMITING & BOT DETECTION)
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 import {
   performAbuseCheck,
   recordFailedBooking,
@@ -170,9 +168,9 @@ import {
   type AbuseCheckResult,
 } from "../_shared/abuseProtection.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // CAPABILITY-BASED ARCHITECTURE IMPORTS (UNIVERSAL BUSINESS OPERATOR)
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 import { 
   classifyUniversalIntent, 
   validateIntentAgainstCapabilities,
@@ -184,37 +182,84 @@ import {
 } from "../_shared/capabilities/index.ts";
 import type { BusinessCapabilities, PrimaryGoal, UniversalIntent } from "../_shared/capabilities/types.ts";
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // CORS HEADERS
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // CURRENCY SYMBOL HELPER
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 function getCurrencySymbol(currency: string | null | undefined): string {
   const map: Record<string, string> = {
-    USD: '$', NGN: '₦', GBP: '£', EUR: '€',
-    KES: 'KSh', GHS: '₵', ZAR: 'R', CAD: 'CA$',
-    AUD: 'A$', INR: '₹', JPY: '¥', CNY: '¥',
+    USD: '$', NGN: ' ', GBP: ' ', EUR: ' ',
+    KES: 'KSh', GHS: ' ', ZAR: 'R', CAD: 'CA$',
+    AUD: 'A$', INR: ' ', JPY: ' ', CNY: ' ',
   };
   return map[(currency || 'USD').toUpperCase()] || '$';
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // INPUT SANITIZATION
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 function sanitizeInput(input: string, maxLength: number = 2000): string {
   if (!input || typeof input !== 'string') return '';
   return input.slice(0, maxLength).replace(/[<>]/g, '').trim();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+function isTaskConfirming(activeTask: ActiveTask | null, expectedType: "booking" | "order"): boolean {
+  if (!activeTask || activeTask.type !== expectedType) return false;
+  return activeTask.step === "confirming" || activeTask.confirmation_sent === true;
+}
+
+async function getExistingBookingForSession(
+  supabase: any,
+  receptionistId: string,
+  sessionId: string,
+): Promise<any | null> {
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("*")
+    .eq("receptionist_id", receptionistId)
+    .contains("metadata", { session_id: sessionId })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[Idempotency] Booking lookup failed:", error.message);
+    return null;
+  }
+  return data || null;
+}
+
+async function getExistingOrderForSession(
+  supabase: any,
+  receptionistId: string,
+  sessionId: string,
+): Promise<any | null> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("receptionist_id", receptionistId)
+    .contains("metadata", { session_id: sessionId })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[Idempotency] Order lookup failed:", error.message);
+    return null;
+  }
+  return data || null;
+}
+
+//                                                                            
 // 7-LAYER S-TIER MODULAR AI ARCHITECTURE
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // Layer 1: Core Identity & Mission
 // Layer 2: Knowledge & Grounding (RAG)
 // Layer 3: Memory & Context Engine
@@ -222,11 +267,11 @@ function sanitizeInput(input: string, maxLength: number = 2000): string {
 // Layer 5: Execution (Booking / Actions)
 // Layer 6: Safety, Quality & Guardrails
 // Layer 7: Failure Prevention & Escalation
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 // LAYER 6: SAFETY CLASSIFIER
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 const SAFETY_PATTERNS = {
   jailbreak: [
     /ignore (previous|all|your) instructions/i,
@@ -269,9 +314,9 @@ function runSafetyClassifier(message: string): { safe: boolean; violation?: stri
   return { safe: true, severity: 'low' };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 // LAYER 4: INTENT DETECTION
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 type IntentType = 
   | 'book_appointment' | 'cancel_appointment' | 'reschedule'
   | 'order_product' | 'ask_info' | 'ask_price' | 'ask_hours' | 'ask_location'
@@ -300,7 +345,7 @@ function detectIntent(message: string, historyLength: number): IntentType {
   if (/^(no|nope|not really|that's wrong|incorrect)/i.test(lowerMsg)) return 'deny';
   if (/actually|i meant|i said .+ not|correction|change that to|switch (it|that) to/i.test(lowerMsg)) return 'correct_previous_info';
   
-  // Product ordering detection — EXPANDED natural language triggers
+  // Product ordering detection -- EXPANDED natural language triggers
   if (/buy|purchase|order|get|want to get|i'd like|i want/i.test(lowerMsg) && !/appointment|book|schedule/i.test(lowerMsg)) return 'order_product';
   if (/add to cart|checkout|shop|shopping/i.test(lowerMsg)) return 'order_product';
   // Natural product browsing / buying intent
@@ -315,7 +360,7 @@ function detectIntent(message: string, historyLength: number): IntentType {
   if (/pick up|grab (some|a|the)/i.test(lowerMsg) && !/appointment|book/i.test(lowerMsg)) return 'order_product';
   if (/what can i (buy|order|get)/i.test(lowerMsg)) return 'order_product';
   
-  // Booking / appointment detection — EXPANDED natural language triggers
+  // Booking / appointment detection -- EXPANDED natural language triggers
   if (/book|schedule|appointment|reserve|sign (me )?up|make a booking/i.test(lowerMsg)) return 'book_appointment';
   if (/when can (i|we) (come in|visit|stop by|see you|swing by|drop by)/i.test(lowerMsg)) return 'book_appointment';
   if (/are (you|there).*(open|slot|opening|available|free)\s*(on|this|next|today|tomorrow)?/i.test(lowerMsg)) return 'book_appointment';
@@ -338,7 +383,7 @@ function detectIntent(message: string, historyLength: number): IntentType {
   if (/speak to (a |someone|human|person|manager)|talk to someone|real person|human help/i.test(lowerMsg)) return 'escalation_request';
   if (/how are you|what's up|how's it going|nice to meet/i.test(lowerMsg)) return 'small_talk';
   
-  // Service inquiry detection — EXPANDED natural language triggers
+  // Service inquiry detection -- EXPANDED natural language triggers
   if (/what (do you|does the|services?).*(do|offer|provide|specialize)/i.test(lowerMsg)) return 'ask_info';
   if (/what (services?|treatments?|options?) (do you|are|is)/i.test(lowerMsg)) return 'ask_info';
   if (/what can you (do|help|offer|provide)/i.test(lowerMsg)) return 'ask_info';
@@ -353,9 +398,9 @@ function detectIntent(message: string, historyLength: number): IntentType {
   return 'general_query';
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 // LAYER 4: MESSAGE ANALYSIS
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 const ACKNOWLEDGMENTS = ['okay', 'ok', 'kk', 'k', 'yes', 'yep', 'yeah', 'sure', 'alright', 'got it', 'cool', 'fine', 'good', 'great', 'perfect', 'understood', 'i see', 'uh huh', 'mhm', 'right'];
 const CORRECTION_PATTERNS = [/i said (.+) not (.+)/i, /i meant (.+)/i, /actually it's (.+)/i, /no, (.+)/i, /correction:? (.+)/i];
 
@@ -376,9 +421,9 @@ function analyzeMessage(message: string, historyLength: number): MessageAnalysis
   return { isAcknowledgment, isCorrection, hasUncertainty, detectedIntent };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 // LAYER 3: CONVERSATION CONTEXT
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 interface ConversationContext {
   serviceMentioned: string | null;
   serviceId: string | null;
@@ -462,7 +507,7 @@ function extractContextFromHistory(history: any[]): ConversationContext {
   const timeMatch = fullText.match(/(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm)|morning|afternoon|evening)/i);
   if (timeMatch) context.timeMentioned = timeMatch[0];
   
-  // STRICT name extraction — uses centralized validator with back-reference support
+  // STRICT name extraction -- uses centralized validator with back-reference support
   // Scan each user message individually so end-of-string patterns work
   for (const h of history) {
     if (h.sender === 'user') {
@@ -568,9 +613,9 @@ function generateRollingSummary(history: any[], verbatimCount: number = 30): { s
   return { summary: summaryParts.join('\n'), recentMessages };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 // LAYER 6: QUALITY METRICS & ESCALATION
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 interface ConversationKPIs {
   total_messages: number;
   is_engaged: boolean;
@@ -697,9 +742,9 @@ function checkEscalationNeeded(message: string, context: ConversationContext, hi
   return { shouldEscalate: false, reason: null, escalationType: null, escalationMessage: null };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 // LAYER 2: KNOWLEDGE BASE BUILDER (RAG)
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], products: any[] = []): string {
   const sections: string[] = [];
   
@@ -733,18 +778,18 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
   });
   const currentTime = timeOnlyFormatter.format(now);
   
-  sections.push(`## 🕐 CURRENT DATE & TIME AWARENESS [CRITICAL]`);
+  sections.push(`##   CURRENT DATE & TIME AWARENESS [CRITICAL]`);
   sections.push(`Current Date/Time: ${currentDateTime}`);
   sections.push(`Current Date: ${currentDate}`);
   sections.push(`Current Time: ${currentTime}`);
   sections.push(`Business Timezone: ${timezone}`);
   sections.push(`Today is: ${new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long' }).format(now)}`);
   sections.push(`\n**Time-Awareness Rules:**`);
-  sections.push(`- If customer asks "what time is it?" or "what's the time?" → Tell them: "${currentTime}"`);
-  sections.push(`- If customer asks "what day is it?" or "what's today's date?" → Tell them: "${currentDate}"`);
-  sections.push(`- If customer gives a PAST date for booking → Politely correct them and suggest valid future dates`);
-  sections.push(`- If customer gives a PAST time today → Politely say that time has passed and suggest later times`);
-  sections.push(`- "Yesterday" or past dates → Cannot book in the past, suggest today or future dates`);
+  sections.push(`- If customer asks "what time is it?" or "what's the time?"   Tell them: "${currentTime}"`);
+  sections.push(`- If customer asks "what day is it?" or "what's today's date?"   Tell them: "${currentDate}"`);
+  sections.push(`- If customer gives a PAST date for booking   Politely correct them and suggest valid future dates`);
+  sections.push(`- If customer gives a PAST time today   Politely say that time has passed and suggest later times`);
+  sections.push(`- "Yesterday" or past dates   Cannot book in the past, suggest today or future dates`);
   sections.push(`- Validate all booking times are in the FUTURE before confirming`);
   
   sections.push(`\n## VERIFIED BUSINESS INFORMATION [HIGH CONFIDENCE]`);
@@ -785,14 +830,14 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
       // Inventory status
       if (p.stock_quantity !== null && p.stock_quantity !== undefined) {
         if (p.stock_quantity === 0) {
-          productDesc += ` [❌ OUT OF STOCK]`;
+          productDesc += ` [  OUT OF STOCK]`;
         } else if (p.stock_quantity <= (p.low_stock_threshold || 5)) {
-          productDesc += ` [⚠️ LOW STOCK: ${p.stock_quantity} left]`;
+          productDesc += ` [   LOW STOCK: ${p.stock_quantity} left]`;
         } else {
-          productDesc += ` [✓ In Stock: ${p.stock_quantity} available]`;
+          productDesc += ` [  In Stock: ${p.stock_quantity} available]`;
         }
       } else {
-        productDesc += ` [✓ In Stock]`;
+        productDesc += ` [  In Stock]`;
       }
       
       if (p.description) productDesc += `: ${p.description}`;
@@ -800,9 +845,9 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
     });
     
     sections.push(`\n**Inventory Rules:**`);
-    sections.push(`- If product is OUT OF STOCK → Apologize and suggest alternatives or ask if they'd like to be notified when back in stock`);
-    sections.push(`- If product is LOW STOCK → Mention limited availability and encourage quick decision`);
-    sections.push(`- If quantity requested exceeds available stock → Inform customer of available quantity and ask if they want that amount instead`);
+    sections.push(`- If product is OUT OF STOCK   Apologize and suggest alternatives or ask if they'd like to be notified when back in stock`);
+    sections.push(`- If product is LOW STOCK   Mention limited availability and encourage quick decision`);
+    sections.push(`- If quantity requested exceeds available stock   Inform customer of available quantity and ask if they want that amount instead`);
   }
   
   if (faqs && faqs.length > 0) {
@@ -821,32 +866,32 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
   return sections.join('\n');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 // MONEY MODE / SALES MODE PROMPT (REVENUE-FOCUSED BEHAVIOR)
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 function buildMoneyModePrompt(receptionist: any): string {
-  return `# 📌 MONEY MODE — REVENUE AGENT BEHAVIOR (ACTIVE)
+  return `#   MONEY MODE -- REVENUE AGENT BEHAVIOR (ACTIVE)
 
 **You are an AI Revenue Agent. Your primary objective is to INCREASE REVENUE.**
 
 Success metrics:
-- ✅ Booked appointments
-- ✅ Completed purchases  
-- ✅ Captured qualified leads (name + contact)
+-   Booked appointments
+-   Completed purchases  
+-   Captured qualified leads (name + contact)
 
 ## MONEY MODE RULES (NON-NEGOTIABLE)
 
-1. **Never chat endlessly** — Every message should move toward ONE money action
-2. **Reduce choices, not expand them** — Guide decisively, don't overwhelm with options
-3. **Handle objections calmly and confidently** — "I understand. Here's why this is worth it..."
-4. **If user hesitates twice** — Introduce urgency: "This time slot is popular" or "Limited availability"
-5. **Before conversation ends** — ALWAYS capture contact details (email or phone)
-6. **Close with action** — Don't let conversations drift without booking/purchase/lead capture
+1. **Never chat endlessly** -- Every message should move toward ONE money action
+2. **Reduce choices, not expand them** -- Guide decisively, don't overwhelm with options
+3. **Handle objections calmly and confidently** -- "I understand. Here's why this is worth it..."
+4. **If user hesitates twice** -- Introduce urgency: "This time slot is popular" or "Limited availability"
+5. **Before conversation ends** -- ALWAYS capture contact details (email or phone)
+6. **Close with action** -- Don't let conversations drift without booking/purchase/lead capture
 
 ## CONVERSION TACTICS
 
 ### For Appointments:
-- "Let me get you booked right now — what day works best?"
+- "Let me get you booked right now -- what day works best?"
 - "I have a great opening at [time]. Should I reserve it for you?"
 - If hesitation: "This slot tends to fill up quickly. Want me to hold it?"
 
@@ -857,21 +902,21 @@ Success metrics:
 
 ### For Lead Capture:
 - "Just in case we get disconnected, can I get your phone number?"
-- "I'll send you a confirmation — what's the best email for you?"
+- "I'll send you a confirmation -- what's the best email for you?"
 - If they resist: "No worries! Is there anything else I can help you with today?"
 
 ## BEHAVIORAL GUIDELINES
 
-- Be polite but CONFIDENT — you're helping them, not pestering them
+- Be polite but CONFIDENT -- you're helping them, not pestering them
 - Use assumptive closes: "So I'll book that for 3pm?" vs "Would you like to book?"
 - Mirror their energy but stay sales-oriented
-- NEVER sound desperate — be professional and helpful
+- NEVER sound desperate -- be professional and helpful
 - After securing a conversion, ask ONCE if they need anything else, then close warmly`;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 // MASTER SYSTEM PROMPT BUILDER (COMPOSABLE BLOCKS)
-// ─────────────────────────────────────────────────────────────────────────────
+//                                                                              
 function buildMasterSystemPrompt(
   receptionist: any,
   knowledgeBase: string,
@@ -899,7 +944,7 @@ function buildMasterSystemPrompt(
   };
 
   // BLOCK 1: CORE IDENTITY (IMMUTABLE)
-  const identityBlock = `# 📌 BLOCK 1 — CORE IDENTITY (IMMUTABLE)
+  const identityBlock = `#   BLOCK 1 -- CORE IDENTITY (IMMUTABLE)
 
 **You are ${receptionist.name}, an S-tier, human-like AI receptionist for ${receptionist.business_name}.**
 ${receptionist.business_type ? `Business Type: ${receptionist.business_type}` : ''}
@@ -915,14 +960,14 @@ You are:
 This identity NEVER changes during a session.`;
 
   // BLOCK 2: SESSION & GREETING INVARIANT (HARD RULE)
-  const sessionBlock = isFirstMessage ? `# 📌 BLOCK 2 — SESSION RULES (NON-NEGOTIABLE)
+  const sessionBlock = isFirstMessage ? `#   BLOCK 2 -- SESSION RULES (NON-NEGOTIABLE)
 
 **THIS IS THE FIRST MESSAGE** - Greet the visitor warmly:
 ${receptionist.greeting_message || `"Hello! Welcome to ${receptionist.business_name}. I'm ${receptionist.name}, and I'm here to help. What can I do for you today?"`}
 
 - **ONLY** greet once
 - **NEVER** greet again during this session
-- **NEVER** restart unless user restarts` : `# 📌 BLOCK 2 — SESSION RULES (NON-NEGOTIABLE)
+- **NEVER** restart unless user restarts` : `#   BLOCK 2 -- SESSION RULES (NON-NEGOTIABLE)
 
 **THIS IS A FOLLOW-UP MESSAGE (message #${messageCount + 1})** - Greeting has ALREADY occurred.
 - **DO NOT** say "Hello", "Hi", "Hey", "Welcome", "Thanks for reaching out", or any greeting phrase
@@ -935,7 +980,7 @@ ${receptionist.greeting_message || `"Hello! Welcome to ${receptionist.business_n
 Violation of this rule is a **CRITICAL FAILURE**. Starting with a greeting on a follow-up message will damage the user experience.`;
 
   // BLOCK 3: MEMORY & CONTEXT
-  const memoryBlock = `# 📌 BLOCK 3 — MEMORY & CONTEXT
+  const memoryBlock = `#   BLOCK 3 -- MEMORY & CONTEXT
 
 ${rollingSummary ? `## Summarized Earlier Context\n${rollingSummary}\n` : ''}
 
@@ -957,7 +1002,7 @@ ${emotionalGuidance[context.emotionalState]}
 - Track booking details, preferences, emotional cues`;
 
   // BLOCK 4: INTENT & DECISION
-  const intentBlock = `# 📌 BLOCK 4 — INTENT & DECISION ENGINE
+  const intentBlock = `#   BLOCK 4 -- INTENT & DECISION ENGINE
 
 Current detected intent: **${messageAnalysis.detectedIntent}**
 Is acknowledgment: ${messageAnalysis.isAcknowledgment}
@@ -966,7 +1011,7 @@ Is correction: ${messageAnalysis.isCorrection}
 ## Intent Handling Rules
 - For acknowledgments: Brief warm response, proceed with pending action
 - For corrections: Acknowledge warmly ("No problem!"), update the info, confirm the change
-- For booking/ordering: Guide toward missing info conversationally — if they provide extra info along the way, accept it all
+- For booking/ordering: Guide toward missing info conversationally -- if they provide extra info along the way, accept it all
 - For complaints: Show genuine empathy, apologize, offer solutions
 - For escalation requests: Connect to human immediately
 - For questions mid-flow: Answer fully, then return to the task naturally
@@ -992,13 +1037,13 @@ Is correction: ${messageAnalysis.isCorrection}
     if (key === 'full_name' || key === 'first_name') value = context.customerName;
     else if (key === 'email') value = context.customerEmail;
     else if (key === 'phone' || key === 'whatsapp') value = context.customerPhone;
-    // Custom/other fields won't have automatic extraction — AI infers from conversation
-    const collected = value ? `✓ ${value}` : '✗ Missing';
+    // Custom/other fields won't have automatic extraction -- AI infers from conversation
+    const collected = value ? `  ${value}` : '  Missing';
     return `- ${f.label}: ${collected}${f.required ? ' (required)' : ' (optional)'}`;
   }).join('\n');
 
   // BLOCK 5: BOOKING & ORDERING INTELLIGENCE
-  const bookingBlock = `# 📌 BLOCK 5 — BOOKING & ORDERING INTELLIGENCE
+  const bookingBlock = `#   BLOCK 5 -- BOOKING & ORDERING INTELLIGENCE
 
 ## APPOINTMENT BOOKING
 Booking requires: Service, Date, Time, plus customer information fields listed below.
@@ -1008,34 +1053,34 @@ Collect these fields in this exact order:
 ${fields.map((f: any, i: number) => `${i + 1}. **${f.label}**${f.required ? ' (REQUIRED)' : ' (optional)'}`).join('\n')}
 
 ${requiredFields.length > 0 ? `Required fields that MUST be collected before confirming: ${requiredFields.join(', ')}` : ''}
-${optionalFields.length > 0 ? `Optional fields — ask for them but don't block confirmation if skipped: ${optionalFields.join(', ')}` : ''}
+${optionalFields.length > 0 ? `Optional fields -- ask for them but don't block confirmation if skipped: ${optionalFields.join(', ')}` : ''}
 
 Current collection status:
-- Service: ${context.serviceMentioned ? '✓' : '✗'} ${context.serviceMentioned || 'Missing'}
-- Date: ${context.dateMentioned ? '✓' : '✗'} ${context.dateMentioned || 'Missing'}
-- Time: ${context.timeMentioned ? '✓' : '✗'} ${context.timeMentioned || 'Missing'}
+- Service: ${context.serviceMentioned ? ' ' : ' '} ${context.serviceMentioned || 'Missing'}
+- Date: ${context.dateMentioned ? ' ' : ' '} ${context.dateMentioned || 'Missing'}
+- Time: ${context.timeMentioned ? ' ' : ' '} ${context.timeMentioned || 'Missing'}
 ${fieldStatusLines}
 
-Booking already confirmed: ${context.bookingConfirmed ? 'YES ✓' : 'NO'}
+Booking already confirmed: ${context.bookingConfirmed ? 'YES  ' : 'NO'}
 
 ## PRODUCT ORDERING
 Product orders require: Product name, Quantity (default 1), plus the same customer information fields above.
 
 Current order status:
-- Product: ${context.productMentioned ? '✓' : '✗'} ${context.productMentioned || 'Not selected'}
-- Quantity: ${context.quantity ? '✓ ' + context.quantity : 'Default 1'}
+- Product: ${context.productMentioned ? ' ' : ' '} ${context.productMentioned || 'Not selected'}
+- Quantity: ${context.quantity ? '  ' + context.quantity : 'Default 1'}
 ${fieldStatusLines}
 
-Order already confirmed: ${context.orderConfirmed ? 'YES ✓' : 'NO'}
+Order already confirmed: ${context.orderConfirmed ? 'YES  ' : 'NO'}
 
 ## COLLECTION RULES (CONVERSATIONAL COLLECTION ENGINE)
-- Guide the customer toward providing missing info NATURALLY — like a real receptionist
+- Guide the customer toward providing missing info NATURALLY -- like a real receptionist
 - If the customer provides multiple pieces of info in one message, accept ALL of them
 - If the customer volunteers info before being asked, store it and skip asking later
 - If the customer asks a question mid-collection, answer it fully, then return to collection naturally
-- If the customer hesitates or says "hold on" / "let me check", respond warmly and wait — do NOT repeat the question
+- If the customer hesitates or says "hold on" / "let me check", respond warmly and wait -- do NOT repeat the question
 - If the customer corrects previous info, acknowledge and update without restarting
-- NEVER repeat the exact same question twice — rephrase if you need to re-ask
+- NEVER repeat the exact same question twice -- rephrase if you need to re-ask
 - If time/product unavailable: Offer up to 3 alternatives
 - NEVER complete booking/order without explicit confirmation
 
@@ -1054,22 +1099,22 @@ After a booking is confirmed OR purchase is complete:
 1. The confirmation has been given - DO NOT repeat it
 2. If NOT already asked: Ask ONCE "Is there anything else I can help you with today?"
 3. If user responds with "no", "that's all", "thanks", "bye", "nope", "nothing", "I'm good", "all set":
-   → Give a SINGLE warm closing: "Thank you for choosing ${receptionist.business_name}! Have a wonderful day! 😊"
-   → DO NOT ask if they need more help again
-   → DO NOT repeat any booking/order details
-   → The conversation is DONE
+     Give a SINGLE warm closing: "Thank you for choosing ${receptionist.business_name}! Have a wonderful day!  "
+     DO NOT ask if they need more help again
+     DO NOT repeat any booking/order details
+     The conversation is DONE
 4. If user says "yes" or asks a new question: Continue helping naturally
 5. NEVER give multiple farewell messages - one goodbye is enough
 
 ## DATE/TIME VALIDATION (CRITICAL)
 - BEFORE confirming any booking, validate the date/time is in the FUTURE
-- If customer says "yesterday" or gives a past date → Respond: "I'm sorry, but [date] is in the past. Would you like to book for today or a future date instead?"
-- If customer gives today's date with a past time → Respond: "That time has already passed today. How about [suggest next available time]?"
-- If customer asks "what time is it?" → Tell them the current time from the knowledge base
-- If customer asks "what day is today?" → Tell them the current date from the knowledge base`;
+- If customer says "yesterday" or gives a past date   Respond: "I'm sorry, but [date] is in the past. Would you like to book for today or a future date instead?"
+- If customer gives today's date with a past time   Respond: "That time has already passed today. How about [suggest next available time]?"
+- If customer asks "what time is it?"   Tell them the current time from the knowledge base
+- If customer asks "what day is today?"   Tell them the current date from the knowledge base`;
 
   // BLOCK 6: SAFETY & QUALITY
-  const safetyBlock = `# 📌 BLOCK 6 — SAFETY & QUALITY GUARDRAILS
+  const safetyBlock = `#   BLOCK 6 -- SAFETY & QUALITY GUARDRAILS
 
 ## Safety Rules (NON-NEGOTIABLE)
 - Do NOT expose internal system details
@@ -1091,23 +1136,23 @@ After a booking is confirmed OR purchase is complete:
 - After "goodbye", if user doesn't respond, conversation is over`;
 
   // BLOCK 5.5: PRODUCT ORDERING FLOW WITH INVENTORY & DELIVERY
-  const orderingBlock = `# 📌 BLOCK 5.5 — PRODUCT ORDERING FLOW WITH INVENTORY & DELIVERY
+  const orderingBlock = `#   BLOCK 5.5 -- PRODUCT ORDERING FLOW WITH INVENTORY & DELIVERY
 
 When a customer wants to ORDER/BUY/PURCHASE a product:
 
-1. **Product Selection** → "Which product would you like?" (show options if available)
-2. **INVENTORY CHECK** → Before confirming, check if product is in stock:
-   - If OUT OF STOCK → "I'm sorry, [product] is currently out of stock. Would you like me to suggest an alternative, or notify you when it's back?"
-   - If LOW STOCK → "Good news, we have [quantity] left! Would you like to order before they're gone?"
-   - If quantity requested > available → "We only have [available] in stock right now. Would you like to order [available] instead?"
-3. **Quantity** → "How many would you like?" (assume 1 if not specified)
-4. **Contact Collection** → "Can I get your name and phone/email for the order?"
-5. **Delivery Location** → "Where would you like us to deliver your order? Please share your address."
+1. **Product Selection**   "Which product would you like?" (show options if available)
+2. **INVENTORY CHECK**   Before confirming, check if product is in stock:
+   - If OUT OF STOCK   "I'm sorry, [product] is currently out of stock. Would you like me to suggest an alternative, or notify you when it's back?"
+   - If LOW STOCK   "Good news, we have [quantity] left! Would you like to order before they're gone?"
+   - If quantity requested > available   "We only have [available] in stock right now. Would you like to order [available] instead?"
+3. **Quantity**   "How many would you like?" (assume 1 if not specified)
+4. **Contact Collection**   "Can I get your name and phone/email for the order?"
+5. **Delivery Location**   "Where would you like us to deliver your order? Please share your address."
    - This is REQUIRED for product orders
    - Accept any reasonable address format
    - If pickup is preferred, customer can say "I'll pick it up" and skip delivery address
-6. **Confirmation** → Summarize: product, quantity, contact info, AND delivery address
-7. **Close** → Ask if they need anything else, then say goodbye
+6. **Confirmation**   Summarize: product, quantity, contact info, AND delivery address
+7. **Close**   Ask if they need anything else, then say goodbye
 
 ### Product Order Confirmation Format:
 "Perfect! I've placed your order for [quantity] x [product]. We'll deliver to [address] and contact you at [contact] to confirm. Is there anything else I can help you with?"
@@ -1115,14 +1160,14 @@ When a customer wants to ORDER/BUY/PURCHASE a product:
 ### Important:
 - ALWAYS check inventory status from the knowledge base before confirming orders
 - ALWAYS collect delivery address before confirming (unless customer opts for pickup)
-- If product shows [❌ OUT OF STOCK] → Do NOT confirm the order, offer alternatives
-- If product shows [⚠️ LOW STOCK: X left] → Mention limited availability
+- If product shows [  OUT OF STOCK]   Do NOT confirm the order, offer alternatives
+- If product shows [   LOW STOCK: X left]   Mention limited availability
 - Keep it simple and conversational
 - Don't repeat order details after confirmation
 - One confirmation, one follow-up question, one goodbye`;
 
   // BLOCK 7: FAILURE PREVENTION
-  const failureBlock = `# 📌 BLOCK 7 — FAILURE PREVENTION & ESCALATION
+  const failureBlock = `#   BLOCK 7 -- FAILURE PREVENTION & ESCALATION
 
 ## Escalate when:
 - Knowledge is missing
@@ -1132,7 +1177,7 @@ When a customer wants to ORDER/BUY/PURCHASE a product:
 - User frustration detected
 
 ## Escalation response:
-"I want to make sure you get the exact help you need — I can connect you to a staff member right now. Would you like me to do that?"
+"I want to make sure you get the exact help you need -- I can connect you to a staff member right now. Would you like me to do that?"
 
 ## Self-Healing Rules
 - If you detect a mistake, correct it immediately
@@ -1149,7 +1194,7 @@ When user indicates they're done (thanks, bye, no that's all, etc.):
 - Do NOT repeat previously stated information`;
 
   // KNOWLEDGE BASE
-  const knowledgeBlock = `# 📌 KNOWLEDGE BASE (RAG)
+  const knowledgeBlock = `#   KNOWLEDGE BASE (RAG)
 
 ${knowledgeBase}`;
 
@@ -1158,15 +1203,15 @@ ${knowledgeBase}`;
 
   // FINAL DIRECTIVE
   const finalBlock = aiMode === 'sales' 
-    ? `# 📌 FINAL DIRECTIVE (MONEY MODE)
+    ? `#   FINAL DIRECTIVE (MONEY MODE)
 
 You are a Revenue Agent. Every interaction should move toward a booking, purchase, or lead capture.
 Be confident, be helpful, and always close. The business depends on you.
 
-**Now respond to the user in Money Mode—helpful, confident, and conversion-focused.**`
-    : `# 📌 FINAL DIRECTIVE
+**Now respond to the user in Money Mode--helpful, confident, and conversion-focused.**`
+    : `#   FINAL DIRECTIVE
 
-You are not just answering questions—you are creating a positive experience.
+You are not just answering questions--you are creating a positive experience.
 Every interaction should leave them thinking "Wow, that was easy and pleasant."
 Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and genuinely caring.
 
@@ -1236,10 +1281,10 @@ Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and g
   return blocks.join('\n\n');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+//                                                                            
 // MAIN SERVER HANDLER
-// ═══════════════════════════════════════════════════════════════════════════
-serve(async (req) => {
+//                                                                            
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -1257,9 +1302,9 @@ serve(async (req) => {
     const formLoadTime = payload._form_load_time ?? null;
     const formSubmitTime = formLoadTime ? (Date.now() - formLoadTime) : undefined;
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // SECURITY: Validate required fields
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     if (!receptionistId || !sessionId) {
       return new Response(
         JSON.stringify({ error: "receptionistId and sessionId are required" }),
@@ -1267,9 +1312,9 @@ serve(async (req) => {
       );
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // ABUSE PROTECTION: Rate Limiting, Honeypot, & Suspicious Pattern Detection
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const message = rawMessage ? sanitizeInput(rawMessage, 2000) : "";
     
     const abuseCheck: AbuseCheckResult = performAbuseCheck(
@@ -1328,9 +1373,9 @@ if (!GEMINI_API_KEY) {
       );
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // UNIFIED FLOW ENGINE: INITIALIZE STATE MANAGER
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const stateManager = new StateManager(supabase);
     const memorySummarizer = new MemorySummarizer(supabase);
     
@@ -1338,9 +1383,9 @@ if (!GEMINI_API_KEY) {
     let conversationState = await stateManager.load(sessionId, receptionistId);
     console.log(`[Flow Engine] State loaded - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, Greeting: ${conversationState.greeting_sent}`);
     
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // RE-GREETING PREVENTION (3-LEVEL ENFORCEMENT)
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // Level 1: Database check - Use session_id consistently
     const { data: existingMessages, error: historyErr } = await supabase
       .from("chat_messages")
@@ -1355,9 +1400,9 @@ if (!GEMINI_API_KEY) {
     const isFirstMessage = (!existingMessages || existingMessages.length === 0) && !conversationState.greeting_sent;
     console.log(`[Widget Chat] Is first message: ${isFirstMessage}, session: ${sessionId}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // GREETING STORAGE FLOW (empty message = store greeting)
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     if (message === "") {
       const { data: existing } = await supabase
         .from("chat_messages")
@@ -1396,9 +1441,9 @@ if (!GEMINI_API_KEY) {
       });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // LAYER 6: SAFETY CHECK
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const safetyResult = runSafetyClassifier(message);
     if (!safetyResult.safe) {
       console.warn(`[Safety] Violation detected: ${safetyResult.violation}, severity: ${safetyResult.severity}`);
@@ -1431,9 +1476,9 @@ if (!GEMINI_API_KEY) {
       );
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // FETCH CONVERSATION HISTORY
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const { data: history } = await supabase
       .from("chat_messages")
       .select("sender, message, metadata, created_at")
@@ -1444,16 +1489,16 @@ if (!GEMINI_API_KEY) {
     
     console.log(`[Widget Chat] Loaded ${history?.length || 0} messages from session ${sessionId}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // LAYER 4: MESSAGE ANALYSIS
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const messageAnalysis = analyzeMessage(message, history?.length || 0);
     console.log(`[Analysis] Intent: ${messageAnalysis.detectedIntent}, Ack: ${messageAnalysis.isAcknowledgment}, Correction: ${messageAnalysis.isCorrection}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // UNIFIED ENGINE v2 — SINGLE SOURCE OF TRUTH (PRIMARY CONTROL LAYER)
+    //                                                                        
+    // UNIFIED ENGINE v2 -- SINGLE SOURCE OF TRUTH (PRIMARY CONTROL LAYER)
     // Consolidates: intent detection, entity extraction, state, governor
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     
     // Fetch services/products early for entity extraction
     const { data: services } = await supabase
@@ -1480,9 +1525,9 @@ if (!GEMINI_API_KEY) {
       canOrder: productItems.length > 0,
     };
     
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // ENGINE v2: LOAD STATE FROM CONVERSATION STATE
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     let engineState: EngineState | null = null;
     
     // Try to load from conversation state slots
@@ -1505,10 +1550,10 @@ if (!GEMINI_API_KEY) {
       }
     }
     
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // ENGINE v2: RUN MAIN PIPELINE
-    // Input → Clean → Detect Intent → Extract Entities → Update State → Govern
-    // ═══════════════════════════════════════════════════════════════════════
+    // Input   Clean   Detect Intent   Extract Entities   Update State   Govern
+    //                                                                        
     const engineInput: EngineInput = {
       message,
       session_id: sessionId,
@@ -1561,7 +1606,7 @@ if (!GEMINI_API_KEY) {
     console.log(`[Engine v2] UI Hints: ${JSON.stringify(engineResult?.ui_hints || {})}`);
     
     if (engineResult?.illegal) {
-      console.warn(`[Engine v2] ⚠️ ILLEGAL STATE: ${engineResult.illegal_reason}`);
+      console.warn(`[Engine v2]    ILLEGAL STATE: ${engineResult.illegal_reason}`);
     }
     
     // Persist engine state in conversation slots
@@ -1573,11 +1618,11 @@ if (!GEMINI_API_KEY) {
     // Build Engine v2 governor prompt block (PRIMARY - highest priority)
     const enginePromptBlock = engineResult.prompt_block;
     
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // ENGINE v2 IS NOW THE SINGLE SOURCE OF TRUTH
     // Legacy UnifiedCore and MemoryPipeline have been consolidated into Engine v2
     // ActiveTask is now derived from Engine v2 state
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     
     // Derive activeTask from Engine v2 state for backward compatibility
     let activeTask: ActiveTask | null = conversationState.active_task || null;
@@ -1596,9 +1641,9 @@ if (!GEMINI_API_KEY) {
     }
     conversationState.active_task = activeTask;
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // LAYER 3: CONTEXT EXTRACTION & ROLLING SUMMARY
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const conversationContext = extractContextFromHistory(history || []);
     const { summary: rollingSummary, recentMessages } = generateRollingSummary(history || [], 30);
 
@@ -1609,9 +1654,9 @@ if (!GEMINI_API_KEY) {
       .eq("receptionist_id", receptionistId)
       .order("priority", { ascending: false });
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // UNIFIED FLOW ENGINE: SLOT EXTRACTION & STATE UPDATE
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const extractedSlots = extractSlots(message, conversationState.slots || {}, serviceItems || [], productItems || []);
     if (extractedSlots && extractedSlots.slots && Object.keys(extractedSlots.slots).length > 0) {
       console.log(`[Flow Engine] Extracted slots:`, extractedSlots.slots);
@@ -1647,9 +1692,9 @@ if (!GEMINI_API_KEY) {
       conversationState.flow_step = null;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // UNIFIED FLOW ENGINE: LONG-TERM MEMORY
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // Get relevant memory summaries
     const memorySummaries = await memorySummarizer.getRelevantSummaries(receptionistId, sessionId);
     const memoryContext = memorySummarizer.buildMemoryContext(memorySummaries);
@@ -1661,14 +1706,14 @@ if (!GEMINI_API_KEY) {
       ? `\n## Active Flow: ${conversationState.active_flow}\nCurrent Step: ${conversationState.flow_step || 'none'}\n${slotSummary ? `Collected Info:\n${slotSummary}` : ''}`
       : '';
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // LAYER 2: BUILD KNOWLEDGE BASE (RAG) WITH TIME & INVENTORY AWARENESS
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const knowledgeBase = buildKnowledgeBase(receptionist, faqs || [], services || [], productItems);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // CAPABILITY-BASED ARCHITECTURE: RESOLVE CAPABILITIES & VALIDATE INTENT
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const capabilities = resolveCapabilities(receptionist);
     const primaryGoal = resolvePrimaryGoal(receptionist);
     
@@ -1682,15 +1727,15 @@ if (!GEMINI_API_KEY) {
     // Build capability-aware prompt section
     const capabilityPrompt = buildCapabilityPrompt(capabilities, primaryGoal, universalIntent, intentValidation);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // GET AI MODE FOR BEHAVIOR SWITCHING
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const aiMode = receptionist.ai_mode || 'booking';
     console.log(`[Widget Chat] AI Mode: ${aiMode}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // CONVERSATION STATE MACHINE: LOAD AND PROCESS STATE
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // Load existing machine context from conversation state slots
     let machineContext: MachineContext = deserializeMachineContext(
       conversationState.slots?.machineContext as string | null
@@ -1721,7 +1766,7 @@ if (!GEMINI_API_KEY) {
       const transitionResult = transition(machineContext, detectedEvent, eventData);
       if (transitionResult.success) {
         machineContext = transitionResult.context;
-        console.log(`[State Machine] Transitioned: ${transitionResult.context.previousState} → ${transitionResult.newState} (${detectedEvent})`);
+        console.log(`[State Machine] Transitioned: ${transitionResult.context.previousState}   ${transitionResult.newState} (${detectedEvent})`);
       } else {
         console.log(`[State Machine] Transition blocked: ${transitionResult.error}`);
       }
@@ -1749,10 +1794,10 @@ if (!GEMINI_API_KEY) {
     // Build state machine prompt block
     const stateMachineBlock = buildStateMachinePrompt(machineContext);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // ACTION PERMISSION GATE: PRE-VALIDATE CURRENT ACTION STATE
     // Build gate block for system prompt based on detected intent
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const detectedAction = detectActionFromIntent(messageAnalysis.detectedIntent);
     let preActionGateResult: ActionGateResult | null = null;
     
@@ -1778,9 +1823,9 @@ if (!GEMINI_API_KEY) {
     // Build action gate prompt block
     const actionGateBlock = buildActionGatePrompt(preActionGateResult);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // HALLUCINATION GUARD: EXTRACT GROUNDED DATA & BUILD GUARD PROMPT
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const groundedData = extractGroundedData(services || [], receptionist, receptionist.knowledge_base);
     const hallucinationGuardBlock = buildHallucinationGuardPrompt(groundedData);
     
@@ -1792,19 +1837,19 @@ if (!GEMINI_API_KEY) {
       console.log(`[Hallucination Guard] Data available: ${groundingValidation.dataAvailable}, Missing: ${groundingValidation.missingData.join(', ') || 'none'}`);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // TASK INTELLIGENCE: BUILD TASK CONTINUITY & FLOW LOCK PROMPTS
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const taskContinuityBlock = buildTaskContinuityPrompt(activeTask);
     const flowLockBlock = buildFlowLockPrompt(activeTask);
     const smartMemorySummary = buildSmartMemorySummary(activeTask);
     
     console.log(`[Task Intelligence] Smart memory: ${smartMemorySummary.substring(0, 100)}...`);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // CONVERSATION GOVERNOR: STATE-DRIVEN EXECUTION CONTROL
     // Now powered by UnifiedCore (single source of truth)
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     
     // Use unified governor block as PRIMARY (from UnifiedCore)
     // Keep legacy governor for backward compatibility logging only
@@ -1849,10 +1894,10 @@ if (!GEMINI_API_KEY) {
     // Update governor state for persistence
     conversationState.governor_state = governorState;
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // PHASE 2: CONVERSATION QUALITY ENHANCEMENT
     // Advanced Empathy, Tone Adaptation, Memory Awareness
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     
     // 1. Deep Emotional Analysis
     const emotionalContext: EmotionalContext = analyzeEmotionalContext(
@@ -1886,9 +1931,9 @@ if (!GEMINI_API_KEY) {
     // 6. Build Quality Standards Block
     const qualityStandardsBlock = buildQualityPrompt();
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + ENGINE v2 GOVERNOR + PHASE 2)
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const systemPrompt = buildMasterSystemPrompt(
       receptionist,
       knowledgeBase,
@@ -1920,9 +1965,9 @@ if (!GEMINI_API_KEY) {
       { role: "user", content: message }
     ];
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // PHASE 2: ADAPTIVE MODEL PARAMETERS (BASED ON TONE & CONTEXT)
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const toneParams = getModelParamsForTone(adaptedTone);
     const temperature = messageAnalysis.isAcknowledgment ? 0.7 : 
                        messageAnalysis.isCorrection ? 0.75 : 
@@ -1931,9 +1976,9 @@ if (!GEMINI_API_KEY) {
     
     console.log(`[Model Params] Temp: ${temperature}, MaxTokens: ${maxTokens} (from tone adaptation)`);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // PHASE 8: AI CALL WITH CIRCUIT BREAKER + TIMEOUT
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const aiData = await callAIWithCircuitBreaker(
       receptionist.model || "google/gemini-2.5-flash",
       async () => {
@@ -1987,16 +2032,16 @@ return {
     let reply = aiData.choices?.[0]?.message?.content || "I'm sorry, I couldn't process that.";
     const latencyMs = Date.now() - startTime;
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // PHASE 2: ENHANCED PERSONALITY POLISHING
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const sentiment = detectSentiment(message);
     reply = polishResponse(reply);
     console.log(`[Personality Engine] Sentiment: ${sentiment}, Response polished`);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // PHASE 2: ENHANCED QUALITY EVALUATION
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const responseQuality = evaluateResponseQuality(
       reply,
       message,
@@ -2008,13 +2053,13 @@ return {
     console.log(`[Quality Evaluator] Score: ${responseQuality?.score ?? 'N/A'}/100, Grade: ${responseQuality?.grade ?? 'N/A'}, Issues: ${responseQuality?.issues?.length ?? 0}`);
     
     if (responseQuality && !responseQuality.passesThreshold) {
-      console.warn(`[Quality Evaluator] ⚠️ Below threshold! Issues: ${(responseQuality.issues || []).map((i: any) => i.type).join(', ')}`);
+      console.warn(`[Quality Evaluator]    Below threshold! Issues: ${(responseQuality.issues || []).map((i: any) => i.type).join(', ')}`);
       console.warn(`[Quality Evaluator] Improvements: ${(responseQuality.improvements || []).join('; ')}`);
     }
     
     // Check if response should be flagged for regeneration (critical issues only)
     if (shouldRegenerateResponse(responseQuality)) {
-      console.warn(`[Quality Evaluator] ⚠️ CRITICAL ISSUE - Response flagged (not regenerating in production to avoid loops)`);
+      console.warn(`[Quality Evaluator]    CRITICAL ISSUE - Response flagged (not regenerating in production to avoid loops)`);
       // In future: could trigger regeneration with stricter prompt
     }
     
@@ -2109,9 +2154,9 @@ return {
       }
     });
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // KB GAP DETECTION: Log low-confidence responses for KB optimization
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const isLowConfidence = qualityRubric.overall_score < 0.6;
     const isUnanswered = /i don't have that information|i'm not sure|let me check|i can't find/i.test(reply);
     const isEscalation = escalationCheck.shouldEscalate;
@@ -2158,10 +2203,10 @@ return {
     const hasOrderIntent = messageAnalysis.detectedIntent === 'order_product' ||
       /buy|purchase|order|get|want/i.test(message);
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // LAYER 5: SYNC SLOTS WITH CONVERSATION CONTEXT
     // Ensure flow engine slots and context extraction are synchronized
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // Merge slot data into context for booking (slots take priority as they're from structured UI)
     const mergedServiceId = conversationState.slots?.serviceId || conversationContext.serviceId;
     const mergedServiceName = conversationState.slots?.serviceName || conversationContext.serviceMentioned;
@@ -2171,11 +2216,12 @@ return {
     const mergedCustomerPhone = conversationState.slots?.customerPhone || conversationContext.customerPhone;
     const mergedCustomerEmail = conversationState.slots?.customerEmail || conversationContext.customerEmail;
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // ACTION PERMISSION GATE: BOOKING VALIDATION
     // AI NEVER books until all required slots are collected and verified
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     let bookingResult = null;
+    let bookingReusedFromSession = false;
     
     // Use Action Gate to validate booking requirements
     const bookingGate = checkBookingGate(
@@ -2193,16 +2239,36 @@ return {
     
     console.log(`[Action Gate] Booking: ${bookingGate.summary}`);
     
-    // Only auto-book if AI response indicates confirmation AND gate allows
+    // Only auto-book after explicit user confirmation to prevent false-positive execution
+    const userExplicitlyConfirmed = messageAnalysis.detectedIntent === 'confirm' ||
+      /^(yes|yep|yeah|correct|right|exactly|confirmed?|that's right|please do|go ahead|book it|confirm it)/i.test(message);
+
+    const bookingExecutionLocked = conversationState.slots?.bookingExecutionLocked === true;
+    const bookingTaskConfirming = isTaskConfirming(activeTask, "booking");
+
     const isBookingConfirmation = (
-      /(?:booked|confirmed|scheduled|appointment is set|all set|I['']ve scheduled)/i.test(reply) || 
-      conversationState.flow_step === 'confirm'
-    ) && !conversationState.booking_confirmed;
+      userExplicitlyConfirmed &&
+      (
+        conversationState.flow_step === 'confirm' ||
+        bookingTaskConfirming ||
+        /(?:booked|confirmed|scheduled|appointment is set|all set|I['']ve scheduled)/i.test(reply)
+      )
+    ) && !conversationState.booking_confirmed && !bookingExecutionLocked;
     
     // GATE ENFORCEMENT: Block booking if requirements not met
     if (bookingGate.allowed && isBookingConfirmation) {
       try {
-        console.log(`[Widget Chat] Auto-booking appointment for ${mergedCustomerName}`);
+        const existingBooking = await getExistingBookingForSession(supabase, receptionistId, sessionId);
+        if (existingBooking) {
+          console.log(`[Idempotency] Existing booking found for session ${sessionId}; skipping auto-book.`);
+          bookingResult = existingBooking;
+          bookingReusedFromSession = true;
+          conversationState.slots = {
+            ...conversationState.slots,
+            bookingExecutionLocked: true,
+          };
+        } else {
+          console.log(`[Widget Chat] Auto-booking appointment for ${mergedCustomerName}`);
         
         // Parse the date/time into ISO format - use slot data first (structured), then natural language
         let startTime: Date | null = null;
@@ -2251,6 +2317,10 @@ return {
             if (bookingData.success) {
               bookingResult = bookingData.appointment;
               bookingResult.service_name = mergedServiceName; // Add for confirmation card
+              conversationState.slots = {
+                ...conversationState.slots,
+                bookingExecutionLocked: true,
+              };
               console.log(`[Widget Chat] Appointment created: ${bookingResult.id}`);
             } else {
               console.error('[Widget Chat] Booking failed:', bookingData.error);
@@ -2261,17 +2331,19 @@ return {
         } else {
           console.warn('[Widget Chat] Could not parse booking date/time:', mergedDate, mergedTime);
         }
+        }
       } catch (bookingErr) {
         console.error('[Widget Chat] Auto-booking failed:', bookingErr);
         // Don't fail the response if booking fails
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // ACTION PERMISSION GATE: ORDER VALIDATION + INVENTORY VALIDATION
     // AI NEVER creates orders until all required slots are collected and verified
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     let orderResult = null;
+    let orderReusedFromSession = false;
     let orderValidation: InventoryValidationResult | null = null;
     
     // Use Action Gate to validate order requirements
@@ -2290,15 +2362,30 @@ return {
     
     console.log(`[Action Gate] Order: ${orderGate.summary}`);
     
-    // Only auto-create order if AI response indicates confirmation AND gate allows
-    const isOrderConfirmation = /(?:order confirmed|placed your order|order is set|purchase confirmed)/i.test(reply) && 
-                                 !conversationContext.orderConfirmed;
+    // Only auto-create order after explicit user confirmation to prevent false-positive execution
+    const orderExecutionLocked = conversationState.slots?.orderExecutionLocked === true;
+    const orderTaskConfirming = isTaskConfirming(activeTask, "order");
+
+    const isOrderConfirmation = userExplicitlyConfirmed &&
+                                 (orderTaskConfirming || /(?:order confirmed|placed your order|order is set|purchase confirmed)/i.test(reply)) && 
+                                 !conversationContext.orderConfirmed &&
+                                 !orderExecutionLocked;
     
     // GATE ENFORCEMENT: Block order if requirements not met
     if (orderGate.allowed && isOrderConfirmation) {
       try {
-        const customerName = conversationContext.customerName || engineState?.entities?.customer?.name || 'Customer';
-        console.log(`[Commerce Engine] Auto-creating order for ${customerName}`);
+        const existingOrder = await getExistingOrderForSession(supabase, receptionistId, sessionId);
+        if (existingOrder) {
+          console.log(`[Idempotency] Existing order found for session ${sessionId}; skipping auto-order.`);
+          orderResult = existingOrder;
+          orderReusedFromSession = true;
+          conversationState.slots = {
+            ...conversationState.slots,
+            orderExecutionLocked: true,
+          };
+        } else {
+          const customerName = conversationContext.customerName || engineState?.entities?.customer?.name || 'Customer';
+          console.log(`[Commerce Engine] Auto-creating order for ${customerName}`);
         
         // Build cart items from context
         const cartItems: CartItem[] = (conversationContext.selectedProducts?.length || 0) > 0
@@ -2358,6 +2445,10 @@ return {
 
             orderResult = createdOrder;
             console.log(`[Commerce Engine] Order created: ${orderExecution.orderId}, Total: ${orderExecution.validation.total_amount}`);
+            conversationState.slots = {
+              ...conversationState.slots,
+              orderExecutionLocked: true,
+            };
             
             // Send notification to receptionist owner
             const { data: receptionist2 } = await supabase
@@ -2371,7 +2462,7 @@ return {
                 type: 'order.created',
                 title: `New Order: ${customerName}`,
                 body: `Order placed via AI receptionist`,
-                message: `${cartItems.length} item(s) ordered — ${getCurrencySymbol(receptionist.currency)}${orderExecution.validation.total_amount.toLocaleString()}`,
+                message: `${cartItems.length} item(s) ordered -- ${getCurrencySymbol(receptionist.currency)}${orderExecution.validation.total_amount.toLocaleString()}`,
                 receptionist_id: receptionistId,
                 user_id: receptionist2.user_id,
                 severity: 'info',
@@ -2388,20 +2479,21 @@ return {
             }
           } else {
             console.warn(`[Commerce Engine] Order validation failed:`, orderExecution.errors);
-            // Stock issues — don't create order, let AI handle the error messaging
+            // Stock issues -- don't create order, let AI handle the error messaging
           }
+        }
         }
       } catch (orderErr) {
         console.error('[Commerce Engine] Auto-order creation failed:', orderErr);
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // CONVERSION EVENT LOGGING (MONEY MODE ANALYTICS)
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     const receptionistCurrency = receptionist.currency || 'USD';
 
-    if (bookingResult) {
+    if (bookingResult && !bookingReusedFromSession) {
       // Estimate revenue from booking - use service price if available
       let estimatedRevenue = 0;
       if (conversationState.slots?.serviceId) {
@@ -2430,7 +2522,7 @@ return {
       console.log(`[Conversion] Logged booking_completed event with revenue: ${estimatedRevenue}`);
     }
     
-    if (orderResult) {
+    if (orderResult && !orderReusedFromSession) {
       // Calculate order revenue from selected products
       let orderRevenue = 0;
       if (conversationContext.selectedProducts?.length) {
@@ -2478,9 +2570,9 @@ return {
       console.log(`[Conversion] Logged lead_captured event`);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // UNIFIED FLOW ENGINE: PERSIST STATE (INCLUDING STATE MACHINE)
-    // ═══════════════════════════════════════════════════════════════════════
+    //                                                                        
     // Update booking/order confirmed flags based on response
     if (bookingResult) {
       conversationState.booking_confirmed = true;

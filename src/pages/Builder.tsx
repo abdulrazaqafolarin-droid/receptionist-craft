@@ -728,6 +728,18 @@ export default function BuilderPage() {
             </h1>
           </div>
           <p className="text-muted-foreground ml-13">Create an AI receptionist and preview how it will talk to your customers.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => document.getElementById('builder-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Business Details</button>
+            <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => document.getElementById('builder-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Preview & Test</button>
+            {receptionistId && (
+              <>
+                <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => document.getElementById('builder-faqs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>FAQs</button>
+                <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => document.getElementById('builder-embed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Widget Install</button>
+                <button className="px-3 py-1.5 text-xs rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20" onClick={() => navigate('/money-mode')}>Money Mode</button>
+              </>
+            )}
+            <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => navigate('/dashboard')}>Back to Dashboard</button>
+          </div>
         </header>
 
         <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -741,7 +753,7 @@ export default function BuilderPage() {
               />
             )}
             
-            <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6 animate-scale-in">
+            <div id="builder-details" className="bg-card rounded-2xl shadow-card border border-border/50 p-6 animate-scale-in">
               <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
                 Edit AI Receptionist
@@ -1010,20 +1022,24 @@ export default function BuilderPage() {
 
             {/* FAQ Manager */}
             {receptionistId && (
-              <FAQManager receptionistId={receptionistId} />
+              <div id="builder-faqs">
+                <FAQManager receptionistId={receptionistId} />
+              </div>
             )}
 
             {/* Widget Embed Code */}
             {receptionistId && receptionist.name && (
-              <WidgetEmbedCode 
-                receptionistId={receptionistId} 
-                receptionistName={receptionist.name}
-              />
+              <div id="builder-embed">
+                <WidgetEmbedCode 
+                  receptionistId={receptionistId} 
+                  receptionistName={receptionist.name}
+                />
+              </div>
             )}
           </section>
 
           {/* Right panel: chat preview */}
-          <section className="lg:col-span-2 bg-card rounded-2xl shadow-card border border-border/50 p-6 flex flex-col animate-slide-in-right">
+          <section id="builder-preview" className="lg:col-span-2 bg-card rounded-2xl shadow-card border border-border/50 p-6 flex flex-col animate-slide-in-right">
             <div className="flex items-center justify-between mb-4 pb-4 border-b border-border">
               <div>
                 <div className="text-xl font-semibold flex items-center gap-2">
