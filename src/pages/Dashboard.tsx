@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,9 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { RevenueEngine } from "@/components/RevenueEngine";
 import { DashboardCharts } from "@/components/DashboardCharts";
+import { ReceptionistScopeSelector } from "@/components/ReceptionistScopeSelector";
+import { getScopeQueryString, useReceptionistScope } from "@/hooks/useReceptionistScope";
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string; active: boolean; mock_mode?: boolean; ai_mode?: string }>>([]);
   const [stats, setStats] = useState({
@@ -24,6 +27,21 @@ export default function Dashboard() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const initialScopeFromUrl = useMemo(() => {
+    const modeParam = searchParams.get("scopeMode");
+    if (modeParam !== "single" && modeParam !== "multi" && modeParam !== "all") return undefined;
+    const idsParam = searchParams.get("scopeIds");
+    const ids = idsParam ? idsParam.split(",").filter(Boolean) : [];
+    return { mode: modeParam, receptionistIds: ids };
+  }, [searchParams]);
+
+  const { scope, setScope, activeReceptionistIds } = useReceptionistScope(
+    user?.id ?? null,
+    receptionists.map((r) => ({ id: r.id, name: r.name })),
+    initialScopeFromUrl,
+  );
+  const scopedPrimaryReceptionist = receptionists.find((r) => r.id === activeReceptionistIds[0]) || receptionists[0];
 
   useEffect(() => {
     if (receptionists.length === 0 && user) {
@@ -47,23 +65,35 @@ export default function Dashboard() {
 
     setReceptionists(recs || []);
 
-    if (recs && recs.length > 0) {
-      const receptionistIds = recs.map(r => r.id);
+    setStats((prev) => ({
+      ...prev,
+      activeReceptionists: (recs || []).filter((r) => r.active).length,
+    }));
+  };
+
+  useEffect(() => {
+    const loadScopedStats = async () => {
+      if (activeReceptionistIds.length === 0) {
+        setStats((prev) => ({ ...prev, conversations: 0, appointments: 0, orders: 0 }));
+        return;
+      }
 
       const [convRes, apptRes, ordersRes] = await Promise.all([
-        supabase.from("conversations").select("*", { count: "exact", head: true }).in("receptionist_id", receptionistIds),
-        supabase.from("appointments").select("*", { count: "exact", head: true }).in("receptionist_id", receptionistIds),
-        supabase.from("orders").select("*", { count: "exact", head: true }).in("receptionist_id", receptionistIds),
+        supabase.from("conversations").select("*", { count: "exact", head: true }).in("receptionist_id", activeReceptionistIds),
+        supabase.from("appointments").select("*", { count: "exact", head: true }).in("receptionist_id", activeReceptionistIds),
+        supabase.from("orders").select("*", { count: "exact", head: true }).in("receptionist_id", activeReceptionistIds),
       ]);
 
-      setStats({
+      setStats((prev) => ({
+        ...prev,
         conversations: convRes.count || 0,
         appointments: apptRes.count || 0,
         orders: ordersRes.count || 0,
-        activeReceptionists: recs.filter(r => r.active).length,
-      });
-    }
-  };
+      }));
+    };
+
+    loadScopedStats();
+  }, [activeReceptionistIds]);
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-background via-background to-accent/20">
@@ -137,6 +167,16 @@ export default function Dashboard() {
 
 
         {receptionists.length > 0 && (
+          <section className="mb-4 animate-fade-in" aria-label="Receptionist scope selector">
+            <ReceptionistScopeSelector
+              receptionists={receptionists.map((r) => ({ id: r.id, name: r.name }))}
+              value={scope}
+              onChange={setScope}
+            />
+          </section>
+        )}
+
+        {receptionists.length > 0 && (
           <section className="mb-6 animate-fade-in" aria-label="Revenue control center">
             <Card className="border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-card to-card">
               <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -149,7 +189,7 @@ export default function Dashboard() {
                     Open the dedicated workspace to control AI mode, threshold, and conversion performance.
                   </p>
                 </div>
-                <Button onClick={() => navigate('/money-mode')} className="bg-amber-500 text-white hover:bg-amber-600">
+                <Button onClick={() => navigate(`/money-mode?${getScopeQueryString(scope)}`)} className="bg-amber-500 text-white hover:bg-amber-600">
                   Open Money Mode
                 </Button>
               </CardContent>
@@ -188,7 +228,7 @@ export default function Dashboard() {
         {/* Charts Section */}
         {receptionists.length > 0 && (
           <section className="mb-8 sm:mb-10 animate-fade-in" aria-label="Activity charts">
-            <DashboardCharts receptionistIds={receptionists.map(r => r.id)} />
+            <DashboardCharts receptionistIds={activeReceptionistIds} />
           </section>
         )}
 
@@ -269,7 +309,7 @@ export default function Dashboard() {
         <section aria-label="Quick actions">
           <nav className="grid grid-cols-2 lg:grid-cols-7 gap-3 sm:gap-4 lg:gap-6">
             {[
-              { title: "Money Mode", desc: "Revenue control center", icon: DollarSign, path: "/money-mode" },
+              { title: "Money Mode", desc: "Revenue control center", icon: DollarSign, path: `/money-mode?${getScopeQueryString(scope)}` },
               { title: "Conversations", desc: "View chat transcripts", icon: MessageCircle, path: "/conversations" },
               { title: "Calendar", desc: "Full schedule view", icon: CalendarDays, path: "/calendar" },
               { title: "Appointments", desc: "Manage bookings", icon: Calendar, path: "/appointments" },
@@ -307,8 +347,8 @@ export default function Dashboard() {
             <div className="grid lg:grid-cols-2 gap-4 lg:gap-6">
               {/* Revenue Engine for first receptionist */}
               <RevenueEngine 
-                receptionistId={receptionists[0]?.id} 
-                currentMode={receptionists[0]?.ai_mode || 'booking'}
+                receptionistIds={activeReceptionistIds}
+                currentMode={scopedPrimaryReceptionist?.ai_mode || 'booking'}
               />
               
               {/* Setup Quick Actions */}

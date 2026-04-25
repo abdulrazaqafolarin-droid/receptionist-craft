@@ -1,17 +1,37 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { RevenueEngine } from "@/components/RevenueEngine";
+import { ReceptionistScopeSelector } from "@/components/ReceptionistScopeSelector";
 import { supabase } from "@/integrations/supabase/client";
+import { ReceptionistScopeState, getScopeQueryString, useReceptionistScope } from "@/hooks/useReceptionistScope";
 import { ArrowLeft, DollarSign, Sparkles } from "lucide-react";
 
 export default function MoneyModePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
   const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; ai_mode?: string; active?: boolean }>>([]);
+
+  const initialScopeFromUrl = useMemo(() => {
+    const modeParam = searchParams.get("scopeMode");
+    if (modeParam !== "single" && modeParam !== "multi" && modeParam !== "all") return undefined;
+    const idsParam = searchParams.get("scopeIds");
+    const ids = idsParam ? idsParam.split(",").filter(Boolean) : [];
+    return { mode: modeParam, receptionistIds: ids } as ReceptionistScopeState;
+  }, [searchParams]);
+
+  const { scope, setScope, activeReceptionistIds } = useReceptionistScope(
+    userId,
+    receptionists.map((r) => ({ id: r.id, name: r.name })),
+    initialScopeFromUrl,
+  );
+
+  const scopedPrimaryReceptionist = receptionists.find((r) => r.id === activeReceptionistIds[0]) || receptionists[0];
 
   useEffect(() => {
     let mounted = true;
@@ -22,6 +42,7 @@ export default function MoneyModePage() {
           data: { user },
         } = await supabase.auth.getUser();
         if (!mounted || !user) return;
+        setUserId(user.id);
 
         const { data } = await supabase
           .from("receptionists")
@@ -58,7 +79,7 @@ export default function MoneyModePage() {
             </p>
             <p className="mt-1 text-[10px] text-muted-foreground/80">Build {import.meta.env.VITE_APP_BUILD_SHA || "unknown"}</p>
           </div>
-          <Button variant="outline" onClick={() => navigate("/dashboard")}>
+          <Button variant="outline" onClick={() => navigate(`/dashboard?${getScopeQueryString(scope)}`)}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
           </Button>
         </div>
@@ -83,20 +104,26 @@ export default function MoneyModePage() {
           </Card>
         ) : (
           <div className="space-y-4">
+            <ReceptionistScopeSelector
+              receptionists={receptionists.map((r) => ({ id: r.id, name: r.name }))}
+              value={scope}
+              onChange={setScope}
+            />
+
             <Card className="border-amber-500/20 bg-amber-500/5">
               <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
                 <div className="text-sm text-muted-foreground">
-                  Now controlling: <span className="font-semibold text-foreground">{receptionists[0]?.name || "Receptionist"}</span>
+                  Now controlling: <span className="font-semibold text-foreground">{scope.mode === "all" ? "All receptionists" : scope.mode === "multi" ? `${activeReceptionistIds.length} receptionists` : scopedPrimaryReceptionist?.name || "Receptionist"}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <DollarSign className="h-4 w-4 text-amber-500" />
                   <span className="text-muted-foreground">Current AI mode:</span>
-                  <Badge variant="outline" className="capitalize">{receptionists[0]?.ai_mode || "booking"}</Badge>
+                  <Badge variant="outline" className="capitalize">{scopedPrimaryReceptionist?.ai_mode || "booking"}</Badge>
                 </div>
               </CardContent>
             </Card>
 
-            <RevenueEngine receptionistId={receptionists[0].id} currentMode={receptionists[0]?.ai_mode || "booking"} />
+            <RevenueEngine receptionistIds={activeReceptionistIds} currentMode={scopedPrimaryReceptionist?.ai_mode || "booking"} />
           </div>
         )}
       </main>
