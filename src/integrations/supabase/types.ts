@@ -888,6 +888,81 @@ export type Database = {
           },
         ]
       }
+      meo_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          created_at: string
+          created_by: string
+          currency: string
+          description: string
+          dismissed_at: string | null
+          estimated_impact: number
+          id: string
+          metadata: Json
+          receptionist_id: string
+          recommended_action: string
+          resolved_at: string | null
+          severity: string
+          status: string
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          created_at?: string
+          created_by?: string
+          currency?: string
+          description: string
+          dismissed_at?: string | null
+          estimated_impact?: number
+          id?: string
+          metadata?: Json
+          receptionist_id: string
+          recommended_action: string
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+          title: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          created_at?: string
+          created_by?: string
+          currency?: string
+          description?: string
+          dismissed_at?: string | null
+          estimated_impact?: number
+          id?: string
+          metadata?: Json
+          receptionist_id?: string
+          recommended_action?: string
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meo_alerts_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "receptionists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meo_alerts_receptionist_id_fkey"
+            columns: ["receptionist_id"]
+            isOneToOne: false
+            referencedRelation: "widget_receptionists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
@@ -2044,6 +2119,20 @@ export type Database = {
       is_org_member: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
+      }
+      upsert_meo_alert: {
+        Args: {
+          p_currency: string
+          p_description: string
+          p_estimated_impact: number
+          p_metadata?: Json
+          p_receptionist_id: string
+          p_recommended_action: string
+          p_severity: string
+          p_title: string
+          p_type: string
+        }
+        Returns: string
       }
       upsert_conversation_state: {
         Args: {

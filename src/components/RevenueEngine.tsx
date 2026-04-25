@@ -27,6 +27,9 @@ import {
   Sparkles,
   AlertTriangle,
   Bot,
+  CheckCircle2,
+  XCircle,
+  RotateCcw,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -51,6 +54,21 @@ interface MoneyModeConfig {
   lastSavedAt: string | null;
 }
 
+type MeoAlertStatus = "open" | "acknowledged" | "dismissed" | "resolved";
+
+interface MeoAlert {
+  id: string;
+  type: string;
+  severity: "low" | "medium" | "high" | "critical";
+  title: string;
+  description: string;
+  estimated_impact: number;
+  currency: string;
+  recommended_action: string;
+  status: MeoAlertStatus;
+  created_at: string;
+}
+
 const conversionData = [
   { day: "Mon", revenue: 1200, conversations: 34, bookings: 8 },
   { day: "Tue", revenue: 1850, conversations: 41, bookings: 12 },
@@ -66,12 +84,6 @@ const funnelData = [
   { stage: "Engaged", value: 744, pct: 60 },
   { stage: "Intent", value: 372, pct: 30 },
   { stage: "Converted", value: 149, pct: 12 },
-];
-
-const meoAlerts = [
-  { id: 1, type: "lost", msg: "3 hot buyers left without booking", amount: "£840", time: "2h ago" },
-  { id: 2, type: "suggest", msg: "Add deposit request - reduces no-shows 40%", amount: "+£220/wk", time: "AI tip" },
-  { id: 3, type: "lost", msg: "Missed 7 leads after hours yesterday", amount: "£1,260", time: "Yesterday" },
 ];
 
 const liveConversations = [
@@ -136,6 +148,9 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     totalRevenue: 0,
     currency: "USD",
   });
+  const [meoAlerts, setMeoAlerts] = useState<MeoAlert[]>([]);
+  const [meoAlertsLoading, setMeoAlertsLoading] = useState(false);
+  const [updatingAlertId, setUpdatingAlertId] = useState<string | null>(null);
 
   const loadConversionStats = useCallback(async () => {
     try {
@@ -159,6 +174,25 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
       });
     } catch (error) {
       console.error("Error loading conversion stats:", error);
+    }
+  }, [receptionistId]);
+
+  const loadMeoAlerts = useCallback(async () => {
+    setMeoAlertsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("meo_alerts")
+        .select("id, type, severity, title, description, estimated_impact, currency, recommended_action, status, created_at")
+        .eq("receptionist_id", receptionistId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setMeoAlerts((data || []) as MeoAlert[]);
+    } catch (error) {
+      console.error("Error loading MEO alerts:", error);
+      toast.error("Failed to load MEO alerts");
+    } finally {
+      setMeoAlertsLoading(false);
     }
   }, [receptionistId]);
 
@@ -202,6 +236,10 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   useEffect(() => {
     loadMoneyModeConfig();
   }, [loadMoneyModeConfig]);
+
+  useEffect(() => {
+    loadMeoAlerts();
+  }, [loadMeoAlerts]);
 
   useEffect(() => {
     setMoneyModeConfig((prev) => ({ ...prev, enabled: aiMode === "sales" }));
@@ -264,8 +302,44 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   };
 
   const weekRevenue = useMemo(() => conversionData.reduce((sum, d) => sum + d.revenue, 0), []);
-  const leakedRevenue = 2720;
+  const leakedRevenue = useMemo(
+    () => meoAlerts.filter((a) => a.status === "open" || a.status === "acknowledged").reduce((sum, a) => sum + Number(a.estimated_impact || 0), 0),
+    [meoAlerts],
+  );
   const fmtCurrency = (amount: number, cur: string) => formatCurrency(amount, cur);
+  const leakedCurrency = meoAlerts[0]?.currency || conversionStats.currency || "USD";
+
+  const updateAlertStatus = async (alert: MeoAlert, status: MeoAlertStatus) => {
+    setUpdatingAlertId(alert.id);
+    try {
+      const patch: {
+        status: MeoAlertStatus;
+        acknowledged_at?: string | null;
+        dismissed_at?: string | null;
+        resolved_at?: string | null;
+      } = { status };
+      const now = new Date().toISOString();
+      if (status === "acknowledged") patch.acknowledged_at = now;
+      if (status === "dismissed") patch.dismissed_at = now;
+      if (status === "resolved") patch.resolved_at = now;
+      if (status === "open") {
+        patch.acknowledged_at = null;
+        patch.dismissed_at = null;
+        patch.resolved_at = null;
+      }
+
+      const { error } = await supabase.from("meo_alerts").update(patch).eq("id", alert.id);
+      if (error) throw error;
+
+      setMeoAlerts((prev) => prev.map((item) => (item.id === alert.id ? { ...item, status } : item)));
+      toast.success(`Alert marked as ${status}`);
+    } catch (error) {
+      console.error("Error updating alert status:", error);
+      toast.error("Failed to update alert");
+    } finally {
+      setUpdatingAlertId(null);
+    }
+  };
 
   return (
     <Card className="border-2 border-border/50 shadow-lg overflow-hidden">
@@ -444,7 +518,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
           <TabsContent value="meo" className="space-y-4">
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-500">Revenue leaked this week</div>
-              <div className="font-mono text-4xl font-bold text-red-500">£{leakedRevenue.toLocaleString()}</div>
+              <div className="font-mono text-4xl font-bold text-red-500">{fmtCurrency(leakedRevenue, leakedCurrency)}</div>
               <div className="text-xs text-muted-foreground">Across missed leads, abandoned flows and lost upsells.</div>
             </div>
 
@@ -460,15 +534,71 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
             <div className="rounded-xl border bg-card p-4">
               <div className="mb-3 text-sm font-semibold">AI revenue intelligence feed</div>
               <div className="space-y-2">
+                {meoAlertsLoading ? (
+                  <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">Loading MEO alerts…</div>
+                ) : null}
+
+                {!meoAlertsLoading && meoAlerts.length === 0 ? (
+                  <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                    No active MEO alerts yet. Run the analytics job to generate actionable events.
+                  </div>
+                ) : null}
+
                 {meoAlerts.map((alert) => (
-                  <div key={alert.id} className="flex items-center justify-between rounded-lg border bg-muted/30 p-3 text-xs">
-                    <div>
-                      <div className="font-semibold">{alert.msg}</div>
-                      <div className="text-muted-foreground">{alert.time}</div>
+                  <div key={alert.id} className="rounded-lg border bg-muted/30 p-3 text-xs">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div>
+                        <div className="font-semibold">{alert.title}</div>
+                        <div className="text-muted-foreground">{alert.description}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={alert.severity === "critical" || alert.severity === "high" ? "bg-red-500/20 text-red-600 border-red-500/30" : "bg-amber-500/20 text-amber-600 border-amber-500/30"}>
+                          {fmtCurrency(alert.estimated_impact, alert.currency)}
+                        </Badge>
+                        <Badge variant="outline">{alert.status}</Badge>
+                      </div>
                     </div>
-                    <Badge className={alert.type === "lost" ? "bg-red-500/20 text-red-600 border-red-500/30" : "bg-emerald-500/20 text-emerald-600 border-emerald-500/30"}>
-                      {alert.amount}
-                    </Badge>
+
+                    <div className="mb-2 text-muted-foreground">
+                      Recommended action: <span className="text-foreground">{alert.recommended_action}</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateAlertStatus(alert, "acknowledged")}
+                        disabled={updatingAlertId === alert.id || alert.status === "acknowledged"}
+                      >
+                        <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Acknowledge
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateAlertStatus(alert, "dismissed")}
+                        disabled={updatingAlertId === alert.id || alert.status === "dismissed"}
+                      >
+                        <XCircle className="mr-1 h-3.5 w-3.5" /> Dismiss
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateAlertStatus(alert, "resolved")}
+                        disabled={updatingAlertId === alert.id || alert.status === "resolved"}
+                      >
+                        Resolve
+                      </Button>
+                      {alert.status !== "open" ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => updateAlertStatus(alert, "open")}
+                          disabled={updatingAlertId === alert.id}
+                        >
+                          <RotateCcw className="mr-1 h-3.5 w-3.5" /> Re-open
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>
