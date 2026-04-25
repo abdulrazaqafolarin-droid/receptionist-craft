@@ -508,9 +508,12 @@ function resolveEffectiveMode(
   intentScore: number,
 ): SalesModeState {
   const { threshold, hysteresis, minHoldTurns, exitConsecutiveTurns } = readSalesModeConfig(receptionist);
-  const previousEffectiveMode = (slots?.effective_mode === 'sales' || slots?.effective_mode === 'support')
+  const configuredBaseMode: 'sales' | 'booking' | 'support' = receptionist.ai_mode === 'support'
+    ? 'support'
+    : (receptionist.ai_mode === 'sales' ? 'sales' : 'booking');
+  const previousEffectiveMode = (slots?.effective_mode === 'sales' || slots?.effective_mode === 'support' || slots?.effective_mode === 'booking')
     ? slots.effective_mode
-    : (receptionist.ai_mode === 'support' ? 'support' : 'booking');
+    : configuredBaseMode;
   const previousInSales = slots?.sales_mode_active === true || previousEffectiveMode === 'sales';
 
   const turnCounter = Number(slots?.sales_mode_turn_counter ?? 0) + 1;
@@ -538,8 +541,7 @@ function resolveEffectiveMode(
     }
   }
 
-  const fallbackMode = receptionist.ai_mode === 'support' ? 'support' : 'booking';
-  const effectiveMode: 'sales' | 'booking' | 'support' = inSales ? 'sales' : fallbackMode;
+  const effectiveMode: 'sales' | 'booking' | 'support' = inSales ? 'sales' : configuredBaseMode;
 
   return {
     score: intentScore,
