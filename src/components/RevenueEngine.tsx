@@ -51,6 +51,29 @@ interface MoneyModeConfig {
   lastSavedAt: string | null;
 }
 
+interface RuntimeMoneyModeState {
+  baseMode: "support" | "booking" | "sales";
+  effectiveMode: "support" | "booking" | "sales";
+  threshold: number;
+  holdTimerRemainingSec: number;
+  lastAutoSwitchReason: string | null;
+  updatedAt: string;
+}
+
+interface ModeTransitionEvent {
+  at: string;
+  fromMode: string | null;
+  toMode: string | null;
+  reason: string;
+  source: "optimization_log" | "conversion_events";
+}
+
+interface TimelineBucket {
+  label: string;
+  count: number;
+  reasons: string[];
+}
+
 const conversionData = [
   { day: "Mon", revenue: 1200, conversations: 34, bookings: 8 },
   { day: "Tue", revenue: 1850, conversations: 41, bookings: 12 },
@@ -136,6 +159,9 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     totalRevenue: 0,
     currency: "USD",
   });
+  const [runtimeState, setRuntimeState] = useState<RuntimeMoneyModeState | null>(null);
+  const [runtimeLoading, setRuntimeLoading] = useState(false);
+  const [modeTransitions, setModeTransitions] = useState<ModeTransitionEvent[]>([]);
 
   const loadConversionStats = useCallback(async () => {
     try {
@@ -187,6 +213,9 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
         threshold,
         lastSavedAt: null,
       });
+      if (data?.ai_mode) {
+        setAiMode(data.ai_mode as "support" | "booking" | "sales");
+      }
       setConfigDirty(false);
     } catch (error) {
       console.error("Error loading money mode config:", error);
@@ -203,9 +232,132 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     loadMoneyModeConfig();
   }, [loadMoneyModeConfig]);
 
+  const loadRuntimeState = useCallback(async () => {
+    setRuntimeLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("receptionists")
+        .select("ai_mode, capabilities")
+        .eq("id", receptionistId)
+        .maybeSingle();
+      if (error) throw error;
+      const capabilities = (data?.capabilities as Record<string, unknown> | null) || {};
+      const parseMode = (value: unknown, fallback: "support" | "booking" | "sales") =>
+        value === "support" || value === "booking" || value === "sales" ? value : fallback;
+      const persistedMode = parseMode(data?.ai_mode, "booking");
+      const baseMode = parseMode(capabilities.money_mode_base_mode, persistedMode);
+      const effectiveMode = parseMode(capabilities.money_mode_effective_mode, persistedMode);
+      const threshold =
+        typeof capabilities.money_mode_runtime_threshold === "number"
+          ? Math.max(1, Math.min(10, capabilities.money_mode_runtime_threshold))
+          : typeof capabilities.money_mode_threshold === "number"
+            ? Math.max(1, Math.min(10, capabilities.money_mode_threshold))
+            : 7;
+      const holdUntil =
+        typeof capabilities.money_mode_hold_until === "string"
+          ? new Date(capabilities.money_mode_hold_until).getTime()
+          : null;
+      const holdFromServer =
+        typeof capabilities.money_mode_hold_seconds_remaining === "number"
+          ? Math.max(0, Math.round(capabilities.money_mode_hold_seconds_remaining))
+          : null;
+      const computedHold =
+        holdUntil && Number.isFinite(holdUntil) ? Math.max(0, Math.round((holdUntil - Date.now()) / 1000)) : 0;
+      const holdTimerRemainingSec = holdFromServer ?? computedHold;
+      const lastAutoSwitchReason =
+        typeof capabilities.money_mode_last_auto_switch_reason === "string"
+          ? capabilities.money_mode_last_auto_switch_reason
+          : typeof capabilities.money_mode_last_switch_reason === "string"
+            ? capabilities.money_mode_last_switch_reason
+            : null;
+
+      setRuntimeState({
+        baseMode,
+        effectiveMode,
+        threshold,
+        holdTimerRemainingSec,
+        lastAutoSwitchReason,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Error loading money mode runtime:", error);
+    } finally {
+      setRuntimeLoading(false);
+    }
+  }, [receptionistId]);
+
+  const loadModeTransitions = useCallback(async () => {
+    try {
+      const lookback = new Date();
+      lookback.setDate(lookback.getDate() - 7);
+
+      const [{ data: optimizationRows, error: optimizationError }, { data: conversionRows, error: conversionError }] = await Promise.all([
+        supabase
+          .from("optimization_log")
+          .select("created_at, action, decision_reason, metadata")
+          .eq("receptionist_id", receptionistId)
+          .gte("created_at", lookback.toISOString())
+          .order("created_at", { ascending: false })
+          .limit(200),
+        supabase
+          .from("conversion_events")
+          .select("created_at, event_type, metadata")
+          .eq("receptionist_id", receptionistId)
+          .gte("created_at", lookback.toISOString())
+          .order("created_at", { ascending: false })
+          .limit(200),
+      ]);
+      if (optimizationError) throw optimizationError;
+      if (conversionError) throw conversionError;
+
+      const fromOptimization: ModeTransitionEvent[] = (optimizationRows || [])
+        .map((row) => {
+          const metadata = (row.metadata as Record<string, unknown> | null) || {};
+          const fromMode = typeof metadata.from_mode === "string" ? metadata.from_mode : null;
+          const toMode = typeof metadata.to_mode === "string" ? metadata.to_mode : null;
+          const reason = row.decision_reason || `Optimization action: ${row.action}`;
+          if (!fromMode && !toMode && !reason.toLowerCase().includes("mode")) return null;
+          return {
+            at: row.created_at,
+            fromMode,
+            toMode,
+            reason,
+            source: "optimization_log" as const,
+          };
+        })
+        .filter((entry): entry is ModeTransitionEvent => Boolean(entry));
+
+      const fromConversion: ModeTransitionEvent[] = (conversionRows || [])
+        .map((row) => {
+          const metadata = (row.metadata as Record<string, unknown> | null) || {};
+          const fromMode = typeof metadata.from_mode === "string" ? metadata.from_mode : null;
+          const toMode = typeof metadata.to_mode === "string" ? metadata.to_mode : null;
+          const reason = typeof metadata.mode_switch_reason === "string" ? metadata.mode_switch_reason : null;
+          if (!fromMode && !toMode && !reason) return null;
+          return {
+            at: row.created_at,
+            fromMode,
+            toMode,
+            reason: reason || `Conversion event: ${row.event_type}`,
+            source: "conversion_events" as const,
+          };
+        })
+        .filter((entry): entry is ModeTransitionEvent => Boolean(entry));
+
+      const merged = [...fromOptimization, ...fromConversion].sort(
+        (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+      );
+      setModeTransitions(merged);
+    } catch (error) {
+      console.error("Error loading mode transitions:", error);
+      setModeTransitions([]);
+    }
+  }, [receptionistId]);
+
   useEffect(() => {
-    setMoneyModeConfig((prev) => ({ ...prev, enabled: aiMode === "sales" }));
-  }, [aiMode]);
+    loadRuntimeState();
+    loadModeTransitions();
+  }, [loadRuntimeState, loadModeTransitions]);
 
   const saveMoneyModeConfig = async () => {
     setConfigLoading(true);
@@ -254,6 +406,8 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
 
       setAiMode(newMode);
       onModeChange?.(newMode);
+      await loadRuntimeState();
+      await loadModeTransitions();
       toast.success(`Switched to ${newMode === "sales" ? "Money Mode" : `${newMode} mode`}`);
     } catch (error) {
       console.error("Error updating AI mode:", error);
@@ -266,6 +420,32 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   const weekRevenue = useMemo(() => conversionData.reduce((sum, d) => sum + d.revenue, 0), []);
   const leakedRevenue = 2720;
   const fmtCurrency = (amount: number, cur: string) => formatCurrency(amount, cur);
+  const formatSeconds = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+  const timelineBuckets = useMemo<TimelineBucket[]>(() => {
+    if (!modeTransitions.length) return [];
+    const map = new Map<string, TimelineBucket>();
+    modeTransitions.forEach((event) => {
+      const ts = new Date(event.at);
+      ts.setMinutes(0, 0, 0);
+      const hour = ts.getHours();
+      ts.setHours(hour - (hour % 6));
+      const key = ts.toISOString();
+      const label = ts.toLocaleString([], { month: "short", day: "numeric", hour: "numeric" });
+      if (!map.has(key)) {
+        map.set(key, { label, count: 0, reasons: [] });
+      }
+      const bucket = map.get(key)!;
+      bucket.count += 1;
+      if (!bucket.reasons.includes(event.reason)) {
+        bucket.reasons.push(event.reason);
+      }
+    });
+    return Array.from(map.values()).slice(0, 12);
+  }, [modeTransitions]);
 
   return (
     <Card className="border-2 border-border/50 shadow-lg overflow-hidden">
@@ -412,6 +592,22 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
                 </div>
               </div>
 
+              <div className="mb-4 rounded-lg border bg-muted/20 p-3">
+                <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span>Runtime state (server)</span>
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={loadRuntimeState} disabled={runtimeLoading}>
+                    {runtimeLoading ? "Refreshing..." : "Refresh"}
+                  </Button>
+                </div>
+                <div className="grid gap-2 text-xs sm:grid-cols-2">
+                  <div className="rounded border bg-background/70 p-2"><span className="text-muted-foreground">Base mode:</span> <span className="font-semibold capitalize">{runtimeState?.baseMode || "—"}</span></div>
+                  <div className="rounded border bg-background/70 p-2"><span className="text-muted-foreground">Effective mode:</span> <span className="font-semibold capitalize">{runtimeState?.effectiveMode || "—"}</span></div>
+                  <div className="rounded border bg-background/70 p-2"><span className="text-muted-foreground">Threshold:</span> <span className="font-semibold">{runtimeState?.threshold ?? "—"}</span></div>
+                  <div className="rounded border bg-background/70 p-2"><span className="text-muted-foreground">Hold timer remaining:</span> <span className="font-semibold">{runtimeState ? formatSeconds(runtimeState.holdTimerRemainingSec) : "—"}</span></div>
+                  <div className="rounded border bg-background/70 p-2 sm:col-span-2"><span className="text-muted-foreground">Last auto-switch reason:</span> <span className="font-semibold">{runtimeState?.lastAutoSwitchReason || "No server reason available"}</span></div>
+                </div>
+              </div>
+
               <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted/20 p-3 text-xs">
                 <div className="text-muted-foreground">
                   {moneyModeConfig.lastSavedAt
@@ -489,6 +685,33 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
           </TabsContent>
 
           <TabsContent value="audit" className="space-y-3">
+            <div className="rounded-xl border bg-card p-4 text-sm">
+              <div className="mb-3 flex items-center justify-between gap-3 font-semibold">
+                <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-500" /> Mode transition audit timeline</div>
+                <Button size="sm" variant="outline" onClick={loadModeTransitions}>Refresh timeline</Button>
+              </div>
+              {timelineBuckets.length === 0 ? (
+                <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">No mode transition events found in the selected interval.</div>
+              ) : (
+                <div className="space-y-2">
+                  {timelineBuckets.map((bucket) => (
+                    <div key={bucket.label} className="rounded-md border bg-muted/20 p-3 text-xs">
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="font-semibold text-foreground">{bucket.label} (6h bucket)</div>
+                        <Badge variant="outline">{bucket.count} transitions</Badge>
+                      </div>
+                      <ul className="space-y-1 text-muted-foreground">
+                        {bucket.reasons.slice(0, 3).map((reason) => (
+                          <li key={reason}>• {reason}</li>
+                        ))}
+                        {bucket.reasons.length > 3 ? <li>• +{bucket.reasons.length - 3} more reasons</li> : null}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="rounded-xl border bg-card p-4 text-sm">
               <div className="mb-3 flex items-center gap-2 font-semibold"><AlertTriangle className="h-4 w-4 text-amber-500" /> UI / UX production audit</div>
               <div className="space-y-2 text-xs text-muted-foreground">
