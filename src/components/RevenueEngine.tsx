@@ -11,6 +11,12 @@ import {
   CartesianGrid,
 } from "recharts";
 import { formatCurrency } from "@/lib/currency";
+import {
+  type AiBaseMode,
+  clampMoneyModeThreshold,
+  normalizeMoneyModeCapabilities,
+  resolveMoneyModeState,
+} from "@/lib/moneyModeContract";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -120,7 +126,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export function RevenueEngine({ receptionistId, currentMode = "booking", onModeChange }: RevenueEngineProps) {
-  const [aiMode, setAiMode] = useState<"support" | "booking" | "sales">(currentMode as "support" | "booking" | "sales");
+  const [aiMode, setAiMode] = useState<AiBaseMode>((currentMode as AiBaseMode) || "booking");
   const [loading, setLoading] = useState(false);
   const [moneyModeConfig, setMoneyModeConfig] = useState<MoneyModeConfig>({
     enabled: aiMode === "sales",
@@ -172,21 +178,31 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
         .maybeSingle();
       if (error) throw error;
 
-      const capabilities = (data?.capabilities as Record<string, unknown> | null) || {};
-      const enabled =
-        typeof capabilities.money_mode_enabled === "boolean"
-          ? capabilities.money_mode_enabled
-          : data?.ai_mode === "sales";
-      const threshold =
-        typeof capabilities.money_mode_threshold === "number"
-          ? Math.max(1, Math.min(10, capabilities.money_mode_threshold))
-          : 7;
+      const baseMode: AiBaseMode = ((data?.ai_mode as AiBaseMode) || "booking");
+      setAiMode(baseMode);
+
+      const normalizedCapabilities = normalizeMoneyModeCapabilities(
+        baseMode,
+        (data?.capabilities as Record<string, unknown> | null) || {},
+      );
 
       setMoneyModeConfig({
-        enabled,
-        threshold,
+        enabled: normalizedCapabilities.money_mode_enabled,
+        threshold: normalizedCapabilities.money_mode_threshold,
         lastSavedAt: null,
       });
+
+      if (typeof (data?.capabilities as Record<string, unknown> | null)?.money_mode_enabled !== "boolean" ||
+          typeof (data?.capabilities as Record<string, unknown> | null)?.money_mode_threshold !== "number") {
+        const { error: normalizeErr } = await supabase
+          .from("receptionists")
+          .update({ capabilities: normalizedCapabilities })
+          .eq("id", receptionistId);
+
+        if (normalizeErr) {
+          console.warn("Unable to normalize legacy capabilities row:", normalizeErr);
+        }
+      }
       setConfigDirty(false);
     } catch (error) {
       console.error("Error loading money mode config:", error);
@@ -202,10 +218,6 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   useEffect(() => {
     loadMoneyModeConfig();
   }, [loadMoneyModeConfig]);
-
-  useEffect(() => {
-    setMoneyModeConfig((prev) => ({ ...prev, enabled: aiMode === "sales" }));
-  }, [aiMode]);
 
   const saveMoneyModeConfig = async () => {
     setConfigLoading(true);
@@ -266,6 +278,16 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   const weekRevenue = useMemo(() => conversionData.reduce((sum, d) => sum + d.revenue, 0), []);
   const leakedRevenue = 2720;
   const fmtCurrency = (amount: number, cur: string) => formatCurrency(amount, cur);
+
+  const currentIntentScore = liveConversations[0]?.intent ?? 0;
+  const modeState = resolveMoneyModeState({
+    baseMode: aiMode,
+    capabilities: {
+      money_mode_enabled: moneyModeConfig.enabled,
+      money_mode_threshold: moneyModeConfig.threshold,
+    },
+    intentScore: currentIntentScore,
+  });
 
   return (
     <Card className="border-2 border-border/50 shadow-lg overflow-hidden">
@@ -403,12 +425,22 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
                     step={1}
                     value={[moneyModeConfig.threshold]}
                     onValueChange={(v) => {
-                      setMoneyModeConfig((prev) => ({ ...prev, threshold: v[0] || 7 }));
+                      setMoneyModeConfig((prev) => ({ ...prev, threshold: clampMoneyModeThreshold(v[0]) }));
                       setConfigDirty(true);
                     }}
                     className="flex-1"
                   />
                   <Badge variant="outline">{moneyModeConfig.threshold}</Badge>
+                </div>
+              </div>
+
+              <div className="mb-4 rounded-lg border bg-muted/30 p-3 text-xs">
+                <div className="mb-2 font-semibold text-foreground">Current computed mode state</div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div><span className="text-muted-foreground">Base mode:</span> <span className="font-medium capitalize">{modeState.baseMode}</span></div>
+                  <div><span className="text-muted-foreground">Auto-mode enabled:</span> <span className="font-medium">{modeState.autoModeEnabled ? "Yes" : "No"}</span></div>
+                  <div><span className="text-muted-foreground">Intent score now:</span> <span className="font-medium">{modeState.scoreUsed}/10</span></div>
+                  <div><span className="text-muted-foreground">Effective mode now:</span> <span className="font-medium capitalize">{modeState.effectiveModeNow}</span></div>
                 </div>
               </div>
 
