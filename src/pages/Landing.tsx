@@ -82,6 +82,16 @@ const HeroBenefitCard = ({
 
 export default function Landing() {
   const navigate = useNavigate();
+  const spotlightAutomations = [
+    "Missed booking recovery",
+    "After-hours lead capture",
+    "No-show reduction",
+  ];
+  const secondaryAutomations = [
+    "Abandoned checkout recovery",
+    "Upsell rescue",
+    "Price opportunity hints",
+  ];
 
   const features = [
     {
@@ -296,6 +306,45 @@ export default function Landing() {
             Built for small businesses who want professional customer service without the overhead
           </p>
         </div>
+
+        <Card className="mb-6 sm:mb-8 lg:mb-10 p-5 sm:p-6 lg:p-8 border-primary/20 bg-primary/5">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <Badge className="bg-primary text-primary-foreground">Spotlight</Badge>
+            <span className="text-sm sm:text-base font-medium text-foreground">Highest-impact automations</span>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground/80 mb-2">Primary</h3>
+              <ul className="space-y-2 text-sm sm:text-base">
+                {spotlightAutomations.map((item) => (
+                  <li key={item} className="flex items-start gap-2 text-foreground">
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground/80 mb-2">
+                Secondary (included, lower prominence)
+              </h3>
+              <ul className="space-y-2 text-sm sm:text-base">
+                {secondaryAutomations.map((item) => (
+                  <li key={item} className="flex items-start gap-2 text-muted-foreground">
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <p className="mt-4 text-sm sm:text-base text-foreground/90">
+            Persist outcome events and attributed value for each automation.
+          </p>
+        </Card>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
           {features.map((feature, idx) => (
