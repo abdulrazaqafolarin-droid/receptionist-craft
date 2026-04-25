@@ -107,23 +107,29 @@ RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
 AS $$
-  SELECT NOT EXISTS (
-    SELECT 1
-    FROM public.ab_test_release_gate_intervals gi
-    LEFT JOIN public.ab_test_release_gate_results gr
-      ON gr.test_id = gi.test_id
-     AND gr.interval_key = gi.interval_key
-    WHERE gi.test_id = p_test_id
-      AND (
-        gr.id IS NULL
-        OR gr.observed_period < gi.min_observation_period
-        OR COALESCE(gr.conversion_uplift, -1) < gi.conversion_uplift_target
-        OR COALESCE(gr.attributed_revenue_uplift, -1) < gi.attributed_revenue_uplift_target
-        OR COALESCE(gr.lead_capture_uplift, -1) < gi.lead_capture_uplift_target
-        OR COALESCE(gr.leakage_reduction, -1) < gi.leakage_reduction_target
-        OR COALESCE(gr.no_show_reduction, -1) < gi.no_show_reduction_target
-      )
-  );
+  SELECT
+    EXISTS (
+      SELECT 1
+      FROM public.ab_test_release_gate_intervals gi
+      WHERE gi.test_id = p_test_id
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.ab_test_release_gate_intervals gi
+      LEFT JOIN public.ab_test_release_gate_results gr
+        ON gr.test_id = gi.test_id
+       AND gr.interval_key = gi.interval_key
+      WHERE gi.test_id = p_test_id
+        AND (
+          gr.id IS NULL
+          OR gr.observed_period < gi.min_observation_period
+          OR COALESCE(gr.conversion_uplift, -1) < gi.conversion_uplift_target
+          OR COALESCE(gr.attributed_revenue_uplift, -1) < gi.attributed_revenue_uplift_target
+          OR COALESCE(gr.lead_capture_uplift, -1) < gi.lead_capture_uplift_target
+          OR COALESCE(gr.leakage_reduction, -1) < gi.leakage_reduction_target
+          OR COALESCE(gr.no_show_reduction, -1) < gi.no_show_reduction_target
+        )
+    );
 $$;
 
 CREATE OR REPLACE FUNCTION public.enforce_ab_test_release_gates()
