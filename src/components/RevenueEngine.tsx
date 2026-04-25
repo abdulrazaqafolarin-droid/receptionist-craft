@@ -32,7 +32,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface RevenueEngineProps {
-  receptionistId: string;
+  receptionistIds: string[];
+  receptionistNames?: Record<string, string>;
+  scopeLabel?: string;
   currentMode?: string;
   onModeChange?: (mode: string) => void;
 }
@@ -51,34 +53,36 @@ interface MoneyModeConfig {
   lastSavedAt: string | null;
 }
 
-const conversionData = [
-  { day: "Mon", revenue: 1200, conversations: 34, bookings: 8 },
-  { day: "Tue", revenue: 1850, conversations: 41, bookings: 12 },
-  { day: "Wed", revenue: 980, conversations: 28, bookings: 6 },
-  { day: "Thu", revenue: 2340, conversations: 55, bookings: 18 },
-  { day: "Fri", revenue: 3100, conversations: 62, bookings: 24 },
-  { day: "Sat", revenue: 2670, conversations: 48, bookings: 19 },
-  { day: "Sun", revenue: 1440, conversations: 31, bookings: 10 },
-];
+interface TrendPoint {
+  day: string;
+  revenue: number;
+  conversations: number;
+  bookings: number;
+}
 
-const funnelData = [
-  { stage: "Visitors", value: 1240, pct: 100 },
-  { stage: "Engaged", value: 744, pct: 60 },
-  { stage: "Intent", value: 372, pct: 30 },
-  { stage: "Converted", value: 149, pct: 12 },
-];
+interface FunnelPoint {
+  stage: string;
+  value: number;
+  pct: number;
+}
 
-const meoAlerts = [
-  { id: 1, type: "lost", msg: "3 hot buyers left without booking", amount: "£840", time: "2h ago" },
-  { id: 2, type: "suggest", msg: "Add deposit request - reduces no-shows 40%", amount: "+£220/wk", time: "AI tip" },
-  { id: 3, type: "lost", msg: "Missed 7 leads after hours yesterday", amount: "£1,260", time: "Yesterday" },
-];
+interface MEOAlert {
+  id: string;
+  type: "lost" | "suggest";
+  msg: string;
+  amount: string;
+  time: string;
+}
 
-const liveConversations = [
-  { id: 1, name: "Sarah M.", intent: 9, status: "HOT", msg: "I'd like to book for next Tuesday", time: "now", mode: "money" },
-  { id: 2, name: "James O.", intent: 6, status: "WARM", msg: "What are your prices for whitening?", time: "2m", mode: "booking" },
-  { id: 3, name: "Aisha K.", intent: 3, status: "COLD", msg: "Just browsing for now", time: "5m", mode: "support" },
-];
+interface LiveConversation {
+  id: string;
+  name: string;
+  intent: number;
+  status: "HOT" | "WARM" | "COLD";
+  msg: string;
+  time: string;
+  mode: string;
+}
 
 const statusClass: Record<string, string> = {
   HOT: "bg-amber-500/15 text-amber-600 border-amber-500/30",
@@ -119,8 +123,21 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   );
 }
 
-export function RevenueEngine({ receptionistId, currentMode = "booking", onModeChange }: RevenueEngineProps) {
-  const [aiMode, setAiMode] = useState<"support" | "booking" | "sales">(currentMode as "support" | "booking" | "sales");
+function getRelativeTimeLabel(isoTime: string) {
+  const elapsedMs = Date.now() - new Date(isoTime).getTime();
+  const mins = Math.max(0, Math.floor(elapsedMs / 60000));
+  if (mins < 1) return "now";
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
+export function RevenueEngine({ receptionistIds, receptionistNames = {}, scopeLabel = "current scope", currentMode = "booking", onModeChange }: RevenueEngineProps) {
+  const safeInitialMode: "support" | "booking" | "sales" =
+    currentMode === "support" || currentMode === "sales" ? currentMode : "booking";
+  const [aiMode, setAiMode] = useState<"support" | "booking" | "sales">(safeInitialMode);
   const [loading, setLoading] = useState(false);
   const [moneyModeConfig, setMoneyModeConfig] = useState<MoneyModeConfig>({
     enabled: aiMode === "sales",
@@ -129,6 +146,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   });
   const [configLoading, setConfigLoading] = useState(false);
   const [configDirty, setConfigDirty] = useState(false);
+  const [mixedConfig, setMixedConfig] = useState(false);
   const [conversionStats, setConversionStats] = useState<ConversionStats>({
     bookings: 0,
     leads: 0,
@@ -136,104 +154,243 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     totalRevenue: 0,
     currency: "USD",
   });
+  const [conversionData, setConversionData] = useState<TrendPoint[]>([]);
+  const [funnelData, setFunnelData] = useState<FunnelPoint[]>([]);
+  const [meoAlerts, setMeoAlerts] = useState<MEOAlert[]>([]);
+  const [liveConversations, setLiveConversations] = useState<LiveConversation[]>([]);
 
-  const loadConversionStats = useCallback(async () => {
-    try {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const { data, error } = await supabase
-        .from("conversion_events")
-        .select("event_type, revenue_value, currency")
-        .eq("receptionist_id", receptionistId)
-        .gte("created_at", thirtyDaysAgo.toISOString());
-
-      if (error) throw error;
-
-      setConversionStats({
-        bookings: data?.filter((e) => e.event_type === "booking_completed").length || 0,
-        leads: data?.filter((e) => e.event_type === "lead_captured").length || 0,
-        orders: data?.filter((e) => e.event_type === "order_completed").length || 0,
-        totalRevenue: data?.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0) || 0,
-        currency: data?.[0]?.currency || "USD",
-      });
-    } catch (error) {
-      console.error("Error loading conversion stats:", error);
+  const loadLiveFeeds = useCallback(async () => {
+    if (!receptionistIds.length) {
+      setConversionData([]);
+      setFunnelData([]);
+      setMeoAlerts([]);
+      setLiveConversations([]);
+      return;
     }
-  }, [receptionistId]);
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    try {
+      const [{ data: events, error: eventsError }, { data: conversations, error: convoError }] = await Promise.all([
+        supabase
+          .from("conversion_events")
+          .select("event_type, revenue_value, currency, created_at, receptionist_id, metadata, session_id")
+          .in("receptionist_id", receptionistIds)
+          .gte("created_at", thirtyDaysAgo.toISOString()),
+        supabase
+          .from("conversations")
+          .select("id, created_at, user_message, receptionist_id, metadata")
+          .in("receptionist_id", receptionistIds)
+          .gte("created_at", sevenDaysAgo.toISOString())
+          .order("created_at", { ascending: false })
+          .limit(100),
+      ]);
+
+      if (eventsError) throw eventsError;
+      if (convoError) throw convoError;
+
+      const eventRows = events || [];
+      const conversationRows = conversations || [];
+
+      const totalRevenue = eventRows.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0);
+      const converted = eventRows.filter((e) => ["booking_completed", "order_completed"].includes(e.event_type)).length;
+      setConversionStats({
+        bookings: eventRows.filter((e) => e.event_type === "booking_completed").length,
+        leads: eventRows.filter((e) => e.event_type === "lead_captured").length,
+        orders: eventRows.filter((e) => e.event_type === "order_completed").length,
+        totalRevenue,
+        currency: eventRows[0]?.currency || "USD",
+      });
+
+      const dayKeys = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - i));
+        return d;
+      });
+
+      const trendRows = dayKeys.map((date) => {
+        const dayStart = new Date(date);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(date);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        const dayEvents = eventRows.filter((e) => {
+          const t = new Date(e.created_at).getTime();
+          return t >= dayStart.getTime() && t <= dayEnd.getTime();
+        });
+
+        const dayConversations = conversationRows.filter((c) => {
+          const t = new Date(c.created_at).getTime();
+          return t >= dayStart.getTime() && t <= dayEnd.getTime();
+        });
+
+        return {
+          day: date.toLocaleDateString(undefined, { weekday: "short" }),
+          revenue: dayEvents.reduce((sum, e) => sum + (Number(e.revenue_value) || 0), 0),
+          conversations: dayConversations.length,
+          bookings: dayEvents.filter((e) => e.event_type === "booking_completed").length,
+        };
+      });
+
+      setConversionData(trendRows);
+
+      const visitors = conversationRows.length;
+      const engaged = eventRows.filter((e) => e.event_type === "lead_captured").length;
+      const intent = eventRows.filter((e) => ["booking_started", "order_started"].includes(e.event_type)).length;
+      const pct = (value: number) => (visitors > 0 ? Math.round((value / visitors) * 100) : 0);
+
+      setFunnelData([
+        { stage: "Visitors", value: visitors, pct: 100 },
+        { stage: "Engaged", value: engaged, pct: pct(engaged) },
+        { stage: "Intent", value: intent, pct: pct(intent) },
+        { stage: "Converted", value: converted, pct: pct(converted) },
+      ]);
+
+      const recentConversations = conversationRows.slice(0, 6).map((c) => {
+        const md = (c.metadata as Record<string, unknown> | null) || {};
+        const rawIntent = typeof md.intent_score === "number" ? md.intent_score : 5;
+        const intent = Math.max(1, Math.min(10, Math.round(rawIntent)));
+        return {
+          id: c.id,
+          name: receptionistNames[c.receptionist_id] || "Visitor",
+          intent,
+          status: intent >= 8 ? "HOT" : intent >= 5 ? "WARM" : "COLD",
+          msg: c.user_message,
+          time: getRelativeTimeLabel(c.created_at),
+          mode: typeof md.mode === "string" ? md.mode : "booking",
+        } as LiveConversation;
+      });
+      setLiveConversations(recentConversations);
+
+      const sessionsWithLead = new Set(eventRows.filter((e) => e.event_type === "lead_captured").map((e) => e.session_id));
+      const sessionsConverted = new Set(eventRows.filter((e) => ["booking_completed", "order_completed"].includes(e.event_type)).map((e) => e.session_id));
+      const droppedLeads = Array.from(sessionsWithLead).filter((s) => !sessionsConverted.has(s)).length;
+      const avgConversionValue = converted > 0 ? Math.round(totalRevenue / converted) : 120;
+      const leakageEstimate = droppedLeads * avgConversionValue;
+
+      const afterHoursMissed = conversationRows.filter((c) => {
+        const hour = new Date(c.created_at).getHours();
+        return hour < 8 || hour > 19;
+      }).length;
+
+      setMeoAlerts([
+        {
+          id: "dropped-leads",
+          type: "lost",
+          msg: `${droppedLeads} lead sessions exited before conversion in selected scope`,
+          amount: `£${Math.max(0, leakageEstimate).toLocaleString()}`,
+          time: "7d window",
+        },
+        {
+          id: "suggestion",
+          type: "suggest",
+          msg: "Enable proactive deposit nudges in high-intent chats to improve close rate",
+          amount: `+£${Math.round(Math.max(0, leakageEstimate) * 0.2).toLocaleString()}/wk`,
+          time: "AI tip",
+        },
+        {
+          id: "after-hours",
+          type: "lost",
+          msg: `${afterHoursMissed} after-hours conversations detected in this scope`,
+          amount: `£${Math.round(afterHoursMissed * (avgConversionValue * 0.5)).toLocaleString()}`,
+          time: "last 7d",
+        },
+      ]);
+    } catch (error) {
+      console.error("Error loading live revenue feeds:", error);
+    }
+  }, [receptionistIds, receptionistNames]);
 
   const loadMoneyModeConfig = useCallback(async () => {
+    if (!receptionistIds.length) return;
+
     setConfigLoading(true);
     try {
       const { data, error } = await supabase
         .from("receptionists")
         .select("ai_mode, capabilities")
-        .eq("id", receptionistId)
-        .maybeSingle();
+        .in("id", receptionistIds);
       if (error) throw error;
 
-      const capabilities = (data?.capabilities as Record<string, unknown> | null) || {};
-      const enabled =
-        typeof capabilities.money_mode_enabled === "boolean"
-          ? capabilities.money_mode_enabled
-          : data?.ai_mode === "sales";
-      const threshold =
-        typeof capabilities.money_mode_threshold === "number"
-          ? Math.max(1, Math.min(10, capabilities.money_mode_threshold))
-          : 7;
+      const configs = (data || []).map((row) => {
+        const capabilities = (row.capabilities as Record<string, unknown> | null) || {};
+        const enabled = typeof capabilities.money_mode_enabled === "boolean" ? capabilities.money_mode_enabled : row.ai_mode === "sales";
+        const threshold = typeof capabilities.money_mode_threshold === "number" ? Math.max(1, Math.min(10, capabilities.money_mode_threshold)) : 7;
+        return { enabled, threshold, ai_mode: row.ai_mode };
+      });
 
+      const first = configs[0];
+      if (!first) return;
+
+      setMixedConfig(configs.some((c) => c.enabled !== first.enabled || c.threshold !== first.threshold));
       setMoneyModeConfig({
-        enabled,
-        threshold,
+        enabled: first.enabled,
+        threshold: first.threshold,
         lastSavedAt: null,
       });
+      setAiMode((first.ai_mode || "booking") as "support" | "booking" | "sales");
       setConfigDirty(false);
     } catch (error) {
       console.error("Error loading money mode config:", error);
     } finally {
       setConfigLoading(false);
     }
-  }, [receptionistId]);
+  }, [receptionistIds]);
 
   useEffect(() => {
-    loadConversionStats();
-  }, [loadConversionStats]);
+    loadLiveFeeds();
+    const id = window.setInterval(loadLiveFeeds, 30000);
+    return () => window.clearInterval(id);
+  }, [loadLiveFeeds]);
 
   useEffect(() => {
     loadMoneyModeConfig();
   }, [loadMoneyModeConfig]);
 
   useEffect(() => {
+    if (currentMode === "support" || currentMode === "booking" || currentMode === "sales") {
+      setAiMode(currentMode);
+    }
+  }, [currentMode]);
+
+  useEffect(() => {
     setMoneyModeConfig((prev) => ({ ...prev, enabled: aiMode === "sales" }));
   }, [aiMode]);
 
   const saveMoneyModeConfig = async () => {
+    if (!receptionistIds.length) return;
+
     setConfigLoading(true);
     try {
       const { data, error: readErr } = await supabase
         .from("receptionists")
-        .select("capabilities")
-        .eq("id", receptionistId)
-        .maybeSingle();
+        .select("id, capabilities")
+        .in("id", receptionistIds);
       if (readErr) throw readErr;
 
-      const capabilities = (data?.capabilities as Record<string, unknown> | null) || {};
-      const updatedCapabilities = {
-        ...capabilities,
-        money_mode_enabled: moneyModeConfig.enabled,
-        money_mode_threshold: moneyModeConfig.threshold,
-      };
+      for (const row of data || []) {
+        const capabilities = (row.capabilities as Record<string, unknown> | null) || {};
+        const updatedCapabilities = {
+          ...capabilities,
+          money_mode_enabled: moneyModeConfig.enabled,
+          money_mode_threshold: moneyModeConfig.threshold,
+        };
 
-      const { error: writeErr } = await supabase
-        .from("receptionists")
-        .update({ capabilities: updatedCapabilities })
-        .eq("id", receptionistId);
-      if (writeErr) throw writeErr;
+        const { error: writeErr } = await supabase
+          .from("receptionists")
+          .update({ capabilities: updatedCapabilities })
+          .eq("id", row.id);
+        if (writeErr) throw writeErr;
+      }
 
       const stamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       setMoneyModeConfig((prev) => ({ ...prev, lastSavedAt: stamp }));
+      setMixedConfig(false);
       setConfigDirty(false);
-      toast.success("Money Mode settings saved");
+      toast.success(`Money Mode settings saved for ${scopeLabel}`);
     } catch (error) {
       console.error("Error saving money mode config:", error);
       toast.error("Failed to save Money Mode settings");
@@ -243,18 +400,20 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   };
 
   const handleModeChange = async (newMode: "support" | "booking" | "sales") => {
+    if (!receptionistIds.length) return;
+
     setLoading(true);
     try {
       const { error } = await supabase
         .from("receptionists")
         .update({ ai_mode: newMode })
-        .eq("id", receptionistId);
+        .in("id", receptionistIds);
 
       if (error) throw error;
 
       setAiMode(newMode);
       onModeChange?.(newMode);
-      toast.success(`Switched to ${newMode === "sales" ? "Money Mode" : `${newMode} mode`}`);
+      toast.success(`Switched ${scopeLabel} to ${newMode === "sales" ? "Money Mode" : `${newMode} mode`}`);
     } catch (error) {
       console.error("Error updating AI mode:", error);
       toast.error("Failed to update AI mode");
@@ -263,8 +422,13 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
     }
   };
 
-  const weekRevenue = useMemo(() => conversionData.reduce((sum, d) => sum + d.revenue, 0), []);
-  const leakedRevenue = 2720;
+  const weekRevenue = useMemo(() => conversionData.reduce((sum, d) => sum + d.revenue, 0), [conversionData]);
+  const leakedRevenue = useMemo(
+    () => meoAlerts
+      .filter((a) => a.type === "lost")
+      .reduce((sum, a) => sum + Number(a.amount.replace(/[^0-9.-]/g, "") || 0), 0),
+    [meoAlerts],
+  );
   const fmtCurrency = (amount: number, cur: string) => formatCurrency(amount, cur);
 
   return (
@@ -284,7 +448,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
           </div>
         </CardTitle>
         <CardDescription>
-          Money mode controls + MEO analytics + live conversion intelligence
+          Scoped to: <span className="font-semibold">{scopeLabel}</span> • live interval conversion intelligence
         </CardDescription>
       </CardHeader>
 
@@ -299,15 +463,15 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
 
           <TabsContent value="dashboard" className="space-y-4">
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <StatTile icon={<TrendingUp className="h-4 w-4" />} label="Revenue This Week" value={`£${weekRevenue.toLocaleString()}`} sub="↑ 23% vs last week" />
-              <StatTile icon={<Target className="h-4 w-4" />} label="Conversions" value={`${conversionStats.bookings + conversionStats.orders}`} sub="Money mode assisted" />
+              <StatTile icon={<TrendingUp className="h-4 w-4" />} label="Revenue This Week" value={`£${weekRevenue.toLocaleString()}`} sub="Live rolling 7-day total" />
+              <StatTile icon={<Target className="h-4 w-4" />} label="Conversions" value={`${conversionStats.bookings + conversionStats.orders}`} sub="Scoped conversion events" />
               <StatTile icon={<Users className="h-4 w-4" />} label="Conversations" value={`${conversionData.reduce((s, d) => s + d.conversations, 0)}`} />
               <StatTile icon={<Sparkles className="h-4 w-4" />} label="AI Revenue (30d)" value={fmtCurrency(conversionStats.totalRevenue, conversionStats.currency)} />
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600">LIVE: 30d revenue + conversion counts</Badge>
-              <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600">DEMO: weekly trend + funnel + live feed</Badge>
+              <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600">LIVE: updates every 30s</Badge>
+              <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600">Scope: {scopeLabel}</Badge>
             </div>
 
             <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
@@ -379,6 +543,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
                 <div>
                   <div className="text-sm font-semibold">Money Mode activation</div>
                   <div className="text-xs text-muted-foreground">Auto-switch to sales mode by intent score</div>
+                  {mixedConfig ? <div className="mt-1 text-xs text-amber-600">Selected receptionists currently have mixed settings.</div> : null}
                 </div>
                 <div className="flex items-center gap-2">
                   <Label htmlFor="money-mode-switch" className="text-xs">Enabled</Label>
@@ -445,7 +610,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-500">Revenue leaked this week</div>
               <div className="font-mono text-4xl font-bold text-red-500">£{leakedRevenue.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">Across missed leads, abandoned flows and lost upsells.</div>
+              <div className="text-xs text-muted-foreground">Across missed leads, abandoned flows and lost upsells in selected scope.</div>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -492,9 +657,9 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
             <div className="rounded-xl border bg-card p-4 text-sm">
               <div className="mb-3 flex items-center gap-2 font-semibold"><AlertTriangle className="h-4 w-4 text-amber-500" /> UI / UX production audit</div>
               <div className="space-y-2 text-xs text-muted-foreground">
-                <div className="rounded-md border bg-muted/30 p-2"><strong className="text-foreground">Critical:</strong> Money mode is currently manual-first. Intent-threshold persistence is still pending backend wiring.</div>
-                <div className="rounded-md border bg-muted/30 p-2"><strong className="text-foreground">Required:</strong> Add server-derived MEO metrics (revenue leak by reason) in place of placeholder data.</div>
-                <div className="rounded-md border bg-muted/30 p-2"><strong className="text-foreground">Done:</strong> Mode switching + conversion attribution + revenue chart surface are now in one operator panel.</div>
+                <div className="rounded-md border bg-muted/30 p-2"><strong className="text-foreground">Live:</strong> All dashboard cards are fed by interval-based scoped data.</div>
+                <div className="rounded-md border bg-muted/30 p-2"><strong className="text-foreground">Scoped:</strong> Selector applies to Money Mode, MEO, and dashboard feeds consistently.</div>
+                <div className="rounded-md border bg-muted/30 p-2"><strong className="text-foreground">Next:</strong> Move leakage heuristics into server-generated MEO insight records.</div>
               </div>
             </div>
           </TabsContent>
