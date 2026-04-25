@@ -1361,6 +1361,10 @@ export type Database = {
           location_id: string | null
           mock_mode: boolean | null
           model: string | null
+          money_mode_enabled: boolean
+          money_mode_hold_until: string | null
+          money_mode_hysteresis: number
+          money_mode_threshold: number
           name: string
           organization_id: string | null
           persona_description: string | null
@@ -1400,6 +1404,10 @@ export type Database = {
           location_id?: string | null
           mock_mode?: boolean | null
           model?: string | null
+          money_mode_enabled?: boolean
+          money_mode_hold_until?: string | null
+          money_mode_hysteresis?: number
+          money_mode_threshold?: number
           name: string
           organization_id?: string | null
           persona_description?: string | null
@@ -1439,6 +1447,10 @@ export type Database = {
           location_id?: string | null
           mock_mode?: boolean | null
           model?: string | null
+          money_mode_enabled?: boolean
+          money_mode_hold_until?: string | null
+          money_mode_hysteresis?: number
+          money_mode_threshold?: number
           name?: string
           organization_id?: string | null
           persona_description?: string | null
