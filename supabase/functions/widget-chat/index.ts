@@ -411,6 +411,151 @@ interface MessageAnalysis {
   detectedIntent: string;
 }
 
+interface IntentReadinessResult {
+  score: number;
+  crossedEnterThreshold: boolean;
+  crossedExitThreshold: boolean;
+  holdActive: boolean;
+  holdUntil: string | null;
+  modeBefore: "booking" | "sales";
+  effectiveMode: "booking" | "sales";
+  reason: string;
+}
+
+const MONEY_MODE_ENTER_THRESHOLD = 7;
+const MONEY_MODE_EXIT_THRESHOLD = 5;
+const MONEY_MODE_HOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+function computeIntentReadinessScore(
+  message: string,
+  messageAnalysis: MessageAnalysis,
+  context: ConversationContext,
+  engineResult: EngineResult,
+): number {
+  let score = 0;
+  const lower = message.toLowerCase();
+
+  const highIntent =
+    messageAnalysis.detectedIntent === "book_appointment" ||
+    messageAnalysis.detectedIntent === "order_product";
+  if (highIntent) score += 4;
+
+  if ((engineResult.intent?.confidence || 0) >= 0.8) score += 2;
+  else if ((engineResult.intent?.confidence || 0) >= 0.6) score += 1;
+
+  if (engineResult.requirements?.ready) score += 2;
+  if ((engineResult.requirements?.missing || []).length <= 1) score += 1;
+
+  const containsActionLanguage = /book|schedule|appointment|reserve|buy|order|purchase|checkout|pay|price|available|slot|time|today|tomorrow/i.test(lower);
+  if (containsActionLanguage) score += 1;
+
+  const hasKnownContext = !!(
+    context.serviceMentioned ||
+    context.productMentioned ||
+    context.dateMentioned ||
+    context.timeMentioned
+  );
+  if (hasKnownContext) score += 1;
+
+  if (messageAnalysis.hasUncertainty) score -= 1;
+  if (messageAnalysis.detectedIntent === "complaint" || messageAnalysis.detectedIntent === "escalation_request") score -= 2;
+  if (messageAnalysis.detectedIntent === "small_talk" || messageAnalysis.detectedIntent === "greeting") score -= 1;
+
+  return Math.max(0, Math.min(10, score));
+}
+
+function resolveEffectiveMode(
+  configuredAiMode: string,
+  intentReadinessScore: number,
+  previousEffectiveMode: string | null | undefined,
+  previousHoldUntil: string | null | undefined,
+  now: Date = new Date(),
+): IntentReadinessResult {
+  if (configuredAiMode === "sales") {
+    const holdUntilDate = previousHoldUntil ? new Date(previousHoldUntil) : null;
+    const holdActive = !!(holdUntilDate && !Number.isNaN(holdUntilDate.getTime()) && holdUntilDate.getTime() > now.getTime());
+    return {
+      score: intentReadinessScore,
+      crossedEnterThreshold: false,
+      crossedExitThreshold: false,
+      holdActive,
+      holdUntil: holdUntilDate && !Number.isNaN(holdUntilDate.getTime()) ? holdUntilDate.toISOString() : null,
+      modeBefore: "sales",
+      effectiveMode: "sales",
+      reason: "configured_sales_mode",
+    };
+  }
+
+  const modeBefore: "booking" | "sales" = previousEffectiveMode === "sales" ? "sales" : ((configuredAiMode === "sales" ? "sales" : "booking") as "booking" | "sales");
+  const holdUntilDate = previousHoldUntil ? new Date(previousHoldUntil) : null;
+  const holdActive = !!(holdUntilDate && !Number.isNaN(holdUntilDate.getTime()) && holdUntilDate.getTime() > now.getTime());
+
+  if (modeBefore === "booking") {
+    if (intentReadinessScore >= MONEY_MODE_ENTER_THRESHOLD) {
+      const newHoldUntil = new Date(now.getTime() + MONEY_MODE_HOLD_MS).toISOString();
+      return {
+        score: intentReadinessScore,
+        crossedEnterThreshold: true,
+        crossedExitThreshold: false,
+        holdActive: true,
+        holdUntil: newHoldUntil,
+        modeBefore,
+        effectiveMode: "sales",
+        reason: `score>=${MONEY_MODE_ENTER_THRESHOLD}_enter_sales`,
+      };
+    }
+
+    return {
+      score: intentReadinessScore,
+      crossedEnterThreshold: false,
+      crossedExitThreshold: false,
+      holdActive: false,
+      holdUntil: null,
+      modeBefore,
+      effectiveMode: "booking",
+      reason: "below_enter_threshold",
+    };
+  }
+
+  // modeBefore === "sales"
+  if (holdActive) {
+    return {
+      score: intentReadinessScore,
+      crossedEnterThreshold: false,
+      crossedExitThreshold: false,
+      holdActive: true,
+      holdUntil: holdUntilDate!.toISOString(),
+      modeBefore,
+      effectiveMode: "sales",
+      reason: "hold_active_stay_sales",
+    };
+  }
+
+  if (intentReadinessScore <= MONEY_MODE_EXIT_THRESHOLD) {
+    return {
+      score: intentReadinessScore,
+      crossedEnterThreshold: false,
+      crossedExitThreshold: true,
+      holdActive: false,
+      holdUntil: null,
+      modeBefore,
+      effectiveMode: "booking",
+      reason: `score<=${MONEY_MODE_EXIT_THRESHOLD}_exit_sales`,
+    };
+  }
+
+  return {
+    score: intentReadinessScore,
+    crossedEnterThreshold: false,
+    crossedExitThreshold: false,
+    holdActive: false,
+    holdUntil: null,
+    modeBefore,
+    effectiveMode: "sales",
+    reason: "hysteresis_keep_sales",
+  };
+}
+
 function analyzeMessage(message: string, historyLength: number): MessageAnalysis {
   const lowerMsg = message.toLowerCase().trim();
   const isAcknowledgment = ACKNOWLEDGMENTS.some(ack => lowerMsg === ack || lowerMsg === ack + '.' || lowerMsg === ack + '!');
@@ -1729,9 +1874,36 @@ if (!GEMINI_API_KEY) {
 
     //                                                                        
     // GET AI MODE FOR BEHAVIOR SWITCHING
+    // Use effective_mode with per-turn intent-readiness + hysteresis
     //                                                                        
-    const aiMode = receptionist.ai_mode || 'booking';
-    console.log(`[Widget Chat] AI Mode: ${aiMode}`);
+    const configuredAiMode = receptionist.ai_mode || 'booking';
+    const previousEffectiveMode = (conversationState.slots?.effective_mode as string | undefined) || configuredAiMode;
+    const previousHoldUntil = (conversationState.slots?.money_mode_hold_until as string | undefined) || null;
+    const intentReadinessScore = computeIntentReadinessScore(
+      message,
+      messageAnalysis,
+      conversationContext,
+      engineResult
+    );
+    const modeDecision = resolveEffectiveMode(
+      configuredAiMode,
+      intentReadinessScore,
+      previousEffectiveMode,
+      previousHoldUntil,
+      new Date()
+    );
+    const effectiveMode = modeDecision.effectiveMode;
+
+    conversationState.slots = {
+      ...conversationState.slots,
+      effective_mode: effectiveMode,
+      money_mode_hold_until: modeDecision.holdUntil,
+      intent_readiness_score: intentReadinessScore,
+    };
+
+    console.log(
+      `[Widget Chat] Mode configured=${configuredAiMode}, effective=${effectiveMode}, score=${intentReadinessScore}, holdUntil=${modeDecision.holdUntil || 'none'}, reason=${modeDecision.reason}`
+    );
 
     //                                                                        
     // CONVERSATION STATE MACHINE: LOAD AND PROCESS STATE
@@ -1941,7 +2113,7 @@ if (!GEMINI_API_KEY) {
       messageAnalysis,
       isFirstMessage,
       rollingSummary,
-      aiMode,
+      effectiveMode,
       capabilityPrompt,
       actionGateBlock,
       stateMachineBlock,
@@ -2091,7 +2263,9 @@ return {
         timestamp: new Date().toISOString(),
         intent: messageAnalysis.detectedIntent,
         is_acknowledgment: messageAnalysis.isAcknowledgment,
-        is_correction: messageAnalysis.isCorrection
+        is_correction: messageAnalysis.isCorrection,
+        effective_mode: effectiveMode,
+        intent_readiness_score: intentReadinessScore,
       }
     });
     
@@ -2110,6 +2284,9 @@ return {
         timestamp: new Date().toISOString(), 
         latency_ms: latencyMs,
         quality_metrics: qualityRubric,
+        effective_mode: effectiveMode,
+        intent_readiness_score: intentReadinessScore,
+        money_mode_hold_until: modeDecision.holdUntil,
         context_used: {
           service: conversationContext.serviceMentioned,
           date: conversationContext.dateMentioned,
@@ -2148,6 +2325,10 @@ return {
           reason: escalationCheck.reason,
           type: escalationCheck.escalationType
         } : { triggered: false },
+        effective_mode: effectiveMode,
+        configured_ai_mode: configuredAiMode,
+        intent_readiness_score: intentReadinessScore,
+        money_mode_hold_until: modeDecision.holdUntil,
         intent: messageAnalysis.detectedIntent,
         emotional_state: conversationContext.emotionalState,
         conversation_phase: conversationContext.conversationPhase
@@ -2515,7 +2696,9 @@ return {
           booking_id: bookingResult.id,
           service: conversationContext.serviceMentioned,
           customer_name: conversationContext.customerName,
-          ai_mode: aiMode,
+          effective_mode: effectiveMode,
+          configured_ai_mode: configuredAiMode,
+          intent_readiness_score: intentReadinessScore,
           estimated_value: estimatedRevenue
         }
       });
@@ -2541,7 +2724,9 @@ return {
           order_id: orderResult.id,
           customer_name: conversationContext.customerName,
           item_count: conversationContext.selectedProducts?.length || 1,
-          ai_mode: aiMode,
+          effective_mode: effectiveMode,
+          configured_ai_mode: configuredAiMode,
+          intent_readiness_score: intentReadinessScore,
           order_total: orderRevenue
         }
       });
@@ -2553,7 +2738,7 @@ return {
                           conversationContext.customerName &&
                           !conversationContext.bookingConfirmed && 
                           !conversationContext.orderConfirmed;
-    if (hasNewContact && aiMode === 'sales') {
+    if (hasNewContact && effectiveMode === 'sales') {
       await supabase.from('conversion_events').insert({
         receptionist_id: receptionistId,
         session_id: sessionId,
@@ -2564,7 +2749,9 @@ return {
           customer_name: conversationContext.customerName,
           has_email: !!conversationContext.customerEmail,
           has_phone: !!conversationContext.customerPhone,
-          ai_mode: aiMode
+          effective_mode: effectiveMode,
+          configured_ai_mode: configuredAiMode,
+          intent_readiness_score: intentReadinessScore
         }
       });
       console.log(`[Conversion] Logged lead_captured event`);
@@ -2659,6 +2846,9 @@ return {
         hasOrderIntent,
         receptionistName: receptionist.name,
         businessName: receptionist.business_name,
+        effectiveMode,
+        intentReadinessScore,
+        moneyModeHoldUntil: modeDecision.holdUntil,
         qualityScore: qualityRubric.overall_score,
         bookingCreated: bookingResult ? true : false,
         bookingId: bookingResult?.id || null,
