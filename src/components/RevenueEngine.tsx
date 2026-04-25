@@ -17,7 +17,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   DollarSign,
   TrendingUp,
@@ -61,6 +60,8 @@ const conversionData = [
   { day: "Sun", revenue: 1440, conversations: 31, bookings: 10 },
 ];
 
+const intervalOptions = ["5m", "15m", "1h", "24h", "7d", "1mo"] as const;
+
 const funnelData = [
   { stage: "Visitors", value: 1240, pct: 100 },
   { stage: "Engaged", value: 744, pct: 60 },
@@ -78,6 +79,27 @@ const liveConversations = [
   { id: 1, name: "Sarah M.", intent: 9, status: "HOT", msg: "I'd like to book for next Tuesday", time: "now", mode: "money" },
   { id: 2, name: "James O.", intent: 6, status: "WARM", msg: "What are your prices for whitening?", time: "2m", mode: "booking" },
   { id: 3, name: "Aisha K.", intent: 3, status: "COLD", msg: "Just browsing for now", time: "5m", mode: "support" },
+];
+
+const actionQueue = [
+  {
+    id: "switch-sales",
+    title: "Switch to Sales / Money mode",
+    detail: "High-intent traffic is rising in the current queue.",
+    action: "Activate",
+  },
+  {
+    id: "tighten-threshold",
+    title: "Raise intent threshold to 8",
+    detail: "Reduce low-quality handoffs and keep focus on closers.",
+    action: "Apply",
+  },
+  {
+    id: "review-conversations",
+    title: "Review top missed opportunities",
+    detail: "Inspect recent drop-offs in active conversations.",
+    action: "Open",
+  },
 ];
 
 const statusClass: Record<string, string> = {
@@ -129,6 +151,7 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   });
   const [configLoading, setConfigLoading] = useState(false);
   const [configDirty, setConfigDirty] = useState(false);
+  const [selectedInterval, setSelectedInterval] = useState<(typeof intervalOptions)[number]>("24h");
   const [conversionStats, setConversionStats] = useState<ConversionStats>({
     bookings: 0,
     leads: 0,
@@ -264,6 +287,11 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
   };
 
   const weekRevenue = useMemo(() => conversionData.reduce((sum, d) => sum + d.revenue, 0), []);
+  const effectiveMode = moneyModeConfig.enabled ? "sales" : aiMode;
+  const holdTimer = moneyModeConfig.enabled ? "00:04:12" : "00:00:00";
+  const switchReason = moneyModeConfig.enabled
+    ? `Intent score crossed threshold ${moneyModeConfig.threshold}`
+    : "No active trigger";
   const leakedRevenue = 2720;
   const fmtCurrency = (amount: number, cur: string) => formatCurrency(amount, cur);
 
@@ -289,15 +317,24 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
       </CardHeader>
 
       <CardContent className="pt-6">
-        <Tabs defaultValue="dashboard" className="space-y-5">
-          <TabsList className="grid grid-cols-4 w-full">
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="moneymode">Money Mode</TabsTrigger>
-            <TabsTrigger value="meo">MEO</TabsTrigger>
-            <TabsTrigger value="audit">Audit</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="dashboard" className="space-y-4">
+        <div className="space-y-6">
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-base font-semibold">Overview</h3>
+              <div className="flex flex-wrap gap-2">
+                {intervalOptions.map((interval) => (
+                  <Button
+                    key={interval}
+                    variant={selectedInterval === interval ? "default" : "outline"}
+                    size="sm"
+                    className="h-8 rounded-full px-3 text-xs"
+                    onClick={() => setSelectedInterval(interval)}
+                  >
+                    {interval}
+                  </Button>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               <StatTile icon={<TrendingUp className="h-4 w-4" />} label="Revenue This Week" value={`£${weekRevenue.toLocaleString()}`} sub="↑ 23% vs last week" />
               <StatTile icon={<Target className="h-4 w-4" />} label="Conversions" value={`${conversionStats.bookings + conversionStats.orders}`} sub="Money mode assisted" />
@@ -305,75 +342,74 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
               <StatTile icon={<Sparkles className="h-4 w-4" />} label="AI Revenue (30d)" value={fmtCurrency(conversionStats.totalRevenue, conversionStats.currency)} />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600">LIVE: 30d revenue + conversion counts</Badge>
-              <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600">DEMO: weekly trend + funnel + live feed</Badge>
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
-              <div className="rounded-xl border bg-card p-4">
-                <div className="mb-3 text-sm font-semibold">Revenue trend</div>
-                <ResponsiveContainer width="100%" height={180}>
-                  <AreaChart data={conversionData}>
-                    <defs>
-                      <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="day" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="url(#revGrad)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="rounded-xl border bg-card p-4">
-                <div className="mb-3 text-sm font-semibold">Conversion funnel</div>
-                <div className="space-y-3">
-                  {funnelData.map((item) => (
-                    <div key={item.stage}>
-                      <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">{item.stage}</span>
-                        <span className="font-semibold">{item.value} · {item.pct}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-muted">
-                        <div className="h-2 rounded-full bg-primary/70" style={{ width: `${item.pct}%` }} />
-                      </div>
-                    </div>
-                  ))}
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-lg border bg-emerald-500/5 p-3">
+                <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+                  <Badge variant="outline" className="border-emerald-500/30 text-emerald-600">LIVE</Badge>
+                  Base mode
                 </div>
+                <div className="text-sm font-semibold capitalize">{aiMode}</div>
+              </div>
+              <div className="rounded-lg border bg-emerald-500/5 p-3">
+                <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+                  <Badge variant="outline" className="border-emerald-500/30 text-emerald-600">LIVE</Badge>
+                  Effective mode
+                </div>
+                <div className="text-sm font-semibold capitalize">{effectiveMode}</div>
+              </div>
+              <div className="rounded-lg border bg-primary/5 p-3">
+                <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                  <Badge variant="outline" className="border-primary/30 text-primary">DERIVED</Badge>
+                  Hold timer
+                </div>
+                <div className="text-sm font-semibold">{holdTimer}</div>
+              </div>
+              <div className="rounded-lg border bg-primary/5 p-3">
+                <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                  <Badge variant="outline" className="border-primary/30 text-primary">DERIVED</Badge>
+                  Why switched
+                </div>
+                <div className="text-sm">{switchReason}</div>
               </div>
             </div>
+          </section>
 
+          <section className="space-y-3">
+            <h3 className="text-base font-semibold">Actions</h3>
             <div className="rounded-xl border bg-card p-4">
               <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-semibold">Live conversations</div>
-                <Badge variant="outline">{liveConversations.length} active</Badge>
+                <div className="text-sm font-semibold">Top 3 action queue</div>
+                <Badge variant="outline">Priority sorted</Badge>
               </div>
               <div className="space-y-2">
-                {liveConversations.map((c) => (
-                  <div key={c.id} className="rounded-lg border bg-muted/30 p-3">
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <div className="truncate text-sm font-semibold">{c.name}</div>
-                      <Badge className={statusClass[c.status] || statusClass.COLD}>{c.status}</Badge>
+                {actionQueue.map((item) => (
+                  <div key={item.id} className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold">{item.title}</div>
+                      <div className="text-xs text-muted-foreground">{item.detail}</div>
                     </div>
-                    <div className="mb-2 truncate text-xs text-muted-foreground">{c.msg}</div>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="h-2 w-full rounded-full bg-muted">
-                        <div className="h-2 rounded-full bg-amber-500" style={{ width: `${c.intent * 10}%` }} />
-                      </div>
-                      <div className="w-10 text-right text-xs font-semibold">{c.intent}/10</div>
-                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (item.id === "switch-sales") handleModeChange("sales");
+                        if (item.id === "tighten-threshold") {
+                          setMoneyModeConfig((prev) => ({ ...prev, threshold: 8 }));
+                          setConfigDirty(true);
+                          toast.success("Threshold updated to 8");
+                        }
+                        if (item.id === "review-conversations") window.location.href = "/conversations";
+                      }}
+                    >
+                      {item.action}
+                    </Button>
                   </div>
                 ))}
               </div>
             </div>
-          </TabsContent>
+          </section>
 
-          <TabsContent value="moneymode" className="space-y-4">
+          <section className="space-y-4">
+            <h3 className="text-base font-semibold">Details</h3>
             <div className="rounded-xl border bg-card p-4">
               <div className="mb-4 flex items-center justify-between">
                 <div>
@@ -439,9 +475,6 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
                 <li>• If hesitation appears repeatedly, introduce urgency.</li>
               </ul>
             </div>
-          </TabsContent>
-
-          <TabsContent value="meo" className="space-y-4">
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-500">Revenue leaked this week</div>
               <div className="font-mono text-4xl font-bold text-red-500">£{leakedRevenue.toLocaleString()}</div>
@@ -486,9 +519,6 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </TabsContent>
-
-          <TabsContent value="audit" className="space-y-3">
             <div className="rounded-xl border bg-card p-4 text-sm">
               <div className="mb-3 flex items-center gap-2 font-semibold"><AlertTriangle className="h-4 w-4 text-amber-500" /> UI / UX production audit</div>
               <div className="space-y-2 text-xs text-muted-foreground">
@@ -497,8 +527,8 @@ export function RevenueEngine({ receptionistId, currentMode = "booking", onModeC
                 <div className="rounded-md border bg-muted/30 p-2"><strong className="text-foreground">Done:</strong> Mode switching + conversion attribution + revenue chart surface are now in one operator panel.</div>
               </div>
             </div>
-          </TabsContent>
-        </Tabs>
+          </section>
+        </div>
       </CardContent>
     </Card>
   );
