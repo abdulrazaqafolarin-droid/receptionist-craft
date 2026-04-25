@@ -36,6 +36,8 @@ SET
   money_mode_enabled = CASE
     WHEN jsonb_typeof(capabilities->'money_mode_enabled') = 'boolean'
       THEN (capabilities->>'money_mode_enabled')::boolean
+    WHEN NOT COALESCE(capabilities ? 'money_mode_enabled', false) AND ai_mode = 'sales'
+      THEN true
     ELSE money_mode_enabled
   END,
   money_mode_threshold = CASE
