@@ -376,7 +376,7 @@ AS $$
     AND rim.bucket_start >= p_start
     AND rim.bucket_start < p_end
     AND (p_receptionist_id IS NULL OR rim.receptionist_id = p_receptionist_id)
-    AND r.user_id = p_user_id
+    AND r.user_id = COALESCE(auth.uid(), p_user_id)
   ORDER BY rim.bucket_start ASC;
 $$;
 
