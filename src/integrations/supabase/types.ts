@@ -1348,6 +1348,14 @@ export type Database = {
           business_phone: string | null
           business_type: string | null
           capabilities: Json | null
+          money_mode_enabled: boolean | null
+          money_mode_auto_activation_enabled: boolean | null
+          money_mode_threshold: number | null
+          money_mode_hysteresis_band: number | null
+          money_mode_hold_turns: number | null
+          automation_workflows: Json | null
+          kpi_gate_min_conversion_rate: number | null
+          kpi_gate_min_revenue: number | null
           created_at: string
           currency: string
           customer_fields: Json | null
@@ -1387,6 +1395,14 @@ export type Database = {
           business_phone?: string | null
           business_type?: string | null
           capabilities?: Json | null
+          money_mode_enabled?: boolean | null
+          money_mode_auto_activation_enabled?: boolean | null
+          money_mode_threshold?: number | null
+          money_mode_hysteresis_band?: number | null
+          money_mode_hold_turns?: number | null
+          automation_workflows?: Json | null
+          kpi_gate_min_conversion_rate?: number | null
+          kpi_gate_min_revenue?: number | null
           created_at?: string
           currency?: string
           customer_fields?: Json | null
@@ -1426,6 +1442,14 @@ export type Database = {
           business_phone?: string | null
           business_type?: string | null
           capabilities?: Json | null
+          money_mode_enabled?: boolean | null
+          money_mode_auto_activation_enabled?: boolean | null
+          money_mode_threshold?: number | null
+          money_mode_hysteresis_band?: number | null
+          money_mode_hold_turns?: number | null
+          automation_workflows?: Json | null
+          kpi_gate_min_conversion_rate?: number | null
+          kpi_gate_min_revenue?: number | null
           created_at?: string
           currency?: string
           customer_fields?: Json | null

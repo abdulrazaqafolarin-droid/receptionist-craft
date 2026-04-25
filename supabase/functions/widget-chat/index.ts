@@ -210,6 +210,119 @@ function sanitizeInput(input: string, maxLength: number = 2000): string {
   return input.slice(0, maxLength).replace(/[<>]/g, '').trim();
 }
 
+
+
+interface MoneyModeRuntimeConfig {
+  enabled: boolean;
+  autoActivationEnabled: boolean;
+  threshold: number;
+  hysteresisBand: number;
+  holdTurns: number;
+}
+
+type UISignalIntent =
+  | "browsing"
+  | "service_enquiry"
+  | "product_enquiry"
+  | "booking_intent"
+  | "availability_check"
+  | "order_intent"
+  | "booking_modify"
+  | "pricing_question"
+  | "hours_question"
+  | "location_question"
+  | "complaint_support"
+  | "lead_capture"
+  | "confirmation"
+  | "cancellation"
+  | "escalation"
+  | "unknown";
+
+type UISignalComponent =
+  | "quick_replies"
+  | "service_selector"
+  | "product_selector"
+  | "date_picker"
+  | "time_picker"
+  | "lead_form"
+  | "booking_confirmation"
+  | "order_summary"
+  | "none";
+
+interface UISignal {
+  version: "2026-04-ui-signal-v1";
+  intent: UISignalIntent;
+  activeComponent: UISignalComponent;
+  componentData: Record<string, unknown>;
+  dismissPrevious: boolean;
+  reason: "intent_change" | "step_change" | "completion" | "fallback";
+  confidence: number;
+  flow: {
+    type: "booking" | "ordering" | "support" | "none";
+    step: string | null;
+    canContinue: boolean;
+  };
+}
+
+function mapIntentToUISignalIntent(intent: string): UISignalIntent {
+  switch (intent) {
+    case "book":
+    case "book_explicit":
+      return "booking_intent";
+    case "availability_casual":
+      return "availability_check";
+    case "order":
+      return "order_intent";
+    case "price":
+      return "pricing_question";
+    case "hours":
+      return "hours_question";
+    case "complaint":
+      return "complaint_support";
+    case "escalate":
+      return "escalation";
+    case "confirm":
+      return "confirmation";
+    case "deny":
+    case "cancel":
+      return "cancellation";
+    case "info":
+      return "service_enquiry";
+    case "small_talk":
+    case "greeting":
+    case "farewell":
+      return "browsing";
+    default:
+      return "unknown";
+  }
+}
+
+function resolveMoneyModeRuntimeConfig(receptionist: any): MoneyModeRuntimeConfig {
+  const capabilities = (receptionist?.capabilities || {}) as Record<string, unknown>;
+  return {
+    enabled: typeof receptionist?.money_mode_enabled === 'boolean' ? receptionist.money_mode_enabled : (typeof capabilities.money_mode_enabled === 'boolean' ? capabilities.money_mode_enabled : receptionist?.ai_mode === 'sales'),
+    autoActivationEnabled: typeof receptionist?.money_mode_auto_activation_enabled === 'boolean' ? receptionist.money_mode_auto_activation_enabled : (typeof capabilities.money_mode_auto_activation_enabled === 'boolean' ? capabilities.money_mode_auto_activation_enabled : true),
+    threshold: Math.max(1, Math.min(10, Number(receptionist?.money_mode_threshold ?? capabilities.money_mode_threshold ?? 7))),
+    hysteresisBand: Math.max(0, Math.min(4, Number(receptionist?.money_mode_hysteresis_band ?? capabilities.money_mode_hysteresis_band ?? 1))),
+    holdTurns: Math.max(0, Math.min(10, Number(receptionist?.money_mode_hold_turns ?? capabilities.money_mode_hold_turns ?? 2))),
+  };
+}
+
+function inferIntentScore(message: string, intentConfidence: number | undefined, detectedIntent: string): number {
+  const confidenceScore = Math.round(Math.max(0, Math.min(1, intentConfidence || 0)) * 10);
+  if (confidenceScore > 0) return confidenceScore;
+  const m = message.toLowerCase();
+  if (/(book|schedule|buy|purchase|checkout|price|cost)/.test(m)) return 8;
+  if (detectedIntent === 'book_appointment' || detectedIntent === 'order_product') return 7;
+  if (/(maybe|not sure|later|hold on|let me check)/.test(m)) return 5;
+  return 4;
+}
+
+function hasHesitationSignal(message: string): boolean {
+  const m = message.toLowerCase();
+  return /(hold on|let me check|not sure|give me a sec|maybe later|i'll think about it)/.test(m);
+}
+
 function isTaskConfirming(activeTask: ActiveTask | null, expectedType: "booking" | "order"): boolean {
   if (!activeTask || activeTask.type !== expectedType) return false;
   return activeTask.step === "confirming" || activeTask.confirmation_sent === true;
@@ -1728,10 +1841,46 @@ if (!GEMINI_API_KEY) {
     const capabilityPrompt = buildCapabilityPrompt(capabilities, primaryGoal, universalIntent, intentValidation);
 
     //                                                                        
-    // GET AI MODE FOR BEHAVIOR SWITCHING
+    // GET AI MODE FOR BEHAVIOR SWITCHING + AUTO MONEY MODE HYSTERESIS
     //                                                                        
-    const aiMode = receptionist.ai_mode || 'booking';
-    console.log(`[Widget Chat] AI Mode: ${aiMode}`);
+    const moneyModeConfig = resolveMoneyModeRuntimeConfig(receptionist);
+    const baseAiMode = receptionist.ai_mode || 'booking';
+    const inferredIntentScore = inferIntentScore(message, engineResult?.intent?.confidence, messageAnalysis.detectedIntent);
+    const hesitation = hasHesitationSignal(message) || messageAnalysis.hasUncertainty;
+
+    const prevAutoActive = Boolean(conversationState.slots?.moneyModeAutoActive);
+    const prevHoldTurns = Number(conversationState.slots?.moneyModeHoldTurns || 0);
+    const activationThreshold = moneyModeConfig.threshold;
+    const releaseThreshold = Math.max(1, moneyModeConfig.threshold - moneyModeConfig.hysteresisBand);
+
+    let autoMoneyModeActive = prevAutoActive;
+    let holdTurnsLeft = prevHoldTurns;
+
+    if (moneyModeConfig.enabled && moneyModeConfig.autoActivationEnabled) {
+      const shouldActivate = inferredIntentScore >= activationThreshold || (prevAutoActive && inferredIntentScore >= releaseThreshold);
+      if (shouldActivate) {
+        autoMoneyModeActive = true;
+        holdTurnsLeft = moneyModeConfig.holdTurns;
+      } else if (hesitation && prevAutoActive && holdTurnsLeft > 0) {
+        autoMoneyModeActive = true;
+        holdTurnsLeft = Math.max(0, holdTurnsLeft - 1);
+      } else if (inferredIntentScore < releaseThreshold) {
+        autoMoneyModeActive = false;
+        holdTurnsLeft = 0;
+      }
+    } else {
+      autoMoneyModeActive = false;
+      holdTurnsLeft = 0;
+    }
+
+    const aiMode = autoMoneyModeActive ? 'sales' : baseAiMode;
+    conversationState.slots = {
+      ...conversationState.slots,
+      moneyModeAutoActive: autoMoneyModeActive,
+      moneyModeHoldTurns: holdTurnsLeft,
+      moneyModeIntentScore: inferredIntentScore,
+    };
+    console.log(`[Widget Chat] AI Mode base=${baseAiMode}, effective=${aiMode}, auto=${autoMoneyModeActive}, score=${inferredIntentScore}, hold=${holdTurnsLeft}`);
 
     //                                                                        
     // CONVERSATION STATE MACHINE: LOAD AND PROCESS STATE
@@ -2516,6 +2665,8 @@ return {
           service: conversationContext.serviceMentioned,
           customer_name: conversationContext.customerName,
           ai_mode: aiMode,
+          money_mode_auto_activated: autoMoneyModeActive,
+          money_mode_intent_score: inferredIntentScore,
           estimated_value: estimatedRevenue
         }
       });
@@ -2542,6 +2693,8 @@ return {
           customer_name: conversationContext.customerName,
           item_count: conversationContext.selectedProducts?.length || 1,
           ai_mode: aiMode,
+          money_mode_auto_activated: autoMoneyModeActive,
+          money_mode_intent_score: inferredIntentScore,
           order_total: orderRevenue
         }
       });
@@ -2652,6 +2805,86 @@ return {
       console.log(`[Flow Engine] Memory summary saved`);
     }
 
+    const finalUiHints = {
+      showServiceSelector: (engineResult.ui_hints.show_services || uiHints.showServiceSelector) && !conversationContext.servicesShownInLastMessage,
+      showDatePicker: engineResult.ui_hints.show_calendar || uiHints.showDatePicker,
+      showTimePicker: engineResult.ui_hints.show_time_slots || uiHints.showTimePicker,
+      showProductSelector: (engineResult.ui_hints.show_products || uiHints.showProductSelector) && !conversationContext.productsShownInLastMessage,
+      showQuantityInput: uiHints.showQuantityInput,
+      showContactForm: uiHints.showContactForm,
+      showConfirmButton: engineResult.ui_hints.show_confirmation || uiHints.showConfirmButton,
+      showOrderConfirmation: engineResult.ui_hints.show_order_confirmation,
+      expectedInput: uiHints.expectedInput,
+    };
+
+    let activeComponent: UISignalComponent = "none";
+    let reason: UISignal["reason"] = "fallback";
+    let componentData: Record<string, unknown> = {};
+    if (bookingResult) {
+      activeComponent = "booking_confirmation";
+      reason = "completion";
+      componentData = {
+        id: bookingResult.id,
+        serviceName: bookingResult.service_name || bookingResult.service || mergedServiceName,
+        startTime: bookingResult.start_time,
+        endTime: bookingResult.end_time,
+        customerName: bookingResult.customer_name || mergedCustomerName,
+        customerEmail: bookingResult.customer_email || mergedCustomerEmail,
+        customerPhone: bookingResult.customer_phone || mergedCustomerPhone,
+      };
+    } else if (orderResult) {
+      activeComponent = "order_summary";
+      reason = "completion";
+      componentData = {
+        id: orderResult.id,
+        totalAmount: orderResult.total_amount,
+        customerName: orderResult.customer_name,
+        customerEmail: orderResult.customer_email,
+        customerPhone: orderResult.customer_phone,
+        products: conversationContext.selectedProducts || [],
+      };
+    } else if (finalUiHints.showContactForm) {
+      activeComponent = "lead_form";
+      reason = "step_change";
+    } else if (finalUiHints.showTimePicker) {
+      activeComponent = "time_picker";
+      reason = "step_change";
+    } else if (finalUiHints.showDatePicker) {
+      activeComponent = "date_picker";
+      reason = "step_change";
+    } else if (finalUiHints.showProductSelector) {
+      activeComponent = "product_selector";
+      reason = "step_change";
+    } else if (finalUiHints.showServiceSelector) {
+      activeComponent = "service_selector";
+      reason = "step_change";
+    }
+
+    const signalIntent = mapIntentToUISignalIntent(engineResult.intent.intent);
+    const previousComponent = (conversationState.slots?.last_active_component as UISignalComponent | undefined) || "none";
+    const previousIntent = (conversationState.slots?.last_signal_intent as UISignalIntent | undefined) || "unknown";
+    const uiSignal: UISignal = {
+      version: "2026-04-ui-signal-v1",
+      intent: signalIntent,
+      activeComponent,
+      componentData,
+      dismissPrevious: previousComponent !== activeComponent || previousIntent !== signalIntent,
+      reason,
+      confidence: Math.max(0, Math.min(1, engineResult.intent.confidence || 0)),
+      flow: {
+        type: engineState?.task_type === "booking" ? "booking" : engineState?.task_type === "ordering" ? "ordering" : "none",
+        step: engineState?.task_step || null,
+        canContinue: !engineState?.locked,
+      },
+    };
+
+    conversationState.slots = {
+      ...conversationState.slots,
+      last_active_component: activeComponent,
+      last_signal_intent: signalIntent,
+    };
+    await stateManager.saveState(conversationState);
+
     return new Response(
       JSON.stringify({ 
         reply, 
@@ -2686,17 +2919,8 @@ return {
           products: conversationContext.selectedProducts || [],
         } : null,
         // UI hints based on Engine v2 (PRIMARY) with state machine fallback
-        uiHints: {
-          showServiceSelector: (engineResult.ui_hints.show_services || uiHints.showServiceSelector) && !conversationContext.servicesShownInLastMessage,
-          showDatePicker: engineResult.ui_hints.show_calendar || uiHints.showDatePicker,
-          showTimePicker: engineResult.ui_hints.show_time_slots || uiHints.showTimePicker,
-          showProductSelector: (engineResult.ui_hints.show_products || uiHints.showProductSelector) && !conversationContext.productsShownInLastMessage,
-          showQuantityInput: uiHints.showQuantityInput,
-          showContactForm: uiHints.showContactForm,
-          showConfirmButton: engineResult.ui_hints.show_confirmation || uiHints.showConfirmButton,
-          showOrderConfirmation: engineResult.ui_hints.show_order_confirmation,
-          expectedInput: uiHints.expectedInput,
-        },
+        uiHints: finalUiHints,
+        uiSignal,
         // Legacy UI hints for backward compatibility
         shouldShowServices: (engineResult.ui_hints.show_services || uiHints.showServiceSelector) && !conversationContext.servicesShownInLastMessage,
         shouldShowProducts: (engineResult.ui_hints.show_products || uiHints.showProductSelector) && !conversationContext.productsShownInLastMessage,
@@ -2706,6 +2930,16 @@ return {
           taskStep: engineState?.task_step || null,
           intent: engineResult.intent.intent,
           intentConfidence: engineResult.intent.confidence,
+          moneyMode: {
+            baseMode: baseAiMode,
+            effectiveMode: aiMode,
+            autoActivated: autoMoneyModeActive,
+            threshold: moneyModeConfig.threshold,
+            hysteresisBand: moneyModeConfig.hysteresisBand,
+            holdTurnsLeft,
+            intentScore: inferredIntentScore,
+            hesitationDetected: hesitation,
+          },
           missing: engineResult.requirements.missing,
           nextRequired: engineResult.requirements.next_required,
           locked: engineState?.locked || false,
