@@ -57,8 +57,8 @@ export default function MoneyModePage() {
 
   const selectedReceptionistIds = useMemo(() => {
     if (scopeType === "all") return receptionists.map((r) => r.id);
-    if (scopeType === "multi") return multiReceptionistIds.length ? multiReceptionistIds : receptionists.slice(0, 1).map((r) => r.id);
-    return singleReceptionistId ? [singleReceptionistId] : receptionists.slice(0, 1).map((r) => r.id);
+    if (scopeType === "multi") return multiReceptionistIds;
+    return singleReceptionistId ? [singleReceptionistId] : [];
   }, [scopeType, receptionists, multiReceptionistIds, singleReceptionistId]);
 
   const selectedReceptionists = useMemo(
@@ -68,8 +68,12 @@ export default function MoneyModePage() {
 
   const scopeLabel = useMemo(() => {
     if (scopeType === "all") return "All receptionists";
-    if (scopeType === "multi") return `${selectedReceptionists.length} selected receptionists`;
-    return selectedReceptionists[0]?.name || "Receptionist";
+    if (scopeType === "multi") {
+      return selectedReceptionists.length
+        ? `${selectedReceptionists.length} selected receptionists`
+        : "No receptionists selected";
+    }
+    return selectedReceptionists[0]?.name || "No receptionist selected";
   }, [scopeType, selectedReceptionists]);
 
   const modeLabel = useMemo(() => {
@@ -161,6 +165,13 @@ export default function MoneyModePage() {
                         <span>{r.name}</span>
                       </label>
                     ))}
+                  </div>
+                ) : null}
+
+
+                {scopeType === "multi" && multiReceptionistIds.length === 0 ? (
+                  <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
+                    Select at least one receptionist before changing AI mode or saving Money Mode settings.
                   </div>
                 ) : null}
 
