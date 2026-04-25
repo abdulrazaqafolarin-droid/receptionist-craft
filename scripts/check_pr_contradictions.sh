@@ -67,7 +67,10 @@ for ((i=0; i<${#pr_branches[@]}; i++)); do
     merge_base="$(git merge-base "$a" "$b")"
     merge_tree_output="$(git merge-tree "$merge_base" "$a" "$b")"
 
-    if printf '%s' "$merge_tree_output" | rg -q '^<<<<<<< '; then
+    # git merge-tree conflict markers may appear inside patch hunks prefixed by
+    # diff symbols (for example: "+<<<<<<< .our"), so match an optional patch
+    # marker before the standard conflict marker.
+    if printf '%s' "$merge_tree_output" | rg -q '^[- +]?<<<<<<< '; then
       echo "[CONTRADICTION] $a <-> $b"
       echo "CONTRADICTION|$a|$b" >> "$report_file"
     else
