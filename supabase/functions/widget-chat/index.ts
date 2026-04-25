@@ -181,6 +181,11 @@ import {
   resolvePrimaryGoal 
 } from "../_shared/capabilities/index.ts";
 import type { BusinessCapabilities, PrimaryGoal, UniversalIntent } from "../_shared/capabilities/types.ts";
+import {
+  type AiBaseMode,
+  normalizeMoneyModeCapabilities,
+  resolveMoneyModeState,
+} from "../_shared/moneyModeContract.ts";
 
 //                                                                            
 // CORS HEADERS
@@ -419,6 +424,37 @@ function analyzeMessage(message: string, historyLength: number): MessageAnalysis
   const detectedIntent = detectIntent(message, historyLength);
   
   return { isAcknowledgment, isCorrection, hasUncertainty, detectedIntent };
+}
+
+
+function computeMoneyModeIntentScore(message: string, detectedIntent: string): number {
+  const lowerMsg = message.toLowerCase();
+
+  const intentBase: Record<string, number> = {
+    order_product: 9,
+    book_appointment: 8,
+    ask_price: 7,
+    confirm: 7,
+    ask_info: 5,
+    general_query: 4,
+    ask_hours: 3,
+    ask_location: 3,
+    acknowledgment: 2,
+    small_talk: 1,
+    compliment: 1,
+    complaint: 1,
+    escalation_request: 1,
+    cancel_appointment: 1,
+    deny: 1,
+  };
+
+  let score = intentBase[detectedIntent] ?? 4;
+
+  if (/buy|purchase|order|book|schedule|reserve|price|cost|how much/i.test(lowerMsg)) score += 1;
+  if (/today|now|asap|urgent|immediately|right away/i.test(lowerMsg)) score += 1;
+  if (/just browsing|not now|later|maybe/i.test(lowerMsg)) score -= 2;
+
+  return Math.max(0, Math.min(10, score));
 }
 
 //                                                                              
@@ -1373,6 +1409,23 @@ if (!GEMINI_API_KEY) {
       );
     }
 
+    const normalizedCapabilitiesAtLoad = normalizeMoneyModeCapabilities(
+      ((receptionist.ai_mode || 'booking') as AiBaseMode),
+      (receptionist.capabilities as Record<string, unknown> | null) || {},
+    );
+    if (typeof receptionist.capabilities?.money_mode_enabled !== 'boolean' || typeof receptionist.capabilities?.money_mode_threshold !== 'number') {
+      const { error: capsMigrationErr } = await supabase
+        .from('receptionists')
+        .update({ capabilities: normalizedCapabilitiesAtLoad })
+        .eq('id', receptionistId);
+
+      if (capsMigrationErr) {
+        console.warn('[Widget Chat] Failed to normalize legacy capabilities:', capsMigrationErr.message);
+      } else {
+        receptionist.capabilities = normalizedCapabilitiesAtLoad;
+      }
+    }
+
     //                                                                        
     // UNIFIED FLOW ENGINE: INITIALIZE STATE MANAGER
     //                                                                        
@@ -1728,10 +1781,22 @@ if (!GEMINI_API_KEY) {
     const capabilityPrompt = buildCapabilityPrompt(capabilities, primaryGoal, universalIntent, intentValidation);
 
     //                                                                        
-    // GET AI MODE FOR BEHAVIOR SWITCHING
+    // GET AI MODE FOR BEHAVIOR SWITCHING (UNIFIED MONEY MODE CONTRACT)
     //                                                                        
-    const aiMode = receptionist.ai_mode || 'booking';
-    console.log(`[Widget Chat] AI Mode: ${aiMode}`);
+    const baseMode = ((receptionist.ai_mode || 'booking') as AiBaseMode);
+    const normalizedCapabilities = normalizeMoneyModeCapabilities(
+      baseMode,
+      (receptionist.capabilities as Record<string, unknown> | null) || {},
+    );
+    const moneyModeIntentScore = computeMoneyModeIntentScore(message, messageAnalysis.detectedIntent);
+    const moneyModeState = resolveMoneyModeState({
+      baseMode,
+      capabilities: normalizedCapabilities,
+      intentScore: moneyModeIntentScore,
+    });
+    const aiMode = moneyModeState.effectiveModeNow;
+
+    console.log(`[Widget Chat] Mode Contract -- base=${moneyModeState.baseMode}, auto=${moneyModeState.autoModeEnabled}, threshold=${moneyModeState.threshold}, score=${moneyModeState.scoreUsed}, effective=${moneyModeState.effectiveModeNow}`);
 
     //                                                                        
     // CONVERSATION STATE MACHINE: LOAD AND PROCESS STATE
@@ -2516,6 +2581,10 @@ return {
           service: conversationContext.serviceMentioned,
           customer_name: conversationContext.customerName,
           ai_mode: aiMode,
+          base_mode: moneyModeState.baseMode,
+          auto_mode_enabled: moneyModeState.autoModeEnabled,
+          money_mode_threshold: moneyModeState.threshold,
+          money_mode_score: moneyModeState.scoreUsed,
           estimated_value: estimatedRevenue
         }
       });
@@ -2542,6 +2611,10 @@ return {
           customer_name: conversationContext.customerName,
           item_count: conversationContext.selectedProducts?.length || 1,
           ai_mode: aiMode,
+          base_mode: moneyModeState.baseMode,
+          auto_mode_enabled: moneyModeState.autoModeEnabled,
+          money_mode_threshold: moneyModeState.threshold,
+          money_mode_score: moneyModeState.scoreUsed,
           order_total: orderRevenue
         }
       });
@@ -2553,7 +2626,7 @@ return {
                           conversationContext.customerName &&
                           !conversationContext.bookingConfirmed && 
                           !conversationContext.orderConfirmed;
-    if (hasNewContact && aiMode === 'sales') {
+    if (hasNewContact && moneyModeState.effectiveModeNow === 'sales') {
       await supabase.from('conversion_events').insert({
         receptionist_id: receptionistId,
         session_id: sessionId,
@@ -2564,7 +2637,11 @@ return {
           customer_name: conversationContext.customerName,
           has_email: !!conversationContext.customerEmail,
           has_phone: !!conversationContext.customerPhone,
-          ai_mode: aiMode
+          ai_mode: aiMode,
+          base_mode: moneyModeState.baseMode,
+          auto_mode_enabled: moneyModeState.autoModeEnabled,
+          money_mode_threshold: moneyModeState.threshold,
+          money_mode_score: moneyModeState.scoreUsed
         }
       });
       console.log(`[Conversion] Logged lead_captured event`);
