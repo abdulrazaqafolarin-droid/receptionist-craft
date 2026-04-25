@@ -310,12 +310,19 @@ function resolveMoneyModeRuntimeConfig(receptionist: any): MoneyModeRuntimeConfi
 
 function inferIntentScore(message: string, intentConfidence: number | undefined, detectedIntent: string): number {
   const confidenceScore = Math.round(Math.max(0, Math.min(1, intentConfidence || 0)) * 10);
-  if (confidenceScore > 0) return confidenceScore;
+  const revenueIntents = new Set<IntentType>([
+    'book_appointment',
+    'order_product',
+    'ask_price',
+    'reschedule',
+  ]);
+  const isRevenueIntent = revenueIntents.has(detectedIntent as IntentType);
+
+  if (confidenceScore > 0 && isRevenueIntent) return confidenceScore;
   const m = message.toLowerCase();
-  if (/(book|schedule|buy|purchase|checkout|price|cost)/.test(m)) return 8;
-  if (detectedIntent === 'book_appointment' || detectedIntent === 'order_product') return 7;
-  if (/(maybe|not sure|later|hold on|let me check)/.test(m)) return 5;
-  return 4;
+  if (/(book|schedule|buy|purchase|checkout|price|cost)/.test(m) || isRevenueIntent) return 7;
+  if (/(maybe|not sure|later|hold on|let me check)/.test(m)) return 3;
+  return 2;
 }
 
 function hasHesitationSignal(message: string): boolean {
