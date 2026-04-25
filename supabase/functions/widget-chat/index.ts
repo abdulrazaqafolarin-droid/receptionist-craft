@@ -421,6 +421,47 @@ function analyzeMessage(message: string, historyLength: number): MessageAnalysis
   return { isAcknowledgment, isCorrection, hasUncertainty, detectedIntent };
 }
 
+interface MoneyModeSettings {
+  enabled: boolean;
+  threshold: number;
+}
+
+function parseMoneyModeSettings(capabilities: unknown): MoneyModeSettings {
+  const caps = (capabilities && typeof capabilities === 'object')
+    ? capabilities as Record<string, unknown>
+    : {};
+
+  const rawEnabled = caps.money_mode_enabled;
+  const enabled = rawEnabled === true || rawEnabled === 'true' || rawEnabled === 1 || rawEnabled === '1';
+
+  const rawThreshold = caps.money_mode_threshold;
+  const parsedThreshold = typeof rawThreshold === 'number'
+    ? rawThreshold
+    : typeof rawThreshold === 'string'
+      ? parseFloat(rawThreshold)
+      : NaN;
+  const threshold = Number.isFinite(parsedThreshold)
+    ? Math.max(0, Math.min(1, parsedThreshold))
+    : 0.7;
+
+  return { enabled, threshold };
+}
+
+function getIntentReadinessScore(engineIntentConfidence: unknown, detectedIntent: string): number {
+  if (typeof engineIntentConfidence === 'number' && Number.isFinite(engineIntentConfidence)) {
+    return Math.max(0, Math.min(1, engineIntentConfidence));
+  }
+
+  // Heuristic fallback when classifier confidence is unavailable.
+  if (detectedIntent === 'order_product' || detectedIntent === 'book_appointment' || detectedIntent === 'confirm') {
+    return 0.85;
+  }
+  if (detectedIntent === 'ask_price' || detectedIntent === 'ask_info') {
+    return 0.65;
+  }
+  return 0.35;
+}
+
 //                                                                              
 // LAYER 3: CONVERSATION CONTEXT
 //                                                                              
@@ -1728,10 +1769,22 @@ if (!GEMINI_API_KEY) {
     const capabilityPrompt = buildCapabilityPrompt(capabilities, primaryGoal, universalIntent, intentValidation);
 
     //                                                                        
-    // GET AI MODE FOR BEHAVIOR SWITCHING
+    // DYNAMIC MODE SWITCHING (CAPABILITY-DRIVEN MONEY MODE)
     //                                                                        
-    const aiMode = receptionist.ai_mode || 'booking';
-    console.log(`[Widget Chat] AI Mode: ${aiMode}`);
+    const persistedAiMode = receptionist.ai_mode || 'booking';
+    const moneyModeSettings = parseMoneyModeSettings(receptionist.capabilities);
+    const intentScore = getIntentReadinessScore(
+      engineResult?.intent?.confidence,
+      messageAnalysis.detectedIntent
+    );
+    const effectiveMode = moneyModeSettings.enabled && intentScore >= moneyModeSettings.threshold
+      ? 'sales'
+      : persistedAiMode;
+    console.log(
+      `[Widget Chat] Mode: persisted=${persistedAiMode}, effective=${effectiveMode}, ` +
+      `intent_score=${intentScore.toFixed(2)}, threshold=${moneyModeSettings.threshold.toFixed(2)}, ` +
+      `money_mode_enabled=${moneyModeSettings.enabled}`
+    );
 
     //                                                                        
     // CONVERSATION STATE MACHINE: LOAD AND PROCESS STATE
@@ -1941,7 +1994,7 @@ if (!GEMINI_API_KEY) {
       messageAnalysis,
       isFirstMessage,
       rollingSummary,
-      aiMode,
+      effectiveMode,
       capabilityPrompt,
       actionGateBlock,
       stateMachineBlock,
@@ -2515,7 +2568,9 @@ return {
           booking_id: bookingResult.id,
           service: conversationContext.serviceMentioned,
           customer_name: conversationContext.customerName,
-          ai_mode: aiMode,
+          ai_mode: effectiveMode,
+          effective_mode: effectiveMode,
+          intent_score: intentScore,
           estimated_value: estimatedRevenue
         }
       });
@@ -2541,7 +2596,9 @@ return {
           order_id: orderResult.id,
           customer_name: conversationContext.customerName,
           item_count: conversationContext.selectedProducts?.length || 1,
-          ai_mode: aiMode,
+          ai_mode: effectiveMode,
+          effective_mode: effectiveMode,
+          intent_score: intentScore,
           order_total: orderRevenue
         }
       });
@@ -2553,7 +2610,7 @@ return {
                           conversationContext.customerName &&
                           !conversationContext.bookingConfirmed && 
                           !conversationContext.orderConfirmed;
-    if (hasNewContact && aiMode === 'sales') {
+    if (hasNewContact && effectiveMode === 'sales') {
       await supabase.from('conversion_events').insert({
         receptionist_id: receptionistId,
         session_id: sessionId,
@@ -2564,7 +2621,9 @@ return {
           customer_name: conversationContext.customerName,
           has_email: !!conversationContext.customerEmail,
           has_phone: !!conversationContext.customerPhone,
-          ai_mode: aiMode
+          ai_mode: effectiveMode,
+          effective_mode: effectiveMode,
+          intent_score: intentScore
         }
       });
       console.log(`[Conversion] Logged lead_captured event`);
