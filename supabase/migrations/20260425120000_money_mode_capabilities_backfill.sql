@@ -1,14 +1,16 @@
 -- Backfill legacy receptionist capability rows with money mode contract keys.
 -- Ensures consistent behavior for frontend + widget-chat edge runtime.
+-- NOTE: NULL capabilities rows are intentionally left untouched so runtime
+-- capability resolution can continue deriving default capability flags.
 
 update public.receptionists
 set capabilities = jsonb_set(
   jsonb_set(
-    coalesce(capabilities, '{}'::jsonb),
+    capabilities,
     '{money_mode_enabled}',
     to_jsonb(
       case
-        when jsonb_typeof(coalesce(capabilities, '{}'::jsonb)->'money_mode_enabled') = 'boolean'
+        when jsonb_typeof(capabilities->'money_mode_enabled') = 'boolean'
           then (capabilities->>'money_mode_enabled')::boolean
         else (ai_mode = 'sales')
       end
@@ -18,15 +20,15 @@ set capabilities = jsonb_set(
   '{money_mode_threshold}',
   to_jsonb(
     case
-      when jsonb_typeof(coalesce(capabilities, '{}'::jsonb)->'money_mode_threshold') = 'number'
+      when jsonb_typeof(capabilities->'money_mode_threshold') = 'number'
         then least(10, greatest(1, round((capabilities->>'money_mode_threshold')::numeric)::int))
       else 7
     end
   ),
   true
 )
-where capabilities is null
-   or not (capabilities ? 'money_mode_enabled')
+where capabilities is not null
+  and (not (capabilities ? 'money_mode_enabled')
    or not (capabilities ? 'money_mode_threshold')
    or jsonb_typeof(capabilities->'money_mode_enabled') <> 'boolean'
-   or jsonb_typeof(capabilities->'money_mode_threshold') <> 'number';
+   or jsonb_typeof(capabilities->'money_mode_threshold') <> 'number');
