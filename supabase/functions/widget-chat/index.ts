@@ -1903,7 +1903,7 @@ if (!GEMINI_API_KEY) {
       conversationState.flow_step = null;
       conversationState.slots = {};
     }
-    if (activePendingSwitch && switchDecision && resolvedSwitchIntent !== null) {
+    if (activePendingSwitch && switchDecision) {
       const { pending_intent_switch: _ignored, ...restSlots } = (conversationState.slots || {}) as Record<string, unknown>;
       conversationState.slots = restSlots;
     }
