@@ -477,6 +477,12 @@ function mapStepToUIComponent(taskStep: string | null | undefined, taskType: str
 
 type IntentSwitchDecision = "continue" | "switch" | null;
 
+function mapFlowToIntent(flow: "SERVICE" | "PRODUCT" | null): string | null {
+  if (flow === "PRODUCT") return "order_product";
+  if (flow === "SERVICE") return "book_appointment";
+  return null;
+}
+
 function detectSecondaryIntents(message: string): UIIntent[] {
   const lowerMsg = message.toLowerCase();
   const candidates: UIIntent[] = [];
@@ -1872,20 +1878,15 @@ if (!GEMINI_API_KEY) {
       const { pending_intent_switch: _ignored, ...restSlots } = (conversationState.slots || {}) as Record<string, unknown>;
       conversationState.slots = restSlots;
     }
-    const mapFlowToIntent = (flow: "SERVICE" | "PRODUCT" | null): string | null => {
-      if (flow === "PRODUCT") return "order_product";
-      if (flow === "SERVICE") return "book_appointment";
-      return null;
-    };
-    const forcedIntent = (() => {
+    const resolvedSwitchIntent = (() => {
       if (!activePendingSwitch || !switchDecision) {
-        return messageAnalysis.detectedIntent;
+        return null;
       }
-      const resolvedIntent = switchDecision === "switch"
+      return switchDecision === "switch"
         ? mapFlowToIntent(activePendingSwitch.targetFlow)
         : mapFlowToIntent(activePendingSwitch.fromFlow);
-      return resolvedIntent ?? messageAnalysis.detectedIntent;
     })();
+    const forcedIntent = resolvedSwitchIntent ?? messageAnalysis.detectedIntent;
     try {
       intentRouting = routeIntent(forcedIntent, conversationState, message);
       console.log(`[Flow Engine] Routing: FlowType=${intentRouting.flowType}, StartFlow=${intentRouting.shouldStartFlow}`);
@@ -1902,7 +1903,7 @@ if (!GEMINI_API_KEY) {
       conversationState.flow_step = null;
       conversationState.slots = {};
     }
-    if (activePendingSwitch && switchDecision) {
+    if (activePendingSwitch && switchDecision && resolvedSwitchIntent !== null) {
       const { pending_intent_switch: _ignored, ...restSlots } = (conversationState.slots || {}) as Record<string, unknown>;
       conversationState.slots = restSlots;
     }
