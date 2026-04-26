@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
+import type { UISignal, IntentType as UIIntent, UIComponentType as UIComponent } from "../../../src/shared/uiSignal.ts";
 
 //                                                                            
 // PHASE 8: PRODUCTION HARDENING IMPORTS
@@ -439,6 +440,60 @@ interface SalesModeState {
   hysteresis: number;
   minHoldTurns: number;
   exitConsecutiveTurns: number;
+}
+
+function mapIntentToUIIntent(intent: string): UIIntent {
+  if (["book", "book_explicit", "book_appointment", "reschedule"].includes(intent)) return "booking";
+  if (["availability_casual"].includes(intent)) return "availability";
+  if (["order", "order_product"].includes(intent)) return "ordering";
+  if (["price", "ask_price"].includes(intent)) return "pricing";
+  if (["hours", "ask_hours", "ask_location", "ask_info", "info", "general_query", "small_talk"].includes(intent)) return "browsing";
+  if (["cancel_appointment", "cancel", "deny"].includes(intent)) return "booking_modification";
+  if (["complaint", "escalate", "escalation_request"].includes(intent)) return "support";
+  if (["confirm"].includes(intent)) return "confirmation";
+  if (["farewell", "conversation_end"].includes(intent)) return "closing";
+  return "browsing";
+}
+
+function mapStepToUIComponent(taskStep: string | null | undefined, taskType: string | null | undefined): UIComponent {
+  switch (taskStep) {
+    case "select_service":
+      return "service_selector";
+    case "select_product":
+      return "product_selector";
+    case "select_date":
+      return "date_picker";
+    case "select_time":
+      return "time_picker";
+    case "collect_name":
+    case "collect_contact":
+      return "lead_form";
+    case "confirm":
+      return taskType === "booking" ? "booking_confirmation" : taskType === "ordering" ? "order_summary" : null;
+    default:
+      return null;
+  }
+}
+
+type IntentSwitchDecision = "continue" | "switch" | null;
+
+function detectSecondaryIntents(message: string): UIIntent[] {
+  const lowerMsg = message.toLowerCase();
+  const candidates: UIIntent[] = [];
+  if (/book|appointment|schedule|reserve/.test(lowerMsg)) candidates.push("booking");
+  if (/buy|order|purchase|product/.test(lowerMsg)) candidates.push("ordering");
+  if (/price|cost|how much/.test(lowerMsg)) candidates.push("pricing");
+  if (/help|support|problem|issue/.test(lowerMsg)) candidates.push("support");
+  return Array.from(new Set(candidates));
+}
+
+function parseIntentSwitchDecision(message: string): IntentSwitchDecision {
+  const lower = message.trim().toLowerCase();
+  if (lower === "__switch_topic__") return "switch";
+  if (lower === "__continue_current__") return "continue";
+  if (/^(yes[,!\s]*)?(switch( topic)?|change topic|new topic|let'?s switch)/i.test(lower)) return "switch";
+  if (/^(no[,!\s]*)?(continue|keep going|stay here|don'?t switch)/i.test(lower)) return "continue";
+  return null;
 }
 
 function clamp01(value: number): number {
@@ -1630,6 +1685,7 @@ if (!GEMINI_API_KEY) {
     //                                                                        
     const messageAnalysis = analyzeMessage(message, history?.length || 0);
     console.log(`[Analysis] Intent: ${messageAnalysis.detectedIntent}, Ack: ${messageAnalysis.isAcknowledgment}, Correction: ${messageAnalysis.isCorrection}`);
+    const switchDecision = parseIntentSwitchDecision(message);
 
     //                                                                        
     // UNIFIED ENGINE v2 -- SINGLE SOURCE OF TRUTH (PRIMARY CONTROL LAYER)
@@ -1801,8 +1857,28 @@ if (!GEMINI_API_KEY) {
 
     // Route intent and update flow state (with defensive guards)
     let intentRouting: any = { flowType: null, shouldStartFlow: false, shouldResetCurrentFlow: false, topicShift: null, initialStep: null };
+    const pendingIntentSwitch = (conversationState.slots?.pending_intent_switch || null) as {
+      fromFlow: "SERVICE" | "PRODUCT" | null;
+      targetFlow: "SERVICE" | "PRODUCT" | null;
+      createdAt: string;
+    } | null;
+    const pendingSwitchAgeMs = pendingIntentSwitch?.createdAt
+      ? (Date.now() - new Date(pendingIntentSwitch.createdAt).getTime())
+      : null;
+    const pendingSwitchExpired = pendingSwitchAgeMs !== null && (isNaN(pendingSwitchAgeMs) || pendingSwitchAgeMs > 10 * 60 * 1000);
+    const activePendingSwitch = pendingSwitchExpired ? null : pendingIntentSwitch;
+    if (pendingIntentSwitch && pendingSwitchExpired) {
+      console.log(`[Flow Engine] Clearing stale pending_intent_switch older than 10 minutes`);
+      const { pending_intent_switch: _ignored, ...restSlots } = (conversationState.slots || {}) as Record<string, unknown>;
+      conversationState.slots = restSlots;
+    }
+    const forcedIntent = activePendingSwitch && switchDecision
+      ? (switchDecision === "switch"
+        ? (activePendingSwitch.targetFlow === "PRODUCT" ? "order_product" : "book_appointment")
+        : (activePendingSwitch.fromFlow === "PRODUCT" ? "order_product" : "book_appointment"))
+      : messageAnalysis.detectedIntent;
     try {
-      intentRouting = routeIntent(messageAnalysis.detectedIntent, conversationState, message);
+      intentRouting = routeIntent(forcedIntent, conversationState, message);
       console.log(`[Flow Engine] Routing: FlowType=${intentRouting.flowType}, StartFlow=${intentRouting.shouldStartFlow}`);
     } catch (routeErr) {
       console.error(`[Flow Engine] routeIntent error (non-fatal):`, routeErr);
@@ -1816,6 +1892,10 @@ if (!GEMINI_API_KEY) {
       conversationState.active_flow = null;
       conversationState.flow_step = null;
       conversationState.slots = {};
+    }
+    if (activePendingSwitch && switchDecision) {
+      const { pending_intent_switch: _ignored, ...restSlots } = (conversationState.slots || {}) as Record<string, unknown>;
+      conversationState.slots = restSlots;
     }
 
     // Handle topic shift detection
@@ -2804,11 +2884,6 @@ return {
     // Save active task to conversation state
     conversationState.active_task = activeTask;
     
-    // Save conversation state for next message
-    await stateManager.saveState(conversationState);
-    console.log(`[Flow Engine] State saved - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, MachineState: ${machineContext.state}, ActiveTask: ${activeTask?.type || 'none'}`);
-    
-    
     // Run memory summarization if appropriate
     if (memorySummarizer.shouldSummarize(history || [], conversationContext)) {
       const summaryText = memorySummarizer.generateSummaryText(history || [], conversationContext);
@@ -2816,6 +2891,110 @@ return {
       await memorySummarizer.saveSummary(receptionistId, sessionId, summaryText, keyFacts);
       console.log(`[Flow Engine] Memory summary saved`);
     }
+
+    const inferredIntent = engineResult.intent.intent || messageAnalysis.detectedIntent;
+    const secondaryIntents = detectSecondaryIntents(message).filter((i) => i !== mapIntentToUIIntent(inferredIntent));
+    const requiresClarification = engineResult.intent.confidence < 0.55 || secondaryIntents.length > 1;
+    const shouldPromptSwitch = !!topicShift?.shouldBlock || requiresClarification;
+    const pendingSwitchTarget: "SERVICE" | "PRODUCT" | null =
+      topicShift?.newTopic === "ordering" ? "PRODUCT"
+      : topicShift?.newTopic === "booking" ? "SERVICE"
+      : secondaryIntents.includes("ordering") ? "PRODUCT"
+      : secondaryIntents.includes("booking") ? "SERVICE"
+      : null;
+    const stepComponent = mapStepToUIComponent(engineState?.task_step, engineState?.task_type);
+    const activeComponent: UIComponent =
+      bookingResult ? "booking_confirmation" :
+      orderResult ? "order_summary" :
+      shouldPromptSwitch ? "switch_confirmation" :
+      stepComponent ||
+      (engineResult.ui_hints.show_services ? "service_selector" :
+      engineResult.ui_hints.show_products ? "product_selector" :
+      engineResult.ui_hints.show_calendar ? "date_picker" :
+      engineResult.ui_hints.show_time_slots ? "time_picker" :
+      null);
+    const uiIntent =
+      activeComponent === "lead_form"
+        ? "lead_capture"
+        : mapIntentToUIIntent(inferredIntent);
+    const previousUIIntent = (conversationState.slots?.last_ui_intent as string | undefined) || null;
+    const previousUIComponent = (conversationState.slots?.last_ui_component as string | undefined) || null;
+    const dismissPrevious =
+      (previousUIIntent !== null && previousUIIntent !== uiIntent) ||
+      (previousUIComponent !== null && previousUIComponent !== activeComponent);
+    const uiSignal: UISignal = {
+      version: "1.0",
+      intent: uiIntent,
+      activeComponent,
+      componentData: activeComponent === "time_picker"
+        ? { date: mergedDate || null }
+        : activeComponent === "switch_confirmation"
+          ? {
+              prompt: topicShift?.blockReason || "I can switch topics now, or continue with the current step. Which do you prefer?",
+              secondaryIntents,
+              confidence: engineResult.intent.confidence,
+            }
+        : activeComponent === "booking_confirmation" && bookingResult
+          ? {
+              serviceName: bookingResult.service_name || bookingResult.service || mergedServiceName,
+              dateTime: bookingResult.start_time,
+              customerName: bookingResult.customer_name || mergedCustomerName,
+              customerEmail: bookingResult.customer_email || mergedCustomerEmail,
+              customerPhone: bookingResult.customer_phone || mergedCustomerPhone,
+              confirmationId: bookingResult.id,
+            }
+          : activeComponent === "order_summary" && orderResult
+            ? {
+                products: conversationContext.selectedProducts || [],
+                customerName: orderResult.customer_name,
+                customerEmail: orderResult.customer_email,
+                customerPhone: orderResult.customer_phone,
+                totalAmount: orderResult.total_amount,
+                deliveryAddress: conversationState.slots?.deliveryLocation || null,
+                orderId: orderResult.id,
+              }
+            : {},
+      dismissPrevious,
+      reason: bookingResult || orderResult
+        ? "task_complete"
+        : dismissPrevious
+          ? "intent_switch"
+          : activeComponent
+            ? "step_progression"
+            : "no_ui_needed",
+      flow: {
+        activeFlow: conversationState.active_flow === "SERVICE"
+          ? "booking"
+          : conversationState.active_flow === "PRODUCT"
+            ? "ordering"
+            : effectiveMode === "support"
+              ? "support"
+              : null,
+        step: conversationState.flow_step || null,
+        blocking: !!topicShift?.shouldBlock,
+      },
+      conversationCanContinue: true,
+    };
+    if (shouldPromptSwitch) {
+      conversationState.slots = {
+        ...conversationState.slots,
+        pending_intent_switch: {
+          fromFlow: conversationState.active_flow || null,
+          targetFlow: pendingSwitchTarget,
+          createdAt: new Date().toISOString(),
+        },
+      };
+    } else if (conversationState.slots?.pending_intent_switch) {
+      const { pending_intent_switch: _ignored, ...restSlots } = (conversationState.slots || {}) as Record<string, unknown>;
+      conversationState.slots = restSlots;
+    }
+    conversationState.slots = {
+      ...conversationState.slots,
+      last_ui_intent: uiIntent,
+      last_ui_component: activeComponent,
+    };
+    await stateManager.saveState(conversationState);
+    console.log(`[Flow Engine] State saved - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, MachineState: ${machineContext.state}, ActiveTask: ${activeTask?.type || 'none'}`);
 
     return new Response(
       JSON.stringify({ 
@@ -2867,6 +3046,13 @@ return {
         // Legacy UI hints for backward compatibility
         shouldShowServices: (engineResult.ui_hints.show_services || uiHints.showServiceSelector) && !conversationContext.servicesShownInLastMessage,
         shouldShowProducts: (engineResult.ui_hints.show_products || uiHints.showProductSelector) && !conversationContext.productsShownInLastMessage,
+        uiSignal,
+        intentMeta: {
+          primary: uiIntent,
+          confidence: engineResult.intent.confidence,
+          secondary: secondaryIntents,
+          requiresClarification,
+        },
         // Engine v2 state info (PRIMARY)
         engineV2: {
           taskType: engineState?.task_type || null,
