@@ -441,6 +441,58 @@ interface SalesModeState {
   exitConsecutiveTurns: number;
 }
 
+type UIIntent =
+  | "browsing"
+  | "service_enquiry"
+  | "product_enquiry"
+  | "booking"
+  | "ordering"
+  | "pricing"
+  | "availability"
+  | "booking_modification"
+  | "support"
+  | "lead_capture"
+  | "confirmation"
+  | "closing";
+
+type UIComponent =
+  | "service_selector"
+  | "product_selector"
+  | "date_picker"
+  | "time_picker"
+  | "booking_confirmation"
+  | "order_summary"
+  | "lead_form"
+  | null;
+
+interface UISignal {
+  version: "1.0";
+  intent: UIIntent;
+  activeComponent: UIComponent;
+  componentData: Record<string, unknown>;
+  dismissPrevious: boolean;
+  reason: "intent_switch" | "step_progression" | "task_complete" | "user_cancel" | "no_ui_needed";
+  flow: {
+    activeFlow: "booking" | "ordering" | "support" | null;
+    step: string | null;
+    blocking: boolean;
+  };
+  conversationCanContinue: boolean;
+}
+
+function mapIntentToUIIntent(intent: string): UIIntent {
+  if (["book", "book_explicit", "book_appointment", "reschedule"].includes(intent)) return "booking";
+  if (["availability_casual"].includes(intent)) return "availability";
+  if (["order", "order_product"].includes(intent)) return "ordering";
+  if (["price", "ask_price"].includes(intent)) return "pricing";
+  if (["hours", "ask_hours", "ask_location", "ask_info", "info", "general_query", "small_talk"].includes(intent)) return "browsing";
+  if (["cancel_appointment", "cancel", "deny"].includes(intent)) return "booking_modification";
+  if (["complaint", "escalate", "escalation_request"].includes(intent)) return "support";
+  if (["confirm"].includes(intent)) return "confirmation";
+  if (["farewell", "conversation_end"].includes(intent)) return "closing";
+  return "browsing";
+}
+
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
@@ -2817,6 +2869,70 @@ return {
       console.log(`[Flow Engine] Memory summary saved`);
     }
 
+    const uiIntent = mapIntentToUIIntent(engineResult.intent.intent || messageAnalysis.detectedIntent);
+    const activeComponent: UIComponent =
+      bookingResult ? "booking_confirmation" :
+      orderResult ? "order_summary" :
+      engineResult.ui_hints.show_services ? "service_selector" :
+      engineResult.ui_hints.show_products ? "product_selector" :
+      engineResult.ui_hints.show_calendar ? "date_picker" :
+      engineResult.ui_hints.show_time_slots ? "time_picker" :
+      null;
+    const previousUIIntent = (conversationState.slots?.last_ui_intent as string | undefined) || null;
+    const dismissPrevious = previousUIIntent !== null && previousUIIntent !== uiIntent;
+    const uiSignal: UISignal = {
+      version: "1.0",
+      intent: uiIntent,
+      activeComponent,
+      componentData: activeComponent === "time_picker"
+        ? { date: mergedDate || null }
+        : activeComponent === "booking_confirmation" && bookingResult
+          ? {
+              serviceName: bookingResult.service_name || bookingResult.service || mergedServiceName,
+              dateTime: bookingResult.start_time,
+              customerName: bookingResult.customer_name || mergedCustomerName,
+              customerEmail: bookingResult.customer_email || mergedCustomerEmail,
+              customerPhone: bookingResult.customer_phone || mergedCustomerPhone,
+              confirmationId: bookingResult.id,
+            }
+          : activeComponent === "order_summary" && orderResult
+            ? {
+                products: conversationContext.selectedProducts || [],
+                customerName: orderResult.customer_name,
+                customerEmail: orderResult.customer_email,
+                customerPhone: orderResult.customer_phone,
+                totalAmount: orderResult.total_amount,
+                deliveryAddress: conversationState.slots?.deliveryLocation || null,
+                orderId: orderResult.id,
+              }
+            : {},
+      dismissPrevious,
+      reason: bookingResult || orderResult
+        ? "task_complete"
+        : dismissPrevious
+          ? "intent_switch"
+          : activeComponent
+            ? "step_progression"
+            : "no_ui_needed",
+      flow: {
+        activeFlow: conversationState.active_flow === "SERVICE"
+          ? "booking"
+          : conversationState.active_flow === "PRODUCT"
+            ? "ordering"
+            : effectiveMode === "support"
+              ? "support"
+              : null,
+        step: conversationState.flow_step || null,
+        blocking: !!topicShift?.shouldBlock,
+      },
+      conversationCanContinue: true,
+    };
+    conversationState.slots = {
+      ...conversationState.slots,
+      last_ui_intent: uiIntent,
+    };
+    await stateManager.saveState(conversationState);
+
     return new Response(
       JSON.stringify({ 
         reply, 
@@ -2867,6 +2983,7 @@ return {
         // Legacy UI hints for backward compatibility
         shouldShowServices: (engineResult.ui_hints.show_services || uiHints.showServiceSelector) && !conversationContext.servicesShownInLastMessage,
         shouldShowProducts: (engineResult.ui_hints.show_products || uiHints.showProductSelector) && !conversationContext.productsShownInLastMessage,
+        uiSignal,
         // Engine v2 state info (PRIMARY)
         engineV2: {
           taskType: engineState?.task_type || null,

@@ -9,13 +9,8 @@ import VoiceInputButton from "@/components/widget/VoiceInputButton";
 import VoiceChatOverlay from "@/components/widget/VoiceChatOverlay";
 import { useToast } from "@/hooks/use-toast";
 import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
-import { ServiceSelector } from "@/components/widget/ServiceSelector";
-import { ProductSelectorEnhanced } from "@/components/widget/ProductSelectorEnhanced";
-import { DateSelector } from "@/components/widget/DateSelector";
-import { TimeSlotSelector } from "@/components/widget/TimeSlotSelector";
-import { BookingConfirmation } from "@/components/widget/BookingConfirmation";
-import { OrderConfirmation } from "@/components/widget/OrderConfirmation";
 import { ChatSessionOverlay } from "@/components/widget/ChatSessionOverlay";
+import { UISignalRenderer, type UISignal } from "@/components/widget/UISignalRenderer";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -100,6 +95,7 @@ export default function Widget() {
   const [existingMessages, setExistingMessages] = useState<any[]>([]);
   const [sessionCheckComplete, setSessionCheckComplete] = useState(false);
   const [voiceChatOpen, setVoiceChatOpen] = useState(false);
+  const [activeUISignal, setActiveUISignal] = useState<UISignal | null>(null);
   
   // Abuse protection: honeypot field and form load timing
   const [honeypotValue, setHoneypotValue] = useState("");
@@ -128,6 +124,18 @@ export default function Widget() {
     setMessages(prev => [...prev, msg]);
     persistMessage('ai', content);
     return msg;
+  }
+
+  function emitUISignal(partial: Partial<UISignal> & Pick<UISignal, "intent" | "activeComponent">) {
+    setActiveUISignal({
+      version: "1.0",
+      componentData: {},
+      dismissPrevious: true,
+      reason: partial.activeComponent ? "step_progression" : "no_ui_needed",
+      flow: { activeFlow: null, step: null, blocking: false },
+      conversationCanContinue: true,
+      ...partial,
+    });
   }
 
   // ─── Client-side name validation (mirrors edge function nameValidator.ts) ───
@@ -298,6 +306,7 @@ export default function Widget() {
     // Restore persisted booking state from localStorage
     const restoredBooking = loadPersistedBookingState();
     setBookingState(restoredBooking);
+    setActiveUISignal(null);
     
     // Restore messages from the existing conversation - include both user and AI messages
     if (existingMessages.length > 0) {
@@ -322,15 +331,18 @@ export default function Widget() {
   async function resumeBookingFlow(state: typeof defaultBookingState) {
     // If collecting info (name or contact), just prompt again
     if (state.collectingInfo === 'name') {
+      emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
       addBotMessage("Welcome back! 👋 We were just getting your details to complete the booking. What's your name?");
       return;
     }
     if (state.collectingInfo === 'contact') {
+      emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
       addBotMessage(`Welcome back, ${state.customerName}! 👋 To finish your booking, could you share your email or phone number?`);
       return;
     }
     // If awaiting order confirmation
     if (state.awaitingOrderConfirmation && state.productName) {
+      emitUISignal({ intent: "ordering", activeComponent: null, reason: "step_progression" });
       addBotMessage(`Welcome back! 👋 You had selected ${state.productName}. Would you like to go ahead with this order, make changes, or start fresh?`);
       return;
     }
@@ -354,6 +366,7 @@ export default function Widget() {
             `Welcome back! 👋 You were booking ${state.serviceName} for ${formattedDate}. Here are today's available times — pick one to continue!`,
             { showTimeSlots: true, timeSlots: slots }
           );
+          emitUISignal({ intent: "booking", activeComponent: "time_picker", componentData: { slots } });
         } else {
           // Date no longer has slots — offer date picker again
           setBookingState(prev => ({ ...prev, date: null }));
@@ -361,11 +374,13 @@ export default function Widget() {
             `Welcome back! 👋 You were booking ${state.serviceName}, but ${formattedDate} no longer has open slots. Please pick another date.`,
             { showDatePicker: true }
           );
+          emitUISignal({ intent: "booking", activeComponent: "date_picker" });
         }
       } catch (e) {
         console.error("[Widget] Error resuming booking flow:", e);
         setBookingState(prev => ({ ...prev, date: null }));
         addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName}. Please pick a date to continue.`, { showDatePicker: true });
+        emitUISignal({ intent: "booking", activeComponent: "date_picker" });
       } finally {
         setLoading(false);
       }
@@ -377,6 +392,7 @@ export default function Widget() {
         `Welcome back! 👋 You were booking ${state.serviceName}. Go ahead and pick a date that works for you!`,
         { showDatePicker: true }
       );
+      emitUISignal({ intent: "booking", activeComponent: "date_picker" });
       return;
     }
     // If time slot selected but info not yet collected — start collecting
@@ -384,6 +400,7 @@ export default function Widget() {
       const formattedDate = format(state.date, "EEEE, MMMM d");
       const formattedTime = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(state.timeSlot.startTime || state.timeSlot.start));
       setBookingState(prev => ({ ...prev, collectingInfo: 'name' }));
+      emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
       addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName} on ${formattedDate} at ${formattedTime}. To complete your booking, may I have your name please?`);
       return;
     }
@@ -415,6 +432,7 @@ export default function Widget() {
     // Reset booking state and clear persisted copy
     setBookingState({...defaultBookingState});
     localStorage.removeItem(BOOKING_STATE_KEY);
+    setActiveUISignal(null);
     
     // Show fresh greeting with a proper "Hi" conversation start
     if (receptionist?.greeting_message) {
@@ -686,6 +704,7 @@ export default function Widget() {
             awaitingOrderConfirmation: false,
             collectingInfo: 'name',
           }));
+          emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
           
           addBotMessage("Perfect, let's get your order placed! What's your name?");
           setLoading(false);
@@ -701,6 +720,7 @@ export default function Widget() {
             quantity: 1,
             orderMode: false,
           }));
+          emitUISignal({ intent: "ordering", activeComponent: "product_selector", reason: "intent_switch" });
           
           addBotMessage("No problem at all! Here are our products again — take your time and pick whatever you'd like.", { showProducts: true });
           setLoading(false);
@@ -708,6 +728,7 @@ export default function Widget() {
         } else if (isCancel) {
           // User not ready — back off completely
           setBookingState({...defaultBookingState});
+          emitUISignal({ intent: "browsing", activeComponent: null, reason: "user_cancel" });
           addBotMessage("No worries at all! Feel free to browse or ask me anything whenever you're ready. I'm here to help! 😊");
           setLoading(false);
           return;
@@ -752,6 +773,7 @@ export default function Widget() {
         }
         
         setBookingState(prev => ({ ...prev, customerName: name, collectingInfo: 'contact' }));
+        emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
         
         addBotMessage(`Thank you, ${name}! And what's the best way to reach you? You can share your email address or phone number.`);
         setLoading(false);
@@ -829,6 +851,7 @@ export default function Widget() {
             
             setMessages(prev => [...prev, orderConfirmationMessage]);
             persistMessage('ai', `Wonderful! Your order has been placed successfully. Here are the details:`);
+            emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: orderConfirmationMessage.orderConfirmation || {} });
           } catch (orderErr: any) {
             console.error("[Widget] Order error:", orderErr);
             addBotMessage("I apologize, but I encountered an issue placing your order. Please try again or contact us directly.");
@@ -878,6 +901,7 @@ export default function Widget() {
           
           setMessages(prev => [...prev, confirmationMessage]);
           persistMessage('ai', `Your appointment has been confirmed! Here are your booking details:`);
+          emitUISignal({ intent: "confirmation", activeComponent: "booking_confirmation", componentData: confirmationMessage.bookingConfirmation || {} });
           
           // Reset booking state
           setBookingState({...defaultBookingState});
@@ -932,6 +956,7 @@ export default function Widget() {
         
         // Reset booking state after successful booking
         setBookingState({...defaultBookingState});
+        emitUISignal({ intent: "confirmation", activeComponent: "booking_confirmation", componentData: botMessage.bookingConfirmation || {} });
       }
       
       // Check if order was created by the backend
@@ -947,6 +972,11 @@ export default function Widget() {
         
         // Reset booking state after successful order
         setBookingState({...defaultBookingState});
+        emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: botMessage.orderConfirmation || {} });
+      }
+
+      if (data.uiSignal) {
+        setActiveUISignal(data.uiSignal as UISignal);
       }
 
       // Detect booking intent and show services (only if not already in booking flow)
@@ -1049,6 +1079,7 @@ export default function Widget() {
 
   async function handleServiceSelect(serviceId: string, serviceName: string) {
     setBookingState(prev => ({ ...prev, serviceId, serviceName, orderMode: false }));
+    emitUISignal({ intent: "booking", activeComponent: "date_picker" });
     addUserMessage(`I'd like to book ${serviceName}`);
     addBotMessage(`Great choice! Go ahead and pick a date that works for you.`, { showDatePicker: true });
   }
@@ -1072,6 +1103,7 @@ export default function Widget() {
       orderMode: true,
       collectingInfo: null, // NOT collecting info yet
     }));
+    emitUISignal({ intent: "ordering", activeComponent: null, reason: "step_progression" });
     
     // Soft confirmation message — ask if they want to proceed
     const botContent = `Great choices! You've selected ${productNames}${priceText}. Are you ready to go ahead with this order, or would you like to make any changes?`;
@@ -1121,14 +1153,17 @@ export default function Widget() {
       
       if (slots.length > 0) {
         addBotMessage(`Here are the available slots for ${formattedDate} — pick the one that works best for you!`, { showTimeSlots: true, timeSlots: slots });
+        emitUISignal({ intent: "booking", activeComponent: "time_picker", componentData: { slots } });
       } else {
         setBookingState(prev => ({ ...prev, date: null }));
         addBotMessage(`I'm sorry, but there are no available time slots on ${formattedDate}. Would you like to try a different date?`, { showDatePicker: true });
+        emitUISignal({ intent: "booking", activeComponent: "date_picker" });
       }
     } catch (error) {
       console.error("[Widget] Error fetching availability:", error);
       setBookingState(prev => ({ ...prev, date: null }));
       addBotMessage("I had trouble checking availability. Please try selecting a date again.", { showDatePicker: true });
+      emitUISignal({ intent: "booking", activeComponent: "date_picker" });
     } finally {
       setLoading(false);
     }
@@ -1141,6 +1176,7 @@ export default function Widget() {
       timeSlot: { ...slot, startTime }, 
       collectingInfo: 'name' 
     }));
+    emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
     
     const formattedTime = format(new Date(startTime), "h:mm a");
     const formattedDate = bookingState.date ? format(bookingState.date, "EEEE, MMMM d") : "";
@@ -1156,6 +1192,7 @@ export default function Widget() {
         await handleServiceSelect(services[0].id, services[0].name);
       } else if (services.length > 1) {
         addBotMessage("Which service would you like to book? Just tap one below!", { showServices: true });
+        emitUISignal({ intent: "booking", activeComponent: "service_selector" });
       } else {
         await sendMessage("I'd like to book an appointment");
       }
@@ -1165,6 +1202,7 @@ export default function Widget() {
           `• **${s.name}**${s.duration_minutes ? ` (${s.duration_minutes} min)` : ''}${s.price ? ` - $${s.price}` : ''}`
         ).join('\n');
         addBotMessage(`Here are our available services:\n\n${serviceList}\n\nWould you like to book any of these?`, { showServices: true });
+        emitUISignal({ intent: "service_enquiry", activeComponent: "service_selector" });
       } else {
         await sendMessage("What services do you offer?");
       }
@@ -1174,10 +1212,12 @@ export default function Widget() {
           `• **${p.name}**${p.price ? ` - $${p.price}` : ''}`
         ).join('\n');
         addBotMessage(`Here are our available products:\n\n${productList}\n\nWould you like to order any of these?`, { showProducts: true });
+        emitUISignal({ intent: "product_enquiry", activeComponent: "product_selector" });
       } else {
         await sendMessage("What products do you have?");
       }
     } else if (value === "contact") {
+      emitUISignal({ intent: "support", activeComponent: null, reason: "no_ui_needed" });
       const contactInfo = receptionist?.business_info as any;
       let contactMessage = "Here's how you can reach us:\n\n";
       
@@ -1221,6 +1261,7 @@ export default function Widget() {
     // Reset local booking state and clear persisted copy
     setBookingState({...defaultBookingState});
     localStorage.removeItem(BOOKING_STATE_KEY);
+    setActiveUISignal(null);
     
     // Reset session tracking
     setHasExistingSession(false);
@@ -1428,70 +1469,6 @@ export default function Widget() {
                     </div>
                   )}
 
-                  {msg.showServices && services.length > 0 && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%]">
-                        <ServiceSelector
-                          services={services}
-                          onSelect={handleServiceSelect}
-                          disabled={loading}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.showProducts && products.length > 0 && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[85%]">
-                        <ProductSelectorEnhanced
-                          products={products}
-                          onConfirm={handleProductsConfirm}
-                          disabled={loading}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.showDatePicker && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%]">
-                        <DateSelector
-                          onSelect={handleDateSelect}
-                          disabled={loading}
-                          minDate={new Date()}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.showTimeSlots && msg.timeSlots && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%]">
-                        <TimeSlotSelector
-                          slots={msg.timeSlots}
-                          onSelect={handleTimeSlotSelect}
-                          disabled={loading}
-                          showMore={false}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.bookingConfirmation && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%]">
-                        <BookingConfirmation {...msg.bookingConfirmation} />
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.orderConfirmation && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%]">
-                        <OrderConfirmation {...msg.orderConfirmation} />
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
             </div>
@@ -1517,6 +1494,17 @@ export default function Widget() {
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        <UISignalRenderer
+          signal={activeUISignal}
+          services={services}
+          products={products}
+          loading={loading}
+          onServiceSelect={handleServiceSelect}
+          onProductsConfirm={handleProductsConfirm}
+          onDateSelect={handleDateSelect}
+          onTimeSlotSelect={handleTimeSlotSelect}
+        />
 
         {/* Input */}
         <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
