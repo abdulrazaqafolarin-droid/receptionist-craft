@@ -2983,6 +2983,10 @@ return {
         // Legacy UI hints for backward compatibility
         shouldShowServices: (engineResult.ui_hints.show_services || uiHints.showServiceSelector) && !conversationContext.servicesShownInLastMessage,
         shouldShowProducts: (engineResult.ui_hints.show_products || uiHints.showProductSelector) && !conversationContext.productsShownInLastMessage,
+        showServicesUI: (engineResult.ui_hints.show_services || uiHints.showServiceSelector) && !conversationContext.servicesShownInLastMessage,
+        showProductsUI: (engineResult.ui_hints.show_products || uiHints.showProductSelector) && !conversationContext.productsShownInLastMessage,
+        showDatePickerUI: engineResult.ui_hints.show_calendar || uiHints.showDatePicker,
+        showTimeSlotsUI: engineResult.ui_hints.show_time_slots || uiHints.showTimePicker,
         uiSignal,
         // Engine v2 state info (PRIMARY)
         engineV2: {

@@ -48,13 +48,13 @@ export interface UISignal {
 
 interface Props {
   signal: UISignal | null;
-  services: any[];
-  products: any[];
+  services: Array<{ id: string; name: string; duration_minutes?: number; price?: number }>;
+  products: Array<{ id: string; name: string; price?: number; stock_quantity?: number }>;
   loading: boolean;
   onServiceSelect: (serviceId: string, serviceName: string) => void;
   onProductsConfirm: (selectedProducts: Array<{ productId: string; productName: string; quantity: number; price?: number }>) => void;
   onDateSelect: (date: Date) => void;
-  onTimeSlotSelect: (slot: any) => void;
+  onTimeSlotSelect: (slot: { startTime: string; endTime?: string }) => void;
 }
 
 export function UISignalRenderer({
