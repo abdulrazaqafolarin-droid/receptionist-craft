@@ -499,12 +499,23 @@ function resolvePendingSwitchIntent(
     return { forcedIntent: detectedIntent, shouldConsumePendingSwitch: false };
   }
 
-  const resolvedSwitchIntent = switchDecision === "switch"
-    ? mapFlowToIntent(pendingSwitch.targetFlow)
-    : mapFlowToIntent(pendingSwitch.fromFlow);
+  const selectedFlow = switchDecision === "switch"
+    ? pendingSwitch.targetFlow
+    : pendingSwitch.fromFlow;
+  const resolvedSwitchIntent = mapFlowToIntent(selectedFlow);
+
+  if (!resolvedSwitchIntent) {
+    // If the switch target/source flow is unknown, do not force a fallback flow.
+    // Preserve the currently detected intent instead of deterministically routing
+    // to booking or ordering.
+    return {
+      forcedIntent: detectedIntent,
+      shouldConsumePendingSwitch: true,
+    };
+  }
 
   return {
-    forcedIntent: resolvedSwitchIntent ?? detectedIntent,
+    forcedIntent: resolvedSwitchIntent,
     shouldConsumePendingSwitch: true,
   };
 }
