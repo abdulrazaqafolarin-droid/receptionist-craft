@@ -2942,11 +2942,16 @@ return {
       : secondaryIntents.includes("ordering") ? "PRODUCT"
       : secondaryIntents.includes("booking") ? "SERVICE"
       : null;
+    const canPromptSwitch = shouldPromptSwitch && (
+      pendingSwitchTarget !== null ||
+      conversationState.active_flow === "SERVICE" ||
+      conversationState.active_flow === "PRODUCT"
+    );
     const stepComponent = mapStepToUIComponent(engineState?.task_step, engineState?.task_type);
     const activeComponent: UIComponent =
       bookingResult ? "booking_confirmation" :
       orderResult ? "order_summary" :
-      shouldPromptSwitch ? "switch_confirmation" :
+      canPromptSwitch ? "switch_confirmation" :
       stepComponent ||
       (engineResult.ui_hints.show_services ? "service_selector" :
       engineResult.ui_hints.show_products ? "product_selector" :
@@ -3015,7 +3020,7 @@ return {
       },
       conversationCanContinue: true,
     };
-    if (shouldPromptSwitch) {
+    if (canPromptSwitch) {
       conversationState.slots = {
         ...conversationState.slots,
         pending_intent_switch: {
