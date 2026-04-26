@@ -476,11 +476,37 @@ function mapStepToUIComponent(taskStep: string | null | undefined, taskType: str
 }
 
 type IntentSwitchDecision = "continue" | "switch" | null;
+type FlowKind = "SERVICE" | "PRODUCT" | null;
 
-function mapFlowToIntent(flow: "SERVICE" | "PRODUCT" | null): string | null {
+interface PendingIntentSwitch {
+  fromFlow: FlowKind;
+  targetFlow: FlowKind;
+  createdAt: string;
+}
+
+function mapFlowToIntent(flow: FlowKind): string | null {
   if (flow === "PRODUCT") return "order_product";
   if (flow === "SERVICE") return "book_appointment";
   return null;
+}
+
+function resolvePendingSwitchIntent(
+  pendingSwitch: PendingIntentSwitch | null,
+  switchDecision: IntentSwitchDecision,
+  detectedIntent: string,
+): { forcedIntent: string; shouldConsumePendingSwitch: boolean } {
+  if (!pendingSwitch || !switchDecision) {
+    return { forcedIntent: detectedIntent, shouldConsumePendingSwitch: false };
+  }
+
+  const resolvedSwitchIntent = switchDecision === "switch"
+    ? mapFlowToIntent(pendingSwitch.targetFlow)
+    : mapFlowToIntent(pendingSwitch.fromFlow);
+
+  return {
+    forcedIntent: resolvedSwitchIntent ?? detectedIntent,
+    shouldConsumePendingSwitch: true,
+  };
 }
 
 function detectSecondaryIntents(message: string): UIIntent[] {
@@ -1863,11 +1889,7 @@ if (!GEMINI_API_KEY) {
 
     // Route intent and update flow state (with defensive guards)
     let intentRouting: any = { flowType: null, shouldStartFlow: false, shouldResetCurrentFlow: false, topicShift: null, initialStep: null };
-    const pendingIntentSwitch = (conversationState.slots?.pending_intent_switch || null) as {
-      fromFlow: "SERVICE" | "PRODUCT" | null;
-      targetFlow: "SERVICE" | "PRODUCT" | null;
-      createdAt: string;
-    } | null;
+    const pendingIntentSwitch = (conversationState.slots?.pending_intent_switch || null) as PendingIntentSwitch | null;
     const pendingSwitchAgeMs = pendingIntentSwitch?.createdAt
       ? (Date.now() - new Date(pendingIntentSwitch.createdAt).getTime())
       : null;
@@ -1878,15 +1900,11 @@ if (!GEMINI_API_KEY) {
       const { pending_intent_switch: _ignored, ...restSlots } = (conversationState.slots || {}) as Record<string, unknown>;
       conversationState.slots = restSlots;
     }
-    const resolvedSwitchIntent = (() => {
-      if (!activePendingSwitch || !switchDecision) {
-        return null;
-      }
-      return switchDecision === "switch"
-        ? mapFlowToIntent(activePendingSwitch.targetFlow)
-        : mapFlowToIntent(activePendingSwitch.fromFlow);
-    })();
-    const forcedIntent = resolvedSwitchIntent ?? messageAnalysis.detectedIntent;
+    const { forcedIntent, shouldConsumePendingSwitch } = resolvePendingSwitchIntent(
+      activePendingSwitch,
+      switchDecision,
+      messageAnalysis.detectedIntent,
+    );
     try {
       intentRouting = routeIntent(forcedIntent, conversationState, message);
       console.log(`[Flow Engine] Routing: FlowType=${intentRouting.flowType}, StartFlow=${intentRouting.shouldStartFlow}`);
@@ -1903,7 +1921,7 @@ if (!GEMINI_API_KEY) {
       conversationState.flow_step = null;
       conversationState.slots = {};
     }
-    if (activePendingSwitch && switchDecision) {
+    if (shouldConsumePendingSwitch) {
       const { pending_intent_switch: _ignored, ...restSlots } = (conversationState.slots || {}) as Record<string, unknown>;
       conversationState.slots = restSlots;
     }
