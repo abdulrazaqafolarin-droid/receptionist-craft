@@ -1872,11 +1872,20 @@ if (!GEMINI_API_KEY) {
       const { pending_intent_switch: _ignored, ...restSlots } = (conversationState.slots || {}) as Record<string, unknown>;
       conversationState.slots = restSlots;
     }
-    const forcedIntent = activePendingSwitch && switchDecision
-      ? (switchDecision === "switch"
-        ? (activePendingSwitch.targetFlow === "PRODUCT" ? "order_product" : "book_appointment")
-        : (activePendingSwitch.fromFlow === "PRODUCT" ? "order_product" : "book_appointment"))
-      : messageAnalysis.detectedIntent;
+    const mapFlowToIntent = (flow: "SERVICE" | "PRODUCT" | null): string | null => {
+      if (flow === "PRODUCT") return "order_product";
+      if (flow === "SERVICE") return "book_appointment";
+      return null;
+    };
+    const forcedIntent = (() => {
+      if (!activePendingSwitch || !switchDecision) {
+        return messageAnalysis.detectedIntent;
+      }
+      const resolvedIntent = switchDecision === "switch"
+        ? mapFlowToIntent(activePendingSwitch.targetFlow)
+        : mapFlowToIntent(activePendingSwitch.fromFlow);
+      return resolvedIntent ?? messageAnalysis.detectedIntent;
+    })();
     try {
       intentRouting = routeIntent(forcedIntent, conversationState, message);
       console.log(`[Flow Engine] Routing: FlowType=${intentRouting.flowType}, StartFlow=${intentRouting.shouldStartFlow}`);
