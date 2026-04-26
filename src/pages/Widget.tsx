@@ -138,6 +138,47 @@ export default function Widget() {
     });
   }
 
+  async function hydrateTimePickerSignal(signal: UISignal): Promise<UISignal> {
+    if (
+      signal.activeComponent !== "time_picker" ||
+      Array.isArray(signal.componentData?.slots) ||
+      !bookingState.serviceId ||
+      !bookingState.date ||
+      !receptionistId
+    ) {
+      return signal;
+    }
+
+    try {
+      const dateStr = format(bookingState.date, "yyyy-MM-dd");
+      const nextDay = new Date(bookingState.date);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const endDateStr = format(nextDay, "yyyy-MM-dd");
+
+      const { data: slotsData } = await supabase.functions.invoke("check-availability", {
+        body: {
+          receptionistId,
+          serviceId: bookingState.serviceId,
+          startDate: dateStr,
+          endDate: endDateStr,
+          maxSlots: 6,
+        }
+      });
+
+      const slots = slotsData?.slots || [];
+      return {
+        ...signal,
+        componentData: {
+          ...(signal.componentData || {}),
+          slots,
+        },
+      };
+    } catch (err) {
+      console.warn("[Widget] Failed to hydrate time_picker signal slots:", err);
+      return signal;
+    }
+  }
+
   // ─── Client-side name validation (mirrors edge function nameValidator.ts) ───
   const NAME_BLOCKLIST_CLIENT = new Set([
     'hello','hi','hey','thanks','thank','please','yes','no','sure','okay','ok',
@@ -976,13 +1017,16 @@ export default function Widget() {
       }
 
       if (data.uiSignal) {
-        setActiveUISignal(data.uiSignal as UISignal);
+        const hydratedSignal = await hydrateTimePickerSignal(data.uiSignal as UISignal);
+        setActiveUISignal(hydratedSignal);
       }
 
       // Detect booking intent and show services (only if not already in booking flow)
       // Only show services if AI explicitly asks for service selection
       const shouldShowServices = (
-        data.showServicesUI || 
+        data.showServicesUI ||
+        data.shouldShowServices ||
+        data.uiHints?.showServiceSelector ||
         lowerReply.includes("which service") || 
         lowerReply.includes("what service") ||
         lowerReply.includes("select a service") ||
@@ -996,6 +1040,8 @@ export default function Widget() {
       // Detect product order intent and show products
       const shouldShowProducts = (
         data.showProductsUI ||
+        data.shouldShowProducts ||
+        data.uiHints?.showProductSelector ||
         lowerReply.includes("which product") || 
         lowerReply.includes("what product") ||
         lowerReply.includes("order from our") ||
@@ -1010,6 +1056,7 @@ export default function Widget() {
       // NOT automatically after service selection - let the AI control the flow
       const shouldShowDatePicker = (
         data.showDatePickerUI ||
+        data.uiHints?.showDatePicker ||
         lowerReply.includes("which date") ||
         lowerReply.includes("what date") ||
         lowerReply.includes("when would you like") ||
@@ -1025,6 +1072,7 @@ export default function Widget() {
       // Only show time slots if AI explicitly asks for a time
       const shouldShowTimeSlots = (
         data.showTimeSlotsUI ||
+        data.uiHints?.showTimePicker ||
         lowerReply.includes("which time") ||
         lowerReply.includes("what time") ||
         lowerReply.includes("select a time") ||
