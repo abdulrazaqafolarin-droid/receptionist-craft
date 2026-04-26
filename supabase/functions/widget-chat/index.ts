@@ -493,10 +493,11 @@ function mapFlowToIntent(flow: FlowKind): string | null {
 function resolvePendingSwitchIntent(
   pendingSwitch: PendingIntentSwitch | null,
   switchDecision: IntentSwitchDecision,
-  detectedIntent: string,
+  detectedIntent: string | null | undefined,
 ): { forcedIntent: string; shouldConsumePendingSwitch: boolean } {
+  const stableDetectedIntent = detectedIntent || "unknown";
   if (!pendingSwitch || !switchDecision) {
-    return { forcedIntent: detectedIntent, shouldConsumePendingSwitch: false };
+    return { forcedIntent: stableDetectedIntent, shouldConsumePendingSwitch: false };
   }
 
   const selectedFlow = switchDecision === "switch"
@@ -509,7 +510,7 @@ function resolvePendingSwitchIntent(
     // Preserve the currently detected intent instead of deterministically routing
     // to booking or ordering.
     return {
-      forcedIntent: detectedIntent,
+      forcedIntent: stableDetectedIntent,
       shouldConsumePendingSwitch: true,
     };
   }
