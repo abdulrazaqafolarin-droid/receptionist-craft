@@ -9,13 +9,9 @@ import VoiceInputButton from "@/components/widget/VoiceInputButton";
 import VoiceChatOverlay from "@/components/widget/VoiceChatOverlay";
 import { useToast } from "@/hooks/use-toast";
 import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
-import { ServiceSelector } from "@/components/widget/ServiceSelector";
-import { ProductSelectorEnhanced } from "@/components/widget/ProductSelectorEnhanced";
-import { DateSelector } from "@/components/widget/DateSelector";
-import { TimeSlotSelector } from "@/components/widget/TimeSlotSelector";
-import { BookingConfirmation } from "@/components/widget/BookingConfirmation";
-import { OrderConfirmation } from "@/components/widget/OrderConfirmation";
 import { ChatSessionOverlay } from "@/components/widget/ChatSessionOverlay";
+import { UISignalRenderer } from "@/components/widget/UISignalRenderer";
+import { normalizeUISignal, parseUISignal, type UISignal } from "@/shared/uiSignal";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -24,11 +20,6 @@ type Message = {
   content: string;
   timestamp: Date;
   showQuickReplies?: boolean;
-  showServices?: boolean;
-  showProducts?: boolean;
-  showDatePicker?: boolean;
-  showTimeSlots?: boolean;
-  timeSlots?: any[];
   bookingConfirmation?: any;
   orderConfirmation?: any;
 };
@@ -100,6 +91,7 @@ export default function Widget() {
   const [existingMessages, setExistingMessages] = useState<any[]>([]);
   const [sessionCheckComplete, setSessionCheckComplete] = useState(false);
   const [voiceChatOpen, setVoiceChatOpen] = useState(false);
+  const [activeUISignal, setActiveUISignal] = useState<UISignal | null>(null);
   
   // Abuse protection: honeypot field and form load timing
   const [honeypotValue, setHoneypotValue] = useState("");
@@ -128,6 +120,75 @@ export default function Widget() {
     setMessages(prev => [...prev, msg]);
     persistMessage('ai', content);
     return msg;
+  }
+
+  function emitUISignal(partial: Partial<UISignal> & Pick<UISignal, "intent" | "activeComponent">) {
+    setActiveUISignal(normalizeUISignal(partial));
+  }
+
+  function toUISignalFromLegacyResponse(data: any): UISignal | null {
+    const uiHints = data?.uiHints || {};
+    const activeComponent =
+      uiHints.showServiceSelector ? "service_selector" :
+      uiHints.showProductSelector ? "product_selector" :
+      uiHints.showDatePicker ? "date_picker" :
+      uiHints.showTimePicker ? "time_picker" :
+      uiHints.showOrderConfirmation ? "order_summary" :
+      uiHints.showConfirmButton ? "booking_confirmation" :
+      null;
+
+    if (!activeComponent) return null;
+
+    return normalizeUISignal({
+      intent: activeComponent === "product_selector" ? "ordering" : "booking",
+      activeComponent,
+      flow: {
+        activeFlow: data?.activeFlow === "PRODUCT" ? "ordering" : data?.activeFlow === "SERVICE" ? "booking" : null,
+        step: data?.flowStep || null,
+        blocking: false,
+      },
+    });
+  }
+
+  async function hydrateTimeSlotsForSignal(signal: UISignal, responseData?: any): Promise<UISignal> {
+    if (signal.activeComponent !== "time_picker") return signal;
+    if (Array.isArray(signal.componentData?.slots) && signal.componentData.slots.length > 0) return signal;
+
+    const inferredServiceId =
+      bookingState.serviceId ||
+      (responseData?.collectedSlots?.serviceName
+        ? services.find((s) => s.name === responseData.collectedSlots.serviceName)?.id
+        : null) ||
+      null;
+    const inferredDate =
+      bookingState.date ||
+      (responseData?.collectedSlots?.date ? new Date(responseData.collectedSlots.date) : null) ||
+      null;
+    if (!inferredDate || isNaN(inferredDate.getTime())) return signal;
+    if (!inferredServiceId || !inferredDate) return signal;
+
+    try {
+      const dateStr = format(inferredDate, "yyyy-MM-dd");
+      const nextDay = new Date(inferredDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const endDateStr = format(nextDay, "yyyy-MM-dd");
+      const { data: slotsData } = await supabase.functions.invoke("check-availability", {
+        body: {
+          receptionistId,
+          serviceId: inferredServiceId,
+          startDate: dateStr,
+          endDate: endDateStr,
+          maxSlots: 8,
+        }
+      });
+      const slots = slotsData?.slots || [];
+      return {
+        ...signal,
+        componentData: { ...signal.componentData, slots },
+      };
+    } catch {
+      return signal;
+    }
   }
 
   // ─── Client-side name validation (mirrors edge function nameValidator.ts) ───
@@ -298,6 +359,7 @@ export default function Widget() {
     // Restore persisted booking state from localStorage
     const restoredBooking = loadPersistedBookingState();
     setBookingState(restoredBooking);
+    setActiveUISignal(null);
     
     // Restore messages from the existing conversation - include both user and AI messages
     if (existingMessages.length > 0) {
@@ -322,15 +384,18 @@ export default function Widget() {
   async function resumeBookingFlow(state: typeof defaultBookingState) {
     // If collecting info (name or contact), just prompt again
     if (state.collectingInfo === 'name') {
+      emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
       addBotMessage("Welcome back! 👋 We were just getting your details to complete the booking. What's your name?");
       return;
     }
     if (state.collectingInfo === 'contact') {
+      emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
       addBotMessage(`Welcome back, ${state.customerName}! 👋 To finish your booking, could you share your email or phone number?`);
       return;
     }
     // If awaiting order confirmation
     if (state.awaitingOrderConfirmation && state.productName) {
+      emitUISignal({ intent: "ordering", activeComponent: null, reason: "step_progression" });
       addBotMessage(`Welcome back! 👋 You had selected ${state.productName}. Would you like to go ahead with this order, make changes, or start fresh?`);
       return;
     }
@@ -350,22 +415,19 @@ export default function Widget() {
         
         const slots = slotsData?.slots || [];
         if (slots.length > 0) {
-          addBotMessage(
-            `Welcome back! 👋 You were booking ${state.serviceName} for ${formattedDate}. Here are today's available times — pick one to continue!`,
-            { showTimeSlots: true, timeSlots: slots }
-          );
+          addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName} for ${formattedDate}. Here are today's available times — pick one to continue!`);
+          emitUISignal({ intent: "booking", activeComponent: "time_picker", componentData: { slots } });
         } else {
           // Date no longer has slots — offer date picker again
           setBookingState(prev => ({ ...prev, date: null }));
-          addBotMessage(
-            `Welcome back! 👋 You were booking ${state.serviceName}, but ${formattedDate} no longer has open slots. Please pick another date.`,
-            { showDatePicker: true }
-          );
+          addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName}, but ${formattedDate} no longer has open slots. Please pick another date.`);
+          emitUISignal({ intent: "booking", activeComponent: "date_picker" });
         }
       } catch (e) {
         console.error("[Widget] Error resuming booking flow:", e);
         setBookingState(prev => ({ ...prev, date: null }));
-        addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName}. Please pick a date to continue.`, { showDatePicker: true });
+        addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName}. Please pick a date to continue.`);
+        emitUISignal({ intent: "booking", activeComponent: "date_picker" });
       } finally {
         setLoading(false);
       }
@@ -373,10 +435,8 @@ export default function Widget() {
     }
     // If service selected but no date — show date picker
     if (state.serviceId && !state.date) {
-      addBotMessage(
-        `Welcome back! 👋 You were booking ${state.serviceName}. Go ahead and pick a date that works for you!`,
-        { showDatePicker: true }
-      );
+      addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName}. Go ahead and pick a date that works for you!`);
+      emitUISignal({ intent: "booking", activeComponent: "date_picker" });
       return;
     }
     // If time slot selected but info not yet collected — start collecting
@@ -384,6 +444,7 @@ export default function Widget() {
       const formattedDate = format(state.date, "EEEE, MMMM d");
       const formattedTime = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(state.timeSlot.startTime || state.timeSlot.start));
       setBookingState(prev => ({ ...prev, collectingInfo: 'name' }));
+      emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
       addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName} on ${formattedDate} at ${formattedTime}. To complete your booking, may I have your name please?`);
       return;
     }
@@ -415,6 +476,7 @@ export default function Widget() {
     // Reset booking state and clear persisted copy
     setBookingState({...defaultBookingState});
     localStorage.removeItem(BOOKING_STATE_KEY);
+    setActiveUISignal(null);
     
     // Show fresh greeting with a proper "Hi" conversation start
     if (receptionist?.greeting_message) {
@@ -686,6 +748,7 @@ export default function Widget() {
             awaitingOrderConfirmation: false,
             collectingInfo: 'name',
           }));
+          emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
           
           addBotMessage("Perfect, let's get your order placed! What's your name?");
           setLoading(false);
@@ -701,13 +764,15 @@ export default function Widget() {
             quantity: 1,
             orderMode: false,
           }));
+          emitUISignal({ intent: "ordering", activeComponent: "product_selector", reason: "intent_switch" });
           
-          addBotMessage("No problem at all! Here are our products again — take your time and pick whatever you'd like.", { showProducts: true });
+          addBotMessage("No problem at all! Here are our products again — take your time and pick whatever you'd like.");
           setLoading(false);
           return;
         } else if (isCancel) {
           // User not ready — back off completely
           setBookingState({...defaultBookingState});
+          emitUISignal({ intent: "browsing", activeComponent: null, reason: "user_cancel" });
           addBotMessage("No worries at all! Feel free to browse or ask me anything whenever you're ready. I'm here to help! 😊");
           setLoading(false);
           return;
@@ -752,6 +817,7 @@ export default function Widget() {
         }
         
         setBookingState(prev => ({ ...prev, customerName: name, collectingInfo: 'contact' }));
+        emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
         
         addBotMessage(`Thank you, ${name}! And what's the best way to reach you? You can share your email address or phone number.`);
         setLoading(false);
@@ -829,6 +895,7 @@ export default function Widget() {
             
             setMessages(prev => [...prev, orderConfirmationMessage]);
             persistMessage('ai', `Wonderful! Your order has been placed successfully. Here are the details:`);
+            emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: orderConfirmationMessage.orderConfirmation || {} });
           } catch (orderErr: any) {
             console.error("[Widget] Order error:", orderErr);
             addBotMessage("I apologize, but I encountered an issue placing your order. Please try again or contact us directly.");
@@ -878,6 +945,7 @@ export default function Widget() {
           
           setMessages(prev => [...prev, confirmationMessage]);
           persistMessage('ai', `Your appointment has been confirmed! Here are your booking details:`);
+          emitUISignal({ intent: "confirmation", activeComponent: "booking_confirmation", componentData: confirmationMessage.bookingConfirmation || {} });
           
           // Reset booking state
           setBookingState({...defaultBookingState});
@@ -908,9 +976,7 @@ export default function Widget() {
 
       if (error) throw error;
 
-      // Detect if we should show special UI
       const reply = data.reply || "";
-      const lowerReply = reply.toLowerCase();
       
       let botMessage: Message = {
         role: "assistant",
@@ -932,6 +998,7 @@ export default function Widget() {
         
         // Reset booking state after successful booking
         setBookingState({...defaultBookingState});
+        emitUISignal({ intent: "confirmation", activeComponent: "booking_confirmation", componentData: botMessage.bookingConfirmation || {} });
       }
       
       // Check if order was created by the backend
@@ -947,91 +1014,13 @@ export default function Widget() {
         
         // Reset booking state after successful order
         setBookingState({...defaultBookingState});
+        emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: botMessage.orderConfirmation || {} });
       }
 
-      // Detect booking intent and show services (only if not already in booking flow)
-      // Only show services if AI explicitly asks for service selection
-      const shouldShowServices = (
-        data.showServicesUI || 
-        lowerReply.includes("which service") || 
-        lowerReply.includes("what service") ||
-        lowerReply.includes("select a service") ||
-        lowerReply.includes("choose a service")
-      ) && !bookingState.serviceId && !data.bookingCreated;
-      
-      if (shouldShowServices && services.length > 0) {
-        botMessage.showServices = true;
-      }
-
-      // Detect product order intent and show products
-      const shouldShowProducts = (
-        data.showProductsUI ||
-        lowerReply.includes("which product") || 
-        lowerReply.includes("what product") ||
-        lowerReply.includes("order from our") ||
-        lowerReply.includes("browse our products")
-      ) && !bookingState.productId && !data.orderCreated;
-      
-      if (shouldShowProducts && products.length > 0) {
-        botMessage.showProducts = true;
-      }
-
-      // Only show date picker if AI explicitly asks for a date
-      // NOT automatically after service selection - let the AI control the flow
-      const shouldShowDatePicker = (
-        data.showDatePickerUI ||
-        lowerReply.includes("which date") ||
-        lowerReply.includes("what date") ||
-        lowerReply.includes("when would you like") ||
-        lowerReply.includes("pick a date") ||
-        lowerReply.includes("select a date") ||
-        lowerReply.includes("choose a date")
-      ) && bookingState.serviceId && !bookingState.date && !data.bookingCreated;
-      
-      if (shouldShowDatePicker) {
-        botMessage.showDatePicker = true;
-      }
-
-      // Only show time slots if AI explicitly asks for a time
-      const shouldShowTimeSlots = (
-        data.showTimeSlotsUI ||
-        lowerReply.includes("which time") ||
-        lowerReply.includes("what time") ||
-        lowerReply.includes("select a time") ||
-        lowerReply.includes("pick a time") ||
-        lowerReply.includes("choose a time") ||
-        lowerReply.includes("available slot")
-      ) && bookingState.serviceId && bookingState.date && !bookingState.timeSlot && !data.bookingCreated;
-      
-      if (shouldShowTimeSlots) {
-        const dateStr = format(bookingState.date, "yyyy-MM-dd");
-        const nextDay = new Date(bookingState.date);
-        nextDay.setDate(nextDay.getDate() + 1);
-        const endDateStr = format(nextDay, "yyyy-MM-dd");
-        
-        console.log("[Widget] sendMessage fetching availability:", { receptionistId, serviceId: bookingState.serviceId, startDate: dateStr, endDate: endDateStr });
-        
-        const { data: slotsData, error: slotsError } = await supabase.functions.invoke("check-availability", {
-          body: {
-            receptionistId,
-            serviceId: bookingState.serviceId,
-            startDate: dateStr,
-            endDate: endDateStr,
-            maxSlots: 6,
-          }
-        });
-
-        console.log("[Widget] sendMessage slots response:", { slotsData, slotsError });
-
-        const slots = slotsData?.slots || [];
-        if (slots.length > 0) {
-          botMessage.showTimeSlots = true;
-          botMessage.timeSlots = slots;
-        } else {
-          // No slots available, tell user
-          botMessage.content += "\n\nUnfortunately, no time slots are available for that date. Please select another date.";
-          botMessage.showDatePicker = true;
-        }
+      const rawSignal = parseUISignal(data.uiSignal) || toUISignalFromLegacyResponse(data);
+      if (rawSignal) {
+        const hydratedSignal = await hydrateTimeSlotsForSignal(rawSignal, data);
+        setActiveUISignal(hydratedSignal);
       }
 
       setMessages(prev => [...prev, botMessage]);
@@ -1049,8 +1038,9 @@ export default function Widget() {
 
   async function handleServiceSelect(serviceId: string, serviceName: string) {
     setBookingState(prev => ({ ...prev, serviceId, serviceName, orderMode: false }));
+    emitUISignal({ intent: "booking", activeComponent: "date_picker" });
     addUserMessage(`I'd like to book ${serviceName}`);
-    addBotMessage(`Great choice! Go ahead and pick a date that works for you.`, { showDatePicker: true });
+    addBotMessage(`Great choice! Go ahead and pick a date that works for you.`);
   }
 
   async function handleProductsConfirm(selectedProducts: Array<{ productId: string; productName: string; quantity: number; price?: number }>) {
@@ -1072,6 +1062,7 @@ export default function Widget() {
       orderMode: true,
       collectingInfo: null, // NOT collecting info yet
     }));
+    emitUISignal({ intent: "ordering", activeComponent: null, reason: "step_progression" });
     
     // Soft confirmation message — ask if they want to proceed
     const botContent = `Great choices! You've selected ${productNames}${priceText}. Are you ready to go ahead with this order, or would you like to make any changes?`;
@@ -1111,7 +1102,7 @@ export default function Widget() {
       if (slotsError) {
         console.error("[Widget] check-availability error:", slotsError);
         setBookingState(prev => ({ ...prev, date: null }));
-        addBotMessage("I had trouble checking availability. Please try selecting a date again.", { showDatePicker: true });
+        addBotMessage("I had trouble checking availability. Please try selecting a date again.");
         return;
       }
 
@@ -1120,15 +1111,18 @@ export default function Widget() {
       console.log("[Widget] Extracted slots count:", slots.length);
       
       if (slots.length > 0) {
-        addBotMessage(`Here are the available slots for ${formattedDate} — pick the one that works best for you!`, { showTimeSlots: true, timeSlots: slots });
+        addBotMessage(`Here are the available slots for ${formattedDate} — pick the one that works best for you!`);
+        emitUISignal({ intent: "booking", activeComponent: "time_picker", componentData: { slots } });
       } else {
         setBookingState(prev => ({ ...prev, date: null }));
-        addBotMessage(`I'm sorry, but there are no available time slots on ${formattedDate}. Would you like to try a different date?`, { showDatePicker: true });
+        addBotMessage(`I'm sorry, but there are no available time slots on ${formattedDate}. Would you like to try a different date?`);
+        emitUISignal({ intent: "booking", activeComponent: "date_picker" });
       }
     } catch (error) {
       console.error("[Widget] Error fetching availability:", error);
       setBookingState(prev => ({ ...prev, date: null }));
-      addBotMessage("I had trouble checking availability. Please try selecting a date again.", { showDatePicker: true });
+      addBotMessage("I had trouble checking availability. Please try selecting a date again.");
+      emitUISignal({ intent: "booking", activeComponent: "date_picker" });
     } finally {
       setLoading(false);
     }
@@ -1141,6 +1135,7 @@ export default function Widget() {
       timeSlot: { ...slot, startTime }, 
       collectingInfo: 'name' 
     }));
+    emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
     
     const formattedTime = format(new Date(startTime), "h:mm a");
     const formattedDate = bookingState.date ? format(bookingState.date, "EEEE, MMMM d") : "";
@@ -1149,13 +1144,34 @@ export default function Widget() {
     addBotMessage(`Excellent! You've selected ${bookingState.serviceName} on ${formattedDate} at ${formattedTime}.\n\nTo complete your booking, may I have your name please?`);
   }
 
+  async function handleLeadSubmit(payload: { name: string; contact: string }) {
+    if (bookingState.collectingInfo === "contact") {
+      await sendMessage(payload.contact);
+      return;
+    }
+    if (bookingState.collectingInfo === "name") {
+      await sendMessage(payload.name);
+      return;
+    }
+    await sendMessage(`My name is ${payload.name}. You can reach me at ${payload.contact}.`);
+  }
+
+  async function handleSwitchDecision(decision: "continue" | "switch") {
+    if (decision === "switch") {
+      await sendMessage("__SWITCH_TOPIC__");
+      return;
+    }
+    await sendMessage("__CONTINUE_CURRENT__");
+  }
+
   async function handleQuickReply(value: string) {
     if (value === "book_appointment") {
       if (services.length === 1) {
         // Only one service — skip selection, go straight to calendar
         await handleServiceSelect(services[0].id, services[0].name);
       } else if (services.length > 1) {
-        addBotMessage("Which service would you like to book? Just tap one below!", { showServices: true });
+        addBotMessage("Which service would you like to book? Just tap one below!");
+        emitUISignal({ intent: "booking", activeComponent: "service_selector" });
       } else {
         await sendMessage("I'd like to book an appointment");
       }
@@ -1164,7 +1180,8 @@ export default function Widget() {
         const serviceList = services.map(s => 
           `• **${s.name}**${s.duration_minutes ? ` (${s.duration_minutes} min)` : ''}${s.price ? ` - $${s.price}` : ''}`
         ).join('\n');
-        addBotMessage(`Here are our available services:\n\n${serviceList}\n\nWould you like to book any of these?`, { showServices: true });
+        addBotMessage(`Here are our available services:\n\n${serviceList}\n\nWould you like to book any of these?`);
+        emitUISignal({ intent: "service_enquiry", activeComponent: "service_selector" });
       } else {
         await sendMessage("What services do you offer?");
       }
@@ -1173,11 +1190,13 @@ export default function Widget() {
         const productList = products.map(p => 
           `• **${p.name}**${p.price ? ` - $${p.price}` : ''}`
         ).join('\n');
-        addBotMessage(`Here are our available products:\n\n${productList}\n\nWould you like to order any of these?`, { showProducts: true });
+        addBotMessage(`Here are our available products:\n\n${productList}\n\nWould you like to order any of these?`);
+        emitUISignal({ intent: "product_enquiry", activeComponent: "product_selector" });
       } else {
         await sendMessage("What products do you have?");
       }
     } else if (value === "contact") {
+      emitUISignal({ intent: "support", activeComponent: null, reason: "no_ui_needed" });
       const contactInfo = receptionist?.business_info as any;
       let contactMessage = "Here's how you can reach us:\n\n";
       
@@ -1221,6 +1240,7 @@ export default function Widget() {
     // Reset local booking state and clear persisted copy
     setBookingState({...defaultBookingState});
     localStorage.removeItem(BOOKING_STATE_KEY);
+    setActiveUISignal(null);
     
     // Reset session tracking
     setHasExistingSession(false);
@@ -1428,70 +1448,6 @@ export default function Widget() {
                     </div>
                   )}
 
-                  {msg.showServices && services.length > 0 && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%]">
-                        <ServiceSelector
-                          services={services}
-                          onSelect={handleServiceSelect}
-                          disabled={loading}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.showProducts && products.length > 0 && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[85%]">
-                        <ProductSelectorEnhanced
-                          products={products}
-                          onConfirm={handleProductsConfirm}
-                          disabled={loading}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.showDatePicker && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%]">
-                        <DateSelector
-                          onSelect={handleDateSelect}
-                          disabled={loading}
-                          minDate={new Date()}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.showTimeSlots && msg.timeSlots && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%]">
-                        <TimeSlotSelector
-                          slots={msg.timeSlots}
-                          onSelect={handleTimeSlotSelect}
-                          disabled={loading}
-                          showMore={false}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.bookingConfirmation && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%]">
-                        <BookingConfirmation {...msg.bookingConfirmation} />
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.orderConfirmation && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%]">
-                        <OrderConfirmation {...msg.orderConfirmation} />
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
             </div>
@@ -1517,6 +1473,23 @@ export default function Widget() {
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        <UISignalRenderer
+          signal={activeUISignal}
+          services={services}
+          products={products}
+          loading={loading}
+          onServiceSelect={handleServiceSelect}
+          onProductsConfirm={handleProductsConfirm}
+          onDateSelect={handleDateSelect}
+          onTimeSlotSelect={handleTimeSlotSelect}
+          onLeadSubmit={handleLeadSubmit}
+          onSwitchDecision={handleSwitchDecision}
+          leadDefaults={{
+            name: bookingState.customerName || undefined,
+            contact: bookingState.customerEmail || bookingState.customerPhone || undefined,
+          }}
+        />
 
         {/* Input */}
         <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
