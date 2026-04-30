@@ -399,13 +399,6 @@ function jsonResponse(data: any, status = 200) {
     headers: { ...CORS, "Content-Type": "application/json" }
   });
 }
-({
-    success: true,
-    message: "KB rewrite applied successfully",
-    faqs_added: faqSuggestions.length,
-    kb_sections_added: kbAdditions.length,
-  });
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ACTION: GAP-REPORT - Quick gap analysis without AI. Unchanged from original.
