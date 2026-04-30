@@ -2984,7 +2984,7 @@ return {
       },
       conversationCanContinue: true,
     };
-    if (shouldPromptSwitch) {
+    if (shouldPromptSwitch && pendingSwitchTarget) {
       conversationState.slots = {
         ...conversationState.slots,
         pending_intent_switch: {

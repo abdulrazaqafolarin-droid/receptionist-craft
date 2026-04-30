@@ -70,7 +70,7 @@ export default function Widget() {
     }
   }
 
-  const [bookingState, setBookingState] = useState(defaultBookingState);
+  const [bookingState, setBookingState] = useState(loadPersistedBookingState);
   
   // Whenever bookingState changes, persist it
   useEffect(() => {
@@ -155,6 +155,10 @@ export default function Widget() {
         step: data?.flowStep || null,
         blocking: false,
       },
+      componentData:
+        activeComponent === "time_picker"
+          ? { slots: data?.timeSlots || [] }
+          : {},
     });
   }
 
@@ -166,10 +170,10 @@ export default function Widget() {
       (typeof signal.componentData?.serviceId === "string" ? signal.componentData.serviceId : null) ||
       bookingState.serviceId ||
       (typeof signal.componentData?.serviceName === "string"
-        ? services.find((s) => s.name === signal.componentData.serviceName)?.id
+        ? services.find((s) => s.name?.toLowerCase() === signal.componentData.serviceName?.toLowerCase())?.id
         : null) ||
       (responseData?.collectedSlots?.serviceName
-        ? services.find((s) => s.name === responseData.collectedSlots.serviceName)?.id
+        ? services.find((s) => s.name?.toLowerCase() === responseData.collectedSlots.serviceName?.toLowerCase())?.id
         : null) ||
       null;
     const inferredDate =
