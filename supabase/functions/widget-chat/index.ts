@@ -2927,7 +2927,16 @@ return {
       intent: uiIntent,
       activeComponent,
       componentData: activeComponent === "time_picker"
-        ? { date: mergedDate || null }
+        ? {
+            date: mergedDate || null,
+            serviceId: mergedServiceId || null,
+            serviceName: mergedServiceName || null,
+          }
+        : activeComponent === "lead_form"
+          ? {
+              name: mergedCustomerName || null,
+              contact: mergedCustomerEmail || mergedCustomerPhone || null,
+            }
         : activeComponent === "switch_confirmation"
           ? {
               prompt: topicShift?.blockReason || "I can switch topics now, or continue with the current step. Which do you prefer?",

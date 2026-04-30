@@ -133,6 +133,7 @@ export default function Widget() {
       uiHints.showProductSelector ? "product_selector" :
       uiHints.showDatePicker ? "date_picker" :
       uiHints.showTimePicker ? "time_picker" :
+      uiHints.showContactForm ? "lead_form" :
       uiHints.showOrderConfirmation ? "order_summary" :
       uiHints.showConfirmButton ? "booking_confirmation" :
       null;
@@ -140,7 +141,14 @@ export default function Widget() {
     if (!activeComponent) return null;
 
     return normalizeUISignal({
-      intent: activeComponent === "product_selector" ? "ordering" : "booking",
+      intent:
+        activeComponent === "product_selector"
+          ? "ordering"
+          : activeComponent === "lead_form"
+            ? "lead_capture"
+            : activeComponent === "order_summary"
+              ? "ordering"
+              : "booking",
       activeComponent,
       flow: {
         activeFlow: data?.activeFlow === "PRODUCT" ? "ordering" : data?.activeFlow === "SERVICE" ? "booking" : null,
@@ -155,12 +163,19 @@ export default function Widget() {
     if (Array.isArray(signal.componentData?.slots) && signal.componentData.slots.length > 0) return signal;
 
     const inferredServiceId =
+      (typeof signal.componentData?.serviceId === "string" ? signal.componentData.serviceId : null) ||
       bookingState.serviceId ||
+      (typeof signal.componentData?.serviceName === "string"
+        ? services.find((s) => s.name === signal.componentData.serviceName)?.id
+        : null) ||
       (responseData?.collectedSlots?.serviceName
         ? services.find((s) => s.name === responseData.collectedSlots.serviceName)?.id
         : null) ||
       null;
     const inferredDate =
+      (typeof signal.componentData?.date === "string" || signal.componentData?.date instanceof Date
+        ? new Date(signal.componentData.date as string | Date)
+        : null) ||
       bookingState.date ||
       (responseData?.collectedSlots?.date ? new Date(responseData.collectedSlots.date) : null) ||
       null;
@@ -189,6 +204,16 @@ export default function Widget() {
     } catch {
       return signal;
     }
+  }
+
+  async function applyResponseUISignal(data: any) {
+    const rawSignal = parseUISignal(data?.uiSignal) || toUISignalFromLegacyResponse(data);
+    if (!rawSignal) {
+      setActiveUISignal(null);
+      return;
+    }
+    const hydratedSignal = await hydrateTimeSlotsForSignal(rawSignal, data);
+    setActiveUISignal(hydratedSignal);
   }
 
   // ─── Client-side name validation (mirrors edge function nameValidator.ts) ───
@@ -1017,11 +1042,7 @@ export default function Widget() {
         emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: botMessage.orderConfirmation || {} });
       }
 
-      const rawSignal = parseUISignal(data.uiSignal) || toUISignalFromLegacyResponse(data);
-      if (rawSignal) {
-        const hydratedSignal = await hydrateTimeSlotsForSignal(rawSignal, data);
-        setActiveUISignal(hydratedSignal);
-      }
+      await applyResponseUISignal(data);
 
       setMessages(prev => [...prev, botMessage]);
     } catch (err: any) {
@@ -1298,6 +1319,7 @@ export default function Widget() {
       const botMessage: Message = { role: "assistant", content: reply, timestamp: new Date() };
       setMessages(prev => [...prev, botMessage]);
       persistMessage('ai', reply);
+      await applyResponseUISignal(data);
       
       return reply;
     } catch (err) {
