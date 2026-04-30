@@ -7,6 +7,9 @@ import { BookingConfirmation } from "@/components/widget/BookingConfirmation";
 import { OrderConfirmation } from "@/components/widget/OrderConfirmation";
 import { LeadCaptureForm } from "@/components/widget/LeadCaptureForm";
 import { IntentSwitchPrompt } from "@/components/widget/IntentSwitchPrompt";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Layers3, Minimize2, X } from "lucide-react";
 import type { UISignal } from "@/shared/uiSignal";
 
 interface Props {
@@ -20,6 +23,7 @@ interface Props {
   onTimeSlotSelect: (slot: unknown) => void;
   onLeadSubmit: (payload: { name: string; contact: string }) => void;
   onSwitchDecision: (decision: "continue" | "switch") => void;
+  onDismiss: () => void;
   leadDefaults?: { name?: string; contact?: string };
 }
 
@@ -42,63 +46,118 @@ export function UISignalRenderer({
   onTimeSlotSelect,
   onLeadSubmit,
   onSwitchDecision,
+  onDismiss,
   leadDefaults,
 }: Props) {
   const [visible, setVisible] = useState<UISignal | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   useEffect(() => {
     setVisible(signal);
+    setIsPanelOpen(false);
   }, [signal]);
 
   if (!visible?.activeComponent) return null;
 
+  const launcherLabel: Record<Exclude<UISignal["activeComponent"], null>, string> = {
+    service_selector: "Open Services",
+    product_selector: "Open Products",
+    date_picker: "Open Calendar",
+    time_picker: "Open Time Slots",
+    booking_confirmation: "View Booking",
+    order_summary: "View Order Summary",
+    lead_form: "Open Contact Form",
+    switch_confirmation: "Review Topic Switch",
+  };
+
   return (
     <div className="px-4 sm:px-6 pb-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-200">
       <div className="max-w-[85%] sm:max-w-[75%]">
-        {visible.activeComponent === "service_selector" && services.length > 0 && (
-          <ServiceSelector services={services} onSelect={onServiceSelect} disabled={loading} />
-        )}
+        <Button
+          variant="outline"
+          className="w-full justify-start gap-2 rounded-xl border-primary/30 bg-primary/5 hover:bg-primary/10"
+          onClick={() => setIsPanelOpen((prev) => !prev)}
+          disabled={loading}
+        >
+          <Layers3 className="h-4 w-4 text-primary" />
+          {launcherLabel[visible.activeComponent]}
+        </Button>
 
-        {visible.activeComponent === "product_selector" && products.length > 0 && (
-          <ProductSelectorEnhanced products={products} onConfirm={onProductsConfirm} disabled={loading} />
-        )}
+        {isPanelOpen && (
+          <Card className="mt-2 rounded-xl border border-border/60 bg-card p-3 shadow-sm">
+            <div className="mb-3 flex items-center justify-between border-b border-border/60 pb-2">
+              <p className="text-sm font-semibold">Interactive Panel</p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setIsPanelOpen(false)}
+                  aria-label="Minimize panel"
+                >
+                  <Minimize2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => {
+                    setIsPanelOpen(false);
+                    onDismiss();
+                  }}
+                  aria-label="Close panel"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
 
-        {visible.activeComponent === "date_picker" && (
-          <DateSelector onSelect={onDateSelect} disabled={loading} minDate={new Date()} />
-        )}
+            {visible.activeComponent === "service_selector" && services.length > 0 && (
+              <ServiceSelector services={services} onSelect={onServiceSelect} disabled={loading} />
+            )}
 
-        {visible.activeComponent === "time_picker" && (
-          <TimeSlotSelector
-            slots={Array.isArray(visible.componentData?.slots) ? (visible.componentData.slots as TimeSlotItem[]) : []}
-            onSelect={onTimeSlotSelect}
-            disabled={loading}
-            showMore={false}
-          />
-        )}
+            {visible.activeComponent === "product_selector" && products.length > 0 && (
+              <ProductSelectorEnhanced products={products} onConfirm={onProductsConfirm} disabled={loading} />
+            )}
 
-        {visible.activeComponent === "booking_confirmation" && visible.componentData && (
-          <BookingConfirmation {...visible.componentData} />
-        )}
+            {visible.activeComponent === "date_picker" && (
+              <DateSelector onSelect={onDateSelect} disabled={loading} minDate={new Date()} />
+            )}
 
-        {visible.activeComponent === "order_summary" && visible.componentData && (
-          <OrderConfirmation {...visible.componentData} />
-        )}
+            {visible.activeComponent === "time_picker" && (
+              <TimeSlotSelector
+                slots={Array.isArray(visible.componentData?.slots) ? (visible.componentData.slots as TimeSlotItem[]) : []}
+                onSelect={onTimeSlotSelect}
+                disabled={loading}
+                showMore={false}
+              />
+            )}
 
-        {visible.activeComponent === "lead_form" && (
-          <LeadCaptureForm
-            initialName={leadDefaults?.name}
-            initialContact={leadDefaults?.contact}
-            disabled={loading}
-            onSubmit={onLeadSubmit}
-          />
-        )}
+            {visible.activeComponent === "booking_confirmation" && visible.componentData && (
+              <BookingConfirmation {...visible.componentData} />
+            )}
 
-        {visible.activeComponent === "switch_confirmation" && (
-          <IntentSwitchPrompt
-            prompt={typeof visible.componentData?.prompt === "string" ? visible.componentData.prompt : undefined}
-            disabled={loading}
-            onDecide={onSwitchDecision}
-          />
+            {visible.activeComponent === "order_summary" && visible.componentData && (
+              <OrderConfirmation {...visible.componentData} />
+            )}
+
+            {visible.activeComponent === "lead_form" && (
+              <LeadCaptureForm
+                initialName={leadDefaults?.name}
+                initialContact={leadDefaults?.contact}
+                disabled={loading}
+                onSubmit={onLeadSubmit}
+              />
+            )}
+
+            {visible.activeComponent === "switch_confirmation" && (
+              <IntentSwitchPrompt
+                prompt={typeof visible.componentData?.prompt === "string" ? visible.componentData.prompt : undefined}
+                disabled={loading}
+                onDecide={onSwitchDecision}
+              />
+            )}
+          </Card>
         )}
       </div>
     </div>

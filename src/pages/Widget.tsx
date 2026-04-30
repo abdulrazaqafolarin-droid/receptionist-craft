@@ -1485,6 +1485,7 @@ export default function Widget() {
           onTimeSlotSelect={handleTimeSlotSelect}
           onLeadSubmit={handleLeadSubmit}
           onSwitchDecision={handleSwitchDecision}
+          onDismiss={() => setActiveUISignal(null)}
           leadDefaults={{
             name: bookingState.customerName || undefined,
             contact: bookingState.customerEmail || bookingState.customerPhone || undefined,
