@@ -138,6 +138,29 @@ export default function Widget() {
     });
   }
 
+
+
+  function normalizeUISignal(rawSignal: unknown): UISignal | null {
+    if (!rawSignal || typeof rawSignal !== "object") return null;
+    const signal = rawSignal as Record<string, unknown>;
+
+    const activeComponent = (signal.activeComponent ?? signal.active_component ?? null) as UISignal["activeComponent"];
+    const componentData = (signal.componentData ?? signal.component_data ?? {}) as UISignal["componentData"];
+
+    if (!signal.intent || typeof signal.intent !== "string") return null;
+
+    return {
+      version: "1.0",
+      intent: signal.intent as UISignal["intent"],
+      activeComponent,
+      componentData,
+      dismissPrevious: Boolean(signal.dismissPrevious ?? signal.dismiss_previous ?? true),
+      reason: (signal.reason as UISignal["reason"]) ?? "step_progression",
+      flow: (signal.flow as UISignal["flow"]) ?? { activeFlow: null, step: null, blocking: false },
+      conversationCanContinue: Boolean(signal.conversationCanContinue ?? signal.conversation_can_continue ?? true),
+    };
+  }
+
   async function hydrateTimePickerSignal(signal: UISignal): Promise<UISignal> {
     if (
       signal.activeComponent !== "time_picker" ||
@@ -1017,8 +1040,11 @@ export default function Widget() {
       }
 
       if (data.uiSignal) {
-        const hydratedSignal = await hydrateTimePickerSignal(data.uiSignal as UISignal);
-        setActiveUISignal(hydratedSignal);
+        const normalizedSignal = normalizeUISignal(data.uiSignal);
+        if (normalizedSignal) {
+          const hydratedSignal = await hydrateTimePickerSignal(normalizedSignal);
+          setActiveUISignal(hydratedSignal);
+        }
       }
 
       // Detect booking intent and show services (only if not already in booking flow)

@@ -145,7 +145,10 @@
   bubble.id = 'rutex-bubble';
   bubble.setAttribute('aria-label', 'Open chat');
   bubble.setAttribute('aria-expanded', 'false');
-  bubble.innerHTML = iconChat;
+  var bubbleIcon = document.createElement('span');
+  bubbleIcon.id = 'rutex-bubble-icon';
+  bubbleIcon.innerHTML = iconChat;
+  bubble.appendChild(bubbleIcon);
 
   // Unread badge
   var badge = document.createElement('div');
@@ -212,7 +215,7 @@
     hideGreeting();
     panel.classList.add('rutex-open');
     bubble.setAttribute('aria-expanded', 'true');
-    bubble.innerHTML = iconClose;
+    bubbleIcon.innerHTML = iconClose;
     badge.style.display = 'none';
     isOpen = true;
   }
@@ -220,7 +223,7 @@
   function closePanel() {
     panel.classList.remove('rutex-open');
     bubble.setAttribute('aria-expanded', 'false');
-    bubble.innerHTML = iconChat + badge.outerHTML;
+    bubbleIcon.innerHTML = iconChat;
     isOpen = false;
   }
 
@@ -231,7 +234,7 @@
 
   // Close on outside click
   document.addEventListener('click', function (e) {
-    if (isOpen && !panel.contains(e.target) && e.target !== bubble) {
+    if (isOpen && !panel.contains(e.target) && !bubble.contains(e.target)) {
       closePanel();
     }
   });
@@ -286,18 +289,4 @@
     toggle: function() { if (isOpen) closePanel(); else openPanel(); }
   };
 
-})();    }
-  });
-
-  // Append to body when DOM is ready
-  function mount() {
-    document.body.appendChild(panel);
-    document.body.appendChild(bubble);
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', mount);
-  } else {
-    mount();
-  }
 })();
