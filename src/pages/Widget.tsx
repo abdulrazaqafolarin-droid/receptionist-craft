@@ -196,7 +196,15 @@ export default function Widget() {
           maxSlots: 8,
         }
       });
-      const slots = slotsData?.slots || [];
+      const rawSlots = Array.isArray(slotsData?.slots) ? slotsData.slots : Array.isArray(slotsData?.availableSlots) ? slotsData.availableSlots : [];
+      const slots = rawSlots
+        .filter((slot: any) => slot && (slot.start || slot.startTime || slot.display))
+        .sort((a: any, b: any) => {
+          const av = new Date(a.startTime || a.start || "").getTime();
+          const bv = new Date(b.startTime || b.start || "").getTime();
+          if (isNaN(av) || isNaN(bv)) return 0;
+          return av - bv;
+        });
       return {
         ...signal,
         componentData: { ...signal.componentData, slots },

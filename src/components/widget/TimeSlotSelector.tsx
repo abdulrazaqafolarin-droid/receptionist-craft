@@ -43,7 +43,18 @@ function formatSlotToLocalTime(slot: TimeSlot): string {
 }
 
 export function TimeSlotSelector({ slots, onSelect, disabled, showMore, onShowMore }: TimeSlotSelectorProps) {
-  if (slots.length === 0) {
+  const normalizedSlots = slots
+    .filter((slot) => slot && (slot.start || slot.startTime || slot.display))
+    .sort((a, b) => {
+      const av = new Date(a.startTime || a.start || "").getTime();
+      const bv = new Date(b.startTime || b.start || "").getTime();
+      if (isNaN(av) && isNaN(bv)) return 0;
+      if (isNaN(av)) return 1;
+      if (isNaN(bv)) return -1;
+      return av - bv;
+    });
+
+  if (normalizedSlots.length === 0) {
     return (
       <div className="mt-3 p-4 bg-muted/50 rounded-xl border border-border/50 flex items-center gap-3 animate-in fade-in-0 duration-300">
         <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
@@ -60,8 +71,9 @@ export function TimeSlotSelector({ slots, onSelect, disabled, showMore, onShowMo
   return (
     <div className="mt-3 space-y-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
       <p className="text-xs text-muted-foreground font-medium">Available times (your local time):</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {slots.map((slot, idx) => (
+      <div className="max-h-[220px] overflow-y-auto pr-1">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {normalizedSlots.map((slot, idx) => (
           <Button
             key={idx}
             variant="outline"
@@ -81,6 +93,7 @@ export function TimeSlotSelector({ slots, onSelect, disabled, showMore, onShowMo
             <span>{formatSlotToLocalTime(slot)}</span>
           </Button>
         ))}
+        </div>
       </div>
       {showMore && onShowMore && (
         <Button

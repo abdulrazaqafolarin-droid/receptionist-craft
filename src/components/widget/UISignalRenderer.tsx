@@ -9,7 +9,7 @@ import { LeadCaptureForm } from "@/components/widget/LeadCaptureForm";
 import { IntentSwitchPrompt } from "@/components/widget/IntentSwitchPrompt";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Layers3, Minimize2, X } from "lucide-react";
+import { Layers3, Minimize2, Sparkles, X } from "lucide-react";
 import type { UISignal } from "@/shared/uiSignal";
 
 interface Props {
@@ -75,7 +75,7 @@ export function UISignalRenderer({
       <div className="max-w-[85%] sm:max-w-[75%]">
         <Button
           variant="outline"
-          className="w-full justify-start gap-2 rounded-xl border-primary/30 bg-primary/5 hover:bg-primary/10"
+          className="w-full justify-start gap-2 rounded-xl border-primary/30 bg-primary/5 backdrop-blur-sm hover:bg-primary/10 transition-all duration-200 shadow-sm hover:shadow"
           onClick={() => setIsPanelOpen((prev) => !prev)}
           disabled={loading}
         >
@@ -84,9 +84,12 @@ export function UISignalRenderer({
         </Button>
 
         {isPanelOpen && (
-          <Card className="mt-2 rounded-xl border border-border/60 bg-card p-3 shadow-sm">
+          <Card className="mt-2 rounded-xl border border-primary/15 bg-background/80 backdrop-blur-md p-3 shadow-md shadow-primary/5 animate-in zoom-in-95 fade-in-0 duration-200">
             <div className="mb-3 flex items-center justify-between border-b border-border/60 pb-2">
-              <p className="text-sm font-semibold">Interactive Panel</p>
+              <p className="text-sm font-semibold flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                Interactive Panel
+              </p>
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
@@ -113,11 +116,15 @@ export function UISignalRenderer({
             </div>
 
             {visible.activeComponent === "service_selector" && services.length > 0 && (
-              <ServiceSelector services={services} onSelect={onServiceSelect} disabled={loading} />
+              <div className="max-h-[320px] overflow-y-auto pr-1">
+                <ServiceSelector services={services} onSelect={onServiceSelect} disabled={loading} />
+              </div>
             )}
 
             {visible.activeComponent === "product_selector" && products.length > 0 && (
-              <ProductSelectorEnhanced products={products} onConfirm={onProductsConfirm} disabled={loading} />
+              <div className="max-h-[360px] overflow-y-auto pr-1">
+                <ProductSelectorEnhanced products={products} onConfirm={onProductsConfirm} disabled={loading} />
+              </div>
             )}
 
             {visible.activeComponent === "date_picker" && (
