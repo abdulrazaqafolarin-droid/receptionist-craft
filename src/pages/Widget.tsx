@@ -1039,15 +1039,17 @@ export default function Widget() {
         emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: botMessage.orderConfirmation || {} });
       }
 
+      let hasStructuredUISignal = false;
       if (data.uiSignal) {
         const normalizedSignal = normalizeUISignal(data.uiSignal);
         if (normalizedSignal) {
           const hydratedSignal = await hydrateTimePickerSignal(normalizedSignal);
+          hasStructuredUISignal = Boolean(hydratedSignal.activeComponent);
           setActiveUISignal(hydratedSignal);
         }
       }
 
-      // Detect booking intent and show services (only if not already in booking flow)
+      // Legacy UI fallbacks only when backend does not return a structured uiSignal
       // Only show services if AI explicitly asks for service selection
       const shouldShowServices = (
         data.showServicesUI ||
@@ -1059,7 +1061,7 @@ export default function Widget() {
         lowerReply.includes("choose a service")
       ) && !bookingState.serviceId && !data.bookingCreated;
       
-      if (shouldShowServices && services.length > 0) {
+      if (!hasStructuredUISignal && shouldShowServices && services.length > 0) {
         botMessage.showServices = true;
       }
 
@@ -1074,7 +1076,7 @@ export default function Widget() {
         lowerReply.includes("browse our products")
       ) && !bookingState.productId && !data.orderCreated;
       
-      if (shouldShowProducts && products.length > 0) {
+      if (!hasStructuredUISignal && shouldShowProducts && products.length > 0) {
         botMessage.showProducts = true;
       }
 
@@ -1091,7 +1093,7 @@ export default function Widget() {
         lowerReply.includes("choose a date")
       ) && bookingState.serviceId && !bookingState.date && !data.bookingCreated;
       
-      if (shouldShowDatePicker) {
+      if (!hasStructuredUISignal && shouldShowDatePicker) {
         botMessage.showDatePicker = true;
       }
 
@@ -1107,7 +1109,7 @@ export default function Widget() {
         lowerReply.includes("available slot")
       ) && bookingState.serviceId && bookingState.date && !bookingState.timeSlot && !data.bookingCreated;
       
-      if (shouldShowTimeSlots) {
+      if (!hasStructuredUISignal && shouldShowTimeSlots) {
         const dateStr = format(bookingState.date, "yyyy-MM-dd");
         const nextDay = new Date(bookingState.date);
         nextDay.setDate(nextDay.getDate() + 1);
@@ -1578,6 +1580,7 @@ export default function Widget() {
           onProductsConfirm={handleProductsConfirm}
           onDateSelect={handleDateSelect}
           onTimeSlotSelect={handleTimeSlotSelect}
+          onDismiss={() => setActiveUISignal(null)}
         />
 
         {/* Input */}
