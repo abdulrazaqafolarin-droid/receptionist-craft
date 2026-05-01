@@ -86,8 +86,24 @@ export const UISIGNAL_SCHEMA = z.object({
   conversationCanContinue: z.boolean(),
 });
 
+function validateComponentData(signal: UISignal): boolean {
+  const data = signal.componentData || {};
+  switch (signal.activeComponent) {
+    case "time_picker":
+      return data.slots === undefined || Array.isArray(data.slots);
+    case "switch_confirmation":
+      return data.prompt === undefined || typeof data.prompt === "string";
+    case "lead_form":
+      return (data.name === undefined || typeof data.name === "string" || data.name === null) &&
+        (data.contact === undefined || typeof data.contact === "string" || data.contact === null);
+    default:
+      return true;
+  }
+}
+
 export function isUISignal(value: unknown): value is UISignal {
-  return UISIGNAL_SCHEMA.safeParse(value).success;
+  const parsed = UISIGNAL_SCHEMA.safeParse(value);
+  return parsed.success && validateComponentData(parsed.data);
 }
 
 export function normalizeUISignal(signal: Partial<UISignal> & Pick<UISignal, "intent" | "activeComponent">): UISignal {
@@ -100,11 +116,15 @@ export function normalizeUISignal(signal: Partial<UISignal> & Pick<UISignal, "in
     conversationCanContinue: true,
     ...signal,
   };
-  return UISIGNAL_SCHEMA.parse(normalized);
+  const parsed = UISIGNAL_SCHEMA.parse(normalized);
+  if (!validateComponentData(parsed)) {
+    throw new Error("Invalid UISignal componentData for activeComponent");
+  }
+  return parsed;
 }
 
 export function parseUISignal(value: unknown): UISignal | null {
   const parsed = UISIGNAL_SCHEMA.safeParse(value);
-  if (parsed.success) return parsed.data;
+  if (parsed.success && validateComponentData(parsed.data)) return parsed.data;
   return null;
 }

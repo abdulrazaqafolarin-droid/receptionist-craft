@@ -92,6 +92,7 @@ export default function Widget() {
   const [sessionCheckComplete, setSessionCheckComplete] = useState(false);
   const [voiceChatOpen, setVoiceChatOpen] = useState(false);
   const [activeUISignal, setActiveUISignal] = useState<UISignal | null>(null);
+  const latestRequestIdRef = useRef(0);
   
   // Abuse protection: honeypot field and form load timing
   const [honeypotValue, setHoneypotValue] = useState("");
@@ -769,6 +770,7 @@ export default function Widget() {
     }
 
     try {
+      const requestId = ++latestRequestIdRef.current;
       // Handle soft order confirmation step (client-side flow — persist user message)
       if (bookingState.awaitingOrderConfirmation) {
         persistMessage('user', textToSend);
@@ -1012,6 +1014,7 @@ export default function Widget() {
       });
 
       if (error) throw error;
+      if (requestId !== latestRequestIdRef.current) return;
 
       const reply = data.reply || "";
       
@@ -1055,6 +1058,7 @@ export default function Widget() {
       }
 
       await applyResponseUISignal(data);
+      if (requestId !== latestRequestIdRef.current) return;
 
       setMessages(prev => [...prev, botMessage]);
     } catch (err: any) {
@@ -1314,6 +1318,7 @@ export default function Widget() {
     persistMessage('user', text);
 
     try {
+      const requestId = ++latestRequestIdRef.current;
       const { data, error } = await supabase.functions.invoke("widget-chat", {
         body: {
           message: text,
@@ -1326,12 +1331,14 @@ export default function Widget() {
       });
 
       if (error) throw error;
+      if (requestId !== latestRequestIdRef.current) return "";
       const reply = data.reply || "I'm sorry, I couldn't process that.";
       
       const botMessage: Message = { role: "assistant", content: reply, timestamp: new Date() };
       setMessages(prev => [...prev, botMessage]);
       persistMessage('ai', reply);
       await applyResponseUISignal(data);
+      if (requestId !== latestRequestIdRef.current) return reply;
       
       return reply;
     } catch (err) {
