@@ -769,8 +769,8 @@ export default function Widget() {
       localStorage.setItem(`widget_session_ts_${receptionistId}`, Date.now().toString());
     }
 
+    const requestId = ++latestRequestIdRef.current;
     try {
-      const requestId = ++latestRequestIdRef.current;
       // Handle soft order confirmation step (client-side flow — persist user message)
       if (bookingState.awaitingOrderConfirmation) {
         persistMessage('user', textToSend);
@@ -1069,7 +1069,9 @@ export default function Widget() {
         variant: "destructive" 
       });
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   }
 
