@@ -220,7 +220,10 @@ export default function Widget() {
   }
 
   async function applyResponseUISignal(data: any) {
-    const rawSignal = parseUISignal(data?.uiSignal) || toUISignalFromLegacyResponse(data);
+    const hasStructuredSignal = data && Object.prototype.hasOwnProperty.call(data, "uiSignal");
+    const rawSignal = hasStructuredSignal
+      ? parseUISignal(data?.uiSignal)
+      : toUISignalFromLegacyResponse(data);
     if (!rawSignal) {
       setActiveUISignal(null);
       return;
@@ -1038,7 +1041,6 @@ export default function Widget() {
         
         // Reset booking state after successful booking
         setBookingState({...defaultBookingState});
-        emitUISignal({ intent: "confirmation", activeComponent: "booking_confirmation", componentData: botMessage.bookingConfirmation || {} });
       }
       
       // Check if order was created by the backend
@@ -1054,7 +1056,6 @@ export default function Widget() {
         
         // Reset booking state after successful order
         setBookingState({...defaultBookingState});
-        emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: botMessage.orderConfirmation || {} });
       }
 
       await applyResponseUISignal(data);
