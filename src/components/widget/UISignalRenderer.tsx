@@ -96,7 +96,10 @@ export function UISignalRenderer({
   const renderActiveComponent = () => {
     if (!visible.activeComponent) return null;
     if (visible.activeComponent === "service_selector") {
-      return services.length > 0 ? <ServiceSelector services={services} onSelect={onServiceSelect} disabled={loading} /> : null;
+      const safeServices = services
+        .filter((s) => typeof s.duration_minutes === "number")
+        .map((s) => ({ id: s.id, name: s.name, duration_minutes: s.duration_minutes as number, price: s.price ?? null }));
+      return safeServices.length > 0 ? <ServiceSelector services={safeServices} onSelect={onServiceSelect} disabled={loading} /> : null;
     }
     if (visible.activeComponent === "product_selector") {
       return products.length > 0 ? <ProductSelectorEnhanced products={products} onConfirm={onProductsConfirm} disabled={loading} /> : null;
@@ -109,10 +112,15 @@ export function UISignalRenderer({
       return <TimeSlotSelector slots={slots} onSelect={onTimeSlotSelect} disabled={loading} showMore={false} />;
     }
     if (visible.activeComponent === "booking_confirmation" && visible.componentData) {
-      return <BookingConfirmation {...(visible.componentData as Record<string, unknown>)} />;
+      const data = visible.componentData as Record<string, unknown>;
+      const customerName = (data.customerName as string | undefined) ?? (data.customer_name as string | undefined) ?? "Guest";
+      return <BookingConfirmation {...(data as object)} customerName={customerName} />;
     }
     if (visible.activeComponent === "order_summary" && visible.componentData) {
-      return <OrderConfirmation {...(visible.componentData as Record<string, unknown>)} />;
+      const data = visible.componentData as Record<string, unknown>;
+      const customerName = (data.customerName as string | undefined) ?? (data.customer_name as string | undefined) ?? "Guest";
+      const contactInfo = (data.contactInfo as string | undefined) ?? (data.contact_info as string | undefined) ?? (data.customerEmail as string | undefined) ?? (data.customerPhone as string | undefined) ?? "";
+      return <OrderConfirmation {...(data as object)} customerName={customerName} contactInfo={contactInfo} />;
     }
     return null;
   };

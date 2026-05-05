@@ -1568,7 +1568,7 @@ if (!GEMINI_API_KEY) {
     const memorySummarizer = new MemorySummarizer(supabase);
     
     // Load or create conversation state
-    let conversationState = await stateManager.load(sessionId, receptionistId);
+    const conversationState = await stateManager.load(sessionId, receptionistId);
     console.log(`[Flow Engine] State loaded - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, Greeting: ${conversationState.greeting_sent}`);
     
     //                                                                        
@@ -2047,7 +2047,7 @@ if (!GEMINI_API_KEY) {
     
     // Use unified governor block as PRIMARY (from UnifiedCore)
     // Keep legacy governor for backward compatibility logging only
-    let governorState: GovernorState = conversationState.governor_state || createGovernorState();
+    const governorState: GovernorState = conversationState.governor_state || createGovernorState();
     
     // Sync legacy governor state with Engine v2 state
     if (engineState) {
@@ -3039,7 +3039,7 @@ return {
 function parseBookingDateTime(dateStr: string, timeStr: string): Date | null {
   try {
     const now = new Date();
-    let targetDate = new Date(now);
+    const targetDate = new Date(now);
     
     // Parse date
     const dateLower = dateStr.toLowerCase();
