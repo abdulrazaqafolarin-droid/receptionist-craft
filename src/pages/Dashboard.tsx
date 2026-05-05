@@ -307,7 +307,9 @@ export default function Dashboard() {
             <div className="grid lg:grid-cols-2 gap-4 lg:gap-6">
               {/* Revenue Engine for first receptionist */}
               <RevenueEngine 
-                receptionistId={receptionists[0]?.id} 
+                receptionistIds={receptionists[0]?.id ? [receptionists[0].id] : []}
+                receptionistNames={receptionists[0]?.id ? { [receptionists[0].id]: receptionists[0].name } : {}}
+                scopeLabel={receptionists[0]?.name}
                 currentMode={receptionists[0]?.ai_mode || 'booking'}
               />
               
