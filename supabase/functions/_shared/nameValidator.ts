@@ -203,7 +203,7 @@ export function isNameBackReference(message: string): boolean {
  * Extract a validated name from a message using strict patterns + validation.
  * Returns null if no valid name found — the AI should then ask politely.
  */
-export function extractValidatedName(message: string): string | null {
+export function extractValidatedName(message: string, options: { allowDirectInput?: boolean } = {}): string | null {
   for (const pattern of STRICT_NAME_PATTERNS) {
     const match = message.match(pattern);
     if (match && match[1]) {
@@ -211,10 +211,13 @@ export function extractValidatedName(message: string): string | null {
       if (validated) return validated;
     }
   }
-  // Fallback: when user sends a bare name (e.g., "john" / "john smith") while we are collecting contact details.
-  // This avoids over-enforcing declaration phrases and keeps conversation flow natural.
-  const directInputName = validateDirectNameInput(message);
-  if (directInputName) return directInputName;
+  // Optional fallback: only enabled during explicit name-collection turns.
+  // Do NOT run this in generic entity extraction paths; otherwise short non-name
+  // messages can be incorrectly locked in as customerName.
+  if (options.allowDirectInput) {
+    const directInputName = validateDirectNameInput(message);
+    if (directInputName) return directInputName;
+  }
 
   return null;
 }
@@ -226,7 +229,7 @@ export function extractValidatedName(message: string): string | null {
  */
 export function extractNameWithHistory(message: string, history: Array<{ sender: string; message: string }>): string | null {
   // First try direct extraction
-  const direct = extractValidatedName(message);
+  const direct = extractValidatedName(message, { allowDirectInput: true });
   if (direct) return direct;
 
   // Check for back-reference
@@ -236,7 +239,7 @@ export function extractNameWithHistory(message: string, history: Array<{ sender:
       if (history[i].sender === 'user' || history[i].sender === 'bot' || history[i].sender === 'ai') {
         // Check user messages for direct name declarations
         if (history[i].sender === 'user') {
-          const name = extractValidatedName(history[i].message || '');
+          const name = extractValidatedName(history[i].message || '', { allowDirectInput: true });
           if (name) return name;
         }
         // Check bot messages for "Thank you, Name" acknowledgements
