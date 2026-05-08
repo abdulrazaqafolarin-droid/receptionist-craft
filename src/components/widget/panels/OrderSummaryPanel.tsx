@@ -1,2 +1,0 @@
-import { Button } from "@/components/ui/button";
-export function OrderSummaryPanel({ lines, onConfirm }: { lines: string[]; onConfirm: () => void; }) { return <div className="space-y-3"><div className="rounded-xl border p-3">{lines.map((line) => <p key={line} className="text-sm">{line}</p>)}</div><div className="flex justify-between"><Button variant="outline">← Edit order</Button><Button onClick={onConfirm}>Place order →</Button></div></div>; }
