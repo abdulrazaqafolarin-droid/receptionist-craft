@@ -11,19 +11,19 @@
  */
 export const STRICT_NAME_PATTERNS: RegExp[] = [
   // "My name is John" / "My name is John Smith"
-  /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  /(?:my\s+name\s+is)\s+([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+)?)/i,
   // "Call me John" / "You can call me John" / "Just call me John"
-  /(?:(?:you\s+can\s+)?call\s+me|they\s+call\s+me|just\s+call\s+me|people\s+call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  /(?:(?:you\s+can\s+)?call\s+me|they\s+call\s+me|just\s+call\s+me|people\s+call\s+me)\s+([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+)?)/i,
   // "The name is John" / "Name is John" / "Name: John"
-  /(?:the\s+name\s+is|name[':]?\s*is|name[':]?\s+)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  /(?:the\s+name\s+is|name[':]?\s*is|name[':]?\s+)\s*([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+)?)/i,
   // "This is John" ONLY at start of message (introducing oneself)
-  /^this\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  /^this\s+is\s+([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+)?)/i,
   // "It's John" / "Its John" — short self-intro
-  /^it'?s\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.!?,]?\s*$/i,
+  /^it'?s\s+([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+)?)\s*[.!?,]?\s*$/i,
   // "I'm John" ONLY at end of string (not "I'm in pain", "I'm interested")
-  /\bi'?m\s+([A-Z][a-z]+)\s*[.!?,]?\s*$/i,
+  /\bi'?m\s+([A-Za-z][A-Za-z'-]+)\s*[.!?,]?\s*$/i,
   // "I am John" ONLY at end of string (not "I am not sure")
-  /\bi\s+am\s+([A-Z][a-z]+)\s*[.!?,]?\s*$/i,
+  /\bi\s+am\s+([A-Za-z][A-Za-z'-]+)\s*[.!?,]?\s*$/i,
 ];
 
 /**
@@ -211,6 +211,11 @@ export function extractValidatedName(message: string): string | null {
       if (validated) return validated;
     }
   }
+  // Fallback: when user sends a bare name (e.g., "john" / "john smith") while we are collecting contact details.
+  // This avoids over-enforcing declaration phrases and keeps conversation flow natural.
+  const directInputName = validateDirectNameInput(message);
+  if (directInputName) return directInputName;
+
   return null;
 }
 
