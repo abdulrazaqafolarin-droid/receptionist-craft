@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatCurrency } from "@/lib/currency";
+import { DEFAULT_CURRENCY, formatCurrency } from "@/lib/currency";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, RefreshCw, Package, Clock, ShoppingBag, DollarSign, Edit2, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CurrencySelect } from "@/components/ui/currency-select";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import {
   AlertDialog,
@@ -42,6 +43,7 @@ export default function Services() {
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<ServiceOrProduct | null>(null);
   const [activeTab, setActiveTab] = useState<'services' | 'products'>('services');
@@ -70,8 +72,10 @@ export default function Services() {
   useEffect(() => {
     if (selectedReceptionist) {
       loadItems();
+      const receptionist = receptionists.find((r) => r.id === selectedReceptionist);
+      if (receptionist?.currency) setCurrency(receptionist.currency);
     }
-  }, [selectedReceptionist]);
+  }, [selectedReceptionist, receptionists]);
 
   async function loadReceptionists() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -90,6 +94,7 @@ export default function Services() {
     setReceptionists(data || []);
     if (data && data.length > 0) {
       setSelectedReceptionist(data[0].id);
+      setCurrency(data[0].currency || DEFAULT_CURRENCY);
     }
   }
 
@@ -409,6 +414,17 @@ export default function Services() {
             <CardHeader className="pb-4">
               <CardTitle className="text-lg">Select Receptionist</CardTitle>
               <CardDescription>Manage services and products for a specific receptionist</CardDescription>
+              <div className="pt-3 max-w-xs">
+                <Label className="mb-1 block">Pricing currency</Label>
+                <CurrencySelect
+                  value={currency}
+                  onChange={async (nextCurrency) => {
+                    setCurrency(nextCurrency);
+                    if (!selectedReceptionist) return;
+                    await supabase.from("receptionists").update({ currency: nextCurrency }).eq("id", selectedReceptionist);
+                  }}
+                />
+              </div>
             </CardHeader>
             <CardContent>
               <select 
@@ -534,7 +550,7 @@ export default function Services() {
                         <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
                           <Clock className="h-8 w-8 text-muted-foreground" />
                         </div>
-                        <p className="text-muted-foreground">No services yet. Create your first service above.</p>
+                        <p className="text-muted-foreground">No services yet. Use the form above to add your first service.</p>
                       </CardContent>
                     </Card>
                   ) : (
@@ -623,7 +639,7 @@ export default function Services() {
                         <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
                           <ShoppingBag className="h-8 w-8 text-muted-foreground" />
                         </div>
-                        <p className="text-muted-foreground">No products yet. Create your first product above.</p>
+                        <p className="text-muted-foreground">No products yet. Use the form above to add your first product.</p>
                       </CardContent>
                     </Card>
                   ) : (

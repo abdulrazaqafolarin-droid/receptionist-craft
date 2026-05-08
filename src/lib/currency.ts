@@ -23,6 +23,12 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 /** Default currency when none is specified */
 export const DEFAULT_CURRENCY = 'USD';
 
+export const SUPPORTED_CURRENCIES = [
+  'USD','EUR','GBP','NGN','KES','GHS','ZAR','INR','CAD','AUD','JPY','CNY','BRL'
+] as const;
+
+export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+
 /**
  * Format a number as currency using Intl if available, else symbol map.
  * @param amount  Numeric value
