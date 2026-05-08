@@ -16,6 +16,8 @@ const TEST_SCENARIOS = [
 
 export default function Step5Test() {
   const { receptionist, services, faqs, setStep, receptionistId } = useOnboardingStore();
+  const servicesCount = services.filter((item) => item.type === "service").length;
+  const productsCount = services.filter((item) => item.type === "product").length;
   const [showChat, setShowChat] = useState(false);
 
   const handleContinue = () => {
@@ -52,16 +54,16 @@ export default function Step5Test() {
 
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="p-3 bg-background rounded">
-              <div className="text-2xl font-bold text-primary">{services.length}</div>
+              <div className="text-2xl font-bold text-primary">{servicesCount}</div>
               <div className="text-xs text-muted-foreground">Services</div>
+            </div>
+            <div className="p-3 bg-background rounded">
+              <div className="text-2xl font-bold text-primary">{productsCount}</div>
+              <div className="text-xs text-muted-foreground">Products</div>
             </div>
             <div className="p-3 bg-background rounded">
               <div className="text-2xl font-bold text-primary">{faqs.length}</div>
               <div className="text-xs text-muted-foreground">FAQs</div>
-            </div>
-            <div className="p-3 bg-background rounded">
-              <div className="text-2xl font-bold text-primary">✓</div>
-              <div className="text-xs text-muted-foreground">Ready</div>
             </div>
           </div>
         </div>
