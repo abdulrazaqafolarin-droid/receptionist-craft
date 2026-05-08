@@ -493,6 +493,28 @@ function mapIntentToUIIntent(intent: string): UIIntent {
   return "browsing";
 }
 
+function resolveDeterministicUIComponent(params: {
+  bookingResult: any | null;
+  orderResult: any | null;
+  intentActiveComponent: UIComponent | null;
+  engineHints: {
+    show_services?: boolean;
+    show_products?: boolean;
+    show_calendar?: boolean;
+    show_time_slots?: boolean;
+  };
+}): UIComponent {
+  const { bookingResult, orderResult, intentActiveComponent, engineHints } = params;
+  if (bookingResult) return "booking_confirmation";
+  if (orderResult) return "order_summary";
+  if (intentActiveComponent) return intentActiveComponent;
+  if (engineHints.show_services) return "service_selector";
+  if (engineHints.show_products) return "product_selector";
+  if (engineHints.show_calendar) return "date_picker";
+  if (engineHints.show_time_slots) return "time_picker";
+  return null;
+}
+
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
@@ -1073,7 +1095,7 @@ Success metrics:
 2. **Reduce choices, not expand them** -- Guide decisively, don't overwhelm with options
 3. **Handle objections calmly and confidently** -- "I understand. Here's why this is worth it..."
 4. **If user hesitates twice** -- Introduce urgency: "This time slot is popular" or "Limited availability"
-5. **Before conversation ends** -- ALWAYS capture contact details (email or phone)
+5. **Before conversation ends** -- capture contact details ONLY when buyerReadiness >= 6/10 or clear conversion intent exists
 6. **Close with action** -- Don't let conversations drift without booking/purchase/lead capture
 
 ## CONVERSION TACTICS
@@ -2870,14 +2892,18 @@ return {
     }
 
     const uiIntent = mapIntentToUIIntent(engineResult.intent.intent || messageAnalysis.detectedIntent);
-    const activeComponent: UIComponent =
-      bookingResult ? "booking_confirmation" :
-      orderResult ? "order_summary" :
-      engineResult.ui_hints.show_services ? "service_selector" :
-      engineResult.ui_hints.show_products ? "product_selector" :
-      engineResult.ui_hints.show_calendar ? "date_picker" :
-      engineResult.ui_hints.show_time_slots ? "time_picker" :
+    const intentSuggestedComponent: UIComponent =
+      conversationState.flow_step === "service_selection" ? "service_selector" :
+      conversationState.flow_step === "date_selection" ? "date_picker" :
+      conversationState.flow_step === "time_selection" ? "time_picker" :
+      conversationState.flow_step === "product_selection" ? "product_selector" :
       null;
+    const activeComponent: UIComponent = resolveDeterministicUIComponent({
+      bookingResult: bookingResult || null,
+      orderResult: orderResult || null,
+      intentActiveComponent: intentSuggestedComponent,
+      engineHints: engineResult.ui_hints || {},
+    });
     const previousUIIntent = (conversationState.slots?.last_ui_intent as string | undefined) || null;
     const dismissPrevious = previousUIIntent !== null && previousUIIntent !== uiIntent;
     const uiSignal: UISignal = {

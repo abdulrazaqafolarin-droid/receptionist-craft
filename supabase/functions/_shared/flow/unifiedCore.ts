@@ -782,13 +782,15 @@ ${instruction.promptInstruction}
 
 ## 🔒 CRITICAL RULES
 
-1. **MISSING FIELD RULE**: You may ONLY ask about: ${requirements.nextRequired || 'nothing (confirm order)'}
-   - NEVER ask for data already in collectedFields
-   - NEVER skip ahead to other missing fields
+1. **MULTI-SLOT ACCEPTANCE RULE**: Accept all volunteered information in any order.
+   - Ingest every provided slot from the current message
+   - Merge it with previously collected data
+   - Ask for ONLY the first still-missing required field
+   - NEVER discard volunteered data because it arrived out of sequence
 
 2. **NO REPEATED CONFIRMATIONS**: ${state.rules.confirmationSent ? 'Confirmation ALREADY sent. DO NOT summarize again.' : 'Confirmation not yet sent.'}
 
-3. **TOPIC LOCK**: ${state.rules.topicLock ? `Locked to: ${state.rules.topicLock}. Brief answers to off-topic, then redirect.` : 'No lock.'}
+3. **TOPIC HANDLING RULE**: ${state.rules.topicLock ? `Current task preference: ${state.rules.topicLock}. Answer user questions first, then resume naturally.` : 'No active task preference.'}
 
 4. **RESPONSE STYLE**:
    - Short and direct

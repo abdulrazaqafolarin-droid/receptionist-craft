@@ -286,19 +286,19 @@ export function getRedirectMessage(state: ConversationMachineState, flow: FlowTy
   
   switch (state) {
     case 'selecting_service':
-      return `I'd love to help with that! But first, which service would you like to book?`;
+      return `Absolutely — happy to help with that. By the way, to keep your ${flowName} moving, which service would you like to book?`;
     case 'selecting_date':
-      return `Great question! Once we confirm the date for your ${flowName}, I can help with that. What day works best for you?`;
+      return `Great question — I can help with that. By the way, what day works best for your ${flowName}?`;
     case 'selecting_time':
-      return `I'll be happy to help with that shortly. What time would you prefer for your ${flowName}?`;
+      return `Happy to help with that. By the way, what time would you prefer for your ${flowName}?`;
     case 'selecting_product':
-      return `Sure! Let me know which product you're interested in first, and then I can answer that.`;
+      return `Sure — I can help with that. By the way, which product are you interested in for this ${flowName}?`;
     case 'selecting_quantity':
-      return `Got it! How many would you like to order?`;
+      return `Got it — happy to help. By the way, how many would you like to order?`;
     case 'collecting_contact':
-      return `I can help with that in just a moment. First, may I get your name and phone number or email to complete the ${flowName}?`;
+      return `Absolutely — I can help with that. By the way, to finish your ${flowName} I just need your name and phone number or email — what should I call you?`;
     case 'confirming':
-      return `Almost there! Can you confirm the details look correct so we can finalize your ${flowName}?`;
+      return `Great question — happy to help. By the way, once you're ready, can you confirm the details look correct so we can finalize your ${flowName}?`;
     default:
       return '';
   }
@@ -551,10 +551,10 @@ ${stateDescriptions[context.state]}
 ${validEvents.map(e => `- ${e}`).join('\n') || '- (no valid transitions)'}
 
 ## State Rules (NON-NEGOTIABLE)
-1. You MUST stay focused on the current state's objective
-2. If user goes off-topic, gently redirect them back
-3. You CANNOT skip states or jump ahead
-4. Each state must be completed before transitioning
+1. Acknowledge and answer the user's actual message first
+2. After answering, gently resume the current state's objective
+3. The current state objective is a preference for guidance, not a hard gate
+4. A user question never goes unanswered before returning to the task
 
 ${redirectMsg ? `## Redirect Message (use if user goes off-topic)\n"${redirectMsg}"` : ''}
 
