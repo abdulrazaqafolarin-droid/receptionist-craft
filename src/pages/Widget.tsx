@@ -10,7 +10,8 @@ import VoiceChatOverlay from "@/components/widget/VoiceChatOverlay";
 import { useToast } from "@/hooks/use-toast";
 import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
 import { ChatSessionOverlay } from "@/components/widget/ChatSessionOverlay";
-import { UISignalRenderer, type UISignal } from "@/components/widget/UISignalRenderer";
+import { type UISignal } from "@/components/widget/UISignalRenderer";
+import { WidgetUIManager } from "@/components/widget/WidgetUIManager";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -1571,11 +1572,11 @@ export default function Widget() {
           <div ref={messagesEndRef} />
         </div>
 
-        <UISignalRenderer
+        <WidgetUIManager
           signal={activeUISignal}
           services={services}
           products={products}
-          loading={loading}
+          accentColor={widgetColors.primaryColor}
           onServiceSelect={handleServiceSelect}
           onProductsConfirm={handleProductsConfirm}
           onDateSelect={handleDateSelect}
