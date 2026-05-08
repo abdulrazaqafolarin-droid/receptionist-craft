@@ -2918,19 +2918,12 @@ return {
       conversationState.flow_step === "time_selection" ? "time_picker" :
       conversationState.flow_step === "product_selection" ? "product_selector" :
       null;
-    let activeComponent: UIComponent = resolveDeterministicUIComponent({
+    const activeComponent: UIComponent = resolveDeterministicUIComponent({
       bookingResult: bookingResult || null,
       orderResult: orderResult || null,
       intentActiveComponent: intentSuggestedComponent,
       engineHints: engineResult.ui_hints || {},
     });
-    const noAvailabilityDetected = activeComponent === "time_picker" &&
-      Array.isArray((conversationState.slots as any)?.availableSlots) &&
-      ((conversationState.slots as any)?.availableSlots as any[]).length === 0;
-    if (noAvailabilityDetected) {
-      activeComponent = "lead_form";
-      reply = `${reply}\n\nThere are no available time slots in the next 30 days right now. If you'd like, I can take your contact details and notify you as soon as new slots open.`;
-    }
     const previousUIIntent = (conversationState.slots?.last_ui_intent as string | undefined) || null;
     const dismissPrevious = previousUIIntent !== null && previousUIIntent !== uiIntent;
     const uiSignal: UISignal = {
