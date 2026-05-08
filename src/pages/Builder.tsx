@@ -117,6 +117,7 @@ export default function BuilderPage() {
   const [deleting, setDeleting] = useState(false);
 
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const previewSessionIdRef = useRef<string>(crypto.randomUUID());
 
   // Auto-scroll when messages change
   useEffect(() => {
@@ -331,13 +332,19 @@ export default function BuilderPage() {
     userId: string | null;
   }): Promise<{ reply: string; alternatives?: string[]; appointment?: any }> {
     try {
-      const { data, error } = await supabase.functions.invoke('chat', {
-        body: payload
+      const latestMessage = payload.messages[payload.messages.length - 1]?.content?.trim() || "";
+      const { data, error } = await supabase.functions.invoke("widget-chat", {
+        body: {
+          message: latestMessage,
+          receptionistId: payload.receptionistId,
+          sessionId: previewSessionIdRef.current,
+          source: "builder_preview"
+        }
       });
 
       if (error) {
         console.error('Chat function error:', error);
-        throw new Error(error.message || 'Failed to get response from AI');
+        throw new Error(error.message || "Failed to get response from AI");
       }
 
       if (!data?.reply) {
