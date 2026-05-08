@@ -200,8 +200,14 @@ export function generateInstruction(
 export function buildPromptBlock(
   state: EngineState,
   requirements: RequirementCheck,
-  instruction: GovernorInstruction
+  instruction: GovernorInstruction,
+  userMessage: string = ''
 ): string {
+  const detectsUrgency = (message: string): boolean => {
+    if (!message) return false;
+    return /\b(pain|hurt|emergency|urgent|bleeding|swollen|broken|panicking|scared|desperate|help me|please|asap|as soon as possible|worried|critical)\b/i.test(message);
+  };
+  const urgentTurn = detectsUrgency(userMessage);
   const lines: string[] = [];
   
   // Determine which UI widgets are currently being shown
@@ -250,6 +256,7 @@ The following interactive UI widget(s) are being displayed alongside your text r
 ${activeWidgets.map(w => `• ${w}`).join('\n')}
 
 **NON-NEGOTIABLE RULES when a UI widget is showing:**
+1. ${urgentTurn ? 'This user is in distress. Prioritize empathy and practical help above brevity for this turn.' : 'Your text response MUST be SHORT (1-2 sentences max) — the widget does the heavy lifting'}
 1. Your text response should usually be short (1-2 sentences) — except when the user shows urgency, distress, pain, or emergency needs; in those turns, give a fuller supportive response first
 2. NEVER list, enumerate, or describe the items/options that the widget already displays
 3. Instead, write a brief, friendly prompt directing the user to interact with the widget

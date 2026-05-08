@@ -210,6 +210,13 @@ function sanitizeInput(input: string, maxLength: number = 2000): string {
   return input.slice(0, maxLength).replace(/[<>]/g, '').trim();
 }
 
+async function generateBookingIdempotencyKey(sessionId: string, serviceId: string, date: string, time: string): Promise<string> {
+  const payload = `${sessionId}::${serviceId}::${date}::${time}`;
+  const data = new TextEncoder().encode(payload);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 function isTaskConfirming(activeTask: ActiveTask | null, expectedType: "booking" | "order"): boolean {
   if (!activeTask || activeTask.type !== expectedType) return false;
   return activeTask.step === "confirming" || activeTask.confirmation_sent === true;
@@ -1592,6 +1599,17 @@ if (!GEMINI_API_KEY) {
     // Load or create conversation state
     const conversationState = await stateManager.load(sessionId, receptionistId);
     console.log(`[Flow Engine] State loaded - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, Greeting: ${conversationState.greeting_sent}`);
+    let staleSlotContext = "";
+    const stateUpdatedAt = (conversationState as any)?.updated_at;
+    if (stateUpdatedAt && conversationState?.slots?.date && conversationState?.slots?.time) {
+      const ageMs = Date.now() - new Date(stateUpdatedAt).getTime();
+      const staleThreshold = 2 * 60 * 60 * 1000;
+      if (ageMs > staleThreshold) {
+        conversationState.slots.date = null;
+        conversationState.slots.time = null;
+        staleSlotContext = "STALE_SLOT_DETECTED: Previous date/time may no longer be available. Inform user warmly and collect a new slot.";
+      }
+    }
     
     //                                                                        
     // RE-GREETING PREVENTION (3-LEVEL ENFORCEMENT)
@@ -2507,6 +2525,7 @@ return {
         }
         
         if (startTime && !isNaN(startTime.getTime())) {
+          const idempotencyKey = await generateBookingIdempotencyKey(sessionId, mergedServiceId!, mergedDate!, mergedTime!);
           const bookingPayload = {
             receptionistId,
             serviceId: mergedServiceId,
@@ -2517,6 +2536,7 @@ return {
             bookingSource: 'ai_receptionist',
             metadata: {
               session_id: sessionId,
+              idempotency_key: idempotencyKey,
               booked_via: 'widget_chat_auto',
               conversation_phase: conversationContext.conversationPhase,
               service_name: mergedServiceName

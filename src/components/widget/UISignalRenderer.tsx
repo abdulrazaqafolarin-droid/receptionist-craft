@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ServiceSelector } from "@/components/widget/ServiceSelector";
 import { ProductSelectorEnhanced } from "@/components/widget/ProductSelectorEnhanced";
 import { DateSelector } from "@/components/widget/DateSelector";
@@ -74,11 +74,35 @@ export function UISignalRenderer({
 }: Props) {
   const [visible, setVisible] = useState<UISignal | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const isMounted = useRef(true);
+  const processingDismiss = useRef(false);
 
   useEffect(() => {
+    if (!isMounted.current) return;
+    if (signal?.dismissPrevious && !visible?.activeComponent) {
+      return;
+    }
     setVisible(signal);
     setIsPanelOpen(false);
   }, [signal]);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const handleDismiss = () => {
+    if (!isMounted.current) return;
+    if (processingDismiss.current) return;
+    processingDismiss.current = true;
+    setIsPanelOpen(false);
+    onDismiss?.();
+    setTimeout(() => {
+      processingDismiss.current = false;
+    }, 300);
+  };
 
   if (!visible?.activeComponent) return null;
 
@@ -148,7 +172,7 @@ export function UISignalRenderer({
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsPanelOpen(false)} aria-label="Minimize panel">
                   <Minimize2 className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setIsPanelOpen(false); onDismiss?.(); }} aria-label="Close panel">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleDismiss} aria-label="Close panel">
                   <X className="h-4 w-4" />
                 </Button>
               </div>
