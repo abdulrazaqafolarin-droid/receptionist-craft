@@ -30,9 +30,9 @@ Deno.serve(async (req) => {
       throw new Error("Receptionist ID is required");
     }
 
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("AI_API_KEY");
     if (!GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY missing");
+      throw new Error("Gemini key missing (checked: GEMINI_API_KEY, GOOGLE_API_KEY, AI_API_KEY)");
     }
 
     console.log(`[Chat] Processing message for receptionist ${receptionistId}, user ${userId}`);
