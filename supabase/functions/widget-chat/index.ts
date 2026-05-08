@@ -1558,9 +1558,9 @@ Deno.serve(async (req) => {
       console.log(`[Abuse Protection] Suspicious activity (score: ${abuseCheck.suspiciousScore}), but allowing request`);
     }
 
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("AI_API_KEY");
 if (!GEMINI_API_KEY) {
-  console.error("[Widget Chat] GEMINI_API_KEY missing");
+  console.error("[Widget Chat] Gemini key missing (checked: GEMINI_API_KEY, GOOGLE_API_KEY, AI_API_KEY)");
   return new Response(
     JSON.stringify({ reply: "I'm temporarily unavailable. Please try again shortly or contact us directly.", hasBookingIntent: false }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
