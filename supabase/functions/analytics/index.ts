@@ -364,6 +364,51 @@ Deno.serve(async (req) => {
       }), { headers: { ...CORS, "Content-Type": "application/json" }, status: 200 });
     }
 
+    if (action === "pipeline_metrics") {
+      const userId = body.userId;
+      const receptionistId = body.receptionistId || null;
+      const intervalBucket = body.intervalBucket || "day";
+      const startDate = body.startDate || new Date(Date.now() - (30 * 24 * 60 * 60 * 1000)).toISOString();
+      const endDate = body.endDate || new Date().toISOString();
+
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ error: "userId required" }),
+          { status: 400, headers: { ...CORS, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!["hour", "day", "week"].includes(intervalBucket)) {
+        return new Response(
+          JSON.stringify({ error: "intervalBucket must be one of hour/day/week" }),
+          { status: 400, headers: { ...CORS, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Trigger a lightweight incremental refresh so UI reads near-real-time aggregates.
+      await supabase.rpc("run_receptionist_interval_metrics_incremental", {
+        p_interval_bucket: intervalBucket,
+      });
+
+      const { data, error } = await supabase.rpc("get_receptionist_interval_metrics", {
+        p_interval_bucket: intervalBucket,
+        p_start: startDate,
+        p_end: endDate,
+        p_receptionist_id: receptionistId,
+        p_user_id: userId,
+      });
+
+      if (error) throw error;
+
+      return new Response(JSON.stringify({
+        metrics: data || [],
+        interval_bucket: intervalBucket,
+        refreshed_at: new Date().toISOString(),
+      }), {
+        headers: { ...CORS, "Content-Type": "application/json" }, status: 200
+      });
+    }
+
     return new Response(
       JSON.stringify({ error: "unsupported action" }), 
       { status: 400, headers: { ...CORS, "Content-Type": "application/json" } }
