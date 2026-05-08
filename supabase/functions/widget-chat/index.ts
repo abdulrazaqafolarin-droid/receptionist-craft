@@ -210,6 +210,13 @@ function sanitizeInput(input: string, maxLength: number = 2000): string {
   return input.slice(0, maxLength).replace(/[<>]/g, '').trim();
 }
 
+async function generateBookingIdempotencyKey(sessionId: string, serviceId: string, date: string, time: string): Promise<string> {
+  const payload = `${sessionId}::${serviceId}::${date}::${time}`;
+  const data = new TextEncoder().encode(payload);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 function isTaskConfirming(activeTask: ActiveTask | null, expectedType: "booking" | "order"): boolean {
   if (!activeTask || activeTask.type !== expectedType) return false;
   return activeTask.step === "confirming" || activeTask.confirmation_sent === true;
@@ -491,6 +498,28 @@ function mapIntentToUIIntent(intent: string): UIIntent {
   if (["confirm"].includes(intent)) return "confirmation";
   if (["farewell", "conversation_end"].includes(intent)) return "closing";
   return "browsing";
+}
+
+function resolveDeterministicUIComponent(params: {
+  bookingResult: any | null;
+  orderResult: any | null;
+  intentActiveComponent: UIComponent | null;
+  engineHints: {
+    show_services?: boolean;
+    show_products?: boolean;
+    show_calendar?: boolean;
+    show_time_slots?: boolean;
+  };
+}): UIComponent {
+  const { bookingResult, orderResult, intentActiveComponent, engineHints } = params;
+  if (bookingResult) return "booking_confirmation";
+  if (orderResult) return "order_summary";
+  if (intentActiveComponent) return intentActiveComponent;
+  if (engineHints.show_services) return "service_selector";
+  if (engineHints.show_products) return "product_selector";
+  if (engineHints.show_calendar) return "date_picker";
+  if (engineHints.show_time_slots) return "time_picker";
+  return null;
 }
 
 function clamp01(value: number): number {
@@ -1073,7 +1102,7 @@ Success metrics:
 2. **Reduce choices, not expand them** -- Guide decisively, don't overwhelm with options
 3. **Handle objections calmly and confidently** -- "I understand. Here's why this is worth it..."
 4. **If user hesitates twice** -- Introduce urgency: "This time slot is popular" or "Limited availability"
-5. **Before conversation ends** -- ALWAYS capture contact details (email or phone)
+5. **Before conversation ends** -- capture contact details ONLY when buyerReadiness >= 6/10 or clear conversion intent exists
 6. **Close with action** -- Don't let conversations drift without booking/purchase/lead capture
 
 ## CONVERSION TACTICS
@@ -1570,6 +1599,17 @@ if (!GEMINI_API_KEY) {
     // Load or create conversation state
     const conversationState = await stateManager.load(sessionId, receptionistId);
     console.log(`[Flow Engine] State loaded - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, Greeting: ${conversationState.greeting_sent}`);
+    let staleSlotContext = "";
+    const stateUpdatedAt = (conversationState as any)?.updated_at;
+    if (stateUpdatedAt && conversationState?.slots?.date && conversationState?.slots?.time) {
+      const ageMs = Date.now() - new Date(stateUpdatedAt).getTime();
+      const staleThreshold = 2 * 60 * 60 * 1000;
+      if (ageMs > staleThreshold) {
+        conversationState.slots.date = null;
+        conversationState.slots.time = null;
+        staleSlotContext = "STALE_SLOT_DETECTED: Previous date/time may no longer be available. Inform user warmly and collect a new slot.";
+      }
+    }
     
     //                                                                        
     // RE-GREETING PREVENTION (3-LEVEL ENFORCEMENT)
@@ -2485,6 +2525,7 @@ return {
         }
         
         if (startTime && !isNaN(startTime.getTime())) {
+          const idempotencyKey = await generateBookingIdempotencyKey(sessionId, mergedServiceId!, mergedDate!, mergedTime!);
           const bookingPayload = {
             receptionistId,
             serviceId: mergedServiceId,
@@ -2495,6 +2536,7 @@ return {
             bookingSource: 'ai_receptionist',
             metadata: {
               session_id: sessionId,
+              idempotency_key: idempotencyKey,
               booked_via: 'widget_chat_auto',
               conversation_phase: conversationContext.conversationPhase,
               service_name: mergedServiceName
@@ -2870,14 +2912,25 @@ return {
     }
 
     const uiIntent = mapIntentToUIIntent(engineResult.intent.intent || messageAnalysis.detectedIntent);
-    const activeComponent: UIComponent =
-      bookingResult ? "booking_confirmation" :
-      orderResult ? "order_summary" :
-      engineResult.ui_hints.show_services ? "service_selector" :
-      engineResult.ui_hints.show_products ? "product_selector" :
-      engineResult.ui_hints.show_calendar ? "date_picker" :
-      engineResult.ui_hints.show_time_slots ? "time_picker" :
+    const intentSuggestedComponent: UIComponent =
+      conversationState.flow_step === "service_selection" ? "service_selector" :
+      conversationState.flow_step === "date_selection" ? "date_picker" :
+      conversationState.flow_step === "time_selection" ? "time_picker" :
+      conversationState.flow_step === "product_selection" ? "product_selector" :
       null;
+    let activeComponent: UIComponent = resolveDeterministicUIComponent({
+      bookingResult: bookingResult || null,
+      orderResult: orderResult || null,
+      intentActiveComponent: intentSuggestedComponent,
+      engineHints: engineResult.ui_hints || {},
+    });
+    const noAvailabilityDetected = activeComponent === "time_picker" &&
+      Array.isArray((conversationState.slots as any)?.availableSlots) &&
+      ((conversationState.slots as any)?.availableSlots as any[]).length === 0;
+    if (noAvailabilityDetected) {
+      activeComponent = "lead_form";
+      reply = `${reply}\n\nThere are no available time slots in the next 30 days right now. If you'd like, I can take your contact details and notify you as soon as new slots open.`;
+    }
     const previousUIIntent = (conversationState.slots?.last_ui_intent as string | undefined) || null;
     const dismissPrevious = previousUIIntent !== null && previousUIIntent !== uiIntent;
     const uiSignal: UISignal = {

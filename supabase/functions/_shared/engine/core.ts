@@ -90,7 +90,7 @@ export function runEngine(input: EngineInput): EngineResult {
   // ─────────────────────────────────────────────────────────────────────────
   // STEP 8: Build prompt block
   // ─────────────────────────────────────────────────────────────────────────
-  const promptBlock = buildPromptBlock(newState, requirements, instruction);
+  const promptBlock = buildPromptBlock(newState, requirements, instruction, input.message);
   
   // ─────────────────────────────────────────────────────────────────────────
   // STEP 9: Check for illegal state

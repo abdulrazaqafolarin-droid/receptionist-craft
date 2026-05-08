@@ -131,12 +131,14 @@ If alternatives accepted:
 ${summary || 'No booking information collected yet.'}
 
 ## Booking Flow (Natural Conversation)
-When handling appointments:
+When handling appointments (preferred sequence, not mandatory):
 1. **Service Selection** → "What service are you interested in?" (show options if multiple)
 2. **Date Selection** → "What day works best for you?"
 3. **Time Selection** → "What time would be most convenient?"
 4. **Contact Collection** → "Can I get your name and phone number to confirm?"
 5. **Confirmation** → Summarize and confirm all details
+
+If the customer provides details out of order, accept all provided details and ask only for what is still missing.
 
 ### Important:
 - **NEVER** use technical commands or jargon
