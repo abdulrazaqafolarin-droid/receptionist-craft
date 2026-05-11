@@ -5,9 +5,13 @@ import { DateSelector } from "@/components/widget/DateSelector";
 import { TimeSlotSelector } from "@/components/widget/TimeSlotSelector";
 import { BookingConfirmation } from "@/components/widget/BookingConfirmation";
 import { OrderConfirmation } from "@/components/widget/OrderConfirmation";
+import { LeadForm } from "@/components/widget/LeadForm";
+import { SwitchConfirmation } from "@/components/widget/SwitchConfirmation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Layers3, Minimize2, Sparkles, X } from "lucide-react";
+
+
 
 export type IntentType =
   | "browsing"
@@ -59,6 +63,14 @@ interface Props {
   onDateSelect: (date: Date) => void;
   onTimeSlotSelect: (slot: { startTime: string; endTime?: string }) => void;
   onDismiss?: () => void;
+  onEditBooking?: () => void;
+  onCancelBooking?: () => void;
+  onEditOrder?: () => void;
+  onCancelOrder?: () => void;
+  onLeadFormSubmit?: (data: { name: string; email?: string; phone?: string }) => void;
+  onLeadFormSkip?: () => void;
+  onSwitchConfirm?: () => void;
+  onSwitchCancel?: () => void;
 }
 
 export function UISignalRenderer({
@@ -71,6 +83,14 @@ export function UISignalRenderer({
   onDateSelect,
   onTimeSlotSelect,
   onDismiss,
+  onEditBooking,
+  onCancelBooking,
+  onEditOrder,
+  onCancelOrder,
+  onLeadFormSubmit,
+  onLeadFormSkip,
+  onSwitchConfirm,
+  onSwitchCancel,
 }: Props) {
   const [visible, setVisible] = useState<UISignal | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -138,13 +158,33 @@ export function UISignalRenderer({
     if (visible.activeComponent === "booking_confirmation" && visible.componentData) {
       const data = visible.componentData as Record<string, unknown>;
       const customerName = (data.customerName as string | undefined) ?? (data.customer_name as string | undefined) ?? "Guest";
-      return <BookingConfirmation {...(data as object)} customerName={customerName} />;
+      return <BookingConfirmation {...(data as object)} customerName={customerName} onEdit={onEditBooking} onCancel={onCancelBooking} />;
     }
     if (visible.activeComponent === "order_summary" && visible.componentData) {
       const data = visible.componentData as Record<string, unknown>;
       const customerName = (data.customerName as string | undefined) ?? (data.customer_name as string | undefined) ?? "Guest";
       const contactInfo = (data.contactInfo as string | undefined) ?? (data.contact_info as string | undefined) ?? (data.customerEmail as string | undefined) ?? (data.customerPhone as string | undefined) ?? "";
-      return <OrderConfirmation {...(data as object)} customerName={customerName} contactInfo={contactInfo} />;
+      return <OrderConfirmation {...(data as object)} customerName={customerName} contactInfo={contactInfo} onEdit={onEditOrder} onCancel={onCancelOrder} />;
+    }
+    if (visible.activeComponent === "lead_form") {
+      return (
+        <LeadForm
+          onSubmit={(formData) => onLeadFormSubmit?.(formData)}
+          onSkip={onLeadFormSkip}
+          disabled={loading}
+          componentData={visible.componentData as Record<string, unknown>}
+        />
+      );
+    }
+    if (visible.activeComponent === "switch_confirmation") {
+      return (
+        <SwitchConfirmation
+          onConfirm={() => onSwitchConfirm?.()}
+          onCancel={() => onSwitchCancel?.()}
+          disabled={loading}
+          componentData={visible.componentData as Record<string, unknown>}
+        />
+      );
     }
     return null;
   };

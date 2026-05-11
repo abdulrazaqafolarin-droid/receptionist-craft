@@ -24,6 +24,7 @@ export function generateUIHints(state: EngineState): UIHints {
     show_products: false,
     show_calendar: false,
     show_time_slots: false,
+    show_lead_form: false,
     show_confirmation: false,
     show_order_confirmation: false,
   };
@@ -42,6 +43,10 @@ export function generateUIHints(state: EngineState): UIHints {
       break;
     case 'select_time':
       hints.show_time_slots = true;
+      break;
+    case 'collect_name':
+    case 'collect_contact':
+      hints.show_lead_form = true;
       break;
     case 'confirm':
       if (state.task_type === 'booking') {
@@ -77,11 +82,13 @@ export function generateInstruction(
   // UNIVERSAL FORBIDDEN ACTIONS
   // ─────────────────────────────────────────────────────────────────────────
   
-  // Never re-confirm after confirmation sent
+  // After confirmation sent: block unsolicited re-confirmation
+  // but ALLOW re-confirmation if the customer explicitly asks for it
   if (state.rules.confirmation_sent) {
-    instruction.forbidden.push('summarize_again');
-    instruction.forbidden.push('repeat_details');
-    instruction.forbidden.push('re_confirm');
+    instruction.forbidden.push('unprompted_re_confirm');
+    instruction.forbidden.push('unprompted_repeat_details');
+    instruction.allowed.push('re_confirm_if_requested');
+    instruction.allowed.push('repeat_details_if_requested');
   }
   
   // Never ask for already collected data
@@ -90,104 +97,89 @@ export function generateInstruction(
     instruction.forbidden.push(`re_ask_${field}`);
   });
   
-  // Never re-greet
+  // Never re-greet with full greeting sequence
+  // Light acknowledgments ("welcome back", "hey again") after pause are fine
   if (state.rules.greeted) {
-    instruction.forbidden.push('greet_again');
-    instruction.forbidden.push('introduce_self');
+    instruction.forbidden.push('full_greet_again');
+    instruction.forbidden.push('re_introduce_self');
+    instruction.allowed.push('light_acknowledgment_after_pause');
   }
   
-  // Never ask "anything else" twice
-  if (state.rules.asked_if_need_more) {
+  // Never ask "anything else" twice — but resets on new task
+  if (state.rules.asked_if_need_more && !state.task_type) {
     instruction.forbidden.push('ask_if_need_more');
   }
   
   // ─────────────────────────────────────────────────────────────────────────
-  // STEP-SPECIFIC INSTRUCTIONS
+  // STEP-SPECIFIC INSTRUCTIONS (FLEXIBLE ORDER)
   // ─────────────────────────────────────────────────────────────────────────
   
   if (!state.task_type) {
-    // No active task
     instruction.allowed.push('ask_how_to_help');
     instruction.allowed.push('answer_question');
     instruction.instruction = 'No active task. Help the user start a booking or order, or answer their question naturally.';
     return instruction;
   }
   
-  // BOOKING FLOW
-  if (state.task_type === 'booking') {
-    switch (requirements.next_required) {
-      case 'service':
-        instruction.allowed.push('ask_for_service');
-        instruction.allowed.push('present_services');
-        instruction.instruction = 'Ask which service they would like. Be natural and helpful.';
-        break;
-      case 'date':
-        instruction.allowed.push('ask_for_date');
-        instruction.instruction = 'Ask what date works best for them. Be conversational.';
-        break;
-      case 'time':
-        instruction.allowed.push('ask_for_time');
-        instruction.instruction = 'Ask what time they prefer. Mention available slots if relevant.';
-        break;
-      case 'name':
-        instruction.allowed.push('ask_for_name');
-        instruction.instruction = 'Ask for their name to complete the booking. Be friendly.';
-        break;
-      case 'contact':
-        instruction.allowed.push('ask_for_contact');
-        instruction.instruction = 'Ask for their phone number or email. Explain it\'s for confirmation.';
-        break;
-      case null:
-        // All collected - confirm
-        if (!state.rules.confirmation_sent) {
-          instruction.should_confirm = true;
-          instruction.allowed.push('summarize_and_confirm');
-          instruction.instruction = 'Summarize the booking details ONCE and ask for confirmation. Keep it brief.';
-        } else {
-          instruction.should_close = true;
-          instruction.allowed.push('thank_and_close');
-          instruction.instruction = 'Booking confirmed. Thank them warmly and ask if there\'s anything else.';
-        }
-        break;
+  const { collected, missing, next_required } = requirements;
+  const fieldLabel: Record<string, string> = {
+    service: 'the service they want',
+    product: 'what product they want',
+    date: 'what date works for them',
+    time: 'what time works for them',
+    name: 'their name',
+    contact: 'their phone number or email',
+    quantity: 'the quantity they want',
+    delivery_address: 'their delivery address',
+  };
+  
+  // Build a flexible instruction that acknowledges collected fields
+  // and naturally asks for only what's still missing
+  if (next_required === null) {
+    if (!state.rules.confirmation_sent) {
+      instruction.should_confirm = true;
+      instruction.allowed.push('summarize_and_confirm');
+      instruction.instruction = `The customer has provided all required ${state.task_type} details. Summarize what they've provided ONCE and ask them to confirm. Keep it brief.`;
+    } else {
+      instruction.should_close = true;
+      instruction.allowed.push('thank_and_close');
+      instruction.allowed.push('celebrate_with_customer');
+      instruction.allowed.push('offer_one_preparation_tip');
+      instruction.instruction = `${state.task_type === 'booking' ? 'Booking' : 'Order'} confirmed. 1. Celebrate briefly with the customer. 2. Offer ONE natural next-step or preparation tip if relevant. 3. Then ask warmly if there\'s anything else. Keep it conversational, not checklist-like.`;
     }
+    return instruction;
   }
   
-  // ORDERING FLOW
-  if (state.task_type === 'ordering') {
-    switch (requirements.next_required) {
-      case 'product':
-        instruction.allowed.push('ask_for_product');
-        instruction.allowed.push('present_products');
-        instruction.instruction = 'Ask what they would like to order. Present options if available.';
-        break;
-      case 'quantity':
-        instruction.allowed.push('ask_for_quantity');
-        instruction.instruction = 'Confirm the quantity they want.';
-        break;
-      case 'name':
-        instruction.allowed.push('ask_for_name');
-        instruction.instruction = 'Ask for their name to complete the order.';
-        break;
-      case 'contact':
-        instruction.allowed.push('ask_for_contact');
-        instruction.instruction = 'Ask for their phone number or email for order confirmation.';
-        break;
-      case 'delivery_address':
-        instruction.allowed.push('ask_for_delivery_address');
-        instruction.instruction = 'Ask where they would like us to deliver the order. Accept any address or "pickup" if they prefer to collect.';
-        break;
-      case null:
-        if (!state.rules.confirmation_sent) {
-          instruction.should_confirm = true;
-          instruction.allowed.push('summarize_and_confirm');
-          instruction.instruction = 'Summarize the order including delivery address ONCE and ask for confirmation.';
-        } else {
-          instruction.should_close = true;
-          instruction.allowed.push('thank_and_close');
-          instruction.instruction = 'Order confirmed. Thank them and ask if they need anything else.';
-        }
-        break;
-    }
+  // Flexible collection: don't force a specific order, just ask for the next missing field
+  // If customer provided info out of order, acknowledge the collected fields
+  const emotionContext = state.emotional_tone === 'frustrated' || state.emotional_tone === 'negative'
+    ? ' The customer seems distressed. Acknowledge their concern first, then gently guide to the next step.'
+    : state.emotional_tone === 'urgent'
+    ? ' The customer has urgency. Be efficient and reassuring.'
+    : '';
+  if (collected.length > 0) {
+    instruction.instruction = `Collected: ${collected.join(', ')}. Missing: ${missing.join(', ')}. `;
+    instruction.instruction += `Naturally ask for ${fieldLabel[next_required] || `the ${next_required}`}. `;
+    instruction.instruction += `If the customer just provided multiple details, acknowledge them all before asking for the next one.`;
+    instruction.instruction += emotionContext;
+  } else {
+    instruction.instruction = `Ask for ${fieldLabel[next_required] || `the ${next_required}`} to continue the ${state.task_type}. Be natural and conversational.`;
+    instruction.instruction += emotionContext;
+  }
+  
+  // When a UI widget is active for this field, don't ask for it in text
+  const uiHintsForInstruction = generateUIHints(state);
+  if (next_required === 'service' && uiHintsForInstruction.show_services) {
+    instruction.allowed.push('refer_to_service_widget');
+  } else if (next_required === 'product' && uiHintsForInstruction.show_products) {
+    instruction.allowed.push('refer_to_product_widget');
+  } else if (next_required === 'date' && uiHintsForInstruction.show_calendar) {
+    instruction.allowed.push('refer_to_date_widget');
+  } else if (next_required === 'time' && uiHintsForInstruction.show_time_slots) {
+    instruction.allowed.push('refer_to_time_widget');
+  } else {
+    instruction.allowed.push(`ask_for_${next_required}`);
+    instruction.allowed.push(`present_${next_required === 'service' ? 'services' : next_required === 'product' ? 'products' : next_required}`);
   }
   
   return instruction;
@@ -250,23 +242,22 @@ ${instruction.forbidden.map(a => `• ${a}`).join('\n')}
 • Use robotic filler phrases like "Certainly!", "Of course!", "I'd be happy to!"
 
 ${activeWidgets.length > 0 ? `
-## 🖥️ UI WIDGET ACTIVE — TEXT DEDUPLICATION RULE (CRITICAL)
+## 🖥️ UI WIDGET ACTIVE — TEXT DEDUPLICATION GUIDELINE
 
 The following interactive UI widget(s) are being displayed alongside your text response:
 ${activeWidgets.map(w => `• ${w}`).join('\n')}
 
-**NON-NEGOTIABLE RULES when a UI widget is showing:**
-1. ${urgentTurn ? 'This user is in distress. Prioritize empathy and practical help above brevity for this turn.' : 'Your text response MUST be SHORT (1-2 sentences max) — the widget does the heavy lifting'}
-1. Your text response should usually be short (1-2 sentences) — except when the user shows urgency, distress, pain, or emergency needs; in those turns, give a fuller supportive response first
+**GUIDELINES when a UI widget is showing:**
+1. ${urgentTurn ? 'This user is in distress. Prioritize empathy and practical help above brevity for this turn.' : 'Your text response should be short and complementary to the widget — let the widget handle selection while you provide context, answer questions, or guide naturally.'}
 2. NEVER list, enumerate, or describe the items/options that the widget already displays
-3. Instead, write a brief, friendly prompt directing the user to interact with the widget
+3. If the customer asks about the options shown in the widget (e.g., differences between services), ANSWER their question fully before directing them to the widget
+4. Write a brief, friendly prompt directing the user to interact with the widget only if they haven't already asked a specific question
 
-**Examples of CORRECT short responses when widgets are active:**
-- Service Selector: "Here are our available services — just tap the one you'd like!"
-- Product Selector: "Here are our products — pick whatever catches your eye!"
-- Calendar: "Go ahead and choose a date that works best for you!"
-- Time Slots: "Here are the available time slots — tap the one you prefer!"
-- Confirmation: "Here's your summary — please confirm if everything looks good!"
+**Example approach (NOT exact wording — adapt to conversation):**
+If user asks a specific question about options: answer it, then suggest the widget.
+If user hasn't asked anything specific: a brief prompt to use the widget is fine.
+
+**Widget Request (Optional):** If the conversation would benefit from a different widget than the one currently shown, end your response with [WIDGET: widget_name] where widget_name is one of: service_selector, product_selector, date_picker, time_picker, booking_confirmation, order_summary. Example: ending with [WIDGET: date_picker] will switch to showing the calendar. Use this sparingly — only when the conversation naturally requires a different input mode.
 ` : ''}
 
 ## 🧠 CONVERSATIONAL COLLECTION RULES

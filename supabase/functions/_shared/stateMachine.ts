@@ -1,18 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// CONVERSATION STATE MACHINE
+// @deprecated — CONVERSATION STATE MACHINE (LEGACY)
 // ═══════════════════════════════════════════════════════════════════════════
 // 
-// This module enforces a strict state machine for conversation flows.
-// The AI CANNOT jump around - it must follow valid transitions.
-// State changes only occur through explicit transitions.
+// DEPRECATED as of conversational flow audit (2026-05-10).
+// Engine v2 (engine/governor.ts + engine/core.ts) is the single source
+// of truth for state tracking. This module is retained only for
+// backward compatibility with imports — it is NOT called at runtime.
+// See widget-chat/index.ts line ~1955:
+//   "Old stateMachine.ts is fully replaced by Engine v2's state tracking."
 //
-// States:
-//   idle → selecting_service → selecting_date → selecting_time → 
-//   collecting_contact → confirming → completed
-//
-// For ordering:
-//   idle → selecting_product → selecting_quantity → 
-//   collecting_contact → confirming → completed
+// DO NOT modify. DO NOT use in new code. Will be removed in next cleanup.
 //
 // ═══════════════════════════════════════════════════════════════════════════
 

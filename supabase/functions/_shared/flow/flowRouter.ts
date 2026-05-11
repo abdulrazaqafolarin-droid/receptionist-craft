@@ -69,11 +69,13 @@ export function detectTopicShift(
         blockReason: 'Booking in progress. Ask user to confirm switch.',
       };
     }
+    // PARK MODE: Allow topic switch but save current slots as parkedSlots for resume
     return {
       type: 'inferred',
       confidence: 0.8,
       newTopic: 'ordering',
       shouldBlock: false,
+      parkSlots: true,
     };
   }
 
@@ -87,11 +89,13 @@ export function detectTopicShift(
         blockReason: 'Order in progress. Ask user to confirm switch.',
       };
     }
+    // PARK MODE: Allow topic switch but save current slots as parkedSlots for resume
     return {
       type: 'inferred',
       confidence: 0.8,
       newTopic: 'booking',
       shouldBlock: false,
+      parkSlots: true,
     };
   }
 

@@ -210,6 +210,10 @@ export interface ConversationState {
   governor_state?: GovernorStateType | null;
   // New: Unified State object (SINGLE SOURCE OF TRUTH)
   unified_state?: UnifiedStateType | null;
+  // Parked flow state for topic switch resume (PARK MODE)
+  parkedFlow?: FlowType | null;
+  parkedStep?: FlowStep | null;
+  parkedSlots?: Record<string, any> | null;
 }
 
 export interface TopicShiftSignal {
@@ -218,6 +222,7 @@ export interface TopicShiftSignal {
   newTopic?: string;
   shouldBlock: boolean;
   blockReason?: string;
+  parkSlots?: boolean; // If true, save current slots for resume instead of destroying them
 }
 
 export interface FlowTransition {

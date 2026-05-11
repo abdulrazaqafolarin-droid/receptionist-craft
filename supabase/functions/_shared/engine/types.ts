@@ -183,6 +183,7 @@ export interface UIHints {
   show_products: boolean;
   show_calendar: boolean;
   show_time_slots: boolean;
+  show_lead_form: boolean;
   show_confirmation: boolean;
   show_order_confirmation: boolean;
 }

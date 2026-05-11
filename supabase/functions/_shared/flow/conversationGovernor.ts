@@ -728,22 +728,9 @@ export function getTopicLockRedirect(state: GovernorState): string | null {
     return null;
   }
   
-  const flowName = state.active_flow === 'booking' ? 'booking' : 'order';
   const nextStep = state.missing_fields[0] || 'confirmation';
   
-  return `Let's finish your ${flowName} first. ${getRedirectQuestion(nextStep)}`;
-}
-
-function getRedirectQuestion(field: string): string {
-  switch (field) {
-    case 'service': return 'Which service would you like?';
-    case 'product': return 'What would you like to order?';
-    case 'date': return 'What date works for you?';
-    case 'time': return 'What time would you prefer?';
-    case 'quantity': return 'How many would you like?';
-    case 'name': return 'May I have your name?';
-    case 'contact': return 'And the best way to reach you?';
-    case 'confirmation': return 'Shall I confirm this for you?';
-    default: return 'Let me help you complete this.';
-  }
+  // Softened redirect — this is appended AFTER answering the customer's question
+  // The AI is instructed to answer briefly first, then gracefully return to the task
+  return null;
 }

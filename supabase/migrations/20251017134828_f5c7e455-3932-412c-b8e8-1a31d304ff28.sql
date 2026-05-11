@@ -1,17 +1,33 @@
 -- Create enum for user plan
-CREATE TYPE public.user_plan AS ENUM ('free', 'pro', 'enterprise');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_plan') THEN
+    CREATE TYPE public.user_plan AS ENUM ('free', 'pro', 'enterprise');
+  END IF;
+END $$;
 
 -- Create enum for receptionist tone
-CREATE TYPE public.receptionist_tone AS ENUM ('friendly', 'professional', 'playful');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'receptionist_tone') THEN
+    CREATE TYPE public.receptionist_tone AS ENUM ('friendly', 'professional', 'playful');
+  END IF;
+END $$;
 
 -- Create enum for appointment status
-CREATE TYPE public.appointment_status AS ENUM ('booked', 'cancelled', 'completed');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'appointment_status') THEN
+    CREATE TYPE public.appointment_status AS ENUM ('booked', 'cancelled', 'completed');
+  END IF;
+END $$;
 
 -- Create enum for integration type
-CREATE TYPE public.integration_type AS ENUM ('twilio', 'openai', 'google_calendar', 'stripe');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'integration_type') THEN
+    CREATE TYPE public.integration_type AS ENUM ('twilio', 'openai', 'google_calendar', 'stripe');
+  END IF;
+END $$;
 
 -- Create profiles table
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   name TEXT,
@@ -25,16 +41,20 @@ CREATE TABLE public.profiles (
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
-CREATE POLICY "Users can view own profile"
-  ON public.profiles FOR SELECT
-  USING (auth.uid() = id);
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+  CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+END $$;
 
-CREATE POLICY "Users can update own profile"
-  ON public.profiles FOR UPDATE
-  USING (auth.uid() = id);
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+  CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+END $$;
 
 -- Create receptionists table
-CREATE TABLE public.receptionists (
+CREATE TABLE IF NOT EXISTS public.receptionists (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
   name TEXT NOT NULL,
@@ -55,24 +75,32 @@ CREATE TABLE public.receptionists (
 ALTER TABLE public.receptionists ENABLE ROW LEVEL SECURITY;
 
 -- Receptionists policies
-CREATE POLICY "Users can view own receptionists"
-  ON public.receptionists FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can view own receptionists" ON public.receptionists;
+  CREATE POLICY "Users can view own receptionists" ON public.receptionists FOR SELECT USING (auth.uid() = user_id);
+END $$;
 
-CREATE POLICY "Users can create own receptionists"
-  ON public.receptionists FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can create own receptionists" ON public.receptionists;
+  CREATE POLICY "Users can create own receptionists" ON public.receptionists FOR INSERT WITH CHECK (auth.uid() = user_id);
+END $$;
 
-CREATE POLICY "Users can update own receptionists"
-  ON public.receptionists FOR UPDATE
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can update own receptionists" ON public.receptionists;
+  CREATE POLICY "Users can update own receptionists" ON public.receptionists FOR UPDATE USING (auth.uid() = user_id);
+END $$;
 
-CREATE POLICY "Users can delete own receptionists"
-  ON public.receptionists FOR DELETE
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can delete own receptionists" ON public.receptionists;
+  CREATE POLICY "Users can delete own receptionists" ON public.receptionists FOR DELETE USING (auth.uid() = user_id);
+END $$;
 
 -- Create receptionist_faqs table
-CREATE TABLE public.receptionist_faqs (
+CREATE TABLE IF NOT EXISTS public.receptionist_faqs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   receptionist_id UUID REFERENCES public.receptionists(id) ON DELETE CASCADE NOT NULL,
   question TEXT NOT NULL,
@@ -85,48 +113,64 @@ CREATE TABLE public.receptionist_faqs (
 ALTER TABLE public.receptionist_faqs ENABLE ROW LEVEL SECURITY;
 
 -- FAQ policies
-CREATE POLICY "Users can view own receptionist FAQs"
-  ON public.receptionist_faqs FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.receptionists
-      WHERE receptionists.id = receptionist_faqs.receptionist_id
-      AND receptionists.user_id = auth.uid()
-    )
-  );
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can view own receptionist FAQs" ON public.receptionist_faqs;
+  CREATE POLICY "Users can view own receptionist FAQs"
+    ON public.receptionist_faqs FOR SELECT
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.receptionists
+        WHERE receptionists.id = receptionist_faqs.receptionist_id
+        AND receptionists.user_id = auth.uid()
+      )
+    );
+END $$;
 
-CREATE POLICY "Users can create own receptionist FAQs"
-  ON public.receptionist_faqs FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.receptionists
-      WHERE receptionists.id = receptionist_faqs.receptionist_id
-      AND receptionists.user_id = auth.uid()
-    )
-  );
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can create own receptionist FAQs" ON public.receptionist_faqs;
+  CREATE POLICY "Users can create own receptionist FAQs"
+    ON public.receptionist_faqs FOR INSERT
+    WITH CHECK (
+      EXISTS (
+        SELECT 1 FROM public.receptionists
+        WHERE receptionists.id = receptionist_faqs.receptionist_id
+        AND receptionists.user_id = auth.uid()
+      )
+    );
+END $$;
 
-CREATE POLICY "Users can update own receptionist FAQs"
-  ON public.receptionist_faqs FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.receptionists
-      WHERE receptionists.id = receptionist_faqs.receptionist_id
-      AND receptionists.user_id = auth.uid()
-    )
-  );
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can update own receptionist FAQs" ON public.receptionist_faqs;
+  CREATE POLICY "Users can update own receptionist FAQs"
+    ON public.receptionist_faqs FOR UPDATE
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.receptionists
+        WHERE receptionists.id = receptionist_faqs.receptionist_id
+        AND receptionists.user_id = auth.uid()
+      )
+    );
+END $$;
 
-CREATE POLICY "Users can delete own receptionist FAQs"
-  ON public.receptionist_faqs FOR DELETE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.receptionists
-      WHERE receptionists.id = receptionist_faqs.receptionist_id
-      AND receptionists.user_id = auth.uid()
-    )
-  );
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can delete own receptionist FAQs" ON public.receptionist_faqs;
+  CREATE POLICY "Users can delete own receptionist FAQs"
+    ON public.receptionist_faqs FOR DELETE
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.receptionists
+        WHERE receptionists.id = receptionist_faqs.receptionist_id
+        AND receptionists.user_id = auth.uid()
+      )
+    );
+END $$;
 
 -- Create conversations table
-CREATE TABLE public.conversations (
+CREATE TABLE IF NOT EXISTS public.conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   receptionist_id UUID REFERENCES public.receptionists(id) ON DELETE CASCADE NOT NULL,
   user_message TEXT NOT NULL,
@@ -140,28 +184,36 @@ CREATE TABLE public.conversations (
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 
 -- Conversations policies
-CREATE POLICY "Users can view own conversations"
-  ON public.conversations FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.receptionists
-      WHERE receptionists.id = conversations.receptionist_id
-      AND receptionists.user_id = auth.uid()
-    )
-  );
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can view own conversations" ON public.conversations;
+  CREATE POLICY "Users can view own conversations"
+    ON public.conversations FOR SELECT
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.receptionists
+        WHERE receptionists.id = conversations.receptionist_id
+        AND receptionists.user_id = auth.uid()
+      )
+    );
+END $$;
 
-CREATE POLICY "Users can create conversations"
-  ON public.conversations FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.receptionists
-      WHERE receptionists.id = conversations.receptionist_id
-      AND receptionists.user_id = auth.uid()
-    )
-  );
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can create conversations" ON public.conversations;
+  CREATE POLICY "Users can create conversations"
+    ON public.conversations FOR INSERT
+    WITH CHECK (
+      EXISTS (
+        SELECT 1 FROM public.receptionists
+        WHERE receptionists.id = conversations.receptionist_id
+        AND receptionists.user_id = auth.uid()
+      )
+    );
+END $$;
 
 -- Create appointments table
-CREATE TABLE public.appointments (
+CREATE TABLE IF NOT EXISTS public.appointments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   receptionist_id UUID REFERENCES public.receptionists(id) ON DELETE CASCADE NOT NULL,
   customer_name TEXT NOT NULL,
@@ -178,38 +230,50 @@ CREATE TABLE public.appointments (
 ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
 
 -- Appointments policies
-CREATE POLICY "Users can view own appointments"
-  ON public.appointments FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.receptionists
-      WHERE receptionists.id = appointments.receptionist_id
-      AND receptionists.user_id = auth.uid()
-    )
-  );
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can view own appointments" ON public.appointments;
+  CREATE POLICY "Users can view own appointments"
+    ON public.appointments FOR SELECT
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.receptionists
+        WHERE receptionists.id = appointments.receptionist_id
+        AND receptionists.user_id = auth.uid()
+      )
+    );
+END $$;
 
-CREATE POLICY "Users can create appointments"
-  ON public.appointments FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.receptionists
-      WHERE receptionists.id = appointments.receptionist_id
-      AND receptionists.user_id = auth.uid()
-    )
-  );
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can create appointments" ON public.appointments;
+  CREATE POLICY "Users can create appointments"
+    ON public.appointments FOR INSERT
+    WITH CHECK (
+      EXISTS (
+        SELECT 1 FROM public.receptionists
+        WHERE receptionists.id = appointments.receptionist_id
+        AND receptionists.user_id = auth.uid()
+      )
+    );
+END $$;
 
-CREATE POLICY "Users can update own appointments"
-  ON public.appointments FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.receptionists
-      WHERE receptionists.id = appointments.receptionist_id
-      AND receptionists.user_id = auth.uid()
-    )
-  );
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can update own appointments" ON public.appointments;
+  CREATE POLICY "Users can update own appointments"
+    ON public.appointments FOR UPDATE
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.receptionists
+        WHERE receptionists.id = appointments.receptionist_id
+        AND receptionists.user_id = auth.uid()
+      )
+    );
+END $$;
 
 -- Create integrations table
-CREATE TABLE public.integrations (
+CREATE TABLE IF NOT EXISTS public.integrations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
   type public.integration_type NOT NULL,
@@ -223,20 +287,26 @@ CREATE TABLE public.integrations (
 ALTER TABLE public.integrations ENABLE ROW LEVEL SECURITY;
 
 -- Integrations policies
-CREATE POLICY "Users can view own integrations"
-  ON public.integrations FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can view own integrations" ON public.integrations;
+  CREATE POLICY "Users can view own integrations" ON public.integrations FOR SELECT USING (auth.uid() = user_id);
+END $$;
 
-CREATE POLICY "Users can create own integrations"
-  ON public.integrations FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can create own integrations" ON public.integrations;
+  CREATE POLICY "Users can create own integrations" ON public.integrations FOR INSERT WITH CHECK (auth.uid() = user_id);
+END $$;
 
-CREATE POLICY "Users can update own integrations"
-  ON public.integrations FOR UPDATE
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can update own integrations" ON public.integrations;
+  CREATE POLICY "Users can update own integrations" ON public.integrations FOR UPDATE USING (auth.uid() = user_id);
+END $$;
 
 -- Create usage_logs table
-CREATE TABLE public.usage_logs (
+CREATE TABLE IF NOT EXISTS public.usage_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
   usage_type TEXT NOT NULL,
@@ -249,9 +319,11 @@ CREATE TABLE public.usage_logs (
 ALTER TABLE public.usage_logs ENABLE ROW LEVEL SECURITY;
 
 -- Usage logs policies
-CREATE POLICY "Users can view own usage logs"
-  ON public.usage_logs FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "Users can view own usage logs" ON public.usage_logs;
+  CREATE POLICY "Users can view own usage logs" ON public.usage_logs FOR SELECT USING (auth.uid() = user_id);
+END $$;
 
 -- Function to handle new user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -272,6 +344,7 @@ END;
 $$;
 
 -- Trigger to create profile on user signup
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW

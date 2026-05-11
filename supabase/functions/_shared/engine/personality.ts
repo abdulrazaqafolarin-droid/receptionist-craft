@@ -9,18 +9,13 @@
 import type { EmotionalTone, EngineState } from './types.ts';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ROBOTIC PHRASES TO AVOID
+// ROBOTIC PHRASES TO AVOID (Prompt-level guidance only)
 // ═══════════════════════════════════════════════════════════════════════════
 
+// These phrases are flagged in the system prompt as overused.
+// They are NOT stripped post-generation — that corrupts sentence structure.
+// The LLM is instructed to prefer fresher language for these.
 export const ROBOTIC_PHRASES = [
-  'certainly',
-  'of course',
-  "i'd be happy to",
-  'absolutely',
-  'i understand',
-  'thank you for',
-  'i apologize',
-  'please note that',
   'kindly',
   'as per',
   'regarding your',
@@ -28,7 +23,22 @@ export const ROBOTIC_PHRASES = [
   'at this time',
   'please be advised',
   'rest assured',
-  'i appreciate',
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TRULY ROBOTIC PHRASES (Post-generation strip targets)
+// These are genuinely robotic/fake-chatbot phrases that should be removed
+// from output. They are unambiguous and safe to strip without breaking grammar.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const STRIP_PHRASES = [
+  'as an ai',
+  'i am a bot',
+  "i'm a bot",
+  'i am an ai',
+  "i'm an ai",
+  'i am programmed',
+  "i'm programmed",
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -83,6 +93,20 @@ export const NATURAL_ACKS: Record<EmotionalTone, string[]> = {
 export function detectSentiment(message: string): EmotionalTone {
   const lower = message.toLowerCase();
   
+  // SARCASM DETECTION: Words like "great", "perfect", "wonderful" that appear
+  // in a negative/venting context with intensifiers or contradictory phrases
+  const sarcasmIndicators = /(?:great|perfect|wonderful|awesome|fantastic|lovely|just\s*great|oh\s*great)\s*[.!]*\s*,?\s*(?:\.\s*\.\s*\.|!|just|another|more|even|thing)|(?:yeah|sure)\s*(right|because)|as\s*if/i;
+  const negativityContext = /(?:can't|cannot|don't|doesn't|won't)\s*(?:even|ever|just)|(?:another|more)\s+(?:problem|issue|hassle|headache|thing|one|delay|charge|bill|fee)|(?:what\s*next|here\s*we\s*go)|(?:have|has|had)\s*to\s*deal\s*with/i;
+  const exclamationDensity = (message.match(/!/g) || []).length;
+  
+  if (sarcasmIndicators.test(lower) && negativityContext.test(lower)) {
+    return 'frustrated';
+  }
+  // "Great." or "Perfect." as standalone sentences (sarcastic)
+  if (/^(great|perfect|wonderful|fantastic|lovely)\.?$/i.test(message.trim()) && exclamationDensity === 0) {
+    return 'frustrated';
+  }
+  
   // Frustrated
   if (/frustrated|annoyed|angry|upset|terrible|awful|worst|ridiculous|unacceptable|hate/i.test(lower)) {
     return 'frustrated';
@@ -98,7 +122,7 @@ export function detectSentiment(message: string): EmotionalTone {
     return 'negative';
   }
   
-  // Positive
+  // Positive (only if not in sarcasm context)
   if (/great|awesome|wonderful|perfect|love|amazing|thank|excited|happy/i.test(lower)) {
     return 'positive';
   }
@@ -152,10 +176,11 @@ ${tone === 'positive' ? 'User is happy! Match their energy appropriately.' : ''}
 3. **BE BRIEF**: 1-2 sentences unless more detail is needed
 4. **BE WARM**: Care about the customer genuinely
 
-## NEVER SAY:
+## AVOID OVERUSING:
 ${ROBOTIC_PHRASES.map(p => `• "${p}"`).join('\n')}
-• Don't start with "I" multiple times in a row
-• Don't use exclamation marks excessively!!!
+• "Certainly", "Of course", "I'd be happy to" — fine in small doses, don't repeat
+• Starting with "I" multiple times in a row
+• Excessive exclamation marks!!!
 
 ## GOOD ACKNOWLEDGMENTS:
 ${NATURAL_ACKS[tone].slice(0, 4).map(a => `• "${a}"`).join('\n')}
@@ -174,13 +199,14 @@ ${NATURAL_ACKS[tone].slice(0, 4).map(a => `• "${a}"`).join('\n')}
 export function polishResponse(response: string): string {
   let polished = response;
   
-  // Remove robotic phrases (case-insensitive)
-  for (const phrase of ROBOTIC_PHRASES) {
+  // Remove ONLY truly robotic phrases (AI disclaimers) — post-generation
+  // Do NOT strip natural speech like "certainly", "thank you", "i understand"
+  for (const phrase of STRIP_PHRASES) {
     const regex = new RegExp(`\\b${phrase}\\b[!.,]?\\s*`, 'gi');
     polished = polished.replace(regex, '');
   }
   
-  // Remove double spaces
+  // Remove double spaces caused by stripping
   polished = polished.replace(/\s{2,}/g, ' ');
   
   // Remove leading punctuation

@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { ShoppingBag, User, Phone, Mail, CheckCircle, MapPin } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 
@@ -20,6 +21,8 @@ interface OrderConfirmationProps {
   totalAmount?: number;
   deliveryAddress?: string;
   currency?: string;
+  onEdit?: () => void;
+  onCancel?: () => void;
 }
 
 export function OrderConfirmation({
@@ -32,6 +35,8 @@ export function OrderConfirmation({
   totalAmount,
   deliveryAddress,
   currency,
+  onEdit,
+  onCancel,
 }: OrderConfirmationProps) {
   const isEmail = contactInfo?.includes('@');
 
@@ -128,6 +133,29 @@ export function OrderConfirmation({
           <p className="text-xs text-muted-foreground">
             We'll contact you shortly to confirm your order details.
           </p>
+
+          <div className="flex gap-2">
+            {onEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onEdit}
+                className="flex-1 text-xs"
+              >
+                Edit Details
+              </Button>
+            )}
+            {onCancel && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onCancel}
+                className="flex-1 text-xs text-red-600 border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
+              >
+                Cancel Order
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </Card>

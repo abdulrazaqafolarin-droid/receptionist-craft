@@ -58,6 +58,10 @@ export function updateState(
     next.task_step = intent.target_task === 'booking' ? 'select_service' : 'select_product';
     next.entities.appointment.timezone = timezone || null;
     next.topic_lock = intent.target_task;
+    // Reset per-task flags so "anything else" can be asked again after multi-task sessions
+    next.rules.asked_if_need_more = false;
+    next.rules.closing_offered = false;
+    next.rules.clarification_asked = false;
   }
   
   // ─────────────────────────────────────────────────────────────────────────

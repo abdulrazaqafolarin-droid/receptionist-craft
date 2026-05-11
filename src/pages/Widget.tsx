@@ -19,13 +19,7 @@ type Message = {
   content: string;
   timestamp: Date;
   showQuickReplies?: boolean;
-  showServices?: boolean;
-  showProducts?: boolean;
-  showDatePicker?: boolean;
-  showTimeSlots?: boolean;
-  timeSlots?: any[];
-  bookingConfirmation?: any;
-  orderConfirmation?: any;
+
 };
 
 export default function Widget() {
@@ -427,23 +421,21 @@ export default function Widget() {
         const slots = slotsData?.slots || [];
         if (slots.length > 0) {
           addBotMessage(
-            `Welcome back! 👋 You were booking ${state.serviceName} for ${formattedDate}. Here are today's available times — pick one to continue!`,
-            { showTimeSlots: true, timeSlots: slots }
+            `Welcome back! 👋 You were booking ${state.serviceName} for ${formattedDate}. Here are today's available times — pick one to continue!`
           );
           emitUISignal({ intent: "booking", activeComponent: "time_picker", componentData: { slots } });
         } else {
           // Date no longer has slots — offer date picker again
           setBookingState(prev => ({ ...prev, date: null }));
           addBotMessage(
-            `Welcome back! 👋 You were booking ${state.serviceName}, but ${formattedDate} no longer has open slots. Please pick another date.`,
-            { showDatePicker: true }
+            `Welcome back! 👋 You were booking ${state.serviceName}, but ${formattedDate} no longer has open slots. Please pick another date.`
           );
           emitUISignal({ intent: "booking", activeComponent: "date_picker" });
         }
       } catch (e) {
         console.error("[Widget] Error resuming booking flow:", e);
         setBookingState(prev => ({ ...prev, date: null }));
-        addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName}. Please pick a date to continue.`, { showDatePicker: true });
+        addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName}. Please pick a date to continue.`);
         emitUISignal({ intent: "booking", activeComponent: "date_picker" });
       } finally {
         setLoading(false);
@@ -453,8 +445,7 @@ export default function Widget() {
     // If service selected but no date — show date picker
     if (state.serviceId && !state.date) {
       addBotMessage(
-        `Welcome back! 👋 You were booking ${state.serviceName}. Go ahead and pick a date that works for you!`,
-        { showDatePicker: true }
+        `Welcome back! 👋 You were booking ${state.serviceName}. Go ahead and pick a date that works for you!`
       );
       emitUISignal({ intent: "booking", activeComponent: "date_picker" });
       return;
@@ -694,47 +685,21 @@ export default function Widget() {
     if (!textToSend || !receptionistId) return;
 
     // ─── QUICK ACTION INTENT ROUTING ───────────────────────────────
-    // If not already in a booking/order flow, check if the typed message
-    // matches a quick action button intent and route identically.
+    // Quick action intents are now handled by the AI on the backend for typed messages.
+    // The QUICK_ACTION_INTENTS pattern matching was removed because it intercepted
+    // user messages and replaced them with hardcoded responses, causing the AI to
+    // ignore what the customer actually typed. The quick action buttons below the
+    // chat (QuickReplyButtons) remain as UI shortcuts for users who click them.
+    // See defect U1 from conversational flow audit.
     const isInActiveFlow = bookingState.collectingInfo || 
                            bookingState.awaitingOrderConfirmation || 
                            bookingState.serviceId || 
                            bookingState.productId;
 
-    if (!isInActiveFlow) {
-      const lowerText = textToSend.toLowerCase();
-      
-      // First: check if user mentions a specific service name with booking intent
-      const bookingIntentMatch = QUICK_ACTION_INTENTS.some(({ pattern, action }) => 
-        action === 'book_appointment' && pattern.test(lowerText)
-      );
-      
-      if (bookingIntentMatch) {
-        const matchedService = matchServiceFromText(textToSend);
-        addUserMessage(textToSend);
-        setInput("");
-        
-        if (matchedService) {
-          // User mentioned a specific service — skip service selection, go to calendar
-          await handleServiceSelect(matchedService.id, matchedService.name);
-        } else {
-          // General booking intent — route to handleQuickReply
-          await handleQuickReply('book_appointment');
-        }
-        return;
-      }
-      
-      // Then check other intents
-      for (const { pattern, action } of QUICK_ACTION_INTENTS) {
-        if (action === 'book_appointment') continue; // already handled above
-        if (pattern.test(lowerText)) {
-          addUserMessage(textToSend);
-          setInput("");
-          await handleQuickReply(action);
-          return;
-        }
-      }
-    }
+    // REMOVED: QUICK_ACTION_INTENTS pre-processing override that discarded user messages.
+    // Message always reaches the AI for proper intent detection.
+    // This fixes the CRITICAL bug where "Do you have consultations?" was intercepted
+    // and never sent to the AI (U1).
 
     const userMessage: Message = {
       role: "user",
@@ -786,7 +751,7 @@ export default function Widget() {
           }));
           emitUISignal({ intent: "ordering", activeComponent: "product_selector", reason: "intent_switch" });
           
-          addBotMessage("No problem at all! Here are our products again — take your time and pick whatever you'd like.", { showProducts: true });
+          addBotMessage("No problem at all! Here are our products again — take your time and pick whatever you'd like.");
           setLoading(false);
           return;
         } else if (isCancel) {
@@ -797,10 +762,12 @@ export default function Widget() {
           setLoading(false);
           return;
         }
-        // If none matched, treat as ambiguous — ask again gently
-        addBotMessage("Just to be sure — would you like to go ahead with this order, make any changes to your selection, or take some more time to browse?");
-        setLoading(false);
-        return;
+        // Default: route unrecognized messages to the AI for proper handling.
+        // The AI can understand questions ("Can I get it in blue?"),
+        // modifications ("Actually make it 3"), or anything else the
+        // regex patterns would miss. This fixes defect U2.
+        setBookingState(prev => ({ ...prev, awaitingOrderConfirmation: false }));
+        // Fall through to normal AI flow below
       }
 
       // Handle booking info collection (client-side flow — persist user message)
@@ -900,22 +867,14 @@ export default function Widget() {
               throw orderError;
             }
 
-            const orderConfirmationMessage: Message = {
-              role: "assistant",
-              content: `Wonderful! Your order has been placed successfully. Here are the details:`,
-              timestamp: new Date(),
-              orderConfirmation: {
-                products: orderItems.map(i => ({ name: i.product_name, quantity: i.quantity, price: i.unit_price })),
-                customerName: bookingState.customerName,
-                contactInfo: contactInfo,
-                orderId: orderId || crypto.randomUUID(),
-                totalAmount,
-              }
-            };
-            
-            setMessages(prev => [...prev, orderConfirmationMessage]);
-            persistMessage('ai', `Wonderful! Your order has been placed successfully. Here are the details:`);
-            emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: orderConfirmationMessage.orderConfirmation || {} });
+            addBotMessage(`Wonderful! Your order has been placed successfully. Here are the details:`);
+            emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: {
+              products: orderItems.map(i => ({ name: i.product_name, quantity: i.quantity, price: i.unit_price })),
+              customerName: bookingState.customerName,
+              contactInfo: contactInfo,
+              orderId: orderId || crypto.randomUUID(),
+              totalAmount,
+            } });
           } catch (orderErr: any) {
             console.error("[Widget] Order error:", orderErr);
             addBotMessage("I apologize, but I encountered an issue placing your order. Please try again or contact us directly.");
@@ -949,23 +908,14 @@ export default function Widget() {
           const appointmentDate = format(new Date(bookingState.timeSlot.startTime), "EEEE, MMMM d, yyyy");
           const appointmentTime = format(new Date(bookingState.timeSlot.startTime), "h:mm a");
 
-          // Show confirmation with card
-          const confirmationMessage: Message = {
-            role: "assistant",
-            content: `Your appointment has been confirmed! Here are your booking details:`,
-            timestamp: new Date(),
-            bookingConfirmation: {
-              serviceName: bookingState.serviceName,
-              dateTime: bookingState.timeSlot.startTime,
-              customerName: bookingState.customerName,
-              contactInfo: contactInfo,
-              duration: services.find(s => s.id === bookingState.serviceId)?.duration_minutes,
-            }
-          };
-          
-          setMessages(prev => [...prev, confirmationMessage]);
-          persistMessage('ai', `Your appointment has been confirmed! Here are your booking details:`);
-          emitUISignal({ intent: "confirmation", activeComponent: "booking_confirmation", componentData: confirmationMessage.bookingConfirmation || {} });
+          addBotMessage(`Your appointment has been confirmed! Here are your booking details:`);
+          emitUISignal({ intent: "confirmation", activeComponent: "booking_confirmation", componentData: {
+            serviceName: bookingState.serviceName,
+            dateTime: bookingState.timeSlot.startTime,
+            customerName: bookingState.customerName,
+            contactInfo: contactInfo,
+            duration: services.find(s => s.id === bookingState.serviceId)?.duration_minutes,
+          } });
           
           // Reset booking state
           setBookingState({...defaultBookingState});
@@ -998,7 +948,6 @@ export default function Widget() {
 
       // Detect if we should show special UI
       const reply = data.reply || "";
-      const lowerReply = reply.toLowerCase();
       
       let botMessage: Message = {
         role: "assistant",
@@ -1008,7 +957,8 @@ export default function Widget() {
 
       // Check if booking was created by the backend
       if (data.bookingCreated && data.bookingDetails) {
-        botMessage.bookingConfirmation = {
+        setBookingState({...defaultBookingState});
+        emitUISignal({ intent: "confirmation", activeComponent: "booking_confirmation", componentData: {
           serviceName: data.bookingDetails.serviceName,
           dateTime: data.bookingDetails.startTime,
           customerName: data.bookingDetails.customerName,
@@ -1016,127 +966,27 @@ export default function Widget() {
           customerPhone: data.bookingDetails.customerPhone,
           confirmationId: data.bookingDetails.id,
           duration: services.find(s => s.id === bookingState.serviceId)?.duration_minutes,
-        };
-        
-        // Reset booking state after successful booking
-        setBookingState({...defaultBookingState});
-        emitUISignal({ intent: "confirmation", activeComponent: "booking_confirmation", componentData: botMessage.bookingConfirmation || {} });
+        } });
       }
       
       // Check if order was created by the backend
       if (data.orderCreated && data.orderDetails) {
-        botMessage.orderConfirmation = {
+        setBookingState({...defaultBookingState});
+        emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: {
           products: data.orderDetails.products || [],
           customerName: data.orderDetails.customerName,
           contactInfo: data.orderDetails.customerEmail || data.orderDetails.customerPhone,
           orderId: data.orderDetails.id,
           totalAmount: data.orderDetails.totalAmount,
           deliveryAddress: data.orderDetails.deliveryAddress,
-        };
-        
-        // Reset booking state after successful order
-        setBookingState({...defaultBookingState});
-        emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: botMessage.orderConfirmation || {} });
+        } });
       }
 
-      let hasStructuredUISignal = false;
       if (data.uiSignal) {
         const normalizedSignal = normalizeUISignal(data.uiSignal);
         if (normalizedSignal) {
           const hydratedSignal = await hydrateTimePickerSignal(normalizedSignal);
-          hasStructuredUISignal = Boolean(hydratedSignal.activeComponent);
           setActiveUISignal(hydratedSignal);
-        }
-      }
-
-      // Legacy UI fallbacks only when backend does not return a structured uiSignal
-      // Only show services if AI explicitly asks for service selection
-      const shouldShowServices = (
-        data.showServicesUI ||
-        data.shouldShowServices ||
-        data.uiHints?.showServiceSelector ||
-        lowerReply.includes("which service") || 
-        lowerReply.includes("what service") ||
-        lowerReply.includes("select a service") ||
-        lowerReply.includes("choose a service")
-      ) && !bookingState.serviceId && !data.bookingCreated;
-      
-      if (!hasStructuredUISignal && shouldShowServices && services.length > 0) {
-        botMessage.showServices = true;
-      }
-
-      // Detect product order intent and show products
-      const shouldShowProducts = (
-        data.showProductsUI ||
-        data.shouldShowProducts ||
-        data.uiHints?.showProductSelector ||
-        lowerReply.includes("which product") || 
-        lowerReply.includes("what product") ||
-        lowerReply.includes("order from our") ||
-        lowerReply.includes("browse our products")
-      ) && !bookingState.productId && !data.orderCreated;
-      
-      if (!hasStructuredUISignal && shouldShowProducts && products.length > 0) {
-        botMessage.showProducts = true;
-      }
-
-      // Only show date picker if AI explicitly asks for a date
-      // NOT automatically after service selection - let the AI control the flow
-      const shouldShowDatePicker = (
-        data.showDatePickerUI ||
-        data.uiHints?.showDatePicker ||
-        lowerReply.includes("which date") ||
-        lowerReply.includes("what date") ||
-        lowerReply.includes("when would you like") ||
-        lowerReply.includes("pick a date") ||
-        lowerReply.includes("select a date") ||
-        lowerReply.includes("choose a date")
-      ) && bookingState.serviceId && !bookingState.date && !data.bookingCreated;
-      
-      if (!hasStructuredUISignal && shouldShowDatePicker) {
-        botMessage.showDatePicker = true;
-      }
-
-      // Only show time slots if AI explicitly asks for a time
-      const shouldShowTimeSlots = (
-        data.showTimeSlotsUI ||
-        data.uiHints?.showTimePicker ||
-        lowerReply.includes("which time") ||
-        lowerReply.includes("what time") ||
-        lowerReply.includes("select a time") ||
-        lowerReply.includes("pick a time") ||
-        lowerReply.includes("choose a time") ||
-        lowerReply.includes("available slot")
-      ) && bookingState.serviceId && bookingState.date && !bookingState.timeSlot && !data.bookingCreated;
-      
-      if (!hasStructuredUISignal && shouldShowTimeSlots) {
-        const dateStr = format(bookingState.date, "yyyy-MM-dd");
-        const nextDay = new Date(bookingState.date);
-        nextDay.setDate(nextDay.getDate() + 1);
-        const endDateStr = format(nextDay, "yyyy-MM-dd");
-        
-        console.log("[Widget] sendMessage fetching availability:", { receptionistId, serviceId: bookingState.serviceId, startDate: dateStr, endDate: endDateStr });
-        
-        const { data: slotsData, error: slotsError } = await supabase.functions.invoke("check-availability", {
-          body: {
-            receptionistId,
-            serviceId: bookingState.serviceId,
-            startDate: dateStr,
-            endDate: endDateStr,
-            maxSlots: 6,
-          }
-        });
-
-        console.log("[Widget] sendMessage slots response:", { slotsData, slotsError });
-
-        const slots = slotsData?.slots || [];
-        if (slots.length > 0) {
-          botMessage.showTimeSlots = true;
-          botMessage.timeSlots = slots;
-        } else {
-          // No slots available, tell user
-          botMessage.content += "\n\nUnfortunately, no time slots are available for that date. Please select another date.";
-          botMessage.showDatePicker = true;
         }
       }
 
@@ -1157,7 +1007,7 @@ export default function Widget() {
     setBookingState(prev => ({ ...prev, serviceId, serviceName, orderMode: false }));
     emitUISignal({ intent: "booking", activeComponent: "date_picker" });
     addUserMessage(`I'd like to book ${serviceName}`);
-    addBotMessage(`Great choice! Go ahead and pick a date that works for you.`, { showDatePicker: true });
+    addBotMessage(`Great choice! Go ahead and pick a date that works for you.`);
   }
 
   async function handleProductsConfirm(selectedProducts: Array<{ productId: string; productName: string; quantity: number; price?: number }>) {
@@ -1219,7 +1069,7 @@ export default function Widget() {
       if (slotsError) {
         console.error("[Widget] check-availability error:", slotsError);
         setBookingState(prev => ({ ...prev, date: null }));
-        addBotMessage("I had trouble checking availability. Please try selecting a date again.", { showDatePicker: true });
+        addBotMessage("I had trouble checking availability. Please try selecting a date again.");
         return;
       }
 
@@ -1228,17 +1078,17 @@ export default function Widget() {
       console.log("[Widget] Extracted slots count:", slots.length);
       
       if (slots.length > 0) {
-        addBotMessage(`Here are the available slots for ${formattedDate} — pick the one that works best for you!`, { showTimeSlots: true, timeSlots: slots });
+        addBotMessage(`Here are the available slots for ${formattedDate} — pick the one that works best for you!`);
         emitUISignal({ intent: "booking", activeComponent: "time_picker", componentData: { slots } });
       } else {
         setBookingState(prev => ({ ...prev, date: null }));
-        addBotMessage(`I'm sorry, but there are no available time slots on ${formattedDate}. Would you like to try a different date?`, { showDatePicker: true });
+        addBotMessage(`I'm sorry, but there are no available time slots on ${formattedDate}. Would you like to try a different date?`);
         emitUISignal({ intent: "booking", activeComponent: "date_picker" });
       }
     } catch (error) {
       console.error("[Widget] Error fetching availability:", error);
       setBookingState(prev => ({ ...prev, date: null }));
-      addBotMessage("I had trouble checking availability. Please try selecting a date again.", { showDatePicker: true });
+      addBotMessage("I had trouble checking availability. Please try selecting a date again.");
       emitUISignal({ intent: "booking", activeComponent: "date_picker" });
     } finally {
       setLoading(false);
@@ -1267,7 +1117,7 @@ export default function Widget() {
         // Only one service — skip selection, go straight to calendar
         await handleServiceSelect(services[0].id, services[0].name);
       } else if (services.length > 1) {
-        addBotMessage("Which service would you like to book? Just tap one below!", { showServices: true });
+        addBotMessage("Which service would you like to book? Just tap one below!");
         emitUISignal({ intent: "booking", activeComponent: "service_selector" });
       } else {
         await sendMessage("I'd like to book an appointment");
@@ -1277,7 +1127,7 @@ export default function Widget() {
         const serviceList = services.map(s => 
           `• **${s.name}**${s.duration_minutes ? ` (${s.duration_minutes} min)` : ''}${s.price ? ` - $${s.price}` : ''}`
         ).join('\n');
-        addBotMessage(`Here are our available services:\n\n${serviceList}\n\nWould you like to book any of these?`, { showServices: true });
+        addBotMessage(`Here are our available services:\n\n${serviceList}\n\nWould you like to book any of these?`);
         emitUISignal({ intent: "service_enquiry", activeComponent: "service_selector" });
       } else {
         await sendMessage("What services do you offer?");
@@ -1287,7 +1137,7 @@ export default function Widget() {
         const productList = products.map(p => 
           `• **${p.name}**${p.price ? ` - $${p.price}` : ''}`
         ).join('\n');
-        addBotMessage(`Here are our available products:\n\n${productList}\n\nWould you like to order any of these?`, { showProducts: true });
+        addBotMessage(`Here are our available products:\n\n${productList}\n\nWould you like to order any of these?`);
         emitUISignal({ intent: "product_enquiry", activeComponent: "product_selector" });
       } else {
         await sendMessage("What products do you have?");
@@ -1581,6 +1431,23 @@ export default function Widget() {
           onDateSelect={handleDateSelect}
           onTimeSlotSelect={handleTimeSlotSelect}
           onDismiss={() => setActiveUISignal(null)}
+          onLeadFormSubmit={(data) => {
+            if (data.name) {
+              setBookingState(prev => ({ ...prev, customerName: data.name, customerEmail: data.email || prev.customerEmail, customerPhone: data.phone || prev.customerPhone, collectingInfo: null }));
+              addUserMessage(`My name is ${data.name}${data.email ? `, email: ${data.email}` : ''}${data.phone ? `, phone: ${data.phone}` : ''}`);
+              addBotMessage(`Thanks ${data.name}! Let me process that for you.`);
+            }
+          }}
+          onLeadFormSkip={() => setActiveUISignal(null)}
+          onSwitchConfirm={() => {
+            addUserMessage("Yes, let's switch");
+            setActiveUISignal(null);
+            sendMessage("Yes, let's switch");
+          }}
+          onSwitchCancel={() => {
+            addUserMessage("No, stay");
+            setActiveUISignal(null);
+          }}
         />
 
         {/* Input */}

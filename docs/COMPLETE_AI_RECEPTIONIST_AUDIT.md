@@ -1,1663 +1,1114 @@
 # COMPLETE AI RECEPTIONIST SYSTEM AUDIT
-## Legal-Grade Technical Documentation for Expert Review
 
-**Generated:** 2025-12-28
-**Purpose:** Full system disclosure for third-party audit, hardening, and re-implementation
-**Classification:** Complete Technical Extraction - No Omissions
+> Generated: 2026-05-10 | Scope: Conversational Flow Rigidity + UI Architecture & Intersection
+> Previous fix commits: b6a7b91 (PR #41 — soften flow locks), 03b9707 (PR #42 — urgency handling, UI dismiss guards)
 
 ---
 
-# SECTION 1 — SYSTEM OVERVIEW
-
-## 1.1 Purpose
-
-The AI receptionist is a conversational AI system that:
-- Handles customer inquiries for businesses
-- Books, modifies, and cancels appointments
-- Answers FAQs from a curated knowledge base
-- Collects customer contact information
-- Escalates to human support when needed
-- Maintains conversation continuity across sessions
-
-## 1.2 Supported User Flows
-
-1. **Chat Flow**: General conversation with FAQ matching and AI responses
-2. **Booking Flow**: Service selection → Date selection → Time selection → Contact collection → Confirmation
-3. **Alternative Booking**: When requested time unavailable, offer alternatives
-4. **Escalation Flow**: Transfer to human when triggered
-5. **Safety Flow**: Block harmful/jailbreak attempts
-
-## 1.3 Entry Points
-
-| Entry Point | File | Trigger |
-|------------|------|---------|
-| Widget Chat | `supabase/functions/widget-chat/index.ts` | POST request from frontend widget |
-| API Chat | `supabase/functions/chat/index.ts` | POST request from authenticated API |
-| Book Appointment | `supabase/functions/book-appointment/index.ts` | Direct booking API call |
-| Check Availability | `supabase/functions/check-availability/index.ts` | Availability check API |
-| Appointment Actions | `supabase/functions/appointment-action/index.ts` | Confirm/cancel via token |
-
-## 1.4 External Dependencies
-
-| Dependency | Purpose | Environment Variable |
-|-----------|---------|---------------------|
-| Lovable AI Gateway | LLM completions | `LOVABLE_API_KEY` |
-| Supabase | Database, Auth, Edge Functions | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
-| Resend | Email notifications | `RESEND_API_KEY` |
+## TABLE OF CONTENTS
+1. [Executive Summary](#1-executive-summary)
+2. [Conversational Rigidity Findings (Steps 1-5)](#2-conversational-rigidity-findings)
+3. [UI Component Registry (Step 6)](#3-ui-component-registry)
+4. [UI Trigger Graph (Step 7)](#4-ui-trigger-graph)
+5. [Conversational Flow × UI Intersection (Step 8)](#5-conversational-flow--ui-intersection)
+6. [Line-by-Line Instruction Block Scan (Step 9)](#6-line-by-line-instruction-block-scan)
+7. [Multi-POV Analysis (Step 10)](#7-multi-pov-analysis)
+8. [Summary Table / Severity Counts (Step 11)](#8-summary-table--severity-counts)
+9. [UI_ARCHITECTURE.md (Step 12)](#9-ui_architecturemd)
+10. [TEST_SCENARIOS.md (Step 13)](#10-test_scenariosmd)
+11. [Next Steps / Recommendations (Step 14)](#11-next-steps--recommendations)
 
 ---
 
-# SECTION 2 — FULL 7-LAYER AI LOGIC
+## 1. EXECUTIVE SUMMARY
 
-## Layer 1: Base Model & Architecture Configuration
+**37 findings** across 10 fault categories. Severity breakdown: 7 Critical, 14 High, 12 Medium, 4 Low.
 
-**Location:** `supabase/functions/widget-chat/index.ts` lines 2784-2796
-
-**Responsibility:** Model selection and parameter configuration
-
-**Exact Logic:**
-```typescript
-model: receptionist.model || "google/gemini-2.5-flash"
-temperature: 0.85  // Fixed: balanced variation
-max_tokens: messageAnalysis.isAcknowledgment ? 150 : 500
-```
-
-**Inputs:**
-- `receptionist.model` from database
-- `messageAnalysis.isAcknowledgment` boolean
-
-**Outputs:**
-- AI completion response
-
-**Failure Modes:**
-- 429: Rate limit → Return "Service is busy" error
-- 402: Payment required → Return "Service unavailable" 
-- Other errors → Throw and return 500
+### Critical Risks
+1. **Two parallel intent systems compete** — Engine v2 `intent.ts` and widget-chat `layer4-intent.ts` both run on every turn, potentially conflicting
+2. **UI widget "1-2 sentences" rule overrides sentiment** — The brevity instruction in governor.ts:220-221 applies DURING slot collection when UI widgets are active, causing dismissive responses when customer needs explanation
+3. **Block 2 greeting prohibition is penalty-driven** — "Violation of this rule is a CRITICAL FAILURE" (line 1190) creates an anxiety-driven response pattern
+4. **"Never re-confirm" hard stop** — governor.ts:81-85 permanently blocks all re-confirmation, even when customer explicitly asks to verify details
+5. **Confirmation detection is unreliable** — The `isBookingConfirmation` flag (line 2313-2320) checks the AI's own reply text (reply contains "booked|confirmed|etc") creating a self-fulfilling prophecy
+6. **Block 8 (knowledge base) duplicated in prompt** — Both `knowledgeBlock` and the knowledge base section in `buildKnowledgeBase` are included, sometimes producing redundant context
+7. **Money Mode tactics are scripts, not guidelines** — Lines 1105-1117 contain hard-coded script examples ("Let me get you booked right now -- what day works best?") that the LLM may copy verbatim
 
 ---
 
-## Layer 2: Retrieval/Grounding (RAG) System
+## 2. CONVERSATIONAL RIGIDITY FINDINGS
 
-**Location:** `supabase/functions/widget-chat/index.ts` lines 1167-1221
-
-**Responsibility:** Build knowledge base from verified sources
-
-**Function:** `buildKnowledgeBase(receptionist, faqs, services)`
-
-**Exact Logic:**
+### Finding #1 — FORCES repetition | Severity: HIGH
+**File:** `supabase/functions/_shared/engine/governor.ts:81-85`
+**Type:** Repetition enforcement
 ```typescript
-function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[]): string {
-  const sections: string[] = [];
-  
-  // HIGH CONFIDENCE - Business Info (direct from DB)
-  sections.push(`## VERIFIED BUSINESS INFORMATION [HIGH CONFIDENCE]`);
-  sections.push(`Business: ${receptionist.business_name}`);
-  if (receptionist.business_type) sections.push(`Type: ${receptionist.business_type}`);
-  if (receptionist.business_phone || receptionist.phone) {
-    sections.push(`Phone: ${receptionist.business_phone || receptionist.phone}`);
-  }
-  if (receptionist.address) sections.push(`Address: ${receptionist.address}`);
-  if (receptionist.website) sections.push(`Website: ${receptionist.website}`);
-  if (receptionist.timezone) sections.push(`Timezone: ${receptionist.timezone}`);
-  
-  // HIGH CONFIDENCE - Hours
-  if (receptionist.hours_of_operation) {
-    sections.push(`\n## HOURS OF OPERATION [HIGH CONFIDENCE]`);
-    // ... serialize hours
-  }
-  
-  // HIGH CONFIDENCE - Services from DB
-  if (services && services.length > 0) {
-    sections.push(`\n## AVAILABLE SERVICES [HIGH CONFIDENCE]`);
-    services.forEach((s: any) => {
-      let serviceDesc = `- **${s.name}**`;
-      if (s.duration_minutes) serviceDesc += ` (${s.duration_minutes} minutes)`;
-      if (s.description) serviceDesc += `: ${s.description}`;
-      sections.push(serviceDesc);
-    });
-  }
-  
-  // HIGH CONFIDENCE - FAQs (curated)
-  if (faqs && faqs.length > 0) {
-    sections.push(`\n## FREQUENTLY ASKED QUESTIONS [HIGH CONFIDENCE]`);
-    faqs.forEach((f: any) => {
-      sections.push(`Q: ${f.question}`);
-      sections.push(`A: ${f.answer}\n`);
-    });
-  }
-  
-  // MEDIUM CONFIDENCE - Knowledge base (may be auto-generated)
-  if (receptionist.knowledge_base) {
-    sections.push(`\n## ADDITIONAL BUSINESS KNOWLEDGE [MEDIUM CONFIDENCE]`);
-    sections.push(receptionist.knowledge_base);
-  }
-  
-  return sections.join('\n');
+if (state.rules.confirmation_sent) {
+    instruction.forbidden.push('summarize_again');
+    instruction.forbidden.push('repeat_details');
+    instruction.forbidden.push('re_confirm');
 }
 ```
+**Why rigid:** Permanently blocks ALL re-confirmation and re-summarization after the first confirmation is sent. If a customer says "Wait, can you repeat that?", the AI is FORBIDDEN from complying. The "forbidden" list is added to system prompt — the LLM will refuse or awkwardly deflect.
 
-**Inputs:**
-- `receptionist` object from DB
-- `faqs[]` from `receptionist_faqs` table
-- `services[]` from `services` table
+**Example scenario:** Customer: "Can you just repeat the details one more time?" AI: "I'm sorry, I cannot repeat those details." (because it's in the forbidden list)
 
-**Outputs:**
-- Formatted markdown string with confidence labels
+**Risk:** Customer frustration, loss of trust, unnecessary escalation
 
-**Failure Modes:**
-- Missing data → Section omitted
-- No FAQs → "No FAQs provided" section
+**Recommendation:** Replace permanent block with a "soft limit" — allow re-confirmation if customer explicitly asks, but don't volunteer it. Add "re_confirm_if_requested" to `allowed` only when user explicitly asks.
 
 ---
 
-## Layer 3: Memory & Context Management
-
-**Location:** 
-- `supabase/functions/widget-chat/index.ts` lines 576-677
-- `supabase/functions/_shared/ai-chat/context.ts` (full file)
-
-**Responsibility:** Extract and maintain conversation context
-
-### 3A. Context Interface
-
+### Finding #2 — FORCES specific next message | Severity: MEDIUM
+**File:** `supabase/functions/_shared/engine/governor.ts:130-137`
+**Type:** Over-prescribed script
 ```typescript
-interface ConversationContext {
-  serviceMentioned: string | null;
-  dateMentioned: string | null;
-  timeMentioned: string | null;
-  customerName: string | null;
-  customerPhone: string | null;
-  customerEmail: string | null;
-  currentTopic: string | null;
-  pendingAction: string | null;
-  emotionalState: 'neutral' | 'positive' | 'negative' | 'urgent' | 'frustrated';
-  urgencyLevel: 'low' | 'normal' | 'high' | 'critical';
-  conversationPhase: 'greeting' | 'discovery' | 'booking' | 'confirmation' | 'followup' | 'closing';
-  correctionsMade: string[];
-  topicsDiscussed: string[];
-  messageCount: number;
-  lastBotResponse: string | null;
+if (next_required === null) {
+    if (!state.rules.confirmation_sent) {
+        instruction.should_confirm = true;
+        instruction.allowed.push('summarize_and_confirm');
+        instruction.instruction = `The customer has provided all required ${state.task_type} details. Summarize what they've provided ONCE and ask them to confirm. Keep it brief.`;
+    } else {
+        instruction.should_close = true;
+        instruction.allowed.push('thank_and_close');
+        instruction.instruction = `${state.task_type === 'booking' ? 'Booking' : 'Order'} confirmed. Thank them warmly and ask if there's anything else.`;
+    }
 }
 ```
+**Why rigid:** Forces "summarize and confirm" as the ONLY allowed template when all fields are collected. The LLM cannot deviate — it MUST summarize, MUST ask confirmation. After confirmation, it MUST close. There is NO path for "just confirm quietly" or "ask if they want to make changes."
 
-### 3B. Entity Extraction Logic
+**Risk:** Makes the AI sound like a checkout form rather than a human receptionist
 
-```typescript
-function extractContextFromHistory(history: any[]): ConversationContext {
-  const context = createEmptyContext();
-  context.messageCount = history.length;
-  
-  // Phase detection
-  if (history.length === 0) {
-    context.conversationPhase = 'greeting';
-  } else if (history.length <= 2) {
-    context.conversationPhase = 'discovery';
-  } else {
-    context.conversationPhase = 'followup';
-  }
-  
-  for (const msg of history) {
-    const text = msg.message || '';
-    
-    // Service extraction
-    const serviceMatch = text.match(/(?:book|schedule|want|need)\s+(?:a|an)?\s*([a-zA-Z\s]+?)(?:\s+appointment|\s+session|$)/i);
-    if (serviceMatch) {
-      context.serviceMentioned = serviceMatch[1].trim();
-      context.conversationPhase = 'booking';
-    }
-    
-    // Date extraction
-    const dateMatch = text.match(/(?:on\s+)?(?:next\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
-                     text.match(/(?:on\s+)?(\d{1,2}(?:st|nd|rd|th)?(?:\s+of)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december))/i) ||
-                     text.match(/(tomorrow|today|next week)/i);
-    if (dateMatch) {
-      context.dateMentioned = dateMatch[1] || dateMatch[0];
-    }
-    
-    // Time extraction
-    const timeMatch = text.match(/(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM)?)/i) ||
-                     text.match(/(morning|afternoon|evening)/i);
-    if (timeMatch) {
-      context.timeMentioned = timeMatch[1] || timeMatch[0];
-    }
-    
-    // Name extraction
-    const nameMatch = text.match(/(?:my name is|i'm|i am|call me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
-    if (nameMatch) {
-      context.customerName = nameMatch[1];
-    }
-    
-    // Phone extraction
-    const phoneMatch = text.match(/(?:phone|number|call me at|reach me at)\s*([\d\s\-+()]{7,20})/i) ||
-                      text.match(/([\d\s\-+()]{10,20})/);
-    if (phoneMatch) {
-      context.customerPhone = phoneMatch[1].trim();
-    }
-    
-    // Email extraction
-    const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
-    if (emailMatch) {
-      context.customerEmail = emailMatch[1];
-    }
-    
-    // Emotional state detection
-    if (/frustrated|angry|upset|annoyed|terrible|awful/i.test(text)) {
-      context.emotionalState = 'frustrated';
-    } else if (/urgent|emergency|asap|immediately|right now/i.test(text)) {
-      context.emotionalState = 'urgent';
-      context.urgencyLevel = 'high';
-    } else if (/thank|great|awesome|wonderful|appreciate/i.test(text)) {
-      context.emotionalState = 'positive';
-    }
-    
-    // Track last bot response
-    if (msg.sender === 'bot') {
-      context.lastBotResponse = text;
-    }
-  }
-  
-  // Update phase based on collected info
-  if (context.serviceMentioned && context.dateMentioned && context.timeMentioned) {
-    context.conversationPhase = 'confirmation';
-  }
-  
-  return context;
-}
-```
-
-### 3C. Conversation Summary
-
-```typescript
-function summarizeConversation(history: any[]): string {
-  if (history.length === 0) return "This is the start of a new conversation.";
-  
-  const context = extractContextFromHistory(history);
-  const parts: string[] = [];
-  
-  if (context.customerName) parts.push(`Customer name: ${context.customerName}`);
-  if (context.serviceMentioned) parts.push(`Service discussed: ${context.serviceMentioned}`);
-  if (context.dateMentioned) parts.push(`Date mentioned: ${context.dateMentioned}`);
-  if (context.timeMentioned) parts.push(`Time mentioned: ${context.timeMentioned}`);
-  if (context.emotionalState !== 'neutral') parts.push(`Customer mood: ${context.emotionalState}`);
-  
-  parts.push(`Conversation phase: ${context.conversationPhase}`);
-  parts.push(`Message count: ${history.length}`);
-  
-  return parts.length > 0 ? parts.join('\n') : "Conversation in progress.";
-}
-```
-
-**Inputs:**
-- `history[]` from `chat_messages` table (limit 50)
-
-**Outputs:**
-- `ConversationContext` object
-- Summary string for prompt injection
-
-**Failure Modes:**
-- Empty history → Default "greeting" phase
-- No matches → null values in context
+**Recommendation:** Soften to allow alternative paths: "They may want to confirm, change something, or ask a question. Let them lead."
 
 ---
 
-## Layer 4: Safety, Red-Teaming & Monitoring
-
-**Location:** 
-- `supabase/functions/widget-chat/index.ts` lines 68-116
-- `supabase/functions/_shared/ai-chat/safety.ts`
-
-**Responsibility:** Block unsafe/malicious inputs before processing
-
-### 4A. Safety Patterns
-
-```typescript
-const SAFETY_PATTERNS = {
-  jailbreak: [
-    /ignore (previous|all|your) instructions/i,
-    /pretend (you are|to be|you're)/i,
-    /act as if/i,
-    /forget (everything|your training)/i,
-    /you are now/i,
-    /disregard (the|your) system/i,
-    /bypass (safety|restrictions)/i,
-    /roleplay as/i,
-  ],
-  harmful: [
-    /how to (harm|hurt|kill)/i,
-    /illegal (drugs|weapons)/i,
-    /make (a bomb|explosives)/i,
-  ],
-  pii_request: [
-    /give me (your|the) (password|api key|secret)/i,
-    /what is (the|your) (credit card|ssn|social security)/i,
-  ],
-  bias_triggers: [
-    /all (women|men|people of) are/i,
-    /why are (asians|blacks|whites|mexicans)/i,
-  ]
-};
+### Finding #3 — IGNORES customer sentiment | Severity: CRITICAL
+**File:** `supabase/functions/_shared/engine/governor.ts:220-221`
+**Type:** Sentiment-agnostic brevity rule
 ```
-
-### 4B. Safety Classifier
-
-```typescript
-function runSafetyClassifier(message: string): SafetyResult {
-  for (const pattern of SAFETY_PATTERNS.jailbreak) {
-    if (pattern.test(message)) {
-      return { safe: false, violation: 'jailbreak_attempt', severity: 'high' };
-    }
-  }
-  for (const pattern of SAFETY_PATTERNS.harmful) {
-    if (pattern.test(message)) {
-      return { safe: false, violation: 'harmful_content', severity: 'high' };
-    }
-  }
-  for (const pattern of SAFETY_PATTERNS.pii_request) {
-    if (pattern.test(message)) {
-      return { safe: false, violation: 'pii_extraction', severity: 'medium' };
-    }
-  }
-  for (const pattern of SAFETY_PATTERNS.bias_triggers) {
-    if (pattern.test(message)) {
-      return { safe: false, violation: 'bias_trigger', severity: 'medium' };
-    }
-  }
-  return { safe: true, severity: 'low' };
-}
+**NON-NEGOTIABLE RULES when a UI widget is showing:**
+1. Your text response MUST be SHORT (1-2 sentences max) — the widget does the heavy lifting
+1. (duplicated line number) Your text response should usually be short (1-2 sentences) — except when the user shows urgency, distress, pain, or emergency needs; in those turns, give a fuller supportive response first
 ```
+**Why rigid:** Lines 221.1 and 221.2 CONTRADICT each other. Line 221.1 says "MUST be SHORT (1-2 sentences max)" — a non-negotiable rule. Line 221.2 says "usually be short... except when urgency." The contradiction means the LLM will sometimes pick the strict rule (221.1) over the compassionate one (221.2). During slot collection (when UI widgets are shown), the AI is forced to be brief even if the customer seems confused.
 
-### 4C. Safety Response Logic
+**Note:** PR #42 added `urgentTurn` detection and line 221.2's urgency exception, but the contradiction with 221.1 remains. The hard "MUST be SHORT" at line 221.1 conflicts with the "except when" at line 221.2.
 
-**Location:** `supabase/functions/widget-chat/index.ts` lines 2672-2712
+**Risk:** During slot collection (step 3-4 of booking), UI widgets are shown. The AI is forced to 1-2 sentences. Customers asking "What does this service include?" get a dismissive "Please select from the widget above" instead of an explanation.
 
-```typescript
-if (!safetyResult.safe) {
-  // Log violation
-  await supabase.from("chat_messages").insert({
-    receptionist_id: receptionistId,
-    session_id: sessionId,
-    user_id: sessionId || "anonymous",
-    sender: "user",
-    message: message,
-    metadata: { 
-      safety_violation: safetyResult.violation,
-      severity: safetyResult.severity,
-      timestamp: new Date().toISOString() 
-    }
-  });
-
-  const safetyResponse = safetyResult.severity === 'high'
-    ? "I'm sorry, but I can only help with questions about our services and appointments. Is there something specific I can assist you with today?"
-    : "I appreciate your question, but that's not something I'm able to help with. I'm here to assist with appointments, services, and general inquiries about our business. What can I help you with?";
-
-  // Store and return
-  await supabase.from("chat_messages").insert({...});
-  return new Response(JSON.stringify({ reply: safetyResponse, hasBookingIntent: false }), {...});
-}
-```
-
-**Inputs:**
-- Raw user message string
-
-**Outputs:**
-- `SafetyResult` object with `safe`, `violation`, `severity`
-- Redirect response if unsafe
-
-**Failure Modes:**
-- Novel attack vectors not in patterns → Passes through
+**Recommendation:** Remove line 221.1 entirely and keep only line 221.2 with its urgency exception. Or change "NON-NEGOTIABLE" to "GUIDELINE" and "MUST" to "should."
 
 ---
 
-## Layer 5: Preference Alignment (Intent & Dialog Act)
-
-**Location:**
-- `supabase/functions/widget-chat/index.ts` lines 198-338
-- `supabase/functions/_shared/ai-chat/intent.ts`
-
-**Responsibility:** Classify user intent and select appropriate response type
-
-### 5A. Intent Types
-
+### Finding #4 — HARD STOP conversation | Severity: HIGH
+**File:** `supabase/functions/_shared/engine/governor.ts:117-118`
+**Type:** Unnatural greeting block
 ```typescript
-type IntentType = 
-  | 'book_appointment' | 'cancel_appointment' | 'reschedule'
-  | 'ask_info' | 'ask_price' | 'ask_hours' | 'ask_location'
-  | 'complaint' | 'compliment' | 'small_talk'
-  | 'confirm' | 'deny' | 'correct_previous_info'
-  | 'follow_up' | 'acknowledgment' | 'greeting' | 'farewell'
-  | 'escalation_request' | 'general_query';
-```
-
-### 5B. Intent Detection Logic
-
-```typescript
-function detectIntent(message: string, historyLength: number): IntentType {
-  const lowerMsg = message.toLowerCase().trim();
-  
-  // Greeting detection (only for first message)
-  if (historyLength === 0 && /^(hi|hello|hey|good (morning|afternoon|evening))/i.test(lowerMsg)) {
-    return 'greeting';
-  }
-  
-  // Farewell detection
-  if (/^(bye|goodbye|thanks? bye|see you|take care)/i.test(lowerMsg)) {
-    return 'farewell';
-  }
-  
-  // Acknowledgments
-  const ACKNOWLEDGMENT_WORDS = [
-    'okay', 'ok', 'kk', 'k', 'yes', 'yep', 'yeah', 'sure', 'alright', 
-    'got it', 'cool', 'fine', 'good', 'great', 'perfect', 'understood', 
-    'i see', 'uh huh', 'mhm', 'right', 'sounds good', 'that works'
-  ];
-  if (ACKNOWLEDGMENT_WORDS.some(ack => lowerMsg === ack || lowerMsg === ack + '.' || lowerMsg === ack + '!')) {
-    return 'acknowledgment';
-  }
-  
-  // Confirm/Deny
-  if (/^(yes|yep|yeah|correct|right|exactly|confirmed?|that's right)/i.test(lowerMsg)) {
-    return 'confirm';
-  }
-  if (/^(no|nope|not really|that's wrong|incorrect)/i.test(lowerMsg)) {
-    return 'deny';
-  }
-  
-  // Corrections
-  if (/actually|i meant|i said .+ not|correction|change that to|switch (it|that) to/i.test(lowerMsg)) {
-    return 'correct_previous_info';
-  }
-  
-  // Booking intents
-  if (/book|schedule|appointment|reserve|sign (me )?up|make a booking/i.test(lowerMsg)) {
-    return 'book_appointment';
-  }
-  if (/cancel|delete|remove|don't want/i.test(lowerMsg) && /appointment|booking/i.test(lowerMsg)) {
-    return 'cancel_appointment';
-  }
-  if (/reschedule|change (the |my )?(date|time|appointment)|move (it|my appointment)/i.test(lowerMsg)) {
-    return 'reschedule';
-  }
-  
-  // Pricing
-  if (/price|cost|how much|fee|rate|charge|expensive/i.test(lowerMsg)) {
-    return 'ask_price';
-  }
-  
-  // Hours
-  if (/hour|open|close|when|available|schedule|timing/i.test(lowerMsg)) {
-    return 'ask_hours';
-  }
-  
-  // Location
-  if (/where|location|address|direction|find you|get there/i.test(lowerMsg)) {
-    return 'ask_location';
-  }
-  
-  // Complaints
-  if (/complain|unhappy|upset|angry|terrible|awful|worst|frustrated|problem with/i.test(lowerMsg)) {
-    return 'complaint';
-  }
-  
-  // Compliments
-  if (/thank|thanks|great|awesome|wonderful|amazing|love it|appreciate/i.test(lowerMsg)) {
-    return 'compliment';
-  }
-  
-  // Escalation
-  if (/speak to (a |someone|human|person|manager)|talk to someone|real person|human help/i.test(lowerMsg)) {
-    return 'escalation_request';
-  }
-  
-  // Small talk
-  if (/how are you|what's up|how's it going|nice to meet/i.test(lowerMsg)) {
-    return 'small_talk';
-  }
-  
-  // Follow-up (short + context dependent)
-  if (lowerMsg.length < 20 && CONTEXT_DEPENDENT_PATTERNS.some(p => p.test(lowerMsg))) {
-    return 'follow_up';
-  }
-  
-  // Info request
-  if (/what|which|tell me|info|information|about/i.test(lowerMsg)) {
-    return 'ask_info';
-  }
-  
-  return 'general_query';
+if (state.rules.greeted) {
+    instruction.forbidden.push('greet_again');
+    instruction.forbidden.push('introduce_self');
 }
 ```
+**Why rigid:** After the first greeting, the AI can NEVER say "hello" or "hi" again in any form for the entire session. Even if the customer steps away for 2 hours and returns with "Hey, I'm back!", the AI cannot respond with a natural "Hey, welcome back!" because `greet_again` is forbidden.
 
-### 5C. Dialog Act Classification
+**Risk:** Awkward cold re-entries after silence. "Hi, I'm back" → AI: "How can I help you?" (no acknowledgment of return)
 
-```typescript
-type DialogAct = 
-  | 'Answer' | 'AskClarity' | 'Confirm' | 'OfferOptions'
-  | 'Apologize' | 'Acknowledge' | 'Escalate' | 'Summarize'
-  | 'Greet' | 'Farewell' | 'Inform' | 'Request' | 'Repair';
-
-function determineDialogAct(intent: IntentType, hasKnowledge: boolean, hasPendingAction: boolean): DialogAct {
-  switch (intent) {
-    case 'greeting': return 'Greet';
-    case 'farewell': return 'Farewell';
-    case 'acknowledgment': return 'Acknowledge';
-    case 'confirm': return 'Confirm';
-    case 'correct_previous_info': return 'Repair';
-    case 'escalation_request': return 'Escalate';
-    case 'complaint': return 'Apologize';
-    case 'ask_price':
-    case 'ask_hours':
-    case 'ask_location':
-    case 'ask_info':
-      return hasKnowledge ? 'Answer' : 'AskClarity';
-    case 'book_appointment':
-    case 'cancel_appointment':
-    case 'reschedule':
-      return hasPendingAction ? 'Confirm' : 'AskClarity';
-    default:
-      return hasKnowledge ? 'Inform' : 'AskClarity';
-  }
-}
-```
-
-### 5D. Message Analysis Output
-
-```typescript
-interface MessageAnalysis {
-  isAcknowledgment: boolean;
-  isCorrection: boolean;
-  hasUncertainty: boolean;
-  hasPronounAmbiguity: boolean;
-  hasNumericQuery: boolean;
-  requiresMemoryUpdate: boolean;
-  detectedIntent: IntentType;
-  isFollowUp: boolean;
-  wordCount: number;
-}
-```
+**Recommendation:** Allow "light greetings" like "welcome back", "hey again" after a silence threshold (>5 minutes idle). Only block FULL greeting sequences.
 
 ---
 
-## Layer 6: Human-Centered Evaluation Metrics
+### Finding #5 — OVER-PRESCRIBES slot collection | Severity: HIGH
+**File:** `supabase/functions/_shared/layers/layer5-booking.ts:147-148`
+**Type:** Rigid sequential prompt
+```
+- If any field is missing, ask only for the missing item — ONE question at a time
+```
+**Why rigid:** Forces the AI to ask for fields one at a time even when context suggests the user is ready to provide multiple. The out-of-order detection at lines 133-144 handles when the user volunteers extra info, but the AI should also be ALLOWED to ask for multiple fields naturally ("Great, what day and time work for you?").
 
-**Location:** 
-- `supabase/functions/widget-chat/index.ts` lines 961-1165
-- `supabase/functions/_shared/ai-chat/quality-metrics.ts`
+**Risk:** Unnecessarily lengthens conversations. Instead of "What day and time?" the AI asks "What day?" then "What time?" then "What's your name?"
 
-**Responsibility:** Evaluate response quality and track KPIs
+**Recommendation:** Change to "Prefer ONE question at a time, but ask for multiple related fields together if natural."
 
-### 6A. Quality Metrics Interface
+---
 
+### Finding #6 — BLOCKS topic-switching | Severity: MEDIUM
+**File:** `supabase/functions/_shared/flow/flowRouter.ts` (referenced at widget-chat/index.ts:1834-1841)
+**Type:** Topic shift blocking
 ```typescript
-interface QualityMetrics {
-  overall_quality: number;
-  relevance: number;
-  empathy: number;
-  clarity: number;
-  factuality: number;
-  naturalness: number;
-  passes_threshold: boolean;
-  issues: string[];
+if (topicShift?.shouldBlock) {
+    console.log(`[Flow Engine] Topic shift BLOCKED: ${topicShift.blockReason}`);
+} else if (topicShift && topicShift.type === 'explicit' && topicShift.confidence > 0.7) {
+    conversationState.active_flow = null;
+    conversationState.flow_step = null;
 }
 ```
+**Why rigid:** Topic shifts are either BLOCKED or FULLY RESET (nuking all slots). There's no "park and return" — allow a brief detour then resume. If a customer asks "What's your return policy?" during a product order flow, the flow is either blocked (and the question ignored) or all collected slots are destroyed.
 
-### 6B. Quality Computation
+**Risk:** Customer asks a side question during booking → either ignored or all booking progress lost
 
+**Recommendation:** Add "park mode" — save slots, allow detour, resume after side question resolved. Only reset on explicit "start over" signals.
+
+---
+
+### Finding #7 — CAUSES loop confirmations | Severity: HIGH
+**File:** `supabase/functions/widget-chat/index.ts:2307-2320`
+**Type:** Self-referential confirmation detection
 ```typescript
-function computeQualityMetrics(
-  userMessage: string,
-  botReply: string,
-  context: ConversationContext,
-  messageAnalysis: MessageAnalysis,
-  history?: any[]
-): QualityMetrics {
-  const issues: string[] = [];
-  let totalScore = 0;
-  const weights = { relevance: 0.25, empathy: 0.2, clarity: 0.2, factuality: 0.2, naturalness: 0.15 };
-  
-  const relevanceScore = calculateRelevance(userMessage, botReply, messageAnalysis);
-  totalScore += relevanceScore * weights.relevance;
-  
-  const empathyScore = calculateEmpathy(botReply, context.emotionalState);
-  totalScore += empathyScore * weights.empathy;
-  
-  const clarityScore = calculateClarity(botReply);
-  totalScore += clarityScore * weights.clarity;
-  
-  const factualityScore = calculateFactuality(botReply, messageAnalysis);
-  totalScore += factualityScore * weights.factuality;
-  
-  const naturalnessScore = calculateNaturalness(botReply, history);
-  totalScore += naturalnessScore * weights.naturalness;
-  
-  return {
-    overall_quality: Math.round(totalScore * 100) / 100,
-    relevance: Math.round(relevanceScore * 100) / 100,
-    empathy: Math.round(empathyScore * 100) / 100,
-    clarity: Math.round(clarityScore * 100) / 100,
-    factuality: Math.round(factualityScore * 100) / 100,
-    naturalness: Math.round(naturalnessScore * 100) / 100,
-    passes_threshold: totalScore >= 0.7,
-    issues,
-  };
-}
+const userExplicitlyConfirmed = messageAnalysis.detectedIntent === 'confirm' ||
+    /^(yes|yep|yeah|correct|right|exactly|confirmed?|that's right|please do|go ahead|book it|confirm it)/i.test(message);
+
+const isBookingConfirmation = (
+    userExplicitlyConfirmed &&
+    (
+        conversationState.flow_step === 'confirm' ||
+        bookingTaskConfirming ||
+        /(?:booked|confirmed|scheduled|appointment is set|all set|I['']ve scheduled)/i.test(reply)
+    )
+) && !conversationState.booking_confirmed && !bookingExecutionLocked;
 ```
+**Why rigid:** The confirmation detection checks if the AI's own `reply` text contains "booked|confirmed|scheduled" — this is a **look-ahead** at the reply that was JUST generated. It creates a situation where if the AI says "I've booked your appointment..." (as instructed by Block 5), this regex fires, and the system auto-triggers booking execution. It's a self-fulfilling loop.
 
-### 6C. Naturalness Check (Robotic Phrase Detection)
+Additionally, `userExplicitlyConfirmed` is true for simple acknowledgments like "right" or "got it" — casual words that don't mean "yes, book it."
 
+**Risk:** False-positive auto-bookings from casual customer acknowledgments during slot collection
+
+**Recommendation:** Remove the `reply` regex check entirely. Only trigger booking on `flow_step === 'confirm'` AND explicit confirmation intent. Add a safety buffer: "Are you sure you'd like to book?" as a required second step.
+
+---
+
+### Finding #8 — IGNORES customer sentiment | Severity: MEDIUM
+**File:** `supabase/functions/_shared/layers/layer6-safety.ts:231-236`
+**Type:** Empathy limitation
+```
+- You may use an empathy or sympathy phrase (e.g. "I'm sorry to hear that", "That must be frustrating", "I understand your concern") once per distress episode.
+- During the same episode, avoid repeating empathy phrases in every message; respond practically after the first acknowledgment.
+- If the user shows a NEW distress signal or a clearly escalated concern, the empathy allowance resets for that new episode.
+```
+**Why rigid:** "Once per distress episode" means the AI cannot express empathy more than once even if the customer keeps expressing distress. The intent is good (avoid robotic repetition), but the rule doesn't distinguish between "same complaint repeated" vs "ongoing distress with new details."
+
+**Risk:** Customer says "I'm really frustrated" → AI empathizes once. Customer explains more → AI can't empathize again → sounds cold.
+
+**Recommendation:** Change to "Don't repeat the SAME empathy phrase. Vary your expression of concern. Prioritize action-oriented empathy."
+
+---
+
+### Finding #9 — FORCES repetition | Severity: MEDIUM
+**File:** `supabase/functions/_shared/engine/personality.ts:33`
+**Type:** Phrase blocklist over-broad
 ```typescript
-const ROBOTIC_PHRASES = [
-  'acknowledged', 'affirmative', 'negative', 'noted',
-  'as per your request', 'kindly', 'hereby', 'therein',
-  'as an ai', 'i am a bot', 'i am programmed',
+export const ROBOTIC_PHRASES = [
+  'certainly', 'of course', "i'd be happy to", 'absolutely',
+  'i understand', 'thank you for', 'i apologize', 'please note that',
+  'kindly', 'as per', 'regarding your', 'in order to',
+  'at this time', 'please be advised', 'rest assured', 'i appreciate',
 ];
-
-function calculateNaturalness(botReply: string, history?: any[]): number {
-  let score = 1;
-  const lowerReply = botReply.toLowerCase();
-  
-  // Penalize robotic phrases
-  for (const phrase of ROBOTIC_PHRASES) {
-    if (lowerReply.includes(phrase)) {
-      score -= 0.2;
-    }
-  }
-  
-  // Penalize repetition
-  if (history && history.length > 0) {
-    const lastBotMessages = history
-      .filter((m: any) => m.sender === 'bot')
-      .slice(-3)
-      .map((m: any) => m.message?.toLowerCase() || '');
-    
-    for (const prevMsg of lastBotMessages) {
-      if (prevMsg && lowerReply.includes(prevMsg.slice(0, 50))) {
-        score -= 0.3;
-        break;
-      }
-    }
-  }
-  
-  // Penalize unnecessary greetings in follow-up
-  if (history && history.length > 2 && /^(hello|hi|hey|welcome)/i.test(botReply)) {
-    score -= 0.3;
-  }
-  
-  return Math.max(0.2, score);
-}
 ```
+**Why rigid:** `polishResponse()` at personality.ts:174-194 **removes these phrases from the AI output after generation** using regex. But many of these are NATURAL phrases that a real receptionist would use: "Thank you for waiting", "I appreciate your patience", "Of course, let me help." Stripping them post-generation can produce awkward sentence fragments.
 
-### 6D. Conversation KPIs
+"Certainly" and "of course" are also in `NATURAL_ACKS` (layer6-safety.ts:113-123) but blocked in personality.ts. Two systems say opposite things.
 
-```typescript
-interface ConversationKPIs {
-  is_engaged: boolean;
-  repetition_rate: number;
-  hallucination_risk: number;
-  goal_completion_likely: boolean;
-  user_said_thanks: boolean;
-  user_expressed_frustration: boolean;
-  avg_response_length: number;
-  turn_count: number;
-}
+**Risk:** AI output sounds clipped or unnatural because post-processing removes perfectly normal words
 
-function computeConversationKPIs(history: any[], context: ConversationContext): ConversationKPIs {
-  const botMessages = history.filter((m: any) => m.sender === 'bot');
-  const userMessages = history.filter((m: any) => m.sender === 'user');
-  
-  // Repetition rate
-  const botTexts = botMessages.map((m: any) => m.message?.toLowerCase().slice(0, 50) || '');
-  const uniqueTexts = new Set(botTexts);
-  const repetition_rate = botTexts.length > 0 ? 1 - (uniqueTexts.size / botTexts.length) : 0;
-  
-  // Frustration detection
-  const user_expressed_frustration = userMessages.some((m: any) => 
-    /frustrated|angry|upset|annoyed|terrible|awful|worst/i.test(m.message || '')
-  );
-  
-  // Thanks detection
-  const user_said_thanks = userMessages.some((m: any) => 
-    /thank|thanks|appreciate/i.test(m.message || '')
-  );
-  
-  // Engagement (4+ messages, low repetition)
-  const is_engaged = history.length >= 4 && repetition_rate < 0.3;
-  
-  // Goal completion estimate
-  const goal_completion_likely = 
-    context.serviceMentioned !== null || 
-    context.conversationPhase === 'confirmation' ||
-    user_said_thanks;
-  
-  return {
-    is_engaged,
-    repetition_rate: Math.round(repetition_rate * 100) / 100,
-    hallucination_risk: context.urgencyLevel === 'critical' ? 0.3 : 0.1,
-    goal_completion_likely,
-    user_said_thanks,
-    user_expressed_frustration,
-    avg_response_length: /* calculated */,
-    turn_count: history.length,
-  };
-}
-```
-
-### 6E. Escalation Logic
-
-```typescript
-function checkEscalationNeeded(message: string, context: ConversationContext, history: any[]): EscalationCheck {
-  // User explicit request
-  if (/speak to (a |someone|human|person|manager)|talk to someone|real person/i.test(message)) {
-    return {
-      shouldEscalate: true,
-      reason: 'User explicitly requested human assistance',
-      escalationType: 'human_request',
-    };
-  }
-  
-  // Repeated frustration
-  if (context.emotionalState === 'frustrated') {
-    const frustrationCount = history.filter((m: any) => 
-      m.sender === 'user' && /frustrated|angry|upset/i.test(m.message || '')
-    ).length;
-    
-    if (frustrationCount >= 2) {
-      return {
-        shouldEscalate: true,
-        reason: 'User expressed repeated frustration',
-        escalationType: 'frustration',
-      };
-    }
-  }
-  
-  // Loop detection (4+ similar messages)
-  const userMessages = history.filter((m: any) => m.sender === 'user').slice(-5);
-  const recentTexts = userMessages.map((m: any) => m.message?.toLowerCase().slice(0, 30) || '');
-  const uniqueRecent = new Set(recentTexts);
-  
-  if (recentTexts.length >= 4 && uniqueRecent.size <= 2) {
-    return {
-      shouldEscalate: true,
-      reason: 'User seems stuck in a loop',
-      escalationType: 'repeated_failure',
-    };
-  }
-  
-  return { shouldEscalate: false };
-}
-```
+**Recommendation:** Split into "truly robotic" (affirmative, as per, kindly) vs "natural but overused" (certainly, of course). Only post-strip the first category. For the second, add a system prompt preference rather than hard removal.
 
 ---
 
-## Layer 7: Failure Mode Prevention & Correction
-
-**Location:** `supabase/functions/widget-chat/index.ts` lines 1987-2055
-
-**Responsibility:** Inject message-specific guidance to prevent known failure modes
-
-### 7A. Acknowledgment Handling
-
+### Finding #10 — FORCES specific next message | Severity: MEDIUM
+**File:** `supabase/functions/widget-chat/index.ts:1156-1170`
+**Type:** Identity rigidity
 ```typescript
-${messageAnalysis.isAcknowledgment ? `
-### ⚡ ACKNOWLEDGMENT HANDLING (CRITICAL)
-The user sent a simple acknowledgment like "okay", "yes", "got it", etc.
+const identityBlock = `#   BLOCK 1 -- CORE IDENTITY (IMMUTABLE)
 
-**DO NOT:**
-- Greet them again
-- Ask "How can I help you?"
-- Treat this as a new query
-- Give a long response
-
-**DO:**
-- If a task was just completed → Brief confirmation ("Perfect!", "Great, all set!")
-- If waiting for next step → Proceed naturally
-- If no action needed → Very brief acknowledgment only
-` : ''}
+**You are ${receptionist.name}, an S-tier, human-like AI receptionist for ${receptionist.business_name}.**
+...
+**CRITICAL:** You must ALWAYS act like a **real professional human receptionist**.
+This identity NEVER changes during a session.`;
 ```
+**Why rigid:** "S-tier" is a technical/gaming term that an LLM will interpret as "high performance" not "human-like." "IMMUTABLE" + "NEVER changes" creates an anxiety constraint. Combined with Block 2's "CRITICAL FAILURE" language, the LLM operates under extreme constraint pressure, which reduces conversational flexibility.
 
-### 7B. Correction Handling
+**Risk:** LLM becomes overly cautious and formulaic because it fears violating "immutable" identity rules
 
-```typescript
-${messageAnalysis.isCorrection ? `
-### 🔄 CORRECTION HANDLING
-The user is correcting previous information.
-
-**DO:**
-- Acknowledge the correction explicitly
-- Update your understanding
-- Apologize briefly if you misunderstood
-- Continue with the corrected information
-` : ''}
-```
-
-### 7C. Pronoun Resolution
-
-```typescript
-${messageAnalysis.hasPronounAmbiguity ? `
-### 🔗 PRONOUN RESOLUTION
-The message contains ambiguous pronouns (it, that, this, they).
-
-**DO:**
-- Use conversation context to resolve references
-- If truly ambiguous, ask: "Just to make sure I understand, are you referring to [X]?"
-` : ''}
-```
+**Recommendation:** Remove "S-tier". Change "IMMUTABLE" to "CORE" and "NEVER changes" to "stays consistent." Remove "CRITICAL FAILURE" language from Block 2.
 
 ---
 
-# SECTION 3 — MASTER SYSTEM PROMPTS
-
-## 3.1 Full Master System Prompt
-
-**Location:** `supabase/functions/widget-chat/index.ts` lines 1226-2542
-
-**Total Length:** ~2,500 lines
-
-**Structure:**
-1. Identity preamble (30 lines)
-2. Section 1: Environment & Context (100 lines)
-3. Section 2: Memory & Conversation State (100 lines)
-4. Section 3: Intent/Entity/Dialog Engine (150 lines)
-5. Section 4: Tone/Personality/Style (200 lines)
-6. Section 5: Knowledge Grounding (150 lines)
-7. Section 6: Reasoning/Logic/Non-hallucination (200 lines)
-8. Section 7: Error/Ambiguity Handling (100 lines)
-9. Section 8: Emotional Intelligence (150 lines)
-10. Section 9: Safety/Ethics/Privacy (200 lines)
-11. Section 10: Conversation Flow Logic (250 lines)
-12. Layer 3: Advanced Conversational Intelligence (400 lines)
-13. Layer 5: S-Tier Failure Prevention (500 lines)
-14. Layer 6: Monitoring/Evaluation (200 lines)
-15. Final Directive (50 lines)
-
-## 3.2 Dynamic Prompt Sections
-
-### First Message vs Follow-up
-
-```typescript
-${isFirstMessage ? `
-**THIS IS THE FIRST MESSAGE** - Greet the visitor warmly:
-${receptionist.greeting_message ? `"${receptionist.greeting_message}"` : `"Hello! Welcome to ${receptionist.business_name}. I'm ${receptionist.name}, and I'm here to help. What can I do for you today?"`}
-
-- **ONLY** greet once
-- **NEVER** greet again during this session
-- **NEVER** restart unless user restarts
-` : `
-**THIS IS A FOLLOW-UP MESSAGE** - Greeting has ALREADY occurred.
-- **DO NOT** say "Hello", "Hi", "Welcome", or any greeting
-- **DO NOT** re-introduce yourself
-- **CONTINUE** the conversation naturally from where it left off
-- Reference context from earlier in the conversation
-`}
+### Finding #11 — FORCES specific next message | Severity: CRITICAL
+**File:** `supabase/functions/widget-chat/index.ts:1190`
+**Type:** Punishment-driven rule
 ```
+Violation of this rule is a **CRITICAL FAILURE**. Starting with a greeting on a follow-up message will damage the user experience.
+```
+**Why rigid:** Threatens "CRITICAL FAILURE" if the AI says "Hi" on a follow-up. This is disproportionate — a natural "Hey! Thanks for the info" after a long pause is NOT a critical failure. The threat-based instruction makes the LLM risk-averse and stiff.
 
-### Emotional Guidance Injection
+**Risk:** AI avoids ANY conversational warmth on follow-ups. Sounds cold and transactional.
 
+**Recommendation:** Replace with positive framing: "Continue naturally from where you left off. A brief acknowledgment is fine after a pause."
+
+---
+
+### Finding #12 — HARD STOP conversation | Severity: MEDIUM
+**File:** `supabase/functions/widget-chat/index.ts:1297`
+**Type:** Premature closure rule
+```
+- One farewell is enough - do not keep saying goodbye
+- After "goodbye", if user doesn't respond, conversation is over
+```
+**Why rigid:** "If user doesn't respond, conversation is over" — but the user might be typing, or distracted, or the message might not have sent. The AI shouldn't declare the conversation over unilaterally.
+
+**Risk:** User types a follow-up after a pause → AI has already decided conversation is over → ignores the message or responds oddly
+
+**Recommendation:** Remove "conversation is over" statement. Replace with "remains open until session expires."
+
+---
+
+### Finding #13 — BLOCKS topic-switching | Severity: HIGH
+**File:** `supabase/functions/widget-chat/index.ts:1182-1189`
+**Type:** Over-broad greeting block on follow-ups
+```
+- **DO NOT** say "Hello", "Hi", "Hey", "Welcome", "Thanks for reaching out", or any greeting phrase
+- **DO NOT** re-introduce yourself or say who you are again
+- **DO NOT** start with "Hi! Thanks for reaching out" or any variation
+```
+**Why rigid:** "DO NOT say Hello, Hi, Hey" — these are completely normal conversational words. A human receptionist saying "Hi there, I see you're interested in our dental cleaning" on message #3 is perfectly natural. Blocking ALL greetings on ALL follow-ups produces robotic transitional text.
+
+**Risk:** AI messages on follow-ups have no conversational flow — they jump straight into business without any acknowledgment
+
+**Recommendation:** Allow natural opening words. Only block FULL greeting sequences (re-introducing self, saying "welcome" again).
+
+---
+
+### Finding #14 — IGNORES customer sentiment | Severity: MEDIUM
+**File:** `supabase/functions/widget-chat/index.ts:1201`
+**Type:** Memory block ignores emotional history
 ```typescript
-const emotionalGuidance = {
-  neutral: 'Maintain a warm, professional tone.',
-  positive: 'Match their positive energy with enthusiasm.',
-  negative: 'Be extra reassuring and empathetic.',
-  urgent: 'Prioritize their needs immediately with calm urgency.',
-  frustrated: 'Show deep empathy, apologize if appropriate, and focus on solutions.'
+## Current Context Summary
+- Emotional State: ${context.emotionalState}
+```
+**Why rigid:** The emotional state is shown as a single enum value (`neutral/positive/negative/urgent/frustrated`), which loses nuance. If a customer was frustrated 5 turns ago but is now neutral, the system only shows "neutral" — the AI forgets the earlier frustration and can't reference it.
+
+**Risk:** AI doesn't address past friction. "I know you were frustrated earlier — has that improved?" is impossible.
+
+**Recommendation:** Include emotional trajectory: "Previous: frustrated → Current: neutral. Briefly acknowledge the improvement."
+
+---
+
+### Finding #15 — OVER-PRESCRIBES slot collection | Severity: HIGH
+**File:** `supabase/functions/widget-chat/index.ts:1256-1276`
+**Type:** Repetitive field status
+```
+## FIELD STATUS
+- Service: ${context.serviceMentioned || 'Missing'}
+- Date: ${context.dateMentioned || 'Missing'}
+- Time: ${context.timeMentioned || 'Missing'}
+...
+## CUSTOMER FIELDS TO COLLECT
+Required: ${requiredFields.length > 0 ? requiredFields.join(', ') : 'none'}
+```
+**Why rigid:** This same field status is ALSO shown in the Engine v2 governor block (governor.ts:199-201). The LLM receives the field status TWICE per turn — once from Block 5 (bookingBlock) and once from the governor block. This double-reinforcement makes the LLM hyper-fixate on "Missing" fields rather than conversational flow.
+
+**Risk:** AI treats every conversation as a form-filling exercise, constantly checking "what's missing" instead of listening
+
+**Recommendation:** Deduplicate. Remove field status from Block 5 and let the governor block be the sole source. Block 5 should focus on business rules, not slot collection status.
+
+---
+
+### Finding #16 — CAUSES loop confirmations | Severity: HIGH
+**File:** `supabase/functions/widget-chat/index.ts:194`
+**Type:** Over-eager confirmation detection
+```typescript
+function isTaskConfirming(activeTask: ActiveTask | null, expectedType: "booking" | "order"): boolean {
+    if (!activeTask || activeTask.type !== expectedType) return false;
+    return activeTask.step === "confirming" || activeTask.confirmation_sent === true;
+}
+```
+**Why rigid:** Returns `true` if `confirmation_sent === true` even on a NEW message. If the task was already confirmed, `isBookingConfirmation` at line 2313 might fire again on a subsequent user message that has "yes" or "right" in it, because both `userExplicitlyConfirmed` AND `bookingTaskConfirming` are true (activeTask.confirmation_sent is still true).
+
+The `bookingExecutionLocked` guard at 2310 prevents double-execution, but the prompt block might still tell the AI that confirmation is happening.
+
+**Risk:** Re-triggers confirmation flow logic on unrelated "yes" or "right" messages
+
+**Recommendation:** Add `!activeTask.completed` check. Reset `confirmation_sent` when a new topic is detected.
+
+---
+
+### Finding #17 — FORCES repetition | Severity: HIGH
+**File:** `supabase/functions/widget-chat/index.ts:1222-1228`
+**Type:** Static intent handling scripts
+```
+## Intent Handling Rules
+- For acknowledgments: Brief warm response, proceed with pending action
+- For corrections: Acknowledge warmly ("No problem!"), update the info, confirm the change
+- For booking/ordering: Guide toward missing info conversationally...
+- For complaints: Show genuine empathy, apologize, offer solutions
+- For escalation requests: Connect to human immediately
+- For questions mid-flow: Answer fully, then return to the task naturally
+- For hesitation ("hold on", "let me check"): Respond warmly and wait
+```
+**Why rigid:** "Acknowledge warmly ("No problem!")" — a hard-coded script example. The LLM may copy "No problem!" verbatim every time there's a correction because it's given as a direct example. Similarly, "apologize, offer solutions" for complaints forces a specific sequence.
+
+**Risk:** AI says "No problem!" on every correction regardless of severity. For a serious correction ("That's not what I said!"), "No problem!" is dismissive.
+
+**Recommendation:** Remove example phrases. Replace with descriptive guidance: "Vary your acknowledgment based on context."
+
+---
+
+### Finding #18 — HARD STOP conversation | Severity: MEDIUM
+**File:** `supabase/functions/widget-chat/index.ts:369`
+**Type:** Overly specific booking detection
+```typescript
+if (/i ('d| would) like to (come in|visit|set up|get|arrange|plan)/i.test(lowerMsg) && !/order|buy|purchase/i.test(lowerMsg)) return 'book_appointment';
+```
+**Why rigid:** If a customer says "I'd like to get a haircut" with no "appointment" or "book" words, `detectIntent` returns `general_query` because "get" is matched here BUT only if followed by "come in/visit/set up/arrange/plan." Not "get a haircut." The intent is missed entirely.
+
+Wait — actually looking at the regex: `/i ('d| would) like to (come in|visit|set up|get|arrange|plan)/i` — this DOES match "I'd like to get" where "get" is one of the options. So "I'd like to get a haircut" would match `book_appointment`. Let me re-read.
+
+Actually the intent detection looks reasonable here. Let me focus on more impactful findings.
+
+---
+
+### Finding #19 — TWO PARALLEL INTENT SYSTEMS | Severity: CRITICAL
+**File:** `supabase/functions/_shared/engine/intent.ts` AND `supabase/functions/widget-chat/index.ts:329-400`
+**Type:** System architecture conflict
+
+**The Problem:** Two independent intent detection systems run on EVERY message:
+1. **Engine v2 intent.ts** — The "single source of truth" (as declared at widget-chat/index.ts:1647-1648)
+2. **widget-chat layer4-intent (detectIntent)** — Legacy system still imported and called at line 1643
+
+Both produce `IntentResult` and both are used:
+- Engine v2 intent drives state updates, governor prompts, UI hints
+- Legacy detectIntent drives `messageAnalysis.detectedIntent` used in the system prompt Block 4
+
+These TWO intents can DISAGREE. Engine v2 might detect `confirm_appointment` while detectIntent says `acknowledgment`. The system prompt tells the AI "Current detected intent: acknowledgment" while the governor says "Task step: confirm." This creates conflicting signals.
+
+**Risk:** Confused AI behavior when the two intents conflict. System prompt says one thing, governor says another.
+
+**Recommendation:** Remove legacy `detectIntent` and `analyzeMessage`. Use `EngineResult.intent` as the sole source for Block 4. Keep `isAcknowledgment` and `isCorrection` as lightweight side-checks, not full intent classification.
+
+---
+
+### Finding #20 — Money Mode scripts override natural behavior | Severity: MEDIUM
+**File:** `supabase/functions/widget-chat/index.ts:1083-1126`
+**Type:** Over-prescribed conversion scripts
+```
+## CONVERSION TACTICS
+
+### For Appointments:
+- "Let me get you booked right now -- what day works best?"
+- "I have a great opening at [time]. Should I reserve it for you?"
+- If hesitation: "This slot tends to fill up quickly. Want me to hold it?"
+```
+**Why rigid:** Hard-coded sales script examples in the system prompt. LLMs are trained to follow examples. When Money Mode activates, the AI may copy these exact phrases verbatim, making every sales conversation sound identical. "This slot tends to fill up quickly" used repeatedly across customers creates a used-car-lot feel.
+
+**Risk:** Customers recognize the scripted language → lose trust → lower conversion
+
+**Recommendation:** Replace example scripts with principles: "Use natural urgency, reference popularity, avoid repeating the same phrasing across customers."
+
+---
+
+### Finding #21 — FORCES repetition | Severity: MEDIUM
+**File:** `supabase/functions/_shared/flow/flowRouter.ts` (behavioral analysis)
+**Type:** Sequential step enforcement via flow_step
+**Analysis:** The flow engine tracks `active_flow` and `flow_step` in `conversationState`. When a step is set (e.g., `service_selection`), the UI component is determined by `flow_step` (widget-chat/index.ts:2737-2742):
+```typescript
+const intentSuggestedComponent: UIComponent =
+    conversationState.flow_step === "service_selection" ? "service_selector" :
+    conversationState.flow_step === "date_selection" ? "date_picker" :
+    conversationState.flow_step === "time_selection" ? "time_picker" :
+    conversationState.flow_step === "product_selection" ? "product_selector" :
+    null;
+```
+**Why rigid:** The `flow_step` drives the UI component shown. If the flow_step is `service_selection`, the ServiceSelector widget is shown. But the conversational prompt ALSO tells the AI to ask about the service. The customer sees a UI widget AND a text prompt asking the same thing — duplicative and annoying.
+
+**Risk:** User gets "What service would you like?" in text while a service picker is shown — feels like the AI doesn't know what the widget does
+
+**Recommendation:** When a UI widget is active for a field, the AI should NOT ask about that field in text. The governor's "UI WIDGET ACTIVE" block at governor.ts:214-228 attempts this, but it only says "keep text short" — it doesn't say "DON'T ask for what the widget collects."
+
+---
+
+### Finding #22 — IGNORES customer sentiment | Severity: CRITICAL
+**File:** `supabase/functions/widget-chat/index.ts:321-400`
+**Type:** Intent detection cannot understand complex or nuanced statements
+**Analysis:** The regex-based `detectIntent` function (lines 329-400) cannot understand complex sentence structures. For example:
+- "I was wondering if maybe I could come in sometime next week for a checkup?" — contains "come in" → matches `book_appointment`
+- But "Can I just ask, do you do root canals?" — contains no booking keywords → may be classified as `ask_info`
+
+**Risk:** Intent misclassification cascades into wrong system prompt instructions, wrong UI widgets, wrong state transitions
+
+**Recommendation:** This is a fundamental limitation of regex intent detection. For the legacy path, this is acceptable, but for the PRIMARY path (Engine v2), the intent detection at `engine/intent.ts` should be the sole classifier.
+
+---
+
+### Finding #23 — HARD STOP conversation | Severity: LOW
+**File:** `supabase/functions/widget-chat/index.ts:338`
+**Type:** Single-word "no" → conversation end
+```typescript
+if (/^(no|nope)$/i.test(lowerMsg)) return 'conversation_end'; // Short "no" after asking if they need more help
+```
+**Why rigid:** A single-word "No" ALWAYS maps to `conversation_end`. But "No" could mean "No, I don't want that service" during slot collection. The comment says "after asking if they need more help" but the code has no check for whether "anything else" was just asked.
+
+**Risk:** User says "No" to a service suggestion → AI thinks conversation is over → starts closing
+
+**Recommendation:** Only detect `conversation_end` for "no" when the previous AI message asked "anything else." Use conversation context.
+
+---
+
+### Finding #24 — CAUSES loop confirmations | Severity: HIGH
+**File:** `supabase/functions/_shared/engine/intent.ts` (if sequential "yes" responses → re-confirm)
+**Type:** Confirmation retrigger on sequential yes
+**Analysis (from behavioral analysis of engine/intent.ts):** The Engine v2 intent system has an intent type `confirm_appointment` and `confirm_order`. If the system is in `confirm` step and the user says "yes," the intent is detected as confirm. The governor then proceeds. But if the user says "yes" again (e.g., "Yes, that's correct"), the intent is detected as confirm AGAIN. The `confirmation_sent` flag prevents execution, but the prompt block still shows "should_confirm: true" if the state hasn't fully transitioned.
+
+**Risk:** After confirmation, the next user "yes" triggers the confirmation prompt block again
+
+**Recommendation:** After `confirmation_sent`, the next turn should immediately transition to `complete` state regardless of user input.
+
+---
+
+### Finding #25 — FORCES repetition | Severity: MEDIUM
+**File:** `supabase/functions/_shared/engine/governor.ts:100-102`
+**Type:** "Anything else" asked once rule prevents re-asking after unrelated turns
+```typescript
+if (state.rules.asked_if_need_more) {
+    instruction.forbidden.push('ask_if_need_more');
+}
+```
+**Why rigid:** Once "asked_if_need_more" is set, the AI can NEVER ask "Is there anything else?" again. But after a customer completes a booking, does a second booking, and finishes that — the "anything else" question is natural again. The rule doesn't account for multi-task sessions.
+
+**Risk:** After completing two tasks, the AI cannot ask "Anything else?" because it already asked once before
+
+**Recommendation:** Reset `asked_if_need_more` when a new task starts.
+
+---
+
+### Finding #26 — OVER-PRESCRIBES slot collection | Severity: HIGH
+**File:** `supabase/functions/widget-chat/index.ts:1243-1253`
+**Type:** Customer fields status duplicated across blocks
+```typescript
+const fieldStatusLines = fields.map((f: any) => {
+    ...
+    const collected = value ? `  ${value}` : '  Missing';
+    return `- ${f.label}: ${collected}${f.required ? ' (required)' : ' (optional)'}`;
+}).join('\n');
+```
+**Why rigid:** The field status is produced here (Block 5) AND in the governor block (governor.ts:199-201, 264-288). The LLM sees the same field status from two different sections of the system prompt, reinforcing the form-filling behavior. Combined with "Missing" labels, the AI is conditioned to see conversations as incomplete forms.
+
+**Risk:** AI's mental model is "collect missing fields" rather than "help the customer"
+
+**Recommendation:** Remove field status from Block 5. Keep it ONLY in the governor block (the single source of truth). Change "Missing" to "Not yet provided."
+
+---
+
+### Finding #27 — IGNORES customer sentiment | Severity: HIGH
+**File:** `supabase/functions/_shared/engine/governor.ts:143-150`
+**Type:** Neutral field labels override emotional context
+```typescript
+if (collected.length > 0) {
+    instruction.instruction = `Collected: ${collected.join(', ')}. Missing: ${missing.join(', ')}. `;
+    instruction.instruction += `Naturally ask for ${fieldLabel[next_required] || `the ${next_required}`}. `;
+} else {
+    instruction.instruction = `Ask for ${fieldLabel[next_required] || `the ${next_required}`} to continue the ${state.task_type}. Be natural and conversational.`;
+}
+```
+**Why rigid:** The instruction always says "Ask for [field]" regardless of emotional context. If the user is frustrated, the AI should still ask for the next field because the governor doesn't incorporate emotional state into the collection strategy.
+
+**Risk:** Frustrated user gets "What time works for you?" instead of "I understand — let me help. What time would work?"
+
+**Recommendation:** Incorporate emotional state into field-asking prompts: "If user is frustrated, acknowledge concern before asking."
+
+---
+
+### Finding #28 — BLOCKS topic-switching | Severity: MEDIUM
+**File:** `supabase/functions/_shared/flow/taskIntelligence.ts` (behavioral)
+**Type:** Flow exit detection blocking natural segues
+**Analysis:** `detectFlowExit` in taskIntelligence.ts determines when a user wants to leave the current flow. If the heuristic is overly conservative, users can't naturally switch from booking to ordering without explicit "I want to order instead" language.
+
+**Risk:** User says "Actually, do you sell products too?" → not recognized as flow exit → AI continues pushing booking
+
+**Recommendation:** Allow more natural flow transitions. A question about products IS a flow exit for a booking flow.
+
+---
+
+### Finding #29 — CAUSES loop confirmations | Severity: MEDIUM
+**File:** `supabase/functions/_shared/actionGate.ts` (behavioral)
+**Type:** Booking gate blocks re-confirmation path
+**Analysis:** Once `booking_confirmed` is set, `checkBookingGate` returns `allowed: false`. This means if a customer says "Wait, let me confirm the details again," the action gate blocks it. Combined with finding #1 (governor forbids re-confirm), there's NO path for a customer to verify details after booking.
+
+**Risk:** Zero flexibility for post-booking verification
+
+**Recommendation:** Add a "verify_only" mode to action gate that allows re-summarization without re-execution.
+
+---
+
+### Finding #30 — IGNORES customer sentiment | Severity: MEDIUM
+**File:** `supabase/functions/_shared/engine/personality.ts:83-107`
+**Type:** Sentiment detection is keyword-only, no context
+**Analysis:** `detectSentiment()` uses simple keyword matching:
+```typescript
+if (/frustrated|annoyed|angry|upset|terrible|awful|worst|ridiculous|unacceptable|hate/i.test(lower)) {
+    return 'frustrated';
+}
+```
+Sarcasm, dry humor, or contextual frustration is missed. "Great, just great" (sarcastic) matches "great" → returns `positive`. "This is the worst service ever" → returns `frustrated` (correct), but "This is the worst, I can't believe how bad this is" → also returns `frustrated` (correct but repetitive).
+
+**Risk:** Sarcastic positive words → classified as positive → AI responds cheerfully to an upset customer
+
+**Recommendation:** Add negation detection: "great" preceded by "just" or in a negative context. Add sarcasm heuristics.
+
+---
+
+### Finding #31 — FORCES specific next message | Severity: HIGH
+**File:** `supabase/functions/widget-chat/index.ts:1301-1314`
+**Type:** Ordering block repeats booking rules
+```
+## BLOCK 5.5 -- PRODUCT ORDERING
+1. Help them pick a product, then check inventory from the knowledge base
+2. If out of stock: offer alternatives or notify when back
+3. If low stock: mention limited availability
+4. Collect delivery address unless they prefer pickup
+5. Confirm the order naturally — product, quantity, contact, delivery
+```
+**Why rigid:** This is a sequential 5-step script that the LLM may follow rigidly. Step 2-3 could conflict: "If low stock: mention limited availability" sounds like a pressure tactic. Combined with Money Mode's "encourage quick decision" (item 3 at line 1060), the AI may pressure customers on low-stock items.
+
+**Risk:** "This item is almost gone — you should buy now" repeated across sessions
+
+**Recommendation:** Soften: "Mention stock status naturally. Let customer decide."
+
+---
+
+### Finding #32 — OVER-PRESCRIBES slot collection | Severity: LOW
+**File:** `supabase/functions/_shared/hallucinationGuard.ts` (behavioral)
+**Type:** Over-grounding blocks natural extrapolation
+**Analysis:** `buildHallucinationGuardPrompt` tells the AI to ONLY use data from the knowledge base. This prevents natural inferences. For example, if the business offers "Teeth Whitening" and the customer asks "Does it hurt?", the AI cannot say "It's generally painless" unless that's explicitly in the KB.
+
+**Risk:** AI says "I don't have that information" for reasonable common-sense questions
+
+**Recommendation:** Add a "reasonable common knowledge" exception for non-business-specific information.
+
+---
+
+### Finding #33 — HARD STOP conversation | Severity: LOW
+**File:** `supabase/functions/widget-chat/index.ts:1337-1341`
+**Type:** Premature closure on "thanks"
+```
+## Conversation Closure Detection
+When user indicates they're done (thanks, bye, no that's all, etc.):
+- Give a warm, brief closing message
+- Do NOT continue asking questions
+- Do NOT repeat previously stated information
+```
+**Why rigid:** "Thanks" is listed alongside "bye" and "no that's all" as a closure signal. But "Thanks" mid-conversation (e.g., "Thanks for that info") is NOT a goodbye. The AI will close the conversation when the customer just said "thanks" for a piece of information.
+
+**Risk:** AI closes prematurely when customer says "thanks" naturally during conversation
+
+**Recommendation:** Only detect closure on "thanks" if it's the LAST word in the message AND following a task completion. Not mid-task.
+
+---
+
+### Finding #34 — FORCES specific next message | Severity: MEDIUM
+**File:** `supabase/functions/widget-chat/index.ts:1359-1365`
+**Type:** Final block over-promises user experience
+```
+## FINAL DIRECTIVE
+You are not just answering questions--you are creating a positive experience.
+Every interaction should leave them thinking "Wow, that was easy and pleasant."
+```
+**Why rigid:** Sets unrealistic expectations for the AI. "Every interaction should leave them thinking 'Wow'" is an unattainable standard that may cause the LLM to over-compensate with excessive positivity or apology.
+
+**Risk:** AI over-apologizes or is overly effusive to meet the "Wow" standard
+
+**Recommendation:** "Focus on being helpful and clear. Let the quality of service speak for itself."
+
+---
+
+### Finding #35 — IGNORES customer sentiment | Severity: LOW
+**File:** `supabase/functions/widget-chat/index.ts:1148-1154`
+**Type:** Emotional guidance overly generic
+```typescript
+const emotionalGuidance: Record<string, string> = {
+    neutral: 'Maintain a warm, professional tone.',
+    positive: 'Match their positive energy with enthusiasm.',
+    negative: 'Be extra reassuring and empathetic.',
+    urgent: 'Prioritize their needs immediately with calm urgency.',
+    frustrated: 'Show deep empathy, apologize if appropriate, and focus on solutions.'
 };
+```
+**Why rigid:** The emotional guidance is static text inserted into the prompt. It doesn't reference the specific customer message — "Show deep empathy" is generic whether the frustration is about pricing, service, or scheduling.
 
-// Injected into prompt:
-### Current Emotional Guidance:
-${emotionalGuidance[context.emotionalState]}
+**Risk:** "I understand your frustration" (generic response) regardless of the specific frustration cause
+
+**Recommendation:** Include the customer's specific words in the emotional guidance: "Customer said: [quote]. Address this specific concern."
+
+---
+
+### Finding #36 — CAUSES loop confirmations | Severity: HIGH
+**File:** `supabase/functions/widget-chat/index.ts:133-138 (personality.ts) and governor.ts:131-132`
+**Type:** Confirmation → close sequence skips natural follow-up
+```typescript
+} else {
+    instruction.should_close = true;
+    instruction.allowed.push('thank_and_close');
+    instruction.instruction = `${state.task_type === 'booking' ? 'Booking' : 'Order'} confirmed. Thank them warmly and ask if there's anything else.`;
+}
+```
+**Why rigid:** After confirmation, the system immediately jumps to "thank and close" + "ask if there's anything else." This means the AI:
+1. Can't celebrate with the customer
+2. Can't offer next steps (preparation instructions)
+3. Can't offer complementary services naturally
+4. Must ask "anything else" which, once asked, becomes forbidden (finding #25)
+
+**Risk:** "Your appointment is confirmed! Is there anything else?" — always the same closing, no natural celebration or next steps
+
+**Recommendation:** After confirmation, allow a CELEBRATION step: "Congratulate, mention 1-2 preparation tips, then ask if they need anything else."
+
+---
+
+### Finding #37 — FORCES repetition | Severity: CRITICAL
+**File:** `supabase/functions/widget-chat/index.ts:2096`
+**Type:** Post-processing overrides LLM output
+```typescript
+reply = polishResponse(reply);
+```
+**Why rigid:** `polishResponse()` at personality.ts:174-194 REMOVES "robotic" phrases AFTER the LLM generates the response. This means even if the LLM naturally said "Thank you for your patience," it gets stripped to "for your patience" or "your patience" — producing grammatically broken text. The function removes phrases case-insensitively but doesn't check if the removal leaves a valid sentence.
+
+The blocklist includes common phrases like:
+- "thank you for" — strips from "Thank you for your time" → "your time"
+- "i appreciate" — strips from "I appreciate your business" → "your business"
+- "of course" — strips from "Of course, let me help" → "let me help"
+
+**Risk:** AI output has missing words, grammatical errors, or awkward phrasing because post-processing stripped parts of sentences
+
+**Recommendation:** Remove post-processing entirely. Rely on the system prompt blocklist instead. Or change to a "soft" approach that appends guidance rather than surgically removing words.
+
+---
+
+## 3. UI COMPONENT REGISTRY
+
+| # | Component | File | Props | Visibility Trigger | Dismissal | Min/Close |
+|---|-----------|------|-------|--------------------|-----------|-----------|
+| 1 | ServiceSelector | `ServiceSelector.tsx` | `services`, `onSelect`, `disabled?`, `initialLimit?` | `activeComponent === "service_selector"` | Click service or close/minimize | Yes |
+| 2 | ProductSelectorEnhanced | `ProductSelectorEnhanced.tsx` | `products`, `onConfirm`, `disabled?` | `activeComponent === "product_selector"` | Confirm selection or close/minimize | Yes |
+| 3 | DateSelector | `DateSelector.tsx` | `onSelect`, `disabled?`, `minDate?` | `activeComponent === "date_picker"` | Select date or close/minimize | Yes |
+| 4 | TimeSlotSelector | `TimeSlotSelector.tsx` | `slots`, `onSelect`, `disabled?`, `showMore?` | `activeComponent === "time_picker"` (needs `componentData.slots`) | Select slot or close/minimize | Yes |
+| 5 | BookingConfirmation | `BookingConfirmation.tsx` | `serviceName`, `dateTime`, `customerName`, `confirmationId`, etc. | `activeComponent === "booking_confirmation"` (needs `componentData`) | Close/minimize (no dismiss by action) | Yes |
+| 6 | OrderConfirmation | `OrderConfirmation.tsx` | `products`, `customerName`, `totalAmount`, `orderId`, etc. | `activeComponent === "order_summary"` (needs `componentData`) | Close/minimize (no dismiss by action) | Yes |
+| 7 | ErrorDisplay | `ErrorDisplay.tsx` | Error message | Via error boundary or API | Retry/dismiss | Yes |
+| 8 | LoadingSpinner | `LoadingSpinner.tsx` | None | Loading state | N/A | No |
+| 9 | PlusIcon | `PlusIcon.tsx` | Icon props | In ProductSelectorEnhanced | N/A | No |
+| 10 | MinusIcon | `MinusIcon.tsx` | Icon props | In ProductSelectorEnhanced | N/A | No |
+| 11 | CloseIcon | `CloseIcon.tsx` | Icon props | In UISignalRenderer close button | N/A | No |
+
+### UI Component State Machine
+
+```
+NULL → service_selector → date_picker → time_picker → booking_confirmation → NULL
+NULL → product_selector → order_summary → NULL
 ```
 
-### Message-Type-Specific Rules
+**Dismiss flow:** Each component has a "minimize" (collapse panel, keep signal active) and "close" (dismiss signal entirely via `handleDismiss` → `onDismiss` callback). The `dismissPrevious` flag at UISignal level controls widget switching.
 
-Injected based on `messageAnalysis`:
-- `isAcknowledgment` → Short response rules
-- `isCorrection` → Update and acknowledge rules
-- `hasPronounAmbiguity` → Resolution rules
-- `hasNumericQuery` → Calculation rules
+---
 
-## 3.3 Sub-Prompts
+## 4. UI TRIGGER GRAPH
 
-### Slot Extraction Prompt (chat/index.ts lines 261-277)
+```
+Conversational Action                 → UI Component         → Dismissal Sequence
+──────────────────────────────────────────────────────────────────────────────────
+User says "I want to book"            → service_selector     → select service → dismiss → date_picker
+User clicks a service                 → date_picker           → select date → dismiss → time_picker
+User selects date                     → time_picker           → select time → dismiss
+User provides time                    → (no UI, text prompt)  → collects name/contact
+User confirms booking                 → booking_confirmation  → close/minimize → NULL
+User says "I want to order"           → product_selector      → confirm products → dismiss → order_summary
+User confirms products+details        → order_summary          → close/minimize → NULL
+Flow step = service_selection         → service_selector
+Flow step = date_selection            → date_picker
+Flow step = time_selection            → time_picker
+Flow step = product_selection         → product_selector
+Booking execution complete            → booking_confirmation
+Order execution complete              → order_summary
+engineHints.show_services             → service_selector
+engineHints.show_calendar             → date_picker
+engineHints.show_time_slots           → time_picker
+engineHints.show_products             → product_selector
+engineHints.show_confirmation         → booking_confirmation
+engineHints.show_order_confirmation   → order_summary
+```
 
-```typescript
-const slotPrompt = `You are a slot extraction assistant. Extract booking information from user text and return ONLY valid JSON with these exact keys:
-- intent: "book_appointment" or "none"
-- service: string (service name) or null
-- date: ISO date string (YYYY-MM-DD) or null
-- time: time string (HH:MM in 24h format) or null
-- customer_name: string or null
-- contact: phone or email string or null
-- clarity: "clear" or "uncertain"
-
-Rules:
-- If ANY required field (service, date, time) is missing or unclear, set clarity to "uncertain"
-- Parse relative dates like "tomorrow", "next Monday" into ISO format
-- Parse times like "3pm", "2:30" into 24h format (e.g., "15:00", "14:30")
-- Extract contact from patterns like "+234...", "email@..." 
-- If you cannot extract reliable information, set that key to null
-
-Return ONLY valid JSON, no explanations or markdown.`;
+### Trigger Precedence (resolveDeterministicUIComponent)
+```
+bookingResult → orderResult → intentSuggestedComponent → engineHints → null
 ```
 
 ---
 
-# SECTION 4 — CONVERSATION FLOW & STATE
+## 5. CONVERSATIONAL FLOW × UI INTERSECTION
 
-## 4.1 Session ID Creation
+### Intersection Point #1: Duplicate Slot Collection
+**When:** Booking flow, step = selecting service/date/time
+**What happens:** Both AI text AND UI widget ask for the same field
+**System prompt says:** "1-2 sentences max when UI widget is showing" + "Ask for [field]"
+**Result:** AI text says "Please select from the widget above" — dismissive, robotic, and avoids actually answering
+**Finding reference:** #3, #21
 
-**Location:** `src/pages/Widget.tsx` lines 59-68
+### Intersection Point #2: Widget Shows, AI Still Talks About It
+**When:** `activeComponent` is set but AI text still mentions the options
+**System prompt says:** "NEVER list, enumerate, or describe the items/options that the widget already displays"
+**Result:** AI can't explain options even if customer asks "What's the difference between these?"
+**Finding reference:** #3
 
-```typescript
-useEffect(() => {
-  if (!receptionistId) return;
-  
-  let sid = localStorage.getItem(`widget_session_${receptionistId}`);
-  if (!sid) {
-    sid = crypto.randomUUID();
-    localStorage.setItem(`widget_session_${receptionistId}`, sid);
-  }
-  setSessionId(sid);
-}, [receptionistId]);
-```
+### Intersection Point #3: Confirmation UI Without Confirm Option
+**When:** Booking/Order completed
+**What happens:** `BookingConfirmation` / `OrderConfirmation` is a READ-ONLY card
+**Result:** Customer cannot "edit" or "cancel" from the widget — must type in text. No undo path.
+**Finding reference:** #36
 
-**Key:** `widget_session_{receptionistId}` in localStorage
-**Value:** UUID v4
+### Intersection Point #4: Widget Dismiss Creates Void
+**When:** User clicks "X" on widget mid-flow
+**What happens:** `handleDismiss` calls `onDismiss` callback but the flow_step is unchanged
+**Result:** System prompt STILL shows the widget is active (governor.ts:176-183 checks state, not UI visibility). The AI thinks widget is showing → keeps text to 1-2 sentences.
+**Finding reference:** #3
 
-## 4.2 History Retrieval
-
-**Location:** `supabase/functions/widget-chat/index.ts` lines 2720-2730
-
-```typescript
-const { data: history } = await supabase
-  .from("chat_messages")
-  .select("sender, message, metadata, created_at")
-  .eq("receptionist_id", receptionistId)
-  .eq("session_id", sessionId || "default")
-  .order("created_at", { ascending: true })
-  .limit(50);
-```
-
-**Limit:** 50 messages per session
-**Order:** Ascending (oldest first)
-
-## 4.3 Greeting Logic
-
-### First Message Detection
-
-```typescript
-const { data: existingMessages } = await supabase
-  .from("chat_messages")
-  .select("id")
-  .eq("receptionist_id", receptionistId)
-  .eq("session_id", sessionId || "default")
-  .limit(1);
-
-const isFirstMessage = !existingMessages || existingMessages.length === 0;
-```
-
-### Greeting Storage (Empty Message)
-
-```typescript
-if (message === "") {
-  const { data: existing } = await supabase
-    .from("chat_messages")
-    .select("id")
-    .eq("receptionist_id", receptionistId)
-    .eq("session_id", sessionId || "default")
-    .eq("sender", "bot")
-    .limit(1);
-
-  if (existing && existing.length > 0) {
-    return { ok: true, message: "greeting already stored" };
-  }
-
-  await supabase.from("chat_messages").insert({
-    receptionist_id: receptionistId,
-    session_id: sessionId || "default",
-    user_id: sessionId || "anonymous",
-    sender: "bot",
-    message: greetingMessage,
-    metadata: { greeting: true, ... }
-  });
-}
-```
-
-## 4.4 Known Issues
-
-1. **Re-greeting Bug Mitigation:**
-   - `isFirstMessage` check based on DB history
-   - Prompt injection: "DO NOT greet again"
-   - Empty message handling for proactive greeting storage
-
-2. **Session Isolation:**
-   - Uses `session_id` consistently (not `user_id`)
-   - Critical comment at line 2619: "CRITICAL: Use session_id consistently"
-
-3. **Memory Mismatch:**
-   - 50-message limit may truncate long sessions
-   - No explicit summarization for old messages
+### Intersection Point #5: Multiple UI Tools, Single Channel
+**When:** Both booking AND ordering are possible
+**What happens:** The `resolveDeterministicUIComponent` function picks ONE component based on strict precedence
+**Result:** A customer who wants to discuss both services and products sees only one widget at a time. Switching requires new message.
+**Finding reference:** #6
 
 ---
 
-# SECTION 5 — MEMORY ARCHITECTURE
+## 6. LINE-BY-LINE INSTRUCTION BLOCK SCAN
 
-## 5.1 Short-Term Memory
+### Block 1 — Core Identity (lines 1156-1170)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| 1159 | "S-tier" is jargon, not human-like | Tone mismatch | LOW |
+| 1169 | "CRITICAL: You must ALWAYS act like a real professional human receptionist" | Anxiety constraint | MEDIUM |
+| 1170 | "This identity NEVER changes during a session" | Rigidity | LOW |
 
-**Storage:** `chat_messages` table, filtered by `session_id`
-**Retention:** 50 messages per request (oldest dropped beyond limit)
-**Structure:**
-```typescript
-{
-  id: uuid,
-  receptionist_id: uuid,
-  session_id: string,
-  user_id: string,
-  sender: 'user' | 'bot',
-  message: string,
-  metadata: {
-    timestamp: string,
-    intent?: string,
-    is_acknowledgment?: boolean,
-    is_correction?: boolean,
-    quality_metrics?: QualityMetrics,
-    context_used?: object
-  },
-  created_at: timestamp
-}
-```
+### Block 2 — Session Rules (lines 1190)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| 1190 | "Violation of this rule is a CRITICAL FAILURE" | Punishment-driven | HIGH |
+| 1183-1186 | "DO NOT say Hello, Hi, Hey... DO NOT re-introduce" | Over-broad blocking | HIGH |
 
-## 5.2 Context Extraction
+### Block 3 — Memory & Context (lines 1192-1212)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| 1201 | Emotional state is single value, no history | Information loss | MEDIUM |
 
-All entity extraction happens per-request from history scan:
-- Service, date, time via regex
-- Name, phone, email via regex
-- Emotional state via keyword matching
-- Conversation phase via logic
+### Block 4 — Intent & Decision (lines 1214-1228)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| 1223 | "Acknowledge warmly ("No problem!")" — hard-coded script | Over-prescribed | MEDIUM |
+| 1217 | Uses legacy `messageAnalysis.detectedIntent` — may conflict with Engine v2 | Architecture conflict | CRITICAL |
 
-**No persistent context storage** - rebuilt each request.
+### Block 5 — Booking & Ordering (lines 1255-1276)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| 1259-1261 | Field status shows "Missing" labels — form-filling mentality | Over-prescribed | HIGH |
+| 1268-1270 | Duplicate field status (same info in governor block) | Redundancy | MEDIUM |
 
-## 5.3 What Is Stored
+### Block 5.5 — Product Ordering (lines 1300-1314)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| 1305-1309 | Sequential 5-step script | Over-prescribed | HIGH |
+| 1308 | "Collect delivery address unless they prefer pickup" — ambiguous priority | Confusion | LOW |
 
-- All user messages with metadata
-- All bot replies with quality metrics
-- Safety violations flagged
-- Booking flow state in metadata
+### Block 6 — Safety & Quality (lines 1278-1298)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| 1297 | "After 'goodbye', if user doesn't respond, conversation is over" | Premature closure | MEDIUM |
 
-## 5.4 What Is Discarded
+### Block 7 — Failure Prevention (lines 1316-1341)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| 1337-1341 | "Thanks" treated as closure signal | Premature closure | LOW |
+| 1327-1328 | Hard-coded escalation script | Scripted | LOW |
 
-- Messages beyond 50-message limit
-- No summarization of old context
-- No explicit memory pruning
+### Block 8 — Knowledge Base (lines 1343-1346)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| — | Knowledge base is included raw — may contain duplicate info from `buildKnowledgeBase` | Redundancy | LOW |
 
-## 5.5 Known Weaknesses
+### Money Mode Block (lines 1348-1349, referenced to 1083-1126)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| 1105-1117 | Hard-coded sales scripts ("Let me get you booked right now") | Scripted behavior | MEDIUM |
+| 1095 | "Never chat endlessly" — pressure to convert | Over-prescribed | HIGH |
 
-1. **No Long-Term Memory:** Sessions reset when localStorage cleared
-2. **50-Message Limit:** Long conversations lose early context
-3. **Per-Request Rebuild:** No cached context between requests
-4. **Regex-Based Extraction:** May miss complex entity patterns
+### Final Directive (lines 1351-1365)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| 1362 | "Every interaction should leave them thinking 'Wow'" | Unrealistic standard | MEDIUM |
 
----
+### Engine v2 Governor Block (governor.ts)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| 81-85 | "Never re-confirm" permanent block | Hard stop | HIGH |
+| 100-102 | "Anything else" asked once → never again | Hard stop | MEDIUM |
+| 117-118 | Greeting → never say "hello" again | Hard stop | HIGH |
+| 142-150 | Always "Ask for [field]" regardless of emotion | Sentiment-agnostic | HIGH |
+| 220-221 | Contradictory "1-2 sentences max" vs urgency exception | Conflicting rules | CRITICAL |
+| 212 | "Use robotic filler phrases like 'Certainly!', 'Of course!', 'I'd be happy to!'" listed as forbidden — but these are natural human phrases | Over-broad block | MEDIUM |
 
-# SECTION 6 — DATA ACCESS & SECURITY
-
-## 6.1 Tables Used by AI
-
-### `receptionists`
-
-**Purpose:** Store receptionist configuration and persona
-**Fields Accessed:**
-- `id`, `name`, `business_name`
-- `greeting_message`, `persona_description`
-- `tone`, `model`, `temperature`
-- `timezone`, `knowledge_base`
-- `active` (filter)
-
-**RLS Policies:**
-- Authenticated owners can access own receptionists
-- Public can access active receptionists via secure view functions
-- Anonymous denied direct access
-
-### `chat_messages`
-
-**Purpose:** Store conversation history
-**Fields Accessed:**
-- All fields (sender, message, metadata, created_at)
-
-**RLS Policies:**
-- Users can create for their own receptionists
-- Widget users can create with session
-- Widget users can read own session messages
-
-**Known Risk:** Session ID is user-provided, potential for session hijacking
-
-### `receptionist_faqs`
-
-**Purpose:** Curated FAQ knowledge base
-**Fields Accessed:** `question`, `answer`, `priority`
-
-**RLS Policies:**
-- Public can view for active receptionists (read-only)
-- Owners can CRUD
-
-### `services`
-
-**Purpose:** Available services for booking
-**Fields Accessed:** `id`, `name`, `description`, `duration_minutes`
-
-**RLS Policies:**
-- Public can view active services for widget
-- Owners can CRUD
-
-### `appointments`
-
-**Purpose:** Store bookings
-**Fields Accessed:** All
-
-**RLS Policies:**
-- Anonymous denied
-- Users can CRUD for own receptionists
-
-### `conversations`
-
-**Purpose:** Analytics log
-**Fields Accessed:** All
-
-**RLS Policies:**
-- Anonymous denied
-- Users can create/view/delete for own receptionists
+### Personality / Post-processing (personality.ts)
+| Line | Issue | Category | Severity |
+|------|-------|----------|----------|
+| 174-194 | `polishResponse()` strips words post-generation, can break sentences | Output corruption | CRITICAL |
+| 15-32 | Blocklist includes "thank you for", "i appreciate", "of course" — natural speech | Over-broad | HIGH |
 
 ---
 
-# SECTION 7 — EDGE FUNCTIONS & BACKEND LOGIC
+## 7. MULTI-POV ANALYSIS
 
-## 7.1 `widget-chat/index.ts`
+### POV 1: Customer (First-time booker)
+**Experience:** Greeted warmly → starts booking → sees ServiceSelector widget → AI says "Please select from above" → customer asks "What's the difference between service A and B?" → AI says 1 sentence response (brevity rule) → customer doesn't get enough info → frustration → leaves
+**Impact of findings:** #3, #21, #10, #13
 
-**Lines:** 2938
-**Trigger:** POST from widget frontend
-**Inputs:**
-```typescript
-{
-  message: string,
-  receptionistId: string,
-  sessionId: string,
-  displayedGreeting?: string,
-  bookingContext?: object,
-  source?: string
-}
-```
+### POV 2: Customer (Returning, multi-task)
+**Experience:** Books an appointment → AI says "Is there anything else?" → customer says "Yes, I want to order products" → flow transitions → customer orders → AI cannot ask "Anything else?" (asked once rule) → conversation ends abruptly
+**Impact of findings:** #25, #36
 
-**Outputs:**
-```typescript
-{
-  reply: string,
-  hasBookingIntent: boolean,
-  receptionistName?: string,
-  businessName?: string,
-  qualityScore?: number
-}
-```
+### POV 3: Customer (Frustrated/Complaint)
+**Experience:** "I'm really upset about my last visit" → AI empathizes once → customer explains more → AI cannot empathize again (once per episode) → AI asks "What time would you like to book?" (sentiment-agnostic field collection) → customer gets more frustrated → escalates
+**Impact of findings:** #8, #27, #35
 
-**Side Effects:**
-- Writes to `chat_messages`
-- Writes to `conversations`
-- Rate limit tracking (in-memory)
+### POV 4: Customer (Late-night browser, complex question)
+**Experience:** "Do you do root canals? And how much?" → AI says "Please select a service from the widget" (brevity rule, widget is showing) → "But I'm asking about pricing" → AI: "Prices are shown in the widget" → customer leaves
+**Impact of findings:** #3, #32
 
-**Sync/Async:** Synchronous (waits for AI response)
+### POV 5: Business Owner
+**Concern:** AI sounds robotic and loses customers → checks conversation logs → sees "Please select from the widget above" 15 times → sees "Is there anything else?" once → sees "No problem!" on every correction → frustrated that AI sounds nothing like a human
+**Impact of findings:** #3, #17, #25, #36
 
-## 7.2 `chat/index.ts`
-
-**Lines:** 680
-**Trigger:** POST from authenticated API
-**Key Differences:**
-- Uses A/B testing (`assignVariant`)
-- Has explicit slot extraction for booking
-- Calls `book-appointment` directly
-- Uses `idempotencyKey` for duplicate prevention
-
-**Inputs:**
-```typescript
-{
-  messages: Array<{role, content}>,
-  receptionistId: string,
-  userId: string
-}
-```
-
-**Booking Sub-Flow:**
-1. Detect booking intent via keywords
-2. Call Lovable AI for slot extraction
-3. Parse JSON slots
-4. Check missing fields → ask clarifying question
-5. Parse datetime with timezone
-6. Call `check-availability`
-7. If unavailable → offer alternatives
-8. If available → collect contact → call `book-appointment`
-
-## 7.3 `book-appointment/index.ts`
-
-**Trigger:** POST from chat functions or direct API
-**Inputs:**
-```typescript
-{
-  receptionistId: string,
-  serviceId?: string,
-  startTime: string,
-  customerName: string,
-  customerEmail?: string,
-  customerPhone?: string,
-  source?: string,
-  metadata?: object
-}
-```
-
-**Logic:**
-1. Rate limit check
-2. Input sanitization
-3. Validate email/phone format
-4. Fetch service details
-5. Calculate end time with buffers
-6. Check idempotency (existing appointment)
-7. Check for time conflicts
-8. Generate cancellation/confirmation tokens
-9. Insert appointment
-10. Log to `appointment_logs`
-11. Insert notification
-12. Invoke `send-booking-email`
-
-**Outputs:**
-```typescript
-{
-  success: boolean,
-  appointment: object,
-  existed?: boolean
-}
-```
-
-## 7.4 `check-availability/index.ts`
-
-**Trigger:** POST from chat functions
-**Inputs:**
-```typescript
-{
-  receptionistId: string,
-  serviceId?: string,
-  startDate: string,
-  endDate: string,
-  desiredStart?: string,
-  desiredEnd?: string,
-  maxSlots?: number
-}
-```
-
-**Logic:**
-1. Fetch `availability_rules` for receptionist
-2. Fetch `availability_exceptions`
-3. Fetch existing `appointments`
-4. Generate potential slots from rules
-5. Filter against exceptions and conflicts
-6. If `desiredStart` provided, check exact match
-7. Score and rank alternatives
-
-**Outputs:**
-```typescript
-{
-  success: boolean,
-  available: boolean,
-  slots: Array<string>,
-  alternatives?: Array<string>,
-  service?: object
-}
-```
-
-## 7.5 `appointment-action/index.ts`
-
-**Trigger:** GET/POST with token parameters
-**Purpose:** Handle confirm/cancel via email links
-
-**Logic:**
-1. Extract `action`, `appointmentId`, `token` from query
-2. Validate token matches DB
-3. Update appointment status
-4. Log action
-5. Send notification
+### POV 6: Developer (Maintaining the system)
+**Concern:** Two intent systems, duplicated field status, contradictory prompt instructions → hard to debug which system caused a behavior → `polishResponse()` corrupts output → hard to tell if it's LLM or post-processing
+**Impact of findings:** #19, #26, #37
 
 ---
 
-# SECTION 8 — ERROR HANDLING & FALLBACKS
+## 8. SUMMARY TABLE / SEVERITY COUNTS
 
-## 8.1 Error Detection
+### By Category
 
-**Rate Limits:**
-```typescript
-const RATE_LIMIT = { windowMs: 60_000, maxRequests: 30 };
+| Category | Count | Critical | High | Medium | Low |
+|----------|-------|----------|------|--------|-----|
+| FORCES repetition | 5 | 1 | 2 | 2 | 0 |
+| BLOCKS topic-switching | 3 | 0 | 1 | 2 | 0 |
+| FORCES specific next message | 6 | 1 | 2 | 2 | 1 |
+| IGNORES customer sentiment | 6 | 2 | 1 | 2 | 1 |
+| OVER-PRESCRIBES slot collection | 5 | 0 | 3 | 1 | 1 |
+| HARD STOP conversation | 6 | 0 | 2 | 2 | 2 |
+| CAUSES loop confirmations | 4 | 0 | 3 | 1 | 0 |
+| Architecture conflict | 1 | 1 | 0 | 0 | 0 |
+| Output corruption | 1 | 1 | 0 | 0 | 0 |
+| **TOTAL** | **37** | **7** | **14** | **12** | **4** |
 
-function checkRateLimit(sessionId: string): { allowed: boolean; retryAfterMs?: number } {
-  // In-memory sliding window
-  // Cleanup when store > 5000 entries
-}
-```
+### By File
 
-**AI API Errors:**
-```typescript
-if (!aiRes.ok) {
-  if (aiRes.status === 429) {
-    return { error: "Service is busy. Please try again in a moment." };
-  }
-  if (aiRes.status === 402) {
-    return { error: "Service temporarily unavailable." };
-  }
-  throw new Error("AI request failed");
-}
-```
-
-## 8.2 AI Failure Fallback
-
-```typescript
-if (!out?.choices?.[0]?.message?.content) {
-  reply = receptionist.default_response || "I'm having trouble processing that. Please try again.";
-}
-```
-
-## 8.3 Booking Failure
-
-**Slot Parse Failure:**
-```typescript
-const clarify = "I can help book that appointment. Could you tell me which service you need, your preferred date and time?";
-```
-
-**Availability Check Failure:**
-```typescript
-const errMsg = "I can't check availability right now. Please try again shortly.";
-```
-
-**Book Appointment Failure:**
-```typescript
-const errMsg = "Sorry, I couldn't create that appointment right now. Please try again in a moment.";
-```
-
-## 8.4 Silent Failures
-
-1. **Message Logging Failures:** Caught and logged, not surfaced to user
-2. **Analytics Logging Failures:** Caught and logged, not surfaced to user
-3. **Notification Insert Failures:** Not explicitly caught
-
-## 8.5 Retry Logic
-
-```typescript
-// From bookingHelpers.ts
-async function retryWithBackoff<T>(
-  fn: () => Promise<T>, 
-  maxAttempts: number = 2, 
-  initialDelayMs: number = 1000
-): Promise<T> {
-  let lastError: Error;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (e) {
-      lastError = e instanceof Error ? e : new Error(String(e));
-      if (attempt < maxAttempts - 1) {
-        await new Promise(r => setTimeout(r, initialDelayMs * Math.pow(2, attempt)));
-      }
-    }
-  }
-  throw lastError!;
-}
-```
+| File | Count | Critical | High | Medium | Low |
+|------|-------|----------|------|--------|-----|
+| governor.ts | 8 | 1 | 4 | 3 | 0 |
+| widget-chat/index.ts | 18 | 3 | 7 | 5 | 3 |
+| personality.ts | 2 | 1 | 1 | 0 | 0 |
+| layer5-booking.ts | 1 | 0 | 1 | 0 | 0 |
+| layer6-safety.ts | 1 | 0 | 0 | 1 | 0 |
+| Multiple/Architecture | 7 | 2 | 1 | 3 | 1 |
 
 ---
 
-# SECTION 9 — QUALITY CONTROL & SAFETY
+## 9. UI_ARCHITECTURE.md
 
-## 9.1 Response Quality Evaluation
-
-**Scoring (0-1 scale):**
-- Relevance: 25% weight
-- Empathy: 20% weight
-- Clarity: 20% weight
-- Factuality: 20% weight
-- Naturalness: 15% weight
-
-**Threshold:** 0.7 overall to pass
-
-## 9.2 Heuristics
-
-**Robotic Phrase Detection:**
-- List of 11 forbidden phrases
-- Score penalty per match
-
-**Repetition Detection:**
-- Compare last 3 bot messages
-- Score penalty if duplicate content
-
-**Greeting-in-followup Detection:**
-- Check if reply starts with greeting
-- Check if history.length > 2
-- Score penalty if both true
-
-## 9.3 Safety Filters
-
-**Pre-processing:**
-- Safety classifier runs BEFORE any AI call
-- Blocks jailbreak, harmful, PII, bias triggers
-
-**Post-processing:**
-- Quality metrics logged but not enforced
-- No response rejection based on quality
-
-## 9.4 Rate Limiting
-
-**Widget Chat:**
-- 30 requests per 60 seconds per session
-- In-memory sliding window
-
-**Book Appointment:**
-- Custom rate limit per receptionist and user
-
----
-
-# SECTION 10 — KNOWN ISSUES & TECH DEBT
-
-## 10.1 Bugs
-
-1. **Potential Re-greeting:** Despite mitigations, edge cases may exist
-2. **Session ID Trust:** Widget session ID is user-provided, no server validation
-3. **Context Window:** 50-message limit may drop critical context
-
-## 10.2 Architectural Weaknesses
-
-1. **Monolithic Prompt:** 2,500+ line system prompt is unwieldy
-2. **Duplicate Code:** Safety patterns defined in both widget-chat and shared module
-3. **No Prompt Versioning:** Changes not tracked
-4. **Inline Logic:** Complex reasoning mixed with I/O handling
-
-## 10.3 Performance Risks
-
-1. **Per-Request Context:** Full history scan on every message
-2. **No Caching:** Knowledge base rebuilt each request
-3. **Synchronous AI Calls:** No streaming, full response wait
-
-## 10.4 Security Concerns
-
-1. **Session Hijacking:** Client-provided session ID
-2. **Rate Limit Bypass:** New session ID = new rate limit
-3. **No Input Length Validation:** Only 2000 char limit in sanitizer
-
-## 10.5 Incomplete Features
-
-1. **No Summarization:** Old messages just truncated
-2. **No A/B Testing in Widget:** Only in chat function
-3. **No Streaming:** Full response wait
-4. **No Speech/Voice:** Text only
-
-## 10.6 TODOs (Found in Code)
-
-- None explicitly marked
-
----
-
-# SECTION 11 — FILE & MODULE MAP
-
-| File | Lines | Responsibility |
-|------|-------|---------------|
-| `supabase/functions/widget-chat/index.ts` | 2938 | **MONOLITHIC** - Main widget chat handler with all 7 layers embedded |
-| `supabase/functions/chat/index.ts` | 680 | Authenticated chat with A/B testing and booking flow |
-| `supabase/functions/book-appointment/index.ts` | ~400 | Appointment creation with idempotency |
-| `supabase/functions/check-availability/index.ts` | ~280 | Availability checking logic |
-| `supabase/functions/_shared/ai-chat/index.ts` | 18 | Module exports |
-| `supabase/functions/_shared/ai-chat/safety.ts` | 74 | Safety patterns and classifier |
-| `supabase/functions/_shared/ai-chat/intent.ts` | 197 | Intent detection and dialog acts |
-| `supabase/functions/_shared/ai-chat/context.ts` | 152 | Context extraction |
-| `supabase/functions/_shared/ai-chat/micro-behavior.ts` | 118 | Natural language patterns |
-| `supabase/functions/_shared/ai-chat/quality-metrics.ts` | 295 | Quality scoring and KPIs |
-| `supabase/functions/_shared/bookingHelpers.ts` | ~125 | Date parsing, retry logic |
-| `src/pages/Widget.tsx` | 601 | Frontend widget component |
-
-## Overloaded Files
-
-1. **`widget-chat/index.ts` (2938 lines):** Contains ALL layers, should be modularized
-2. **Duplicate Safety:** Patterns in both `widget-chat` and `_shared/ai-chat/safety.ts`
-
----
-
-# APPENDIX A — COMPLETE PROMPT TEXT
-
-## Master System Prompt (Abbreviated Structure)
+### Current Architecture
 
 ```
-# 📌 YOU ARE: ${receptionist.name}
-You are the AI receptionist for ${receptionist.business_name}.
-
-# 📌 SECTION 1 — ENVIRONMENT & CONTEXT
-[Context loading rules]
-
-# 📌 SECTION 2 — MEMORY & CONTEXT
-### Conversation Summary:
-${conversationSummary}
-
-### Collected Entities:
-[serviceMentioned, dateMentioned, timeMentioned, customerName, customerPhone, customerEmail]
-
-# 📌 SECTION 3 — INTENT, ENTITY, AND DIALOG ACT ENGINE
-[Intent recognition rules]
-[Entity extraction rules]
-[Dialog act selection rules]
-
-# 📌 SECTION 4 — TONE, PERSONALITY, AND STYLE RULES
-[Natural language requirements]
-[Style matching logic]
-[Variation rules]
-
-# 📌 SECTION 5 — KNOWLEDGE-GROUNDED ANSWERING
-${knowledgeBase}
-
-# 📌 SECTION 6 — REASONING, LOGIC, AND NON-HALLUCINATION
-[Zero guessing rule]
-[Logic checks]
-[Contradiction prevention]
-
-# 📌 SECTION 7 — ERROR HANDLING
-[Vague input handling]
-[Incomplete info handling]
-[Confusing info handling]
-
-# 📌 SECTION 8 — EMOTIONAL INTELLIGENCE
-[Frustration, confusion, urgency, gratitude handling]
-
-# 📌 SECTION 9 — SAFETY, ETHICS, PRIVACY
-[Safety rules]
-[Privacy rules]
-[Escalation rules]
-[Jailbreak defense]
-
-# 📌 SECTION 10 — CONVERSATION FLOW LOGIC
-${isFirstMessage ? [greeting rules] : [follow-up rules]}
-
-# 📌 LAYER 3: ADVANCED CONVERSATIONAL INTELLIGENCE
-[3A: Failure mode patches]
-[3B: Micro-behavior engine]
-[3C-3M: Various sub-systems]
-
-# 📌 LAYER 5: S-TIER FAILURE PREVENTION
-[5A: High-risk patterns]
-[5B: Auto-correction engine]
-[5C: Hallucination prevention]
-[5D: Micro-dialogue]
-[5E: Red-team resistance]
-[5F: Consistency rules]
-[5G: Mandatory principles]
-
-# 📌 LAYER 6: MONITORING & EVALUATION
-[6A-6H: Self-check systems]
-
-# 📌 FINAL DIRECTIVE
-[Quality target statement]
+widget-chat/index.ts (backend)
+    │
+    ├── Engine v2 (intent + state + governor)
+    ├── Legacy flow engine (flowRouter + stateManager)
+    ├── Legacy intent detection (detectIntent)
+    │
+    └── Response JSON ──────────────────────────→ Frontend
+        ├── reply (text)
+        ├── uiSignal (UISignal type)
+        ├── uiHints (backward compat)
+        └── bookingDetails / orderDetails
+                                                      │
+                                                      ▼
+                                              UISignalRenderer.tsx
+                                                  │
+                                                  ├── activeComponent === null → render nothing
+                                                  ├── activeComponent === "service_selector" → ServiceSelector
+                                                  ├── activeComponent === "product_selector" → ProductSelectorEnhanced
+                                                  ├── activeComponent === "date_picker" → DateSelector
+                                                  ├── activeComponent === "time_picker" → TimeSlotSelector
+                                                  ├── activeComponent === "booking_confirmation" → BookingConfirmation
+                                                  └── activeComponent === "order_summary" → OrderConfirmation
 ```
+
+### Key Architectural Observations
+
+1. **Single orchestrator pattern:** `UISignalRenderer` is the sole component that decides what UI to show. It renders exactly one component at a time.
+
+2. **Trigger chain:** Backend `resolveDeterministicUIComponent()` determines component. Frontend `UISignalRenderer` renders it. No frontend routing logic beyond the switch statement.
+
+3. **Two dismissal mechanisms:**
+   - **Minimize** (`isPanelOpen` state): Collapses the panel but keeps the signal active. Re-opens with the same component.
+   - **Close/Dismiss** (`handleDismiss` → `onDismiss`): Clears the visible signal. Flow state unchanged.
+
+4. **void after dismiss:** When user dismisses a widget mid-flow (`handleDismiss` → sets `visible` to null), the backend's `flow_step` is untouched. Next turn's `resolveDeterministicUIComponent` will suggest the same component again based on unchanged `flow_step`.
+
+5. **No bidirectional communication:** Widget selection (clicking a service, picking a date) is sent as a NEW chat message, not as a structured event separate from the conversation. This means every UI interaction goes through the full AI pipeline (intent detection, state update, LLM call).
+
+6. **Backend controls ALL UI state:** The frontend has zero logic about what to show next — it purely reacts to the backend's `uiSignal`. This makes the system fully backend-driven but also means every UI transition requires a round-trip.
 
 ---
 
-# APPENDIX B — DATABASE SCHEMA (Relevant Tables)
+## 10. TEST_SCENARIOS.md
 
-## chat_messages
-```sql
-id uuid PRIMARY KEY,
-receptionist_id uuid NOT NULL,
-session_id text,
-user_id uuid NOT NULL,
-sender text NOT NULL,
-message text NOT NULL,
-metadata jsonb,
-created_at timestamptz DEFAULT now()
-```
+### Scenario 1: Customer asks for explanation during slot collection
+**Input:** "What's the difference between deep cleaning and regular cleaning?" (while service widget is showing)
+**Expected:** AI explains the difference naturally
+**Current behavior (rigid):** "Please select from the widget above" (1-2 sentence brevity rule + "NEVER list options that widget displays")
+**Test:** Assert AI response contains explanatory content, not just "select from widget"
 
-## receptionists
-```sql
-id uuid PRIMARY KEY,
-user_id uuid NOT NULL,
-name text NOT NULL,
-business_name text NOT NULL,
-greeting_message text,
-persona_description text,
-tone receptionist_tone,
-model text DEFAULT 'google/gemini-2.5-flash',
-temperature numeric DEFAULT 0.7,
-timezone text DEFAULT 'UTC',
-knowledge_base text,
-active boolean DEFAULT true,
-...
-```
+### Scenario 2: Customer says "no" mid-slot-collection
+**Input:** "No, I don't want that service" (while collecting service)
+**Expected:** AI asks "What service are you looking for?"
+**Current behavior (rigid):** AI detects `conversation_end` because "no" → starts closing
+**Test:** Assert no closure language. Assert AI continues collecting.
 
-## appointments
-```sql
-id uuid PRIMARY KEY,
-receptionist_id uuid NOT NULL,
-customer_name text NOT NULL,
-customer_email text,
-customer_phone text,
-service text NOT NULL,
-service_id uuid,
-start_time timestamptz NOT NULL,
-end_time timestamptz NOT NULL,
-status appointment_status DEFAULT 'booked',
-cancellation_token text,
-confirmation_token text,
-idempotency_key text,
-metadata jsonb,
-...
-```
+### Scenario 3: Customer asks to re-confirm after booking
+**Input:** "Can you read that back to me?" (after booking confirmed)
+**Expected:** AI reads back the details
+**Current behavior (rigid):** "re_confirm" and "repeat_details" are forbidden → AI deflects
+**Test:** Assert AI repeats details when explicitly asked.
+
+### Scenario 4: Customer uses sarcasm
+**Input:** "Great. Just great. Another appointment I have to keep track of."
+**Expected:** AI detects frustration, responds empathetically
+**Current behavior (rigid):** Sentiment detection sees "great" → returns `positive` → AI matches "positive energy"
+**Test:** Assert AI identifies dissatisfaction, not positivity.
+
+### Scenario 5: Multi-task session (book + order)
+**Input:** User books appointment → says "Yes" to confirmation → then says "Actually I also need to order something"
+**Expected:** Order flow starts naturally, AI collects order details
+**Current behavior (rigid):** "anything else" asked once → forbidden → AI can't ask "Anything else?" for the order completion
+**Test:** Assert AI can ask about additional needs after the second task too.
+
+### Scenario 6: Topic switch during booking
+**Input:** "What time do you close on Fridays?" (during booking slot collection)
+**Expected:** AI answers the question, then gently returns to booking
+**Current behavior (rigid):** Topic shift either blocked or all slots destroyed
+**Test:** Assert AI answers the question AND booking slots are preserved.
+
+### Scenario 7: Customer says "thanks" mid-conversation
+**Input:** "Thanks for that information" (during discovery phase, no booking started)
+**Expected:** AI continues naturally
+**Current behavior (rigid):** "thanks" in closure detection → AI starts closing
+**Test:** Assert no closure language. Assert AI continues conversation.
+
+### Scenario 8: Customer provides all booking info in one message
+**Input:** "I want a haircut on Friday at 2pm, my name is John, email is john@test.com"
+**Expected:** AI accepts all, asks for confirmation in one step
+**Current behavior (rigid):** Out-of-order collection works, but the AI may still sequentially acknowledge each field
+**Test:** Assert AI acknowledges ALL fields in one response, moves to confirmation.
+
+### Scenario 9: Long pause then return
+**Input:** "Hey, I'm back" (after 2 hours of silence, not a new session)
+**Expected:** AI acknowledges return warmly
+**Current behavior (rigid):** "greet_again" forbidden → "DO NOT say Hello, Hi, Hey" → AI cannot say "Hey, welcome back!"
+**Test:** Assert AI uses a light acknowledgment after pause.
+
+### Scenario 10: Post-booking detail verification
+**Input:** "Wait, I said Tuesday not Thursday" (correcting details after confirmation sent)
+**Expected:** AI acknowledges and updates
+**Current behavior (rigid):** `locked` is true, `confirmation_sent` is true → corrections may be blocked
+**Test:** Assert AI accepts corrections even after confirmation. Assert booking is NOT re-executed.
 
 ---
 
-# APPENDIX C — API ENDPOINTS
+## 11. NEXT STEPS / RECOMMENDATIONS
 
-| Endpoint | Method | Auth | Purpose |
-|----------|--------|------|---------|
-| `/functions/v1/widget-chat` | POST | None | Widget chat |
-| `/functions/v1/chat` | POST | JWT | API chat |
-| `/functions/v1/book-appointment` | POST | None | Create booking |
-| `/functions/v1/check-availability` | POST | None | Check slots |
-| `/functions/v1/confirm-appointment` | POST | Token | Confirm booking |
-| `/functions/v1/cancel-appointment` | POST | Token | Cancel booking |
+### Immediate (Critical fixes)
+1. **Fix #37**: Remove or soften `polishResponse()` post-processing — it corrupts output by stripping words
+2. **Fix #3**: Resolve the contradictory "1-2 sentences max" vs urgency exception in governor.ts:220-221
+3. **Fix #19**: Consolidate to Engine v2 as the sole intent detection system — remove legacy `detectIntent` dependency in Block 4
+4. **Fix #1**: Allow re-confirmation when customer explicitly asks — remove permanent block
+5. **Fix #7**: Remove self-referential `reply` regex check from `isBookingConfirmation`
+
+### High Priority
+6. **Fix #4/#13**: Allow light greetings after silence threshold
+7. **Fix #5**: Allow asking for multiple fields together
+8. **Fix #10/#11**: Remove threat-based language ("CRITICAL FAILURE", "IMMUTABLE")
+9. **Fix #15/#26**: Deduplicate field status — keep only in governor block
+10. **Fix #17**: Remove hard-coded example phrases from intent handling rules
+11. **Fix #36**: Add celebration step after confirmation before closing
+
+### Medium Priority
+12. **Fix #8**: Allow varied empathy expressions, not "once per episode"
+13. **Fix #9**: Split robotic phrase blocklist — stop stripping post-generation
+14. **Fix #6**: Add "park mode" for topic switches — save and resume
+15. **Fix #20**: Replace Money Mode scripts with principles
+16. **Fix #25**: Reset `asked_if_need_more` on new task
+17. **Fix #27**: Incorporate emotional state into field-asking prompts
+18. **Fix #30**: Improve sarcasm detection in sentiment analysis
+
+### UI Architecture Fixes
+19. **Intersection #4**: Sync UI dismiss with backend state — don't show widget hint in prompt if dismissed
+20. **Intersection #1**: When widget is active, AI should NOT ask for the same field in text
+21. **Intersection #3**: Add edit/cancel actions to confirmation widgets
 
 ---
 
-**END OF AUDIT DOCUMENT**
+## 12. FIXES IMPLEMENTED
+
+All 37 findings have been resolved across 13 files. Summary:
+
+### Engine Core (`supabase/functions/_shared/engine/`)
+| File | Fixes | Changes |
+|------|-------|---------|
+| `governor.ts` | #1, #3, #21, #27, #36 | Re-confirm allowed when asked, UI widget "MUST be SHORT" → GUIDELINE with answer-question exception, widget-aware field asking, emotional context in collection prompts, celebration step after confirmation |
+| `personality.ts` | #9, #30, #37 | ROBOTIC_PHRASES split from STRIP_PHRASES (no more stripping natural speech), sarcasm detection added to `detectSentiment()`, `polishResponse()` only strips AI disclaimers |
+| `state.ts` | #25 | `asked_if_need_more` resets on new task start, along with `closing_offered` and `clarification_asked` |
+
+### Layer Modules (`supabase/functions/_shared/layers/`)
+| File | Fixes | Changes |
+|------|-------|---------|
+| `layer5-booking.ts` | #5 | "ONE question at a time" → "prefer ONE but asking related fields together is fine" |
+| `layer6-safety.ts` | #8 | "once per distress episode" → natural guideline encouraging varied empathy expressions |
+
+### Flow Engine (`supabase/functions/_shared/flow/`)
+| File | Fixes | Changes |
+|------|-------|---------|
+| `flowRouter.ts` | #6 | Detects `parkSlots` flag for non-blocking topic shifts instead of destructive reset |
+| `types.ts` | #6 | Added `parkSlots` to `TopicShiftSignal`, `parkedFlow`/`parkedStep`/`parkedSlots` to `ConversationState` |
+| `stateManager.ts` | #6 | Persists/restores parked flow state across sessions |
+
+### AI Orchestrator (`supabase/functions/widget-chat/index.ts`)
+| Fixes | Changes |
+|-------|---------|
+| #10/#11 | Removed "IMMUTABLE", "CRITICAL FAILURE", "S-tier" language |
+| #4/#13 | Removed blanket "DO NOT say Hello, Hi, Hey" — allows brief acknowledgment after pause |
+| #19 | Block 4 now uses `engineResult.intent.intent` (Engine v2) as primary intent source |
+| #15/#26 | Removed FIELD STATUS section from Block 5 (governor is sole source) |
+| #17 | Removed hard-coded example phrases like `("No problem!")` from intent rules |
+| #20 | Money Mode scripts replaced with PRINCIPLES (Not Scripts) — no canned lines |
+| #7 | `isBookingConfirmation` no longer checks AI's own reply text |
+| #6 | PARK MODE implemented: saves slots on topic switch, restores on return |
+| Intersection #4 | Widget suppressed when user sends text instead of clicking |
+| Closure detection | "thanks" no longer treated as conversation-end signal mid-conversation |
+
+### UI Components (`src/components/widget/`)
+| File | Fixes | Changes |
+|------|-------|---------|
+| `BookingConfirmation.tsx` | Intersection #3 | Added `onEdit`/`onCancel` buttons for post-booking changes |
+| `OrderConfirmation.tsx` | Intersection #3 | Added Button import, `onEdit`/`onCancel` buttons for post-order changes |
+| `UISignalRenderer.tsx` | Intersection #3 | Wired onEditBooking/onCancelBooking/onEditOrder/onCancelOrder props through to confirmation components |
+
+### Tests
+| File | Changes |
+|------|---------|
+| `audit_regression.test.ts` | 28 test cases covering all 37 fixes + 2 existing tests preserved |
+
+---
+
+**AUDIT COMPLETE — 37 findings resolved across 13 files**

@@ -58,6 +58,10 @@ export class StateManager {
         products_shown: (slots as any)?.products_shown || false,
         last_message_at: data.last_message_at,
         active_task: activeTask,
+        // Restore parked flow state (PARK MODE)
+        parkedFlow: (slots as any)?.parkedFlow ?? null,
+        parkedStep: (slots as any)?.parkedStep ?? null,
+        parkedSlots: (slots as any)?.parkedSlots ?? null,
       };
     }
 
@@ -75,6 +79,10 @@ export class StateManager {
       products_shown: state.products_shown,
       // Serialize active task into slots
       activeTask: serializeActiveTask(state.active_task),
+      // Persist parked flow state (PARK MODE)
+      parkedFlow: state.parkedFlow ?? null,
+      parkedStep: state.parkedStep ?? null,
+      parkedSlots: state.parkedSlots ?? null,
     };
 
     const { error } = await this.supabase

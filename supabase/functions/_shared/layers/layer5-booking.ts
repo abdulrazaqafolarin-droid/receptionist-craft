@@ -44,11 +44,26 @@ export function checkBookingRequirements(context: ConversationContext): BookingR
 }
 
 /**
- * Determine current booking state from context
+ * Determine which field to ask for next, handling out-of-order collection.
+ * 
+ * Customers may provide date, time, or contact info before service.
+ * This function returns the FIRST truly missing field regardless of order,
+ * and the prompt block below explicitly handles out-of-order scenarios.
+ * 
+ * Returns:
+ * - collecting_service if service is missing (even if other fields are filled)
+ * - collecting_date if service is collected but date is missing
+ * - collecting_time if service+date collected but time is missing
+ * - collecting_contact if service+date+time collected but contact/name missing
+ * - ready_to_confirm if all required fields are present
  */
 export function determineBookingState(context: ConversationContext): BookingState {
   const req = checkBookingRequirements(context);
   
+  // Check each required field independently — order doesn't matter,
+  // we find the first gap and return the corresponding collection state.
+  // Fields provided out of order (e.g., date before service) are preserved
+  // in the context and shown in the prompt block below.
   if (!req.service) return 'collecting_service';
   if (!req.date) return 'collecting_date';
   if (!req.time) return 'collecting_time';
@@ -101,9 +116,11 @@ export function buildBookingPrompt(context: ConversationContext): string {
   const requirements = checkBookingRequirements(context);
   const summary = buildBookingSummary(context);
   
-  return `# 📌 BOOKING INTELLIGENCE (STATE MACHINE)
+  const hasOutOfOrderData = (requirements.date && !requirements.service) || (requirements.time && (!requirements.service || !requirements.date)) || (requirements.contact && (!requirements.service || !requirements.date || !requirements.time));
 
-## Booking Requirements
+  return `# 📌 BOOKING INTELLIGENCE (NEXT NEEDED FIELD)
+
+## Field Status
 Booking requires ALL of:
 - Service: ${requirements.service ? '✅ ' + context.serviceMentioned : '❌ Missing'}
 - Date: ${requirements.date ? '✅ ' + context.dateMentioned : '❌ Missing'}
@@ -111,38 +128,37 @@ Booking requires ALL of:
 - Contact: ${requirements.contact ? '✅ ' + (context.customerEmail || context.customerPhone) : '❌ Missing (email or phone)'}
 - Name: ${requirements.name ? '✅ ' + context.customerName : '❌ Missing'}
 
-## Current Booking State: ${state.toUpperCase()}
+## Next Field to Ask About: ${state === 'ready_to_confirm' ? 'CONFIRMATION' : state.replace('collecting_', '').toUpperCase()}
+
+${hasOutOfOrderData ? `
+## ⚠️ OUT-OF-ORDER DATA DETECTED
+The customer has provided some details ahead of the usual sequence.
+Already collected: ${[
+  requirements.service && 'service',
+  requirements.date && 'date',
+  requirements.time && 'time',
+  requirements.contact && 'contact',
+  requirements.name && 'name',
+].filter(Boolean).join(', ')}.
+Acknowledge what they've already told you, then ask only for what's still missing.
+` : ''}
 
 ## Booking Rules
-If any field is missing:
-→ Ask only for the missing item.
-→ Ask ONE question at a time.
-→ Never ask for information already provided.
-
-If time unavailable:
-→ Offer up to 3 alternatives.
-
-If alternatives accepted:
-→ Proceed to booking.
-
-**Never book without explicit confirmation.**
+- If any field is missing, ask naturally. Asking for related fields together is fine (e.g., "What day and time work for you?"). Prefer not to split related items into separate turns.
+- Never ask for information already provided
+- If the customer provides details out of order, accept ALL provided details and ask only for what is still missing
+- If time unavailable, offer up to 3 alternatives
+- If alternatives accepted, proceed to booking
+- **Never book without explicit confirmation**
 
 ## Collected Information So Far
 ${summary || 'No booking information collected yet.'}
 
-## Booking Flow (Natural Conversation)
-When handling appointments (preferred sequence, not mandatory):
-1. **Service Selection** → "What service are you interested in?" (show options if multiple)
-2. **Date Selection** → "What day works best for you?"
-3. **Time Selection** → "What time would be most convenient?"
-4. **Contact Collection** → "Can I get your name and phone number to confirm?"
-5. **Confirmation** → Summarize and confirm all details
-
-If the customer provides details out of order, accept all provided details and ask only for what is still missing.
+## Booking Flow Reference (not mandatory — adapt to conversation)
+1. Service → 2. Date → 3. Time → 4. Contact → 5. Confirmation
 
 ### Important:
 - **NEVER** use technical commands or jargon
-- Offer alternatives if requested time is unavailable
 - Be flexible and accommodating
 - Confirm understanding at each step`;
 }

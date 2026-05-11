@@ -16,6 +16,8 @@ interface BookingConfirmationProps {
   confirmationId?: string;
   location?: string;
   duration?: number;
+  onEdit?: () => void;
+  onCancel?: () => void;
 }
 
 export function BookingConfirmation({
@@ -31,6 +33,8 @@ export function BookingConfirmation({
   confirmationId,
   location,
   duration,
+  onEdit,
+  onCancel,
 }: BookingConfirmationProps) {
   // Normalize the data - handle both old and new prop formats
   const displayService = serviceName || service || "Appointment";
@@ -169,6 +173,28 @@ export function BookingConfirmation({
             }
           </p>
 
+          <div className="flex gap-2 mt-2">
+            {onEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onEdit}
+                className="flex-1 text-xs"
+              >
+                Edit Details
+              </Button>
+            )}
+            {onCancel && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onCancel}
+                className="flex-1 text-xs text-red-600 border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
           {displayDateTime && (
             <Button
               variant="outline"

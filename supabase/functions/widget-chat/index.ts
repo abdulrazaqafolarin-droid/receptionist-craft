@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2.39.3";
+import { supabase } from "../_shared/db.ts";
 
 //                                                                            
 // PHASE 8: PRODUCTION HARDENING IMPORTS
@@ -88,18 +88,7 @@ import {
   type CoreResult,
 } from "../_shared/flow/unifiedCore.ts";
 
-//                                                                            
-// CONVERSATION GOVERNOR (STATE-DRIVEN EXECUTION CONTROL)
-//                                                                            
-import {
-  runGovernor,
-  buildGovernorPrompt,
-  checkRequirements,
-  createGovernorState,
-  updateGovernorState,
-  type GovernorState,
-  type GovernorResult,
-} from "../_shared/flow/conversationGovernor.ts";
+// (conversationGovernor.ts fully replaced by Engine v2 governor — see engine/governor.ts)
 
 //                                                                            
 // ACTION PERMISSION GATE (MIDDLEWARE VALIDATOR)
@@ -114,22 +103,7 @@ import {
   type ActionType
 } from "../_shared/actionGate.ts";
 
-//                                                                            
-// CONVERSATION STATE MACHINE (ENFORCED STATE TRANSITIONS)
-//                                                                            
-import {
-  createMachineContext,
-  transition,
-  detectEventFromInput,
-  buildStateMachinePrompt,
-  getUIHintsForState,
-  getRedirectMessage,
-  serializeMachineContext,
-  deserializeMachineContext,
-  type MachineContext,
-  type ConversationMachineState,
-  type TransitionEvent,
-} from "../_shared/stateMachine.ts";
+// (stateMachine.ts fully replaced by Engine v2 — see engine/governor.ts)
 
 //                                                                            
 // HALLUCINATION GUARD (DATA GROUNDING ENFORCEMENT)
@@ -243,6 +217,26 @@ async function getExistingBookingForSession(
   return data || null;
 }
 
+async function getExistingBookingByIdempotencyKey(
+  supabase: any,
+  receptionistId: string,
+  idempotencyKey: string,
+): Promise<any | null> {
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("id, created_at")
+    .eq("receptionist_id", receptionistId)
+    .contains("metadata", { idempotency_key: idempotencyKey })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[Idempotency] Key-based booking lookup failed:", error.message);
+    return null;
+  }
+  return data || null;
+}
+
 async function getExistingOrderForSession(
   supabase: any,
   receptionistId: string,
@@ -340,8 +334,9 @@ function detectIntent(message: string, historyLength: number): IntentType {
   }
   
   // Detect conversation ending signals
-  if (/^(bye|goodbye|thanks? bye|see you|take care|that's all|no thanks?|nothing else|i'm good|all set|done|no more)/i.test(lowerMsg)) return 'conversation_end';
-  if (/^(no|nope)$/i.test(lowerMsg)) return 'conversation_end'; // Short "no" after asking if they need more help
+  if (/^(bye|goodbye|thanks? bye|see you|take care|that's all|nothing else|i'm good|all set|done|no more)/i.test(lowerMsg)) return 'conversation_end';
+  // "no thanks" after being asked "anything else" — requires previous context
+  if (/^(no thanks?|nope|nah|no that's all)$/i.test(lowerMsg)) return 'conversation_end';
   
   if (/^(bye|goodbye|thanks? bye|see you|take care)/i.test(lowerMsg)) return 'farewell';
   
@@ -509,16 +504,118 @@ function resolveDeterministicUIComponent(params: {
     show_products?: boolean;
     show_calendar?: boolean;
     show_time_slots?: boolean;
+    show_lead_form?: boolean;
+    show_confirmation?: boolean;
+    show_order_confirmation?: boolean;
   };
+  aiSuggestedWidget?: UIComponent | null;
+  implicitSuggestedWidget?: UIComponent | null;
 }): UIComponent {
-  const { bookingResult, orderResult, intentActiveComponent, engineHints } = params;
+  const { bookingResult, orderResult, intentActiveComponent, engineHints, aiSuggestedWidget, implicitSuggestedWidget } = params;
   if (bookingResult) return "booking_confirmation";
   if (orderResult) return "order_summary";
+  if (aiSuggestedWidget) return aiSuggestedWidget;
   if (intentActiveComponent) return intentActiveComponent;
   if (engineHints.show_services) return "service_selector";
   if (engineHints.show_products) return "product_selector";
   if (engineHints.show_calendar) return "date_picker";
   if (engineHints.show_time_slots) return "time_picker";
+  if (engineHints.show_lead_form) return "lead_form";
+  if (implicitSuggestedWidget) return implicitSuggestedWidget;
+  return null;
+}
+
+/**
+ * Synchronize the governor prompt block's widget section to match the actual widget being shown.
+ * Prevents the AI from referencing a widget that isn't rendered (or missing one that is).
+ */
+function synchronizeGovernorWidgetBlock(block: string, activeComponent: UIComponent): string {
+  const widgetSectionStart = "## 🖥️ UI WIDGET ACTIVE";
+  const sectionEndAnchor = "## 🧠 CONVERSATIONAL COLLECTION RULES";
+
+  const startIdx = block.indexOf(widgetSectionStart);
+  const endIdx = block.indexOf(sectionEndAnchor, startIdx);
+
+  if (startIdx === -1) return block;
+
+  const widgetNames: Record<string, string> = {
+    "service_selector": "Service Selector",
+    "product_selector": "Product Selector",
+    "date_picker": "Calendar / Date Picker",
+    "time_picker": "Time Slot Picker",
+    "lead_form": "Contact Information Form",
+    "booking_confirmation": "Booking Confirmation Card",
+    "order_summary": "Order Confirmation Card",
+    "switch_confirmation": "Topic Switch Confirmation",
+  };
+
+  if (!activeComponent) {
+    // No widget showing — remove the entire widget section
+    const before = block.substring(0, startIdx);
+    const after = block.substring(endIdx);
+    return before.trimEnd() + "\n\n" + after.trimStart();
+  }
+
+  // Widget is showing — update the widget listing to match
+  const widgetName = widgetNames[activeComponent] || activeComponent;
+  const listingLine = `The following interactive UI widget(s) are being displayed alongside your text response:\n• ${widgetName}`;
+
+  // Find the listing line start and the guidelines section start
+  const listingStart = block.indexOf("The following interactive UI widget", startIdx);
+  const guidelinesStart = block.indexOf("**GUIDELINES", startIdx);
+
+  if (listingStart === -1 || guidelinesStart === -1) return block;
+
+  return (
+    block.substring(0, listingStart) +
+    listingLine + "\n\n" +
+    block.substring(guidelinesStart)
+  );
+}
+
+/**
+ * Implicitly match a widget to show based on the AI's response text.
+ * Fires when the AI naturally asks about dates, services, etc. without an explicit [WIDGET:] marker.
+ * This makes the widget follow the conversation naturally — if AI says "pick a date", calendar appears.
+ */
+function matchWidgetFromResponse(response: string): UIComponent {
+  const lower = response.toLowerCase();
+
+  // Service selection prompts
+  if (/\b(pick|choose|select)\s*(a|the|your)\s*service\b|\bwhat\s*service\b|\bwhich\s*service\b|here are (our|the) services/i.test(lower)) {
+    return "service_selector";
+  }
+
+  // Product selection prompts
+  if (/\b(pick|choose|select)\s*(a|the|your)\s*product\b|\bwhat\s*product\b|\bwhich\s*product\b|here are (our|the) products/i.test(lower)) {
+    return "product_selector";
+  }
+
+  // Date/calendar prompts
+  if (/\b(pick|choose|select)\s*(a|the|your)\s*date\b|\bwhat\s*date\b|\bwhich\s*date\b|\bwhen\s*(works|would|is|are)\b|\bcalendar\b|select\s*(a|the|your)\s*date/i.test(lower)) {
+    return "date_picker";
+  }
+
+  // Time/slot prompts
+  if (/\b(pick|choose|select)\s*(a|the|your)\s*time\b|\bwhat\s*time\b|\bwhich\s*time\b|available\s*(slot|time|slots)\b|\btime\s*(works|would|is)\b|here are (the|your) (available )?(slot|time|slots)/i.test(lower)) {
+    return "time_picker";
+  }
+
+  // Name/contact collection prompts
+  if (/\b(your\s*name|may\s*i\s*have\s*your|what'?s\s*your\s*name|your\s*(email|phone|number)|how\s*(can|do)\s*(i|we)\s*reach|best\s*(way|number)\s*to\s*reach|could\s*you\s*(please\s*)?(share|provide|give)\s*(me\s*)?(your\s*)?(name|email|phone|contact)|(name|email|phone|contact)\s*(please|would\s*be|so\s*i\s*can))\b/i.test(lower)) {
+    return "lead_form";
+  }
+
+  // Topic switch confirmation prompts
+  if (/\b(would\s*you\s*like\s*to\s*(switch|change|look|browse|order|book|see))\b|\b(switch|change)\s*(gears|topics|to|from)\b|\bi\s*see\s*you'?re\s*(interested|looking)\b.*\b(switch|change)\b/i.test(lower)) {
+    return "switch_confirmation";
+  }
+
+  // Confirmation summary
+  if (/\bconfirm\b|\bsummary\b|\bdoes\s*everything\s*look\b|\bhere.?(s| is) (your |the )?(booking|order|summary|confirmation)\b/i.test(lower)) {
+    return "booking_confirmation";
+  }
+
   return null;
 }
 
@@ -1087,48 +1184,26 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
 // MONEY MODE / SALES MODE PROMPT (REVENUE-FOCUSED BEHAVIOR)
 //                                                                              
 function buildMoneyModePrompt(receptionist: any): string {
-  return `#   MONEY MODE -- REVENUE AGENT BEHAVIOR (ACTIVE)
+  return `#   MONEY MODE -- REVENUE FOCUS (ACTIVE)
 
-**You are an AI Revenue Agent. Your primary objective is to INCREASE REVENUE.**
+**Primary objective: Help the customer take a valuable action (booking, purchase, or lead).**
 
-Success metrics:
--   Booked appointments
--   Completed purchases  
--   Captured qualified leads (name + contact)
+## PRINCIPLES (Not Scripts)
 
-## MONEY MODE RULES (NON-NEGOTIABLE)
+1. **Move toward value** -- Every message should help the customer toward a decision, not chat endlessly
+2. **Guide, don't force** -- Reduce choices naturally based on what fits them, not pressure tactics
+3. **Handle objections like a consultant** -- Understand their concern, address it genuinely, don't script responses
+4. **Natural urgency** -- If a slot or item is genuinely limited, mention it once. Don't manufacture urgency
+5. **Close naturally** -- Use assumptive language when appropriate ("I'll reserve that 3pm slot for you"), not canned lines
+6. **After conversion** -- Celebrate briefly, ask once if they need anything else, then close warmly
 
-1. **Never chat endlessly** -- Every message should move toward ONE money action
-2. **Reduce choices, not expand them** -- Guide decisively, don't overwhelm with options
-3. **Handle objections calmly and confidently** -- "I understand. Here's why this is worth it..."
-4. **If user hesitates twice** -- Introduce urgency: "This time slot is popular" or "Limited availability"
-5. **Before conversation ends** -- capture contact details ONLY when buyerReadiness >= 6/10 or clear conversion intent exists
-6. **Close with action** -- Don't let conversations drift without booking/purchase/lead capture
+## PERSONALITY GUIDELINES
 
-## CONVERSION TACTICS
-
-### For Appointments:
-- "Let me get you booked right now -- what day works best?"
-- "I have a great opening at [time]. Should I reserve it for you?"
-- If hesitation: "This slot tends to fill up quickly. Want me to hold it?"
-
-### For Products:
-- "This is one of our most popular items. How many would you like?"
-- If hesitation: "We only have [X] left in stock right now."
-- Suggest complementary products: "Most customers also add [related product]"
-
-### For Lead Capture:
-- "Just in case we get disconnected, can I get your phone number?"
-- "I'll send you a confirmation -- what's the best email for you?"
-- If they resist: "No worries! Is there anything else I can help you with today?"
-
-## BEHAVIORAL GUIDELINES
-
-- Be polite but CONFIDENT -- you're helping them, not pestering them
-- Use assumptive closes: "So I'll book that for 3pm?" vs "Would you like to book?"
-- Mirror their energy but stay sales-oriented
-- NEVER sound desperate -- be professional and helpful
-- After securing a conversion, ask ONCE if they need anything else, then close warmly`;
+- Be helpful and confident, not pushy
+- Mirror the customer's tone and pace
+- Never use the same closing phrase twice across conversations
+- If they decline, accept gracefully and ask if they need anything else
+- A real human receptionist would not pressure -- neither should you`;
 }
 
 //                                                                              
@@ -1144,13 +1219,14 @@ function buildMasterSystemPrompt(
   aiMode: string = 'booking',
   capabilityPrompt: string = '',
   actionGateBlock: string = '',
-  stateMachineBlock: string = '',
   hallucinationGuardBlock: string = '',
   taskContinuityBlock: string = '',
   flowLockBlock: string = '',
   governorBlock: string = '',
   messageCount: number = 0,
-  customerFields: any[] | null = null
+  customerFields: any[] | null = null,
+  engineResult: any = null,
+  engineState: any = null,
 ): string {
   const emotionalGuidance: Record<string, string> = {
     neutral: 'Maintain a warm, professional tone.',
@@ -1160,41 +1236,35 @@ function buildMasterSystemPrompt(
     frustrated: 'Show deep empathy, apologize if appropriate, and focus on solutions.'
   };
 
-  // BLOCK 1: CORE IDENTITY (IMMUTABLE)
-  const identityBlock = `#   BLOCK 1 -- CORE IDENTITY (IMMUTABLE)
+  // BLOCK 1: CORE IDENTITY
+  const identityBlock = `#   BLOCK 1 -- CORE IDENTITY
 
-**You are ${receptionist.name}, an S-tier, human-like AI receptionist for ${receptionist.business_name}.**
+**You are ${receptionist.name}, a helpful receptionist for ${receptionist.business_name}.**
 ${receptionist.business_type ? `Business Type: ${receptionist.business_type}` : ''}
 
 You are:
-- A professional human-like conversational AI receptionist
-- Friendly, warm, respectful, attentive
+- A warm, professional receptionist
+- Friendly, respectful, attentive
 - Capable of empathy and emotional intelligence
-- Fully aware of context, memory, and conversation flow
-- Grounded in verified information
+- Aware of context, memory, and conversation flow
+- Grounded in verified information`;
 
-**CRITICAL:** You must ALWAYS act like a **real professional human receptionist**.
-This identity NEVER changes during a session.`;
-
-  // BLOCK 2: SESSION & GREETING INVARIANT (HARD RULE)
-  const sessionBlock = isFirstMessage ? `#   BLOCK 2 -- SESSION RULES (NON-NEGOTIABLE)
+  // BLOCK 2: SESSION & GREETING INVARIANT
+  const sessionBlock = isFirstMessage ? `#   BLOCK 2 -- SESSION RULES
 
 **THIS IS THE FIRST MESSAGE** - Greet the visitor warmly:
 ${receptionist.greeting_message || `"Hello! Welcome to ${receptionist.business_name}. I'm ${receptionist.name}, and I'm here to help. What can I do for you today?"`}
 
-- **ONLY** greet once
-- **NEVER** greet again during this session
-- **NEVER** restart unless user restarts` : `#   BLOCK 2 -- SESSION RULES (NON-NEGOTIABLE)
+- **ONLY** greet once per session
+- **NEVER** restart unless user restarts
+- After this greeting, continue naturally without re-greeting` : `#   BLOCK 2 -- SESSION RULES
 
 **THIS IS A FOLLOW-UP MESSAGE (message #${messageCount + 1})** - Greeting has ALREADY occurred.
-- **DO NOT** say "Hello", "Hi", "Hey", "Welcome", "Thanks for reaching out", or any greeting phrase
-- **DO NOT** re-introduce yourself or say who you are again
-- **DO NOT** start with "Hi! Thanks for reaching out" or any variation
-- **CONTINUE** the conversation naturally from where it left off
-- Reference context from earlier in the conversation
-- Jump straight into addressing the user's current message
-
-Violation of this rule is a **CRITICAL FAILURE**. Starting with a greeting on a follow-up message will damage the user experience.`;
+- Continue the conversation naturally from where it left off
+- A brief acknowledgment is fine (e.g., "Sure!", "Got it!", "Thanks!") after a pause
+- Avoid full greeting sequences: re-introducing yourself, saying "welcome" again, or starting fresh
+- Reference context from earlier messages
+- Jump straight into addressing the user's current message`;
 
   // BLOCK 3: MEMORY & CONTEXT
   const memoryBlock = `#   BLOCK 3 -- MEMORY & CONTEXT
@@ -1218,18 +1288,20 @@ ${emotionalGuidance[context.emotionalState]}
 - Update context when corrections occur
 - Track booking details, preferences, emotional cues`;
 
-  // BLOCK 4: INTENT & DECISION
+  // BLOCK 4: INTENT & DECISION (ENGINE v2 PRIMARY)
+  // Note: Engine v2 (engine/intent.ts + engine/core.ts) is the PRIMARY intent system.
+  // Legacy widget-level detectIntent is only used for lightweight signal classification.
   const intentBlock = `#   BLOCK 4 -- INTENT & DECISION ENGINE
 
-Current detected intent: **${messageAnalysis.detectedIntent}**
+Current intent: **${engineResult?.intent?.intent || 'unknown'}** (confidence: ${engineResult?.intent?.confidence ? (engineResult.intent.confidence * 100).toFixed(0) : '?'}%)
+Task type: ${engineState?.task_type || 'none'} | Task step: ${engineState?.task_step || 'idle'}
 Is acknowledgment: ${messageAnalysis.isAcknowledgment}
-Is correction: ${messageAnalysis.isCorrection}
 
 ## Intent Handling Rules
 - For acknowledgments: Brief warm response, proceed with pending action
-- For corrections: Acknowledge warmly ("No problem!"), update the info, confirm the change
-- For booking/ordering: Guide toward missing info conversationally -- if they provide extra info along the way, accept it all
-- For complaints: Show genuine empathy, apologize, offer solutions
+- For corrections: Acknowledge warmly, update the info, confirm the change naturally
+- For booking/ordering: Guide toward missing info conversationally -- if they provide extra info, accept it all
+- For complaints: Show genuine empathy, offer solutions, let customer lead
 - For escalation requests: Connect to human immediately
 - For questions mid-flow: Answer fully, then return to the task naturally
 - For hesitation ("hold on", "let me check"): Respond warmly and wait`;
@@ -1246,89 +1318,20 @@ Is correction: ${messageAnalysis.isCorrection}
   
   const requiredFields = fields.filter((f: any) => f.required).map((f: any) => f.label);
   const optionalFields = fields.filter((f: any) => !f.required).map((f: any) => f.label);
-  
-  // Build status lines for each configured field
-  const fieldStatusLines = fields.map((f: any) => {
-    const key = f.key;
-    let value: string | null = null;
-    if (key === 'full_name' || key === 'first_name') value = context.customerName;
-    else if (key === 'email') value = context.customerEmail;
-    else if (key === 'phone' || key === 'whatsapp') value = context.customerPhone;
-    // Custom/other fields won't have automatic extraction -- AI infers from conversation
-    const collected = value ? `  ${value}` : '  Missing';
-    return `- ${f.label}: ${collected}${f.required ? ' (required)' : ' (optional)'}`;
-  }).join('\n');
 
-  // BLOCK 5: BOOKING & ORDERING INTELLIGENCE
+  // BLOCK 5: BOOKING & ORDERING INTELLIGENCE (BUSINESS RULES ONLY)
+  // Field status is tracked by the Engine v2 governor block — not duplicated here
   const bookingBlock = `#   BLOCK 5 -- BOOKING & ORDERING INTELLIGENCE
 
-## APPOINTMENT BOOKING
-Booking requires: Service, Date, Time, plus customer information fields listed below.
+## CUSTOMER FIELDS TO COLLECT
+Required: ${requiredFields.length > 0 ? requiredFields.join(', ') : 'none'}
+Optional: ${optionalFields.length > 0 ? optionalFields.join(', ') : 'none'}
 
-## CUSTOMER INFORMATION TO COLLECT
-Collect these fields in this exact order:
-${fields.map((f: any, i: number) => `${i + 1}. **${f.label}**${f.required ? ' (REQUIRED)' : ' (optional)'}`).join('\n')}
-
-${requiredFields.length > 0 ? `Required fields that MUST be collected before confirming: ${requiredFields.join(', ')}` : ''}
-${optionalFields.length > 0 ? `Optional fields -- ask for them but don't block confirmation if skipped: ${optionalFields.join(', ')}` : ''}
-
-Current collection status:
-- Service: ${context.serviceMentioned ? ' ' : ' '} ${context.serviceMentioned || 'Missing'}
-- Date: ${context.dateMentioned ? ' ' : ' '} ${context.dateMentioned || 'Missing'}
-- Time: ${context.timeMentioned ? ' ' : ' '} ${context.timeMentioned || 'Missing'}
-${fieldStatusLines}
-
-Booking already confirmed: ${context.bookingConfirmed ? 'YES  ' : 'NO'}
-
-## PRODUCT ORDERING
-Product orders require: Product name, Quantity (default 1), plus the same customer information fields above.
-
-Current order status:
-- Product: ${context.productMentioned ? ' ' : ' '} ${context.productMentioned || 'Not selected'}
-- Quantity: ${context.quantity ? '  ' + context.quantity : 'Default 1'}
-${fieldStatusLines}
-
-Order already confirmed: ${context.orderConfirmed ? 'YES  ' : 'NO'}
-
-## COLLECTION RULES (CONVERSATIONAL COLLECTION ENGINE)
-- Guide the customer toward providing missing info NATURALLY -- like a real receptionist
-- If the customer provides multiple pieces of info in one message, accept ALL of them
-- If the customer volunteers info before being asked, store it and skip asking later
-- If the customer asks a question mid-collection, answer it fully, then return to collection naturally
-- If the customer hesitates or says "hold on" / "let me check", respond warmly and wait -- do NOT repeat the question
-- If the customer corrects previous info, acknowledge and update without restarting
-- NEVER repeat the exact same question twice -- rephrase if you need to re-ask
-- If time/product unavailable: Offer up to 3 alternatives
-- NEVER complete booking/order without explicit confirmation
-
-## CONFIRMATION RULES (CRITICAL - READ CAREFULLY)
-1. When confirming an appointment: State service, date, time, name and contact info ONCE
-2. When confirming a product order: State product, quantity, name and contact info ONCE  
-3. Confirmation should be a SINGLE clear message
-4. **NEVER** repeat confirmation details after initial confirmation
-5. After confirmation message, immediately ask ONCE: "Is there anything else I can help you with today?"
-
-## CONVERSATION ENDING RULES (CRITICAL)
-Current phase: ${context.conversationPhase}
-Already asked if need more help: ${context.askedIfNeedMoreHelp ? 'YES' : 'NO'}
-
-After a booking is confirmed OR purchase is complete:
-1. The confirmation has been given - DO NOT repeat it
-2. If NOT already asked: Ask ONCE "Is there anything else I can help you with today?"
-3. If user responds with "no", "that's all", "thanks", "bye", "nope", "nothing", "I'm good", "all set":
-     Give a SINGLE warm closing: "Thank you for choosing ${receptionist.business_name}! Have a wonderful day!  "
-     DO NOT ask if they need more help again
-     DO NOT repeat any booking/order details
-     The conversation is DONE
-4. If user says "yes" or asks a new question: Continue helping naturally
-5. NEVER give multiple farewell messages - one goodbye is enough
-
-## DATE/TIME VALIDATION (CRITICAL)
-- BEFORE confirming any booking, validate the date/time is in the FUTURE
-- If customer says "yesterday" or gives a past date   Respond: "I'm sorry, but [date] is in the past. Would you like to book for today or a future date instead?"
-- If customer gives today's date with a past time   Respond: "That time has already passed today. How about [suggest next available time]?"
-- If customer asks "what time is it?"   Tell them the current time from the knowledge base
-- If customer asks "what day is today?"   Tell them the current date from the knowledge base`;
+## DATE/TIME VALIDATION
+- Ensure date/time is in the FUTURE before confirming
+- If a past date is given, suggest today or a future date
+- If a past time on today's date, suggest next available time
+- Use knowledge base for current time/date questions`;
 
   // BLOCK 6: SAFETY & QUALITY
   const safetyBlock = `#   BLOCK 6 -- SAFETY & QUALITY GUARDRAILS
@@ -1352,36 +1355,21 @@ After a booking is confirmed OR purchase is complete:
 - One farewell is enough - do not keep saying goodbye
 - After "goodbye", if user doesn't respond, conversation is over`;
 
-  // BLOCK 5.5: PRODUCT ORDERING FLOW WITH INVENTORY & DELIVERY
-  const orderingBlock = `#   BLOCK 5.5 -- PRODUCT ORDERING FLOW WITH INVENTORY & DELIVERY
+  // BLOCK 5.5: PRODUCT ORDERING WITH INVENTORY & DELIVERY
+  const orderingBlock = `#   BLOCK 5.5 -- PRODUCT ORDERING
 
-When a customer wants to ORDER/BUY/PURCHASE a product:
+When a customer wants to order something:
 
-1. **Product Selection**   "Which product would you like?" (show options if available)
-2. **INVENTORY CHECK**   Before confirming, check if product is in stock:
-   - If OUT OF STOCK   "I'm sorry, [product] is currently out of stock. Would you like me to suggest an alternative, or notify you when it's back?"
-   - If LOW STOCK   "Good news, we have [quantity] left! Would you like to order before they're gone?"
-   - If quantity requested > available   "We only have [available] in stock right now. Would you like to order [available] instead?"
-3. **Quantity**   "How many would you like?" (assume 1 if not specified)
-4. **Contact Collection**   "Can I get your name and phone/email for the order?"
-5. **Delivery Location**   "Where would you like us to deliver your order? Please share your address."
-   - This is REQUIRED for product orders
-   - Accept any reasonable address format
-   - If pickup is preferred, customer can say "I'll pick it up" and skip delivery address
-6. **Confirmation**   Summarize: product, quantity, contact info, AND delivery address
-7. **Close**   Ask if they need anything else, then say goodbye
+1. Help them pick a product, then check inventory from the knowledge base
+2. If out of stock: offer alternatives or notify when back
+3. If low stock: mention limited availability
+4. Collect delivery address unless they prefer pickup
+5. Confirm the order naturally — product, quantity, contact, delivery
 
-### Product Order Confirmation Format:
-"Perfect! I've placed your order for [quantity] x [product]. We'll deliver to [address] and contact you at [contact] to confirm. Is there anything else I can help you with?"
-
-### Important:
-- ALWAYS check inventory status from the knowledge base before confirming orders
-- ALWAYS collect delivery address before confirming (unless customer opts for pickup)
-- If product shows [  OUT OF STOCK]   Do NOT confirm the order, offer alternatives
-- If product shows [   LOW STOCK: X left]   Mention limited availability
-- Keep it simple and conversational
-- Don't repeat order details after confirmation
-- One confirmation, one follow-up question, one goodbye`;
+Important:
+- Always check inventory from knowledge base before confirming
+- Accept any reasonable address format
+- Never repeat order details after confirmation`;
 
   // BLOCK 7: FAILURE PREVENTION
   const failureBlock = `#   BLOCK 7 -- FAILURE PREVENTION & ESCALATION
@@ -1405,10 +1393,13 @@ When a customer wants to ORDER/BUY/PURCHASE a product:
 - NEVER say the business doesn't offer something unless it is EXPLICITLY stated as unavailable in the knowledge base
 
 ## Conversation Closure Detection
-When user indicates they're done (thanks, bye, no that's all, etc.):
+When user clearly indicates they're done (bye, that's all, nothing else, goodbye):
 - Give a warm, brief closing message
 - Do NOT continue asking questions
-- Do NOT repeat previously stated information`;
+- Do NOT repeat previously stated information
+
+Note: "Thanks" or "Thank you" mid-conversation is NOT a closure signal — it's a polite acknowledgment.
+Only treat as closure if "thanks" is the last word AND follows a completed task (booking confirmation or order completion).`;
 
   // KNOWLEDGE BASE
   const knowledgeBlock = `#   KNOWLEDGE BASE (RAG)
@@ -1422,17 +1413,17 @@ ${knowledgeBase}`;
   const finalBlock = aiMode === 'sales' 
     ? `#   FINAL DIRECTIVE (MONEY MODE)
 
-You are a Revenue Agent. Every interaction should move toward a booking, purchase, or lead capture.
-Be confident, be helpful, and always close. The business depends on you.
+Guide the customer toward a valuable action with confidence and warmth.
+Be helpful, not pushy. Listen and respond naturally.
+The business trusts you to represent it well -- focus on genuine help, not artificial pressure.
 
-**Now respond to the user in Money Mode--helpful, confident, and conversion-focused.**`
+**Now respond to the user naturally, following all guidelines above.**`
     : `#   FINAL DIRECTIVE
 
-You are not just answering questions--you are creating a positive experience.
-Every interaction should leave them thinking "Wow, that was easy and pleasant."
 Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and genuinely caring.
+Listen to what the customer needs and respond naturally -- every interaction should feel easy and pleasant.
 
-**Now respond to the user naturally, following all 7 blocks of training above.**`;
+**Now respond to the user naturally, following all blocks of guidance above.**`;
 
   const blocks = [
     identityBlock,
@@ -1462,11 +1453,6 @@ Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and g
   // Add Action Permission Gate block (middleware validator)
   if (actionGateBlock) {
     blocks.push('---', actionGateBlock);
-  }
-  
-  // Add State Machine block (enforced conversation flow)
-  if (stateMachineBlock) {
-    blocks.push('---', stateMachineBlock);
   }
   
   // Add Hallucination Guard block (data grounding enforcement)
@@ -1568,11 +1554,6 @@ if (!GEMINI_API_KEY) {
 }
 
     console.log(`[Widget Chat] Processing message for receptionist ${receptionistId}, session: ${sessionId}`);
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
 
     // Fetch receptionist
     const { data: receptionist, error: rErr } = await supabase
@@ -1815,7 +1796,7 @@ if (!GEMINI_API_KEY) {
         intent: { intent: 'general_query' as any, confidence: 0.5, reasoning: 'engine_fallback' },
         entities: {} as any,
         requirements: { missing: [], collected: [], next_required: null, ready: false },
-        ui_hints: { show_services: false, show_calendar: false, show_time_slots: false, show_products: false, show_confirmation: false, show_order_confirmation: false },
+        ui_hints: { show_services: false, show_calendar: false, show_time_slots: false, show_products: false, show_lead_form: false, show_confirmation: false, show_order_confirmation: false },
         instruction: { allowed: [], forbidden: [], next_action: 'respond naturally' },
         prompt_block: '',
         illegal: false,
@@ -1845,7 +1826,31 @@ if (!GEMINI_API_KEY) {
     
     // Build Engine v2 governor prompt block (PRIMARY - highest priority)
     const enginePromptBlock = engineResult.prompt_block;
-    
+
+    //                                                                        
+    // EARLY WIDGET DECISION — determine widget BEFORE system prompt is built
+    // so the governor prompt accurately reflects what widget will be shown.
+    // Only bookingResult/orderResult cannot be predicted here (they come after AI response).
+    //                                                                        
+    const earlyFlowStepSupportsWidget = conversationState.flow_step === "service_selection" ||
+      conversationState.flow_step === "date_selection" ||
+      conversationState.flow_step === "time_selection" ||
+      conversationState.flow_step === "product_selection";
+    const earlyIntentSuggestedComponent: UIComponent =
+      !earlyFlowStepSupportsWidget ? null :
+      conversationState.flow_step === "service_selection" ? "service_selector" :
+      conversationState.flow_step === "date_selection" ? "date_picker" :
+      conversationState.flow_step === "time_selection" ? "time_picker" :
+      conversationState.flow_step === "product_selection" ? "product_selector" :
+      null;
+    const earlyActiveComponent: UIComponent = resolveDeterministicUIComponent({
+      bookingResult: null,
+      orderResult: null,
+      intentActiveComponent: earlyIntentSuggestedComponent,
+      engineHints: engineResult.ui_hints || {},
+    });
+    const synchronizedGovernorBlock = synchronizeGovernorWidgetBlock(enginePromptBlock, earlyActiveComponent);
+
     //                                                                        
     // ENGINE v2 IS NOW THE SINGLE SOURCE OF TRUTH
     // Legacy UnifiedCore and MemoryPipeline have been consolidated into Engine v2
@@ -1901,19 +1906,43 @@ if (!GEMINI_API_KEY) {
     }
     
     if (intentRouting.shouldStartFlow && intentRouting.flowType) {
-      conversationState.active_flow = intentRouting.flowType;
-      conversationState.flow_step = intentRouting.initialStep;
+      // RESTORE PARKED SLOTS: If returning to a previously parked flow, restore the saved progress
+      const returningToParkedFlow = conversationState.parkedFlow === intentRouting.flowType;
+      if (returningToParkedFlow && conversationState.parkedSlots) {
+        console.log(`[Flow Engine] Restoring parked ${intentRouting.flowType} flow slots`);
+        conversationState.active_flow = intentRouting.flowType;
+        conversationState.slots = { ...conversationState.parkedSlots };
+        conversationState.flow_step = conversationState.parkedStep || intentRouting.initialStep;
+        conversationState.parkedFlow = null;
+        conversationState.parkedStep = null;
+        conversationState.parkedSlots = null;
+      } else {
+        conversationState.active_flow = intentRouting.flowType;
+        conversationState.flow_step = intentRouting.initialStep;
+      }
     }
     if (intentRouting.shouldResetCurrentFlow) {
       conversationState.active_flow = null;
       conversationState.flow_step = null;
       conversationState.slots = {};
+      // Also clear parked state since user explicitly reset
+      conversationState.parkedFlow = null;
+      conversationState.parkedStep = null;
+      conversationState.parkedSlots = null;
     }
 
-    // Handle topic shift detection
+    // Handle topic shift detection — with PARK MODE support
     const topicShift = intentRouting.topicShift;
     if (topicShift?.shouldBlock) {
       console.log(`[Flow Engine] Topic shift BLOCKED: ${topicShift.blockReason}`);
+    } else if (topicShift && topicShift.parkSlots && conversationState.active_flow) {
+      // PARK MODE: Save current slots and flow info for resume
+      console.log(`[Flow Engine] Parking ${conversationState.active_flow} flow for topic switch to ${topicShift.newTopic}`);
+      conversationState.parkedFlow = conversationState.active_flow;
+      conversationState.parkedStep = conversationState.flow_step;
+      conversationState.parkedSlots = { ...conversationState.slots };
+      conversationState.active_flow = null;
+      conversationState.flow_step = null;
     } else if (topicShift && topicShift.type === 'explicit' && topicShift.confidence > 0.7) {
       console.log(`[Flow Engine] Explicit topic shift detected, confidence: ${topicShift.confidence}`);
       conversationState.active_flow = null;
@@ -1968,65 +1997,12 @@ if (!GEMINI_API_KEY) {
     );
 
     //                                                                        
-    // CONVERSATION STATE MACHINE: LOAD AND PROCESS STATE
+    // ENGINE v2 IS THE SINGLE STATE MANAGER
+    // Old stateMachine.ts is fully replaced by Engine v2's state tracking.
+    // Task state: task_type + task_step, collected/missing fields from
+    // checkRequirements() are the single source of truth.
     //                                                                        
-    // Load existing machine context from conversation state slots
-    let machineContext: MachineContext = deserializeMachineContext(
-      conversationState.slots?.machineContext as string | null
-    );
-    
-    // Detect event from user input and metadata
-    const userMetadata = {
-      selectedServiceId: conversationContext.serviceId || undefined,
-      selectedServiceName: conversationContext.serviceMentioned || undefined,
-      selectedDate: conversationContext.dateMentioned || undefined,
-      selectedTime: conversationContext.timeMentioned || undefined,
-      selectedProductId: conversationContext.productId || undefined,
-      selectedProductName: conversationContext.productMentioned || undefined,
-      quantity: conversationContext.quantity || undefined,
-      customerName: conversationContext.customerName || undefined,
-      customerPhone: conversationContext.customerPhone || undefined,
-      customerEmail: conversationContext.customerEmail || undefined,
-    };
-    
-    const { event: detectedEvent, data: eventData } = detectEventFromInput(
-      message,
-      machineContext.state,
-      userMetadata
-    );
-    
-    // Execute state transition if event detected
-    if (detectedEvent) {
-      const transitionResult = transition(machineContext, detectedEvent, eventData);
-      if (transitionResult.success) {
-        machineContext = transitionResult.context;
-        console.log(`[State Machine] Transitioned: ${transitionResult.context.previousState}   ${transitionResult.newState} (${detectedEvent})`);
-      } else {
-        console.log(`[State Machine] Transition blocked: ${transitionResult.error}`);
-      }
-    }
-    
-    // Sync machine context with flow slots
-    machineContext.serviceId = machineContext.serviceId || conversationContext.serviceId;
-    machineContext.serviceName = machineContext.serviceName || conversationContext.serviceMentioned;
-    machineContext.date = machineContext.date || conversationContext.dateMentioned;
-    machineContext.time = machineContext.time || conversationContext.timeMentioned;
-    machineContext.productId = machineContext.productId || conversationContext.productId;
-    machineContext.productName = machineContext.productName || conversationContext.productMentioned;
-    machineContext.quantity = machineContext.quantity || conversationContext.quantity;
-    machineContext.customerName = machineContext.customerName || conversationContext.customerName;
-    machineContext.customerPhone = machineContext.customerPhone || conversationContext.customerPhone;
-    machineContext.customerEmail = machineContext.customerEmail || conversationContext.customerEmail;
-    machineContext.selectedProducts = (machineContext.selectedProducts?.length || 0) > 0 
-      ? machineContext.selectedProducts 
-      : (conversationContext.selectedProducts || []);
-    
-    // Get UI hints based on current state
-    const uiHints = getUIHintsForState(machineContext.state);
-    console.log(`[State Machine] Current state: ${machineContext.state}, Flow: ${machineContext.flow}, Expected: ${uiHints.expectedInput}`);
-    
-    // Build state machine prompt block
-    const stateMachineBlock = buildStateMachinePrompt(machineContext);
+    const stateMachineBlock = '';
 
     //                                                                        
     // ACTION PERMISSION GATE: PRE-VALIDATE CURRENT ACTION STATE
@@ -2037,17 +2013,17 @@ if (!GEMINI_API_KEY) {
     
     if (detectedAction) {
       const gateContext = {
-        serviceId: machineContext.serviceId,
-        serviceMentioned: machineContext.serviceName,
-        productId: machineContext.productId,
-        productMentioned: machineContext.productName,
-        dateMentioned: machineContext.date,
-        timeMentioned: machineContext.time,
-        customerName: machineContext.customerName,
-        customerPhone: machineContext.customerPhone,
-        customerEmail: machineContext.customerEmail,
-        quantity: machineContext.quantity,
-        selectedProducts: machineContext.selectedProducts,
+        serviceId: conversationContext.serviceId,
+        serviceMentioned: conversationContext.serviceMentioned,
+        productId: conversationContext.productId,
+        productMentioned: conversationContext.productMentioned,
+        dateMentioned: conversationContext.dateMentioned,
+        timeMentioned: conversationContext.timeMentioned,
+        customerName: conversationContext.customerName,
+        customerPhone: conversationContext.customerPhone,
+        customerEmail: conversationContext.customerEmail,
+        quantity: conversationContext.quantity,
+        selectedProducts: conversationContext.selectedProducts,
       };
       
       preActionGateResult = validateActionGate(detectedAction, conversationState.slots || {}, gateContext);
@@ -2081,52 +2057,9 @@ if (!GEMINI_API_KEY) {
     console.log(`[Task Intelligence] Smart memory: ${smartMemorySummary.substring(0, 100)}...`);
 
     //                                                                        
-    // CONVERSATION GOVERNOR: STATE-DRIVEN EXECUTION CONTROL
-    // Now powered by UnifiedCore (single source of truth)
+    // ENGINE v2 GOVERNOR BLOCK — synchronized to match the actual widget being shown
     //                                                                        
-    
-    // Use unified governor block as PRIMARY (from UnifiedCore)
-    // Keep legacy governor for backward compatibility logging only
-    const governorState: GovernorState = conversationState.governor_state || createGovernorState();
-    
-    // Sync legacy governor state with Engine v2 state
-    if (engineState) {
-      governorState.conversation_rules.greeted = engineState.rules?.greeted ?? false;
-      governorState.conversation_rules.confirmation_sent = engineState.rules?.confirmation_sent ?? false;
-      governorState.conversation_rules.closing_sent = engineState.rules?.closing_offered ?? false;
-      governorState.conversation_rules.asked_if_need_more = engineState.rules?.asked_if_need_more ?? false;
-      governorState.locked = engineState.locked ?? false;
-      governorState.topic_lock = engineState.topic_lock ?? null;
-      governorState.missing_fields = engineResult?.requirements?.missing || [];
-      governorState.collected_fields = engineResult?.requirements?.collected || [];
-    }
-    
-    // Update governor state with current flags (legacy sync)
-    if (conversationState.greeting_sent) {
-      governorState.conversation_rules.greeted = true;
-    }
-    if (conversationState.booking_confirmed || conversationState.order_confirmed) {
-      governorState.conversation_rules.confirmation_sent = true;
-      governorState.locked = true;
-    }
-    
-    // Run legacy governor for comparison logging (will be removed after testing)
-    const governorResult = runGovernor(
-      message,
-      activeTask,
-      governorState,
-      businessCapabilities
-    );
-    
-    // Log governor comparison
-    console.log(`[Governor Legacy] Intent: ${governorResult?.clarifiedIntent?.intent || 'N/A'} vs [Engine v2] Intent: ${engineResult?.intent?.intent || 'N/A'}`);
-    console.log(`[Governor Legacy] Next: ${governorResult?.requirements?.next_required || 'CONFIRM'} vs [Engine v2] Next: ${engineResult?.requirements?.missing?.[0] || 'CONFIRM'}`);
-    
-    // USE ENGINE v2 BLOCK (PRIMARY)
-    const governorBlock = enginePromptBlock;
-    
-    // Update governor state for persistence
-    conversationState.governor_state = governorState;
+    const governorBlock = synchronizedGovernorBlock;
 
     //                                                                        
     // PHASE 2: CONVERSATION QUALITY ENHANCEMENT
@@ -2178,13 +2111,14 @@ if (!GEMINI_API_KEY) {
       effectiveMode,
       capabilityPrompt,
       actionGateBlock,
-      stateMachineBlock,
       hallucinationGuardBlock,
       taskContinuityBlock,
       flowLockBlock,
       governorBlock,
       history?.length || 0,
-      receptionist.customer_fields
+      receptionist.customer_fields,
+      engineResult,
+      engineState,
     ) + '\n\n' + empathyPromptBlock + '\n\n' + tonePromptBlock + '\n\n' + memoryAwarenessBlock + '\n\n' + qualityStandardsBlock;
 
     const startTime = Date.now();
@@ -2217,7 +2151,7 @@ if (!GEMINI_API_KEY) {
       receptionist.model || "google/gemini-2.5-flash",
       async () => {
         const aiRes = await fetch(
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
   {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2272,6 +2206,35 @@ return {
     const sentiment = detectSentiment(message);
     reply = polishResponse(reply);
     console.log(`[Personality Engine] Sentiment: ${sentiment}, Response polished`);
+
+    //                                                                        
+    // AI WIDGET SUGGESTION — parse [WIDGET: name] marker from AI response
+    // The AI can request a specific widget by ending with [WIDGET: component_name].
+    // This is stripped from the displayed text and used to override the widget.
+    //                                                                        
+    let aiSuggestedWidget: UIComponent = null;
+    const widgetMarkerMatch = reply.match(/\[WIDGET:\s*(\w+)\s*\]\s*$/i);
+    if (widgetMarkerMatch) {
+      const requestedName = widgetMarkerMatch[1].toLowerCase();
+      const validWidgets = ["service_selector", "product_selector", "date_picker", "time_picker", "lead_form", "booking_confirmation", "order_summary", "switch_confirmation"];
+      if (validWidgets.includes(requestedName)) {
+        aiSuggestedWidget = requestedName as UIComponent;
+        console.log(`[Widget] AI explicitly requested widget: ${aiSuggestedWidget}`);
+      }
+      reply = reply.replace(/\[WIDGET:\s*\w+\s*\]\s*$/i, '').trim();
+    }
+
+    //                                                                        
+    // IMPLICIT WIDGET MATCHING — if the AI didn't use an explicit marker,
+    // analyze the response text to infer the best widget.
+    // This catches natural language like "pick a date" → date_picker.
+    //                                                                        
+    const implicitSuggestedWidget: UIComponent = !aiSuggestedWidget
+      ? matchWidgetFromResponse(reply)
+      : null;
+    if (implicitSuggestedWidget) {
+      console.log(`[Widget] Implicit match from response: ${implicitSuggestedWidget}`);
+    }
 
     //                                                                        
     // PHASE 2: ENHANCED QUALITY EVALUATION
@@ -2490,11 +2453,11 @@ return {
     const isBookingConfirmation = (
       userExplicitlyConfirmed &&
       (
-        conversationState.flow_step === 'confirm' ||
-        bookingTaskConfirming ||
-        /(?:booked|confirmed|scheduled|appointment is set|all set|I['']ve scheduled)/i.test(reply)
+        (conversationState.flow_step === 'confirm' || bookingTaskConfirming) &&
+        !conversationState.booking_confirmed &&
+        !bookingExecutionLocked
       )
-    ) && !conversationState.booking_confirmed && !bookingExecutionLocked;
+    );
     
     // GATE ENFORCEMENT: Block booking if requirements not met
     if (bookingGate.allowed && isBookingConfirmation) {
@@ -2508,76 +2471,85 @@ return {
             ...conversationState.slots,
             bookingExecutionLocked: true,
           };
-        } else {
-          console.log(`[Widget Chat] Auto-booking appointment for ${mergedCustomerName}`);
-        
-        // Parse the date/time into ISO format - use slot data first (structured), then natural language
-        let startTime: Date | null = null;
-        
-        // If we have ISO format date from slots (from DateSelector/TimeSlotSelector)
-        if (mergedDate && mergedDate.includes('T')) {
-          startTime = new Date(mergedDate);
-        } else if (mergedTime && mergedTime.includes('T')) {
-          startTime = new Date(mergedTime);
-        } else {
-          // Fall back to natural language parsing
-          startTime = parseBookingDateTime(mergedDate!, mergedTime!);
-        }
-        
-        if (startTime && !isNaN(startTime.getTime())) {
-          const idempotencyKey = await generateBookingIdempotencyKey(sessionId, mergedServiceId!, mergedDate!, mergedTime!);
-          const bookingPayload = {
-            receptionistId,
-            serviceId: mergedServiceId,
-            startTime: startTime.toISOString(),
-            customerName: mergedCustomerName,
-            customerEmail: mergedCustomerEmail || null,
-            customerPhone: mergedCustomerPhone || null,
-            bookingSource: 'ai_receptionist',
-            metadata: {
-              session_id: sessionId,
-              idempotency_key: idempotencyKey,
-              booked_via: 'widget_chat_auto',
-              conversation_phase: conversationContext.conversationPhase,
-              service_name: mergedServiceName
-            }
-          };
-          
-          console.log(`[Widget Chat] Booking payload:`, JSON.stringify(bookingPayload));
-          
-          // Call book-appointment function
-          const bookingRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/book-appointment`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
-            },
-            body: JSON.stringify(bookingPayload)
-          });
-          
-          if (bookingRes.ok) {
-            const bookingData = await bookingRes.json();
-            if (bookingData.success) {
-              bookingResult = bookingData.appointment;
-              bookingResult.service_name = mergedServiceName; // Add for confirmation card
-              conversationState.slots = {
-                ...conversationState.slots,
-                bookingExecutionLocked: true,
-              };
-              console.log(`[Widget Chat] Appointment created: ${bookingResult.id}`);
-            } else {
-              console.error('[Widget Chat] Booking failed:', bookingData.error);
-            }
+        } else if (mergedDate && mergedTime && mergedServiceId) {
+          // Secondary idempotency check: look up by derived idempotency key (more precise)
+          const idempotencyKey = await generateBookingIdempotencyKey(sessionId, mergedServiceId, mergedDate, mergedTime);
+          const existingByIdKey = await getExistingBookingByIdempotencyKey(supabase, receptionistId, idempotencyKey);
+          if (existingByIdKey) {
+            console.log(`[Idempotency] Booking already exists for key ${idempotencyKey.substring(0, 12)}...; skipping.`);
+            bookingResult = existingByIdKey;
+            bookingResult.service_name = mergedServiceName;
+            bookingReusedFromSession = true;
+            conversationState.slots = {
+              ...conversationState.slots,
+              bookingExecutionLocked: true,
+            };
           } else {
-            console.error('[Widget Chat] Booking request failed:', bookingRes.status);
+            console.log(`[Widget Chat] Auto-booking appointment for ${mergedCustomerName}`);
+
+            // Parse the date/time into ISO format - use slot data first (structured), then natural language
+            let startTime: Date | null = null;
+
+            if (mergedDate && mergedDate.includes('T')) {
+              startTime = new Date(mergedDate);
+            } else if (mergedTime && mergedTime.includes('T')) {
+              startTime = new Date(mergedTime);
+            } else {
+              startTime = parseBookingDateTime(mergedDate!, mergedTime!);
+            }
+
+            if (startTime && !isNaN(startTime.getTime())) {
+              const bookingPayload = {
+                receptionistId,
+                serviceId: mergedServiceId,
+                startTime: startTime.toISOString(),
+                customerName: mergedCustomerName,
+                customerEmail: mergedCustomerEmail || null,
+                customerPhone: mergedCustomerPhone || null,
+                bookingSource: 'ai_receptionist',
+                metadata: {
+                  session_id: sessionId,
+                  idempotency_key: idempotencyKey,
+                  booked_via: 'widget_chat_auto',
+                  conversation_phase: conversationContext.conversationPhase,
+                  service_name: mergedServiceName
+                }
+              };
+
+              console.log(`[Widget Chat] Booking payload:`, JSON.stringify(bookingPayload));
+
+              const bookingRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/book-appointment`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+                },
+                body: JSON.stringify(bookingPayload)
+              });
+
+              if (bookingRes.ok) {
+                const bookingData = await bookingRes.json();
+                if (bookingData.success) {
+                  bookingResult = bookingData.appointment;
+                  bookingResult.service_name = mergedServiceName;
+                  conversationState.slots = {
+                    ...conversationState.slots,
+                    bookingExecutionLocked: true,
+                  };
+                  console.log(`[Widget Chat] Appointment created: ${bookingResult.id}`);
+                } else {
+                  console.error('[Widget Chat] Booking failed:', bookingData.error);
+                }
+              } else {
+                console.error('[Widget Chat] Booking request failed:', bookingRes.status);
+              }
+            } else {
+              console.warn('[Widget Chat] Could not parse booking date/time:', mergedDate, mergedTime);
+            }
           }
-        } else {
-          console.warn('[Widget Chat] Could not parse booking date/time:', mergedDate, mergedTime);
-        }
         }
       } catch (bookingErr) {
         console.error('[Widget Chat] Auto-booking failed:', bookingErr);
-        // Don't fail the response if booking fails
       }
     }
 
@@ -2826,26 +2798,16 @@ return {
     if (bookingResult) {
       conversationState.booking_confirmed = true;
       conversationState.flow_step = 'complete';
-      // Transition state machine to completed
-      const completedTransition = transition(machineContext, 'USER_CONFIRMED', {});
-      if (completedTransition.success) {
-        machineContext = completedTransition.context;
-      }
     }
     if (orderResult) {
       conversationState.order_confirmed = true;
       conversationState.flow_step = 'complete';
-      // Transition state machine to completed
-      const completedTransition = transition(machineContext, 'USER_CONFIRMED', {});
-      if (completedTransition.success) {
-        machineContext = completedTransition.context;
-      }
     }
     
-    // Serialize and save machine context in conversation state slots
+    // Persist Engine v2 state (single source of truth)
     conversationState.slots = {
       ...conversationState.slots,
-      machineContext: serializeMachineContext(machineContext),
+      engineState: JSON.stringify(engineState),
       effective_mode: effectiveMode,
       intent_score: intentScore,
       sales_mode_active: salesModeState.inSales,
@@ -2856,14 +2818,14 @@ return {
       sales_mode_hysteresis: salesModeState.hysteresis,
       sales_mode_min_hold_turns: salesModeState.minHoldTurns,
       sales_mode_exit_consecutive_turns: salesModeState.exitConsecutiveTurns,
-      // Sync machine data back to slots
-      serviceId: machineContext.serviceId || conversationState.slots?.serviceId,
-      serviceName: machineContext.serviceName || conversationState.slots?.serviceName,
-      date: machineContext.date || conversationState.slots?.date,
-      time: machineContext.time || conversationState.slots?.time,
-      customerName: machineContext.customerName || conversationState.slots?.customerName,
-      customerPhone: machineContext.customerPhone || conversationState.slots?.customerPhone,
-      customerEmail: machineContext.customerEmail || conversationState.slots?.customerEmail,
+      // Sync Engine v2 entities back to slots
+      serviceId: engineState?.entities?.service?.id || conversationState.slots?.serviceId,
+      serviceName: engineState?.entities?.service?.name || conversationState.slots?.serviceName,
+      date: engineState?.entities?.appointment?.date || conversationState.slots?.date,
+      time: engineState?.entities?.appointment?.time || conversationState.slots?.time,
+      customerName: engineState?.entities?.customer?.name || conversationState.slots?.customerName,
+      customerPhone: engineState?.entities?.customer?.phone || conversationState.slots?.customerPhone,
+      customerEmail: engineState?.entities?.customer?.email || conversationState.slots?.customerEmail,
     };
     
     // Update active task with conversation context (sync extracted entities)
@@ -2900,7 +2862,7 @@ return {
     
     // Save conversation state for next message
     await stateManager.saveState(conversationState);
-    console.log(`[Flow Engine] State saved - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, MachineState: ${machineContext.state}, ActiveTask: ${activeTask?.type || 'none'}`);
+    console.log(`[Flow Engine] State saved - Flow: ${conversationState.active_flow}, Step: ${conversationState.flow_step}, EngineTask: ${engineState?.task_type || 'none'}:${engineState?.task_step || 'idle'}, ActiveTask: ${activeTask?.type || 'none'}`);
     
     
     // Run memory summarization if appropriate
@@ -2911,8 +2873,18 @@ return {
       console.log(`[Flow Engine] Memory summary saved`);
     }
 
+    // If the user sent a direct text message (not interacting via widget),
+    // suppress the flow-step-based widget suggestion — they chose text interaction
+    const userSentTextInsteadOfWidget = message.trim().length > 0 &&
+      !message.match(/^\{.*uiInteraction.*\}$/);
+    const flowStepSupportsWidget = conversationState.flow_step === "service_selection" ||
+      conversationState.flow_step === "date_selection" ||
+      conversationState.flow_step === "time_selection" ||
+      conversationState.flow_step === "product_selection";
+    
     const uiIntent = mapIntentToUIIntent(engineResult.intent.intent || messageAnalysis.detectedIntent);
     const intentSuggestedComponent: UIComponent =
+      !flowStepSupportsWidget || userSentTextInsteadOfWidget ? null :
       conversationState.flow_step === "service_selection" ? "service_selector" :
       conversationState.flow_step === "date_selection" ? "date_picker" :
       conversationState.flow_step === "time_selection" ? "time_picker" :
@@ -2923,6 +2895,8 @@ return {
       orderResult: orderResult || null,
       intentActiveComponent: intentSuggestedComponent,
       engineHints: engineResult.ui_hints || {},
+      aiSuggestedWidget,
+      implicitSuggestedWidget,
     });
     const previousUIIntent = (conversationState.slots?.last_ui_intent as string | undefined) || null;
     const dismissPrevious = previousUIIntent !== null && previousUIIntent !== uiIntent;
@@ -3014,25 +2988,20 @@ return {
           deliveryAddress: conversationState.slots?.deliveryLocation || null,
           products: conversationContext.selectedProducts || [],
         } : null,
-        // UI hints based on Engine v2 (PRIMARY) with state machine fallback
+        // UI hints based on Engine v2 (PRIMARY)
         uiHints: {
-          showServiceSelector: (engineResult.ui_hints.show_services || uiHints.showServiceSelector) && !conversationContext.servicesShownInLastMessage,
-          showDatePicker: engineResult.ui_hints.show_calendar || uiHints.showDatePicker,
-          showTimePicker: engineResult.ui_hints.show_time_slots || uiHints.showTimePicker,
-          showProductSelector: (engineResult.ui_hints.show_products || uiHints.showProductSelector) && !conversationContext.productsShownInLastMessage,
-          showQuantityInput: uiHints.showQuantityInput,
-          showContactForm: uiHints.showContactForm,
-          showConfirmButton: engineResult.ui_hints.show_confirmation || uiHints.showConfirmButton,
+          showServiceSelector: engineResult.ui_hints.show_services && !conversationContext.servicesShownInLastMessage,
+          showDatePicker: engineResult.ui_hints.show_calendar,
+          showTimePicker: engineResult.ui_hints.show_time_slots,
+          showProductSelector: engineResult.ui_hints.show_products && !conversationContext.productsShownInLastMessage,
+          showQuantityInput: engineState?.task_step === 'select_quantity',
+          showContactForm: engineState?.task_step === 'collect_contact' || engineState?.task_step === 'collect_name',
+          showConfirmButton: engineResult.ui_hints.show_confirmation,
           showOrderConfirmation: engineResult.ui_hints.show_order_confirmation,
-          expectedInput: uiHints.expectedInput,
+          expectedInput: engineState?.task_step || 'general_chat',
         },
-        // Legacy UI hints for backward compatibility
-        shouldShowServices: (engineResult.ui_hints.show_services || uiHints.showServiceSelector) && !conversationContext.servicesShownInLastMessage,
-        shouldShowProducts: (engineResult.ui_hints.show_products || uiHints.showProductSelector) && !conversationContext.productsShownInLastMessage,
-        showServicesUI: (engineResult.ui_hints.show_services || uiHints.showServiceSelector) && !conversationContext.servicesShownInLastMessage,
-        showProductsUI: (engineResult.ui_hints.show_products || uiHints.showProductSelector) && !conversationContext.productsShownInLastMessage,
-        showDatePickerUI: engineResult.ui_hints.show_calendar || uiHints.showDatePicker,
-        showTimeSlotsUI: engineResult.ui_hints.show_time_slots || uiHints.showTimePicker,
+        // Removed orphaned backward-compat UI hint fields (U3 fix).
+        // Frontend uses uiSignal exclusively via UISignalRenderer.
         uiSignal,
         // Engine v2 state info (PRIMARY)
         engineV2: {
@@ -3044,29 +3013,22 @@ return {
           nextRequired: engineResult.requirements.next_required,
           locked: engineState?.locked || false,
         },
-        // State machine info (LEGACY)
-        stateMachine: {
-          state: machineContext.state,
-          flow: machineContext.flow,
-          previousState: machineContext.previousState,
-        },
         // Flow engine state hints
         activeFlow: conversationState.active_flow,
         flowStep: conversationState.flow_step,
-        // Collected slots for debugging/UI
+        // Collected slots from Engine v2 entities
         collectedSlots: {
-          serviceName: engineState?.entities?.service?.name || machineContext.serviceName || mergedServiceName,
-          date: engineState?.entities?.appointment?.date || machineContext.date || mergedDate,
-          time: engineState?.entities?.appointment?.time || machineContext.time || mergedTime,
-          customerName: engineState?.entities?.customer?.name || machineContext.customerName || mergedCustomerName,
-          hasContact: !!(engineState?.entities?.customer?.phone || engineState?.entities?.customer?.email || machineContext.customerPhone || machineContext.customerEmail || mergedCustomerPhone || mergedCustomerEmail),
+          serviceName: engineState?.entities?.service?.name || mergedServiceName,
+          date: engineState?.entities?.appointment?.date || mergedDate,
+          time: engineState?.entities?.appointment?.time || mergedTime,
+          customerName: engineState?.entities?.customer?.name || mergedCustomerName,
+          hasContact: !!(engineState?.entities?.customer?.phone || engineState?.entities?.customer?.email || mergedCustomerPhone || mergedCustomerEmail),
         }
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
     console.error("Widget chat CRITICAL error:", error?.message || error, error?.stack || '');
-    // STABILITY: Always return 200 with a safe fallback reply - NEVER return 500 to the widget
     const safeReply = "I'm sorry, I'm having a temporary issue. Please try again in a moment, or feel free to contact us directly for assistance.";
     return new Response(
       JSON.stringify({ 
@@ -3074,6 +3036,16 @@ return {
         hasBookingIntent: false, 
         hasOrderIntent: false,
         uiHints: {},
+        uiSignal: {
+          version: "1.0",
+          intent: "browsing",
+          activeComponent: null,
+          componentData: {},
+          dismissPrevious: true,
+          reason: "no_ui_needed",
+          flow: { activeFlow: null, step: null, blocking: false },
+          conversationCanContinue: true,
+        },
         error_logged: true 
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

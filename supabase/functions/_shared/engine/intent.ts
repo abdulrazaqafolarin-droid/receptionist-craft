@@ -29,7 +29,7 @@ const PATTERNS = {
   farewell: /^(bye|goodbye|thanks?\s*bye|see\s*you|take\s*care|that'?s\s*all|no\s*thanks?|nothing\s*else|i'?m\s*good|all\s*set|done)[\s!.,]*$/i,
   
   // P4: Confirmation
-  confirm: /^(yes|yep|yeah|yea|correct|right|exactly|confirmed?|that'?s\s*right|perfect|great|sure|ok|okay|sounds\s*good|do\s*it|proceed|go\s*ahead|book\s*it|place\s*(the\s*)?order)[\s!.,]*$/i,
+  confirm: /^(yes|yep|yeah|yea|correct|right|exactly|confirmed?|that'?s\s*(right|correct)|perfect|great|sure|ok|okay|sounds\s*good|do\s*it|proceed|go\s*ahead|book\s*it|place\s*(the\s*)?order|yes[,\s]+that'?s\s*(right|correct)|yes[,\s]*please|yes[,\s]+do\s+it|yes[,\s]+go\s+ahead)[\s!.,]*$/i,
   
   // P5: Denial
   deny: /^(no|nope|nah|not\s*really|that'?s\s*wrong|incorrect|wrong|wait|hold\s*on)[\s!.,]*$/i,
