@@ -275,6 +275,21 @@ serve(async (req) => {
       .single();
 
     if (insertErr) {
+      // Handle unique violation (23505) gracefully — return existing record
+      if (insertErr.code === '23505' && idempotencyKey) {
+        console.log(`[book-appointment] Unique violation for idempotency_key ${idempotencyKey}, fetching existing record`);
+        const { data: existing } = await supabase
+          .from("appointments")
+          .select("*")
+          .eq("idempotency_key", idempotencyKey)
+          .maybeSingle();
+        if (existing) {
+          return new Response(
+            JSON.stringify({ success: true, appointment: existing, existed: true }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
       console.error("[book-appointment] Insert error:", insertErr);
       throw insertErr;
     }

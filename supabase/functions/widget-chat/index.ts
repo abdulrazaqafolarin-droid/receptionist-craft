@@ -258,6 +258,26 @@ async function getExistingOrderForSession(
   return data || null;
 }
 
+async function getExistingOrderByIdempotencyKey(
+  supabase: any,
+  receptionistId: string,
+  idempotencyKey: string,
+): Promise<any | null> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id, created_at")
+    .eq("receptionist_id", receptionistId)
+    .eq("idempotency_key", idempotencyKey)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[Idempotency] Key-based order lookup failed:", error.message);
+    return null;
+  }
+  return data || null;
+}
+
 //                                                                            
 // 7-LAYER S-TIER MODULAR AI ARCHITECTURE
 //                                                                            
@@ -2183,7 +2203,9 @@ if (!aiRes.ok) {
   console.error("Gemini API error:", aiRes.status, errTxt);
   if (aiRes.status === 429) throw new Error("AI_RATE_LIMITED");
   if (aiRes.status === 402) throw new Error("AI_QUOTA_EXCEEDED");
-  throw new Error(`Gemini request failed: ${aiRes.status}`);
+  if (aiRes.status === 403) throw new Error(`AI_FORBIDDEN: ${errTxt.substring(0, 200)}`);
+  if (aiRes.status === 400) throw new Error(`AI_BAD_REQUEST: ${errTxt.substring(0, 200)}`);
+  throw new Error(`Gemini request failed: ${aiRes.status} - ${errTxt.substring(0, 200)}`);
 }
 
 const geminiData = await aiRes.json();
@@ -2632,19 +2654,35 @@ return {
         }
 
         if (cartItems.length > 0) {
-          // Inventory-validated order creation
-          const inventoryValidator = createInventoryValidator(supabase);
-          const deliveryAddress = engineState?.entities?.delivery_address || conversationState.slots?.deliveryLocation || null;
-          
-          const orderExecution = await inventoryValidator.executeOrder(
-            receptionistId,
-            cartItems,
-            customerName,
-            {
-              customerEmail: conversationContext.customerEmail || engineState?.entities?.customer?.email || null,
-              customerPhone: conversationContext.customerPhone || engineState?.entities?.customer?.phone || null,
-              deliveryAddress,
-              sessionId,
+          // Generate order idempotency key from session + product IDs
+          const productIds = cartItems.map(i => i.product_id).sort().join(',');
+          const orderIdempotencyKey = await generateBookingIdempotencyKey(sessionId, productIds, '', '');
+
+          // Key-based idempotency check for orders
+          const existingOrderByKey = await getExistingOrderByIdempotencyKey(supabase, receptionistId, orderIdempotencyKey);
+          if (existingOrderByKey) {
+            console.log(`[Idempotency] Order already exists for key ${orderIdempotencyKey.substring(0, 12)}...; skipping.`);
+            orderResult = existingOrderByKey;
+            orderReusedFromSession = true;
+            conversationState.slots = {
+              ...conversationState.slots,
+              orderExecutionLocked: true,
+            };
+          } else {
+            // Inventory-validated order creation
+            const inventoryValidator = createInventoryValidator(supabase);
+            const deliveryAddress = engineState?.entities?.delivery_address || conversationState.slots?.deliveryLocation || null;
+            
+            const orderExecution = await inventoryValidator.executeOrder(
+              receptionistId,
+              cartItems,
+              customerName,
+              {
+                customerEmail: conversationContext.customerEmail || engineState?.entities?.customer?.email || null,
+                customerPhone: conversationContext.customerPhone || engineState?.entities?.customer?.phone || null,
+                deliveryAddress,
+                sessionId,
+                idempotencyKey: orderIdempotencyKey,
             }
           );
 
@@ -2695,6 +2733,7 @@ return {
           } else {
             console.warn(`[Commerce Engine] Order validation failed:`, orderExecution.errors);
             // Stock issues -- don't create order, let AI handle the error messaging
+          }
           }
         }
         }
@@ -3028,7 +3067,8 @@ return {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
-    console.error("Widget chat CRITICAL error:", error?.message || error, error?.stack || '');
+    const errMsg = error?.message || String(error || '');
+    console.error("Widget chat CRITICAL error:", errMsg, error?.stack || '');
     const safeReply = "I'm sorry, I'm having a temporary issue. Please try again in a moment, or feel free to contact us directly for assistance.";
     return new Response(
       JSON.stringify({ 
@@ -3046,7 +3086,8 @@ return {
           flow: { activeFlow: null, step: null, blocking: false },
           conversationCanContinue: true,
         },
-        error_logged: true 
+        error_logged: true,
+        _diagnostic: errMsg.substring(0, 300)
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

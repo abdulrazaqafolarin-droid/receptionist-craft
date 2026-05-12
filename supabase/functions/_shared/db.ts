@@ -25,7 +25,7 @@ function asResult<T>(promise: Promise<QueryResult<T>>): QueryResult<T> & Promise
 // ─── SELECT query builder ──────────────────────────────────────────────────
 
 class SelectQuery<T = Record<string, unknown>> {
-  private filters: Array<{ col: string; val: string }> = [];
+  private filters: Array<{ col: string; val: string; op?: string }> = [];
   private orderCol = "";
   private orderAsc = true;
   private limitVal = 0;
@@ -36,7 +36,12 @@ class SelectQuery<T = Record<string, unknown>> {
   ) {}
 
   eq(col: string, val: string | number | boolean): this {
-    this.filters.push({ col, val: String(val) });
+    this.filters.push({ col, val: String(val), op: "eq" });
+    return this;
+  }
+
+  contains(col: string, val: Record<string, string>): this {
+    this.filters.push({ col, val: JSON.stringify(val), op: "cs" });
     return this;
   }
 
@@ -65,7 +70,13 @@ class SelectQuery<T = Record<string, unknown>> {
     const promise = (async (): Promise<QueryResult<T>> => {
       try {
         const params: Record<string, string> = { select: this.columns };
-        for (const f of this.filters) params[f.col] = `eq.${f.val}`;
+        for (const f of this.filters) {
+          if (f.op === "cs") {
+            params[f.col] = `cs.${f.val}`;
+          } else {
+            params[f.col] = `eq.${f.val}`;
+          }
+        }
         if (this.orderCol) params.order = `${this.orderCol}.${this.orderAsc ? "asc" : "desc"}`;
         if (this.limitVal > 0) params.limit = String(this.limitVal);
         const qs = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");

@@ -229,6 +229,7 @@ export function buildOrderPayload(
     deliveryAddress?: string | null;
     notes?: string | null;
     sessionId?: string;
+    idempotencyKey?: string | null;
   }
 ): {
   p_receptionist_id: string;
@@ -243,7 +244,17 @@ export function buildOrderPayload(
   p_customer_phone?: string | null;
   p_notes?: string | null;
   p_metadata?: Record<string, unknown>;
+  p_idempotency_key?: string | null;
 } {
+  const metadata: Record<string, unknown> = {
+    session_id: options?.sessionId,
+    ordered_via: 'widget_chat_auto',
+    delivery_address: options?.deliveryAddress || null,
+    inventory_validated: true,
+  };
+  if (options?.idempotencyKey) {
+    metadata.idempotency_key = options.idempotencyKey;
+  }
   return {
     p_receptionist_id: receptionistId,
     p_customer_name: customerName,
@@ -258,12 +269,8 @@ export function buildOrderPayload(
     p_customer_email: options?.customerEmail || null,
     p_customer_phone: options?.customerPhone || null,
     p_notes: options?.notes || null,
-    p_metadata: {
-      session_id: options?.sessionId,
-      ordered_via: 'widget_chat_auto',
-      delivery_address: options?.deliveryAddress || null,
-      inventory_validated: true,
-    },
+    p_metadata: metadata,
+    p_idempotency_key: options?.idempotencyKey || null,
   };
 }
 
@@ -356,6 +363,7 @@ export function createInventoryValidator(supabase: any) {
         customerPhone?: string | null;
         deliveryAddress?: string | null;
         sessionId?: string;
+        idempotencyKey?: string | null;
       }
     ): Promise<{
       success: boolean;
@@ -385,6 +393,7 @@ export function createInventoryValidator(supabase: any) {
         p_customer_phone: orderPayload.p_customer_phone,
         p_notes: orderPayload.p_notes,
         p_metadata: orderPayload.p_metadata,
+        p_idempotency_key: orderPayload.p_idempotency_key,
       });
 
       if (error) {
