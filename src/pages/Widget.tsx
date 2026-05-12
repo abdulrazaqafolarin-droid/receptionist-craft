@@ -152,6 +152,7 @@ export default function Widget() {
       reason: (signal.reason as UISignal["reason"]) ?? "step_progression",
       flow: (signal.flow as UISignal["flow"]) ?? { activeFlow: null, step: null, blocking: false },
       conversationCanContinue: Boolean(signal.conversationCanContinue ?? signal.conversation_can_continue ?? true),
+      moneyModeActive: Boolean(signal.moneyModeActive ?? signal.money_mode_active ?? false),
     };
   }
 

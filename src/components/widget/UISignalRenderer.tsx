@@ -51,6 +51,7 @@ export interface UISignal {
     blocking: boolean;
   };
   conversationCanContinue: boolean;
+  moneyModeActive?: boolean;
 }
 
 interface Props {
@@ -124,7 +125,8 @@ export function UISignalRenderer({
     }, 300);
   };
 
-  if (!visible?.activeComponent) return null;
+  if (!visible?.activeComponent && !visible?.moneyModeActive) return null;
+  const showMoneyBadge = !!visible?.moneyModeActive;
 
   const launcherLabel: Record<Exclude<UISignal["activeComponent"], null>, string> = {
     service_selector: "Open Services",
@@ -191,7 +193,13 @@ export function UISignalRenderer({
 
   return (
     <div className="px-4 sm:px-6 pb-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-200">
-      <div className="max-w-[85%] sm:max-w-[75%]">
+      <div className="max-w-[85%] sm:max-w-[75%] space-y-1">
+        {showMoneyBadge && (
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200/60 text-xs text-amber-700 w-fit animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
+            <Sparkles className="h-3 w-3 text-amber-500" />
+            <span>Personalized suggestions active</span>
+          </div>
+        )}
         <Button
           variant="outline"
           className="w-full justify-start gap-2 rounded-xl border-primary/30 bg-primary/5 backdrop-blur-sm hover:bg-primary/10 transition-all duration-200 shadow-sm hover:shadow"

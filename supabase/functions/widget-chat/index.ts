@@ -487,6 +487,7 @@ interface UISignal {
     blocking: boolean;
   };
   conversationCanContinue: boolean;
+  moneyModeActive?: boolean;
 }
 
 function mapIntentToUIIntent(intent: string): UIIntent {
@@ -698,10 +699,28 @@ function computeIntentScore(
   return Number(clamp01(score).toFixed(3));
 }
 
+function hasDisinterestSignal(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  const disinterest = /^(no(| thanks| thank you)(,|\.|!)?\s*)+$|^not (right now|today|really|interested|my thing)$|^just (browsing|looking)(,|\.|!)?$|^i('m| am) (good|fine|ok|set)(,|\.|!)?$|^maybe (later|some other time)|^i('ll| will) (think about it|let you know|get back)|^that('s| is) (all|it|enough)/i;
+  if (disinterest.test(lower)) return true;
+  if (/(?:no thanks|not interested|just looking|stop|unsubscribe|leave me alone)/i.test(lower)) return true;
+  // Polite declines mid-conversation
+  if (/^(no\b|not really|i'm good|i'm ok|i\s+don't\s+(need|want|think))/i.test(lower)) return true;
+  return false;
+}
+
+function hasActionableContext(context: ConversationContext): boolean {
+  return !!(context.serviceMentioned || context.productMentioned || 
+    context.selectedProducts?.length > 0 || 
+    ['booking', 'ordering', 'confirmation'].includes(context.conversationPhase));
+}
+
 function resolveEffectiveMode(
   receptionist: any,
   slots: Record<string, any> | null | undefined,
   intentScore: number,
+  message?: string,
+  context?: ConversationContext,
 ): SalesModeState {
   const { enabled, threshold, hysteresis, minHoldTurns, exitConsecutiveTurns } = readSalesModeConfig(receptionist);
   const configuredBaseMode: 'sales' | 'booking' | 'support' = receptionist.ai_mode === 'support'
@@ -721,10 +740,19 @@ function resolveEffectiveMode(
     const turnCounter = Number(slots?.sales_mode_turn_counter ?? 0) + 1;
     const exitThreshold = threshold - hysteresis;
 
-    if (!inSales && intentScore >= threshold) {
-      inSales = true;
-      holdUntilTurn = turnCounter + minHoldTurns - 1;
+    // SMART EXIT: Leave immediately on strong disinterest — preserves UX trust
+    if (inSales && message && hasDisinterestSignal(message)) {
+      inSales = false;
       belowExitCount = 0;
+      holdUntilTurn = 0;
+    } else if (!inSales && intentScore >= threshold) {
+      // CONTEXT GUARD: Only enter sales mode when there's something actionable
+      const canTrigger = !context || hasActionableContext(context);
+      if (canTrigger) {
+        inSales = true;
+        holdUntilTurn = turnCounter + minHoldTurns - 1;
+        belowExitCount = 0;
+      }
     } else if (inSales) {
       const holdExpired = turnCounter >= holdUntilTurn;
       if (!holdExpired) {
@@ -1240,26 +1268,26 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
 // MONEY MODE / SALES MODE PROMPT (REVENUE-FOCUSED BEHAVIOR)
 //                                                                              
 function buildMoneyModePrompt(receptionist: any): string {
-  return `#   MONEY MODE -- REVENUE FOCUS (ACTIVE)
+  return `#   MONEY MODE — HELPFUL GUIDANCE (ACTIVE)
 
-**Primary objective: Help the customer take a valuable action (booking, purchase, or lead).**
+You've noticed this customer seems ready to take a step forward. Match their readiness with confident, warm guidance — like the best receptionist at a busy practice who somehow remembers everyone's name and makes everything feel easy.
 
-## PRINCIPLES (Not Scripts)
+## HOW TO BE USEFUL RIGHT NOW
 
-1. **Move toward value** -- Every message should help the customer toward a decision, not chat endlessly
-2. **Guide, don't force** -- Reduce choices naturally based on what fits them, not pressure tactics
-3. **Handle objections like a consultant** -- Understand their concern, address it genuinely, don't script responses
-4. **Natural urgency** -- If a slot or item is genuinely limited, mention it once. Don't manufacture urgency
-5. **Close naturally** -- Use assumptive language when appropriate ("I'll reserve that 3pm slot for you"), not canned lines
-6. **After conversion** -- Celebrate briefly, ask once if they need anything else, then close warmly
+- If they're picking a service: help narrow it down. "Between those two, X is more popular for what you described." Don't list everything.
+- If they have a question: answer it completely, then offer the natural next step. "Yes, that's included. Would you like me to check availability?"
+- If they're hesitating: listen for the real concern. "Is there something specific you're unsure about?" fixes hesitation better than any discount.
+- If they say no: take it gracefully in one message. "No problem at all. Is there anything else I can help you with?" Then drop it.
+- If they confirm: celebrate briefly ("Perfect, you're all set!"), then ask once if they need anything else, then let the conversation end warmly.
+- Recommend naturally: "A lot of our customers also add X" sounds human. "You should buy X" sounds like a script.
 
-## PERSONALITY GUIDELINES
+## WHAT TO AVOID
 
-- Be helpful and confident, not pushy
-- Mirror the customer's tone and pace
-- Never use the same closing phrase twice across conversations
-- If they decline, accept gracefully and ask if they need anything else
-- A real human receptionist would not pressure -- neither should you`;
+- Don't repeat yourself. If you already suggested something and they passed, don't suggest it again.
+- Don't manufacture urgency. Only mention limited availability if it's actually true.
+- Don't use the same closing line twice. Vary your language naturally.
+- If they seem annoyed or dismissive, switch back to pure helpful mode immediately — no questions, just support.
+- Never push after a clear "no". A graceful exit leaves the door open for next time.`;
 }
 
 //                                                                              
@@ -1467,19 +1495,19 @@ ${knowledgeBase}`;
 
   // FINAL DIRECTIVE
   const finalBlock = aiMode === 'sales' 
-    ? `#   FINAL DIRECTIVE (MONEY MODE)
+    ? `#   FINAL DIRECTIVE
 
-Guide the customer toward a valuable action with confidence and warmth.
-Be helpful, not pushy. Listen and respond naturally.
-The business trusts you to represent it well -- focus on genuine help, not artificial pressure.
+Be helpful, be real, and trust the customer to know what they want.
+If they're ready, guide them warmly. If they're not, that's fine too.
+The best close is the one that feels natural — not the one you planned.
 
-**Now respond to the user naturally, following all guidelines above.**`
+**Respond naturally now.**`
     : `#   FINAL DIRECTIVE
 
-Be the receptionist you'd want to talk to: helpful, efficient, empathetic, and genuinely caring.
-Listen to what the customer needs and respond naturally -- every interaction should feel easy and pleasant.
+Be the receptionist you'd want to talk to: helpful, warm, and genuine.
+Listen to what the customer needs and respond naturally.
 
-**Now respond to the user naturally, following all blocks of guidance above.**`;
+**Respond naturally now.**`;
 
   const blocks = [
     identityBlock,
@@ -2044,7 +2072,7 @@ if (!GEMINI_API_KEY) {
     // DYNAMIC SALES MODE: compute intent score each turn and resolve effective mode
     //                                                                        
     const intentScore = computeIntentScore(message, messageAnalysis, conversationContext);
-    const salesModeState = resolveEffectiveMode(receptionist, conversationState.slots as Record<string, any>, intentScore);
+    const salesModeState = resolveEffectiveMode(receptionist, conversationState.slots as Record<string, any>, intentScore, message, conversationContext);
     const effectiveMode = salesModeState.effectiveMode;
     console.log(
       `[Widget Chat] Effective Mode=${effectiveMode}, IntentScore=${intentScore}, ` +
@@ -3026,6 +3054,7 @@ return {
         blocking: !!topicShift?.shouldBlock,
       },
       conversationCanContinue: true,
+      moneyModeActive: effectiveMode === 'sales',
     };
     conversationState.slots = {
       ...conversationState.slots,
