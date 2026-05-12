@@ -1265,6 +1265,37 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
 }
 
 //                                                                              
+// AI FAILURE FALLBACK (M4) — Graceful degradation when Gemini API is down
+//                                                                              
+function buildFallbackResponse(
+  intent: string,
+  receptionistName: string,
+  businessName: string,
+  businessPhone: string,
+): string {
+  const phoneSuffix = businessPhone ? ` You can also call us at ${businessPhone}.` : '';
+
+  const fallbacks: Record<string, string> = {
+    greeting: `Hi! Welcome to ${businessName}. I'm having a brief technical issue — could you try your request again in a moment?${phoneSuffix}`,
+    book_appointment: `I'd be happy to help you book! I'm just having a quick technical hiccup. Could you try again shortly?${phoneSuffix}`,
+    order_product: `I'd love to help you place that order! Give me a moment and try again.${phoneSuffix}`,
+    ask_price: `Great question about pricing! I can check that once I'm back online. Try again in a moment.${phoneSuffix}`,
+    ask_info: `I'd be happy to answer your question. I just need a moment to get back online.${phoneSuffix}`,
+    ask_hours: `Let me check our hours — just give me a moment to get back online.${phoneSuffix}`,
+    ask_location: `Let me look that up once I'm back online. Please try again in a moment.${phoneSuffix}`,
+    confirm: `Got it! Let me process that as soon as I'm back online.${phoneSuffix}`,
+    deny: `No problem at all. Let me know if there's anything else I can help with.${phoneSuffix}`,
+    complaint: `I'm sorry to hear that. I want to help — please give me a moment to look into this once I'm back online.${phoneSuffix}`,
+    farewell: `Thanks for stopping by! Have a great day!${phoneSuffix}`,
+    follow_up: `Thanks for following up! I'm having a brief technical moment — could you try again?${phoneSuffix}`,
+    general_query: `I'm experiencing a temporary technical issue. Please try again in a moment.${phoneSuffix}`,
+  };
+
+  return fallbacks[intent] || 
+    `I'm experiencing a temporary technical issue and can't process that right now. Please try again in a moment.${phoneSuffix}`;
+}
+
+//                                                                              
 // MONEY MODE / SALES MODE PROMPT (REVENUE-FOCUSED BEHAVIOR)
 //                                                                              
 function buildMoneyModePrompt(receptionist: any): string {
@@ -2278,8 +2309,13 @@ return {
   choices: [{ message: { content: geminiText } }]
 };
       },
-      // Graceful fallback response when circuit is open
-      { choices: [{ message: { content: "I'm experiencing a temporary issue. Please try again in a moment, or feel free to call us directly for immediate assistance." } }] },
+      // Intent-aware fallback when Gemini is down (M4)
+      { choices: [{ message: { content: buildFallbackResponse(
+        messageAnalysis.detectedIntent,
+        receptionist.name,
+        receptionist.business_name,
+        receptionist.business_phone || receptionist.phone || '',
+      ) } }] },
       30000 // 30s timeout
     );
 
