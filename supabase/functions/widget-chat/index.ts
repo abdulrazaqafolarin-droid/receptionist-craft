@@ -74,22 +74,7 @@ import {
 } from "../_shared/flow/taskIntelligence.ts";
 
 //                                                                            
-// MEMORY PIPELINE - Kept for slot extraction & summarization only
-//                                                                            
-import {
-  type PipelineResult,
-  type IntentResult,
-  type ExtractedEntities,
-} from "../_shared/flow/memoryPipeline.ts";
-
-// UnifiedCore consolidated into Engine v2 -- imports kept for type compatibility only
-import {
-  type UnifiedState,
-  type CoreResult,
-} from "../_shared/flow/unifiedCore.ts";
-
-// (conversationGovernor.ts fully replaced by Engine v2 governor — see engine/governor.ts)
-
+// (memoryPipeline.ts, unifiedCore.ts, conversationGovernor.ts — deleted in PHASE 1 consolidation)
 //                                                                            
 // ACTION PERMISSION GATE (MIDDLEWARE VALIDATOR)
 //                                                                            
