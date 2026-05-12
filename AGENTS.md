@@ -300,12 +300,43 @@ npx supabase functions deploy {slug} --project-ref esvrhnlwquunsdduvbnr
 - Created `_shared/bookingPreValidator.ts` — lightweight sync pre-validation
 - Added inline pre-check diagnostics to widget-chat booking flow
 
-### PHASE 1 Plan (researched, ~3h to execute)
-- Keep `_shared/engine/` as canonical
-- Move inline functions → `_shared/engine/`: context.ts, knowledge.ts, promptBuilder.ts, salesMode.ts
-- Delete: `stateMachine.ts`, `conversationGovernor.ts`, `unifiedCore.ts`, `memoryPipeline.ts`, `slotExtractor.ts`
+### C4 — UI Widget Suppression [2026-05-12]
+- Root cause: `userSentTextInsteadOfWidget` check at L2926 was `true` for every normal text message, suppressing `intentSuggestedComponent` (flow-step widgets: service_selector, date_picker, time_picker, product_selector)
+- Fix: Removed `userSentTextInsteadOfWidget` from the suppression condition at L2935
+- Committed as `73652df`, deployed as widget-chat v26
 
-## PART 13 — ENGINEERING PRINCIPLE
+### PHASE 1 — Dual Engine Consolidation [2026-05-12]
+- Confirmed no inline `.ts` files in `widget-chat/` (all logic in single `index.ts`)
+- **Deleted 3 dead files from `_shared/flow/`:**
+  - `conversationGovernor.ts` — not imported anywhere
+  - `unifiedCore.ts` — widget-chat imported types only, never used in code
+  - `memoryPipeline.ts` — widget-chat imported types only, never used in code
+- Removed dead type-only imports from `widget-chat/index.ts` (lines 79-89)
+- Remaining `_shared/flow/` files still actively used: `types.ts`, `stateManager.ts`, `flowRouter.ts`, `slotExtractor.ts`, `memorySummarizer.ts`, `taskIntelligence.ts`
+- Committed as `d86da78`, deployed as widget-chat v27
+
+## PART 13 — SESSION LOG (2026-05-12)
+
+### Applied to Production
+1. **SQL Migration** — Applied via Management API `/database/query`:
+   - `idx_appointments_idempotency_unique` (UNIQUE partial index on appointments)
+   - `idempotency_key` column added to orders
+   - `idx_orders_idempotency` (non-unique index for fast lookups)
+   - `idx_orders_idempotency_unique` (UNIQUE partial index on orders)
+   - `create_widget_order` RPC updated with `p_idempotency_key` parameter (8-arg version)
+   - Cleaned up: dropped old `idx_appointments_idempotency` (non-unique leftover), dropped old 7-arg RPC overload
+2. **Edge function deploys** — Redeployed via Supabase CLI: `widget-chat` (v26) and `book-appointment`
+3. **UI fix (C4)** — Removed `userSentTextInsteadOfWidget` suppression of flow-step widgets, committed + pushed as `73652df`
+
+### Notes
+- `CREATE UNIQUE INDEX CONCURRENTLY` had to be changed to `CREATE UNIQUE INDEX` (Management API wraps queries in transactions, preventing CONCURRENTLY)
+- Large SQL payloads timeout at 60s via Management API — break into single-statement calls
+- `npx supabase functions deploy` works with `powershell -ExecutionPolicy Bypass`
+
+### PHASE 1 deployed
+4. **Dead code removal** — Deleted 3 files, removed dead type imports, committed as `d86da78`, deployed as widget-chat v27
+
+## PART 14 — ENGINEERING PRINCIPLE
 Every change must answer YES to:
 > Does this increase revenue conversion for the business owner?
 > OR reduce the risk of the platform failing them?
