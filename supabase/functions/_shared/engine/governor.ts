@@ -257,7 +257,7 @@ ${activeWidgets.map(w => `• ${w}`).join('\n')}
 If user asks a specific question about options: answer it, then suggest the widget.
 If user hasn't asked anything specific: a brief prompt to use the widget is fine.
 
-**Widget Request (Optional):** If the conversation would benefit from a different widget than the one currently shown, end your response with [WIDGET: widget_name] where widget_name is one of: service_selector, product_selector, date_picker, time_picker, booking_confirmation, order_summary. Example: ending with [WIDGET: date_picker] will switch to showing the calendar. Use this sparingly — only when the conversation naturally requires a different input mode.
+**Widget Request (Recommended):** After every response, decide whether a UI widget would help the customer. If yes, end your response with [WIDGET: name@confidence] — e.g., [WIDGET: date_picker@0.94] or [WIDGET: service_selector@0.7]. Confidence: 0.0-1.0. Above 0.7 = show widget. Below 0.7 = don't show (you're unsure, ask a clarifying question instead). Valid widgets: service_selector, product_selector, date_picker, time_picker, booking_confirmation, order_summary, lead_form, switch_confirmation. If no widget is needed, end with [NO_WIDGET]. This tells the system you're handling the interaction through text alone.
 ` : ''}
 
 ## 🧠 CONVERSATIONAL COLLECTION RULES

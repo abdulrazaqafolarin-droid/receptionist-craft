@@ -2331,28 +2331,58 @@ return {
     console.log(`[Personality Engine] Sentiment: ${sentiment}, Response polished`);
 
     //                                                                        
-    // AI WIDGET SUGGESTION — parse [WIDGET: name] marker from AI response
-    // The AI can request a specific widget by ending with [WIDGET: component_name].
-    // This is stripped from the displayed text and used to override the widget.
+    // AI WIDGET DECISION — parse [WIDGET: name@confidence] or [NO_WIDGET] marker
+    // The AI is the primary widget decision-maker — it processes full context.
+    // Format: [WIDGET: service_selector@0.92] or [NO_WIDGET]
+    // Confidence 0.0-1.0; below 0.7 = AI is unsure, don't show widget
     //                                                                        
-    let aiSuggestedWidget: UIComponent = null;
-    const widgetMarkerMatch = reply.match(/\[WIDGET:\s*(\w+)\s*\]\s*$/i);
-    if (widgetMarkerMatch) {
-      const requestedName = widgetMarkerMatch[1].toLowerCase();
-      const validWidgets = ["service_selector", "product_selector", "date_picker", "time_picker", "lead_form", "booking_confirmation", "order_summary", "switch_confirmation"];
-      if (validWidgets.includes(requestedName)) {
-        aiSuggestedWidget = requestedName as UIComponent;
-        console.log(`[Widget] AI explicitly requested widget: ${aiSuggestedWidget}`);
+    const WIDGET_CONFIDENCE_THRESHOLD = 0.7;
+    const VALID_WIDGETS = ["service_selector", "product_selector", "date_picker", "time_picker", "lead_form", "booking_confirmation", "order_summary", "switch_confirmation"];
+    
+    let aiWidgetComponent: UIComponent = null;
+    let aiWidgetConfidence = 0;
+    let aiRequestedNoWidget = false;
+    
+    // Check for [NO_WIDGET] first (explicit opt-out)
+    if (/\[NO_WIDGET\]/i.test(reply)) {
+      aiRequestedNoWidget = true;
+      reply = reply.replace(/\[NO_WIDGET\]/gi, '').trim();
+      console.log(`[Widget] AI explicitly requested NO widget`);
+    } else {
+      // Parse [WIDGET: name@confidence] format
+      const confidentMatch = reply.match(/\[WIDGET:\s*(\w+)\s*@\s*([\d.]+)\s*\]\s*$/i);
+      if (confidentMatch) {
+        const name = confidentMatch[1].toLowerCase();
+        const confidence = parseFloat(confidentMatch[2]);
+        if (VALID_WIDGETS.includes(name) && Number.isFinite(confidence) && confidence > 0 && confidence <= 1) {
+          aiWidgetComponent = name as UIComponent;
+          aiWidgetConfidence = confidence;
+          console.log(`[Widget] AI requested widget: ${aiWidgetComponent} @ ${confidence}`);
+        }
+      } else {
+        // Fallback: [WIDGET: name] without confidence (defaults to 1.0)
+        const legacyMatch = reply.match(/\[WIDGET:\s*(\w+)\s*\]\s*$/i);
+        if (legacyMatch) {
+          const name = legacyMatch[1].toLowerCase();
+          if (VALID_WIDGETS.includes(name)) {
+            aiWidgetComponent = name as UIComponent;
+            aiWidgetConfidence = 1.0;
+            console.log(`[Widget] AI requested widget (legacy): ${aiWidgetComponent} @ 1.0`);
+          }
+        }
       }
-      reply = reply.replace(/\[WIDGET:\s*\w+\s*\]\s*$/i, '').trim();
+      reply = reply.replace(/\[WIDGET:\s*\w+(?:\s*@\s*[\d.]+)?\s*\]\s*$/i, '').trim();
     }
 
+    const aiSuggestedWidget: UIComponent = aiWidgetComponent && aiWidgetConfidence >= WIDGET_CONFIDENCE_THRESHOLD
+      ? aiWidgetComponent
+      : null;
+
     //                                                                        
-    // IMPLICIT WIDGET MATCHING — if the AI didn't use an explicit marker,
-    // analyze the response text to infer the best widget.
-    // This catches natural language like "pick a date" → date_picker.
+    // IMPLICIT WIDGET MATCHING — fallback when AI didn't use any marker
+    // Only used when AI neither requested a widget nor said [NO_WIDGET]
     //                                                                        
-    const implicitSuggestedWidget: UIComponent = !aiSuggestedWidget
+    const implicitSuggestedWidget: UIComponent = (!aiWidgetComponent && !aiRequestedNoWidget)
       ? matchWidgetFromResponse(reply)
       : null;
     if (implicitSuggestedWidget) {
