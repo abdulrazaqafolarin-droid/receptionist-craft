@@ -523,13 +523,14 @@ function resolveDeterministicUIComponent(params: {
   if (bookingResult) return "booking_confirmation";
   if (orderResult) return "order_summary";
   if (aiSuggestedWidget) return aiSuggestedWidget;
+  // AI's implicit widget suggestion (from text matching) beats flow_step — AI is more context-aware
+  if (implicitSuggestedWidget) return implicitSuggestedWidget;
   if (intentActiveComponent) return intentActiveComponent;
   if (engineHints.show_services) return "service_selector";
   if (engineHints.show_products) return "product_selector";
   if (engineHints.show_calendar) return "date_picker";
   if (engineHints.show_time_slots) return "time_picker";
   if (engineHints.show_lead_form) return "lead_form";
-  if (implicitSuggestedWidget) return implicitSuggestedWidget;
   return null;
 }
 
