@@ -57,11 +57,13 @@ export function resolveCapabilities(
   const hasServices = services.some(s => s.is_product !== true);
   
   if (hasProducts || hasServices) {
-    const defaultCaps = getDefaultCapabilities(receptionist.business_type || 'General Business');
     return {
-      ...defaultCaps,
-      sells_products: hasProducts || defaultCaps.sells_products,
-      books_appointments: hasServices || defaultCaps.books_appointments,
+      sells_products: hasProducts,
+      books_appointments: hasServices,
+      offers_services: hasServices,
+      delivers: false,
+      requires_compliance: false,
+      supports_emergency: false,
     };
   }
   

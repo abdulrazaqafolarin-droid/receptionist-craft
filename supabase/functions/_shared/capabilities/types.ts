@@ -91,7 +91,7 @@ export interface CapabilityContext {
 export const DEFAULT_CAPABILITY_MAPPINGS: Record<string, BusinessCapabilities> = {
   // Pure appointment-based
   'Dental Clinic': {
-    sells_products: true,
+    sells_products: false,
     books_appointments: true,
     offers_services_on_demand: false,
     delivers: false,
@@ -118,7 +118,7 @@ export const DEFAULT_CAPABILITY_MAPPINGS: Record<string, BusinessCapabilities> =
     has_membership: false,
   },
   'Hair Salon': {
-    sells_products: true,
+    sells_products: false,
     books_appointments: true,
     offers_services_on_demand: false,
     delivers: false,
@@ -127,7 +127,7 @@ export const DEFAULT_CAPABILITY_MAPPINGS: Record<string, BusinessCapabilities> =
     has_membership: false,
   },
   'Barber Shop': {
-    sells_products: true,
+    sells_products: false,
     books_appointments: true,
     offers_services_on_demand: true,
     delivers: false,
@@ -136,7 +136,7 @@ export const DEFAULT_CAPABILITY_MAPPINGS: Record<string, BusinessCapabilities> =
     has_membership: false,
   },
   'Spa & Wellness': {
-    sells_products: true,
+    sells_products: false,
     books_appointments: true,
     offers_services_on_demand: false,
     delivers: false,
@@ -212,7 +212,7 @@ export const DEFAULT_CAPABILITY_MAPPINGS: Record<string, BusinessCapabilities> =
     has_membership: false,
   },
   'Restaurant': {
-    sells_products: false,
+    sells_products: true,
     books_appointments: true,
     offers_services_on_demand: true,
     delivers: true,
@@ -221,7 +221,7 @@ export const DEFAULT_CAPABILITY_MAPPINGS: Record<string, BusinessCapabilities> =
     has_membership: false,
   },
   'Gym & Fitness': {
-    sells_products: true,
+    sells_products: false,
     books_appointments: true,
     offers_services_on_demand: true,
     delivers: false,
@@ -230,7 +230,7 @@ export const DEFAULT_CAPABILITY_MAPPINGS: Record<string, BusinessCapabilities> =
     has_membership: true,
   },
   'Car Wash': {
-    sells_products: true,
+    sells_products: false,
     books_appointments: true,
     offers_services_on_demand: true,
     delivers: false,

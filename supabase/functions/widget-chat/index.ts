@@ -485,6 +485,7 @@ type UIComponent =
   | "booking_confirmation"
   | "order_summary"
   | "lead_form"
+  | "switch_confirmation"
   | null;
 
 interface UISignal {
@@ -1991,7 +1992,7 @@ if (!GEMINI_API_KEY) {
     //                                                                        
     // CAPABILITY-BASED ARCHITECTURE: RESOLVE CAPABILITIES & VALIDATE INTENT
     //                                                                        
-    const capabilities = resolveCapabilities(receptionist);
+    const capabilities = resolveCapabilities(receptionist, services || []);
     const primaryGoal = resolvePrimaryGoal(receptionist);
     
     // Classify universal intent and validate against capabilities
@@ -2483,6 +2484,14 @@ return {
     
     // GATE ENFORCEMENT: Block booking if requirements not met
     if (bookingGate.allowed && isBookingConfirmation) {
+      const preWarnings: string[] = [];
+      if (!mergedServiceId) preWarnings.push('Service ID is missing');
+      if (!mergedDate && !mergedTime) preWarnings.push('Date and time are missing');
+      if (!mergedCustomerName || mergedCustomerName.length < 2) preWarnings.push('Customer name is too short');
+      if (!mergedCustomerEmail && !mergedCustomerPhone) preWarnings.push('No contact method provided');
+      if (preWarnings.length > 0) {
+        console.warn(`[PreValidator] Booking pre-check warnings:`, preWarnings);
+      }
       try {
         const existingBooking = await getExistingBookingForSession(supabase, receptionistId, sessionId);
         if (existingBooking) {
