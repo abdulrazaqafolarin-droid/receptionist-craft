@@ -429,6 +429,7 @@ function analyzeMessage(message: string, historyLength: number): MessageAnalysis
 }
 
 interface SalesModeConfig {
+  enabled: boolean;
   threshold: number;
   hysteresis: number;
   minHoldTurns: number;
@@ -630,14 +631,25 @@ function clamp01(value: number): number {
 }
 
 function readSalesModeConfig(receptionist: any): SalesModeConfig {
-  const cfg = receptionist?.business_info?.sales_mode || receptionist?.capabilities?.sales_mode || {};
+  // Primary: frontend Money Mode UI saves to capabilities.money_mode_enabled + capabilities.money_mode_threshold
+  // Fallback: legacy business_info.sales_mode or capabilities.sales_mode
+  const caps = receptionist?.capabilities || {};
+  const legacyCfg = receptionist?.business_info?.sales_mode || caps?.sales_mode || {};
 
-  const threshold = Number(cfg.threshold ?? 0.65);
-  const hysteresis = Number(cfg.hysteresis ?? 0.1);
-  const minHoldTurns = Number(cfg.min_hold_turns ?? cfg.minHoldTurns ?? 3);
-  const exitConsecutiveTurns = Number(cfg.exit_consecutive_turns ?? cfg.exitConsecutiveTurns ?? 2);
+  // Check frontend toggle first (money_mode_enabled from RevenueEngine UI)
+  const frontendEnabled = caps.money_mode_enabled === true;
+  const frontendThresholdRaw = Number(caps.money_mode_threshold ?? 0);
+  const frontendThreshold = Number.isFinite(frontendThresholdRaw) && frontendThresholdRaw > 0
+    ? frontendThresholdRaw / 10  // Convert 1-10 scale → 0.1-1.0
+    : null;
+
+  const threshold = frontendThreshold ?? Number(legacyCfg.threshold ?? 0.65);
+  const hysteresis = Number(legacyCfg.hysteresis ?? 0.1);
+  const minHoldTurns = Number(legacyCfg.min_hold_turns ?? legacyCfg.minHoldTurns ?? 3);
+  const exitConsecutiveTurns = Number(legacyCfg.exit_consecutive_turns ?? legacyCfg.exitConsecutiveTurns ?? 2);
 
   return {
+    enabled: frontendEnabled,
     threshold: clamp01(Number.isFinite(threshold) ? threshold : 0.65),
     hysteresis: clamp01(Number.isFinite(hysteresis) ? hysteresis : 0.1),
     minHoldTurns: Math.max(1, Number.isFinite(minHoldTurns) ? Math.floor(minHoldTurns) : 3),
@@ -691,37 +703,41 @@ function resolveEffectiveMode(
   slots: Record<string, any> | null | undefined,
   intentScore: number,
 ): SalesModeState {
-  const { threshold, hysteresis, minHoldTurns, exitConsecutiveTurns } = readSalesModeConfig(receptionist);
+  const { enabled, threshold, hysteresis, minHoldTurns, exitConsecutiveTurns } = readSalesModeConfig(receptionist);
   const configuredBaseMode: 'sales' | 'booking' | 'support' = receptionist.ai_mode === 'support'
     ? 'support'
     : (receptionist.ai_mode === 'sales' ? 'sales' : 'booking');
+  const dynamicSalesEnabled = enabled;
   const previousEffectiveMode = (slots?.effective_mode === 'sales' || slots?.effective_mode === 'support' || slots?.effective_mode === 'booking')
     ? slots.effective_mode
     : configuredBaseMode;
   const previousInSales = slots?.sales_mode_active === true || previousEffectiveMode === 'sales';
 
-  const turnCounter = Number(slots?.sales_mode_turn_counter ?? 0) + 1;
-  let inSales = previousInSales;
+  let inSales = dynamicSalesEnabled && previousInSales;
   let holdUntilTurn = Number(slots?.sales_mode_hold_until_turn ?? 0);
   let belowExitCount = Number(slots?.sales_mode_below_exit_count ?? 0);
-  const exitThreshold = threshold - hysteresis;
 
-  if (!inSales && intentScore >= threshold) {
-    inSales = true;
-    holdUntilTurn = turnCounter + minHoldTurns - 1;
-    belowExitCount = 0;
-  } else if (inSales) {
-    const holdExpired = turnCounter >= holdUntilTurn;
-    if (!holdExpired) {
+  if (dynamicSalesEnabled) {
+    const turnCounter = Number(slots?.sales_mode_turn_counter ?? 0) + 1;
+    const exitThreshold = threshold - hysteresis;
+
+    if (!inSales && intentScore >= threshold) {
+      inSales = true;
+      holdUntilTurn = turnCounter + minHoldTurns - 1;
       belowExitCount = 0;
-    } else if (intentScore < exitThreshold) {
-      belowExitCount += 1;
-      if (belowExitCount >= exitConsecutiveTurns) {
-        inSales = false;
+    } else if (inSales) {
+      const holdExpired = turnCounter >= holdUntilTurn;
+      if (!holdExpired) {
+        belowExitCount = 0;
+      } else if (intentScore < exitThreshold) {
+        belowExitCount += 1;
+        if (belowExitCount >= exitConsecutiveTurns) {
+          inSales = false;
+          belowExitCount = 0;
+        }
+      } else {
         belowExitCount = 0;
       }
-    } else {
-      belowExitCount = 0;
     }
   }
 
@@ -738,6 +754,7 @@ function resolveEffectiveMode(
     hysteresis,
     minHoldTurns,
     exitConsecutiveTurns,
+    enabled,
   };
 }
 
