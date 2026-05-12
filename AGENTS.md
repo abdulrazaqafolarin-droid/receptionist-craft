@@ -198,7 +198,69 @@ Custom domain `receptionist-craft.vercel.app` returns 200 OK with latest build.
 
 ---
 
-## PART 10 — DEV ENVIRONMENT
+## PART 10 — SESSION LOG (2026-05-10) — Widget Chat Diagnostic & Fixes
+
+### Problem
+Widget replied "I'm experiencing a temporary issue. Please try again in a moment."
+
+### Root Causes Found & Fixed
+
+#### 1. verify_jwt blocking requests (✔ FIXED)
+- `widget-chat` and `chat` had `verify_jwt: true` (default)
+- The Supabase anon key is NOT a valid JWT — `supabase.functions.invoke()` from frontend passes anon key as Bearer token
+- **Fix:** Set `verify_jwt = false` via Management API PATCH:
+  ```powershell
+  PATCH /v1/projects/esvrhnlwquunsdduvbnr/functions/{slug}
+  body: { "verify_jwt": false }
+  ```
+- Also updated `supabase/config.toml` so future `npx supabase functions deploy` preserves this.
+
+#### 2. Missing `.contains()` in custom db.ts (✔ FIXED)
+- `widget-chat` uses custom `_shared/db.ts` (fetch-based Supabase REST client)
+- Original `SelectQuery` only had `.eq()`, `.order()`, `.limit()`, `.maybeSingle()`, `.single()`
+- `getExistingBookingForSession()`, `getExistingBookingByIdempotencyKey()`, `getExistingOrderForSession()` all call `.contains("metadata", {...})` — which was undefined → runtime error
+- **Fix:** Added `.contains(col, val)` method using `cs` (contains) operator for JSONB
+- Deployed as widget-chat v23
+
+#### 3. Gemini API Free Tier Quota Exhausted (🔴 STILL BROKEN)
+- API key `AIzaSyDGJTWoGOEyoMepwI0rLgvLNe3ZP3Gt-xA` is valid but on free tier
+- Limits: 20 requests/day for gemini-2.5-flash-lite (all consumed)
+- Per-minute and per-day quotas also exhausted for gemini-2.0-flash
+- **Fix needed:** Enable billing in Google AI Studio for this key, or wait ~24h for daily reset
+- Added `_diagnostic` field in catch block response to surface Gemini errors to frontend (widget-chat v24)
+
+### Supabase Management Commands Used
+
+```powershell
+# List functions
+GET /v1/projects/esvrhnlwquunsdduvbnr/functions
+
+# Update verify_jwt
+PATCH /v1/projects/esvrhnlwquunsdduvbnr/functions/{slug}
+body: { "verify_jwt": false }
+
+# Deploy function (from local)
+npx supabase functions deploy {slug} --project-ref esvrhnlwquunsdduvbnr
+```
+
+### Secrets (actual values)
+- `GEMINI_API_KEY` = `AIzaSyDGJTWoGOEyoMepwI0rLgvLNe3ZP3Gt-xA`
+- `SUPABASE_SERVICE_ROLE_KEY` (JWT) = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzdnJobmx3cXV1bnNkZHV2Ym5yIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTUxMzkzOCwiZXhwIjoyMDkxMDg5OTM4fQ.zRc_SlrPbLO85hWX9dbqVc4yDrbONJvqY4NAgR7ey7s`
+
+### Active Receptionist for Testing
+- **Name:** Ruth
+- **Business:** Rutex Demo Clinic
+- **ID:** `8009284e-4dc2-4530-ba25-0e1c90a445ac`
+
+### Widget Chat v24 — Current State
+- `verify_jwt: false` ✓
+- `.contains()` fixed ✓
+- Gemini error diagnostics returned as `_diagnostic` in response ✓
+- Gemini API still broken (quota exhausted on free tier)
+
+---
+
+## PART 11 — DEV ENVIRONMENT
 - Device: Android phone only (Termux)
 - DNS: IPv6 broken — use pooler URLs
 - Supabase CLI: DNS issues on Android — use curl/Python
@@ -216,7 +278,34 @@ Custom domain `receptionist-craft.vercel.app` returns 200 OK with latest build.
 
 ---
 
-## PART 12 — ENGINEERING PRINCIPLE
+## PART 12 — FIXES APPLIED (2026-05-12)
+
+### M1 — Booking/Order Idempotency
+- UNIQUE partial index on `appointments(idempotency_key)` — hard DB dedup
+- Added `idempotency_key` column to `orders` table + UNIQUE index
+- Updated `create_widget_order` RPC with `p_idempotency_key` param
+- `book-appointment` now catches unique violation (23505) gracefully → returns existing record
+- `widget-chat` generates SHA-256 idempotency key for orders from (sessionId, productIds)
+- `inventoryValidator` passes `p_idempotency_key` through to RPC
+
+### C6 — Product/Service Confusion
+- `widget-chat` now passes `services` to `resolveCapabilities()` — was falling to defaults
+- Removed `||` operator in capability derivation — priority 2 now returns pure DB values
+- Corrected 7 business type defaults in `DEFAULT_CAPABILITY_MAPPINGS`
+
+### A4 — UI Component Naming
+- Added `"switch_confirmation"` to edge function's `UIComponent` type
+
+### A1 — Validator Layer
+- Created `_shared/bookingPreValidator.ts` — lightweight sync pre-validation
+- Added inline pre-check diagnostics to widget-chat booking flow
+
+### PHASE 1 Plan (researched, ~3h to execute)
+- Keep `_shared/engine/` as canonical
+- Move inline functions → `_shared/engine/`: context.ts, knowledge.ts, promptBuilder.ts, salesMode.ts
+- Delete: `stateMachine.ts`, `conversationGovernor.ts`, `unifiedCore.ts`, `memoryPipeline.ts`, `slotExtractor.ts`
+
+## PART 13 — ENGINEERING PRINCIPLE
 Every change must answer YES to:
 > Does this increase revenue conversion for the business owner?
 > OR reduce the risk of the platform failing them?
