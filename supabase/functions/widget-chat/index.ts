@@ -2921,10 +2921,7 @@ return {
       console.log(`[Flow Engine] Memory summary saved`);
     }
 
-    // If the user sent a direct text message (not interacting via widget),
-    // suppress the flow-step-based widget suggestion — they chose text interaction
-    const userSentTextInsteadOfWidget = message.trim().length > 0 &&
-      !message.match(/^\{.*uiInteraction.*\}$/);
+    // Show flow-step-based widget suggestions at the appropriate step
     const flowStepSupportsWidget = conversationState.flow_step === "service_selection" ||
       conversationState.flow_step === "date_selection" ||
       conversationState.flow_step === "time_selection" ||
@@ -2932,7 +2929,7 @@ return {
     
     const uiIntent = mapIntentToUIIntent(engineResult.intent.intent || messageAnalysis.detectedIntent);
     const intentSuggestedComponent: UIComponent =
-      !flowStepSupportsWidget || userSentTextInsteadOfWidget ? null :
+      !flowStepSupportsWidget ? null :
       conversationState.flow_step === "service_selection" ? "service_selector" :
       conversationState.flow_step === "date_selection" ? "date_picker" :
       conversationState.flow_step === "time_selection" ? "time_picker" :
