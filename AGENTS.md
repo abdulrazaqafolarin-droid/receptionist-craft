@@ -341,6 +341,12 @@ npx supabase functions deploy {slug} --project-ref esvrhnlwquunsdduvbnr
 - Passes already-computed `conversationContext` instead of re-extracting from partial history
 - Committed as `69581eb`, deployed as widget-chat v28
 
+### R2 — Money Mode (DYNAMIC AUTO-TRIGGER)
+- `readSalesModeConfig()` now reads `capabilities.money_mode_enabled` + `capabilities.money_mode_threshold` (1-10) from frontend UI, with fallback to legacy `business_info.sales_mode`
+- Threshold converted 1-10 → 0.0-1.0 for `computeIntentScore()` comparison
+- `resolveEffectiveMode()` checks `enabled` flag before activating sales mode; disabled = never enter sales mode regardless of intent score
+- Committed as `df47d3c`, deployed as widget-chat v29
+
 ## PART 14 — SESSION LOG (2026-05-12)
 
 ### Applied to Production (round 2)
@@ -348,10 +354,18 @@ npx supabase functions deploy {slug} --project-ref esvrhnlwquunsdduvbnr
 2. **PHASE 1** — 3 dead flow files deleted, deployed as widget-chat v27
 3. **C4 — UI suppression** — Removed `userSentTextInsteadOfWidget`, deployed as widget-chat v26
 
+### Applied to Production (round 3 — 2026-05-12)
+1. **R2 — Dynamic Money Mode** — Now reads `capabilities.money_mode_enabled` + `money_mode_threshold` (1-10) from frontend RevenueEngine UI; `enabled=false` gates all sales mode; threshold 1-10 converted to 0.0-1.0 for intent scoring
+2. **R2 — Smart exit** — Exit sales mode immediately on disinterest signals (`no thanks`, `just looking`, etc.) bypassing hysteresis; preserves UX trust
+3. **R2 — Context guard** — Only enter sales mode when actionable context exists (service/product selected or booking/ordering phase)
+4. **R2 — Natural prompt** — Replaced corporate language with empathy-first guidance, concrete examples, zero buzzwords
+5. **R2 — UI badge** — Subtle amber `"Personalized suggestions active"` badge in widget when money mode active; builds transparency
+6. All committed as `f820cc3`, deployed as widget-chat v30
+
 ### Audit Status
-- **Fixed (9 of 17):** C2/R1, M1, C6, A4, A1, C4, C7, verify_jwt, .contains() + PHASE 1 dead code (A2)
-- **Reclassified (2):** C5 (doc-only), A2 partially (dead code removed in PHASE 1)
-- **Remaining (7):** C1 (dual engines), C3 (prompt contradictions), A3 (error handling), M2 (caching), M4 (AI fallback), M5 (KPIs), R2 (Money Mode)
+- **Fixed (14 of 17):** C2/R1, M1, C6, A4, A1, C4, C7, verify_jwt, .contains(), R2, PHASE 1 dead code (A2)
+- **Reclassified (3):** C5 (doc-only), A2 (dead code removed in PHASE 1), R2 (enhanced)
+- **Remaining (3):** C1 (dual engines ~40-60h), C3 (prompt contradictions ~20-30h), A3 (error handling ~5h), M2 (caching ~5h), M4 (AI fallback ~5h), M5 (KPIs ~5h)
 
 ## PART 15 — ENGINEERING PRINCIPLE (copied from Part 14)
 Every change must answer YES to:
