@@ -362,10 +362,13 @@ npx supabase functions deploy {slug} --project-ref esvrhnlwquunsdduvbnr
 5. **R2 — UI badge** — Subtle amber `"Personalized suggestions active"` badge in widget when money mode active; builds transparency
 6. All committed as `f820cc3`, deployed as widget-chat v30
 
+### Applied to Production (round 4 — 2026-05-12)
+1. **M4 — AI fallback** — Replaced static generic fallback with intent-aware `buildFallbackResponse()` that returns contextually appropriate responses (booking, ordering, pricing, info, etc.) with business phone number. Handles all circuit breaker failures (not just open state). Deployed as widget-chat v31.
+
 ### Audit Status
-- **Fixed (14 of 17):** C2/R1, M1, C6, A4, A1, C4, C7, verify_jwt, .contains(), R2, PHASE 1 dead code (A2)
+- **Fixed (15 of 17):** C2/R1, M1, C6, A4, A1, C4, C7, verify_jwt, .contains(), R2, M4, PHASE 1 dead code (A2)
 - **Reclassified (3):** C5 (doc-only), A2 (dead code removed in PHASE 1), R2 (enhanced)
-- **Remaining (3):** C1 (dual engines ~40-60h), C3 (prompt contradictions ~20-30h), A3 (error handling ~5h), M2 (caching ~5h), M4 (AI fallback ~5h), M5 (KPIs ~5h)
+- **Remaining (5):** C1 (dual engines ~40-60h), C3 (prompt contradictions ~20-30h), A3 (error handling ~5h), M2 (caching ~5h), M5 (KPIs ~5h)
 
 ## PART 15 — ENGINEERING PRINCIPLE (copied from Part 14)
 Every change must answer YES to:

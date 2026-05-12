@@ -736,9 +736,9 @@ function resolveEffectiveMode(
   let inSales = dynamicSalesEnabled && previousInSales;
   let holdUntilTurn = Number(slots?.sales_mode_hold_until_turn ?? 0);
   let belowExitCount = Number(slots?.sales_mode_below_exit_count ?? 0);
+  const turnCounter = Number(slots?.sales_mode_turn_counter ?? 0) + 1;
 
   if (dynamicSalesEnabled) {
-    const turnCounter = Number(slots?.sales_mode_turn_counter ?? 0) + 1;
     const exitThreshold = threshold - hysteresis;
 
     // SMART EXIT: Leave immediately on strong disinterest — preserves UX trust
