@@ -909,24 +909,57 @@ function summarizeConversation(history: any[]): string {
   return parts.length > 0 ? parts.join('\n') : "Conversation in progress.";
 }
 
-// Rolling summary for long conversations (STEP 3: Summarization Memory)
-function generateRollingSummary(history: any[], verbatimCount: number = 30): { summary: string; recentMessages: any[] } {
+// Smart truncation for long conversations (C7 fix)
+// Preserves greeting, all captured slots, booking/order status, and recent context
+function generateRollingSummary(history: any[], verbatimCount: number = 30, fullContext?: ConversationContext): { summary: string; recentMessages: any[] } {
   if (history.length <= verbatimCount) {
     return { summary: '', recentMessages: history };
   }
   
   const olderMessages = history.slice(0, -verbatimCount);
   const recentMessages = history.slice(-verbatimCount);
-  const context = extractContextFromHistory(olderMessages);
+  const context = fullContext || extractContextFromHistory(history);
   
   const summaryParts: string[] = [];
-  summaryParts.push(`[CONVERSATION SUMMARY - ${olderMessages.length} earlier messages]`);
-  if (context.customerName) summaryParts.push(`Customer: ${context.customerName}`);
-  if (context.serviceMentioned) summaryParts.push(`Service requested: ${context.serviceMentioned}`);
-  if (context.dateMentioned) summaryParts.push(`Date preference: ${context.dateMentioned}`);
-  if (context.timeMentioned) summaryParts.push(`Time preference: ${context.timeMentioned}`);
-  if (context.customerPhone) summaryParts.push(`Phone: ${context.customerPhone}`);
-  if (context.customerEmail) summaryParts.push(`Email: ${context.customerEmail}`);
+  summaryParts.push(`--- EARLIER CONVERSATION (${olderMessages.length} messages) ---`);
+  
+  // Preserve the first exchange (greeting)
+  const firstUserMsg = history.find(h => h.sender === 'user');
+  const firstBotMsg = history.find(h => h.sender === 'ai' || h.sender === 'bot');
+  if (firstUserMsg) summaryParts.push(`First user message: "${(firstUserMsg.message || '').substring(0, 120)}"`);
+  if (firstBotMsg) summaryParts.push(`Initial response: "${(firstBotMsg.message || '').substring(0, 120)}"`);
+  
+  // All captured customer info
+  const infoLines: string[] = [];
+  if (context.customerName) infoLines.push(`Name: ${context.customerName}`);
+  if (context.customerPhone) infoLines.push(`Phone: ${context.customerPhone}`);
+  if (context.customerEmail) infoLines.push(`Email: ${context.customerEmail}`);
+  if (infoLines.length > 0) summaryParts.push(`Customer info — ${infoLines.join(', ')}`);
+  
+  // Booking info
+  const bookingLines: string[] = [];
+  if (context.serviceMentioned) bookingLines.push(`Service: ${context.serviceMentioned}`);
+  if (context.dateMentioned) bookingLines.push(`Date: ${context.dateMentioned}`);
+  if (context.timeMentioned) bookingLines.push(`Time: ${context.timeMentioned}`);
+  if (bookingLines.length > 0) summaryParts.push(`Booking — ${bookingLines.join(', ')}`);
+  
+  // Order info
+  const orderLines: string[] = [];
+  if (context.productMentioned) orderLines.push(`Product: ${context.productMentioned}`);
+  if ((context.selectedProducts?.length || 0) > 0) {
+    const productNames = context.selectedProducts.map((p: any) => p.product_name || p.name || JSON.stringify(p)).join(', ');
+    orderLines.push(`Products: ${productNames}`);
+  }
+  if (context.quantity) orderLines.push(`Qty: ${context.quantity}`);
+  if (orderLines.length > 0) summaryParts.push(`Order — ${orderLines.join(', ')}`);
+  
+  // Status flags
+  const statusFlags: string[] = [];
+  if (context.bookingConfirmed) statusFlags.push('booking CONFIRMED');
+  if (context.orderConfirmed) statusFlags.push('order CONFIRMED');
+  if (context.askedIfNeedMoreHelp) statusFlags.push('asked if need more help');
+  if (statusFlags.length > 0) summaryParts.push(`Status: ${statusFlags.join(', ')}`);
+  
   summaryParts.push(`Phase: ${context.conversationPhase}`);
   if (context.emotionalState !== 'neutral') summaryParts.push(`Mood: ${context.emotionalState}`);
   
@@ -1884,7 +1917,7 @@ if (!GEMINI_API_KEY) {
     // LAYER 3: CONTEXT EXTRACTION & ROLLING SUMMARY
     //                                                                        
     const conversationContext = extractContextFromHistory(history || []);
-    const { summary: rollingSummary, recentMessages } = generateRollingSummary(history || [], 30);
+    const { summary: rollingSummary, recentMessages } = generateRollingSummary(history || [], 30, conversationContext);
 
     // Fetch FAQs for RAG (services already fetched in memory pipeline above)
     const { data: faqs } = await supabase
