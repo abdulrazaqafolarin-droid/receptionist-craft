@@ -336,7 +336,24 @@ npx supabase functions deploy {slug} --project-ref esvrhnlwquunsdduvbnr
 ### PHASE 1 deployed
 4. **Dead code removal** — Deleted 3 files, removed dead type imports, committed as `d86da78`, deployed as widget-chat v27
 
-## PART 14 — ENGINEERING PRINCIPLE
+### C7 — Memory Truncation (HIGH)
+- Enhanced `generateRollingSummary()` with smart truncation that preserves: first greeting exchange, all captured customer info (name, phone, email), booking details (service, date, time), order details (products, qty), booking/order confirmation status, emotional state
+- Passes already-computed `conversationContext` instead of re-extracting from partial history
+- Committed as `69581eb`, deployed as widget-chat v28
+
+## PART 14 — SESSION LOG (2026-05-12)
+
+### Applied to Production (round 2)
+1. **C7 — Memory truncation** — Smart `generateRollingSummary()` deployed as widget-chat v28
+2. **PHASE 1** — 3 dead flow files deleted, deployed as widget-chat v27
+3. **C4 — UI suppression** — Removed `userSentTextInsteadOfWidget`, deployed as widget-chat v26
+
+### Audit Status
+- **Fixed (9 of 17):** C2/R1, M1, C6, A4, A1, C4, C7, verify_jwt, .contains() + PHASE 1 dead code (A2)
+- **Reclassified (2):** C5 (doc-only), A2 partially (dead code removed in PHASE 1)
+- **Remaining (7):** C1 (dual engines), C3 (prompt contradictions), A3 (error handling), M2 (caching), M4 (AI fallback), M5 (KPIs), R2 (Money Mode)
+
+## PART 15 — ENGINEERING PRINCIPLE (copied from Part 14)
 Every change must answer YES to:
 > Does this increase revenue conversion for the business owner?
 > OR reduce the risk of the platform failing them?
