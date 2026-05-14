@@ -608,8 +608,8 @@ export default function BuilderPage() {
   async function autoGenerateContent(generateKB: boolean, generatePrompt: boolean) {
     try {
       // Fetch services and FAQs for this receptionist
-      let services = [];
-      let faqs = [];
+      let services: Array<{ name: string; description: string | null; duration_minutes: number; price: number }> = [];
+      let faqs: Array<{ question: string; answer: string }> = [];
       
       if (receptionistId) {
         const { data: servicesData } = await supabase

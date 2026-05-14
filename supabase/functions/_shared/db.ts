@@ -143,6 +143,93 @@ class MutationQuery {
   }
 }
 
+// ─── UPDATE query ───────────────────────────────────────────────────────────
+
+class UpdateQuery {
+  constructor(
+    private table: string,
+    private data: Record<string, unknown>,
+    private filters: Array<{ col: string; val: string; op?: string }> = [],
+  ) {}
+
+  eq(col: string, val: string | number | boolean): this {
+    this.filters.push({ col, val: String(val), op: "eq" });
+    return this;
+  }
+
+  then<TResult1 = QueryResult<Record<string, unknown>>, TResult2 = never>(
+    onfulfilled?: ((value: QueryResult<Record<string, unknown>>) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): PromiseLike<TResult1 | TResult2> {
+    const promise = (async (): Promise<QueryResult<Record<string, unknown>>> => {
+      try {
+        const params: Record<string, string> = {};
+        for (const f of this.filters) {
+          params[f.col] = `eq.${f.val}`;
+        }
+        const qs = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+        const url = `${SUPABASE_URL}/rest/v1/${this.table}?${qs}&select=*`;
+        const res = await fetch(url, {
+          method: "PATCH",
+          headers: { ...authHeaders(), Prefer: "return=representation" },
+          body: JSON.stringify(this.data),
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          return { data: null, error: { message: `PATCH ${res.status}: ${txt}` } };
+        }
+        const json = (await res.json()) as Record<string, unknown>[];
+        return { data: json[0] ?? null, error: null };
+      } catch (err) {
+        return { data: null, error: { message: String(err) } };
+      }
+    })();
+    return promise.then(onfulfilled, onrejected);
+  }
+}
+
+// ─── DELETE query ───────────────────────────────────────────────────────────
+
+class DeleteQuery {
+  constructor(
+    private table: string,
+    private filters: Array<{ col: string; val: string; op?: string }> = [],
+  ) {}
+
+  eq(col: string, val: string | number | boolean): this {
+    this.filters.push({ col, val: String(val), op: "eq" });
+    return this;
+  }
+
+  then<TResult1 = QueryResult<null>, TResult2 = never>(
+    onfulfilled?: ((value: QueryResult<null>) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): PromiseLike<TResult1 | TResult2> {
+    const promise = (async (): Promise<QueryResult<null>> => {
+      try {
+        const params: Record<string, string> = {};
+        for (const f of this.filters) {
+          params[f.col] = `eq.${f.val}`;
+        }
+        const qs = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+        const url = `${SUPABASE_URL}/rest/v1/${this.table}?${qs}`;
+        const res = await fetch(url, {
+          method: "DELETE",
+          headers: { ...authHeaders(), Prefer: "return=minimal" },
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          return { data: null, error: { message: `DELETE ${res.status}: ${txt}` } };
+        }
+        return { data: null, error: null };
+      } catch (err) {
+        return { data: null, error: { message: String(err) } };
+      }
+    })();
+    return promise.then(onfulfilled, onrejected);
+  }
+}
+
 // ─── Table entry point ─────────────────────────────────────────────────────
 
 class FromBuilder {
@@ -161,6 +248,14 @@ class FromBuilder {
       ? `resolution=merge-duplicates,on_conflict=${opts.onConflict}`
       : "resolution=merge-duplicates";
     return new MutationQuery(this.table, row, "POST", prefer);
+  }
+
+  update(data: Record<string, unknown>): UpdateQuery {
+    return new UpdateQuery(this.table, data);
+  }
+
+  delete(): DeleteQuery {
+    return new DeleteQuery(this.table);
   }
 }
 

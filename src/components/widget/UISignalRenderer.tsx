@@ -126,6 +126,8 @@ export function UISignalRenderer({
   };
 
   if (!visible?.activeComponent && !visible?.moneyModeActive) return null;
+  const activeComponent = visible.activeComponent;
+  if (!activeComponent && !visible?.moneyModeActive) return null;
   const showMoneyBadge = !!visible?.moneyModeActive;
 
   const launcherLabel: Record<Exclude<UISignal["activeComponent"], null>, string> = {
@@ -206,7 +208,7 @@ export function UISignalRenderer({
           disabled={loading}
         >
           <Layers3 className="h-4 w-4 text-primary" />
-          {launcherLabel[visible.activeComponent]}
+          {activeComponent ? launcherLabel[activeComponent] : null}
         </Button>
         {isPanelOpen && (
           <Card className="mt-2 rounded-xl border border-primary/15 bg-background/80 backdrop-blur-md p-3 shadow-md shadow-primary/5 animate-in zoom-in-95 fade-in-0 duration-200">

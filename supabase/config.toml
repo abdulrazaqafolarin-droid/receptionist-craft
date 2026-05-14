@@ -1,7 +1,86 @@
 project_id = "esvrhnlwquunsdduvbnr"
 
+# All edge functions use anon key auth (not JWT) — verify_jwt must be false
 [functions.widget-chat]
 verify_jwt = false
 
 [functions.chat]
+verify_jwt = false
+
+[functions.book-appointment]
+verify_jwt = false
+
+[functions.analytics]
+verify_jwt = false
+
+[functions.check-availability]
+verify_jwt = false
+
+[functions.appointment-action]
+verify_jwt = false
+
+[functions.system-health]
+verify_jwt = false
+
+[functions.optimizer]
+verify_jwt = false
+
+[functions.send-booking-confirmation]
+verify_jwt = false
+
+[functions.send-booking-email]
+verify_jwt = false
+
+[functions.generate-slots]
+verify_jwt = false
+
+[functions.cancel-appointment]
+verify_jwt = false
+
+[functions.voice-to-text]
+verify_jwt = false
+
+[functions.analytics-export]
+verify_jwt = false
+
+[functions.generate-system-prompt]
+verify_jwt = false
+
+[functions.confirm-appointment]
+verify_jwt = false
+
+[functions.ai-phone-call]
+verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.parse-services]
+verify_jwt = false
+
+[functions.send-reminder]
+verify_jwt = false
+
+[functions.generate-knowledge-base]
+verify_jwt = false
+
+[functions.text-to-speech]
+verify_jwt = false
+
+[functions.appointment-reminder-runner]
+verify_jwt = false
+
+[functions.activate-reminders]
+verify_jwt = false
+
+[functions.create-notification]
+verify_jwt = false
+
+[functions.google-calendar-sync]
+verify_jwt = false
+
+[functions.setup-reminder-cron]
+verify_jwt = false
+
+[functions.kb-rewrite]
 verify_jwt = false

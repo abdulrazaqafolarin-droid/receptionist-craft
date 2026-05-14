@@ -14,6 +14,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string; active: boolean; mock_mode?: boolean; ai_mode?: string }>>([]);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [stats, setStats] = useState({
     conversations: 0,
     appointments: 0,
@@ -26,19 +27,19 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (receptionists.length === 0 && user) {
-      const timer = setTimeout(() => {
-        navigate("/onboarding-wizard");
-      }, 2000);
-      return () => clearTimeout(timer);
+    if (dataLoaded && receptionists.length === 0 && user) {
+      navigate("/onboarding-wizard");
     }
-  }, [receptionists, user, navigate]);
+  }, [dataLoaded, receptionists, user, navigate]);
 
   const loadData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setUser(user);
 
-    if (!user) return;
+    if (!user) {
+      setDataLoaded(true);
+      return;
+    }
 
     const { data: recs } = await supabase
       .from("receptionists")
@@ -63,6 +64,8 @@ export default function Dashboard() {
         activeReceptionists: recs.filter(r => r.active).length,
       });
     }
+
+    setDataLoaded(true);
   };
 
   return (

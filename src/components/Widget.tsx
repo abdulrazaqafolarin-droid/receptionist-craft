@@ -1,12 +1,21 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+type WidgetReceptionist = {
+  id: string;
+  name: string | null;
+  business_name: string | null;
+  greeting_message: string | null;
+  timezone: string | null;
+  tone: string | null;
+};
+
 type Props = {
   receptionistId: string;
 };
 
 export default function Widget({ receptionistId }: Props) {
-  const [receptionist, setReceptionist] = useState<any>(null);
+  const [receptionist, setReceptionist] = useState<WidgetReceptionist | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const greetingSentRef = useRef(false);
 
@@ -24,19 +33,18 @@ export default function Widget({ receptionistId }: Props) {
     let mounted = true;
     (async () => {
       try {
-        // Use secure view that only exposes public fields
         const { data, error } = await supabase
           .from("widget_receptionists")
           .select("id, name, business_name, greeting_message, timezone, tone")
           .eq("id", receptionistId)
           .maybeSingle();
-        
+
         if (error) {
           console.warn("Widget: view query error", error);
         }
-        
+
         if (!mounted) return;
-        setReceptionist(data);
+        setReceptionist(data as WidgetReceptionist | null);
       } catch (e) {
         console.warn("Widget: failed to load receptionist", e);
       }

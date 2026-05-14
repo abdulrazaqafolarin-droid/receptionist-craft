@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
+import { callAIWithCircuitBreaker } from "../_shared/circuitBreaker.ts";
 import { assignVariant, mergeVariantConfig } from "../_shared/abTesting.ts";
 import { 
   buildIdempotencyKey, 
@@ -530,34 +531,43 @@ Return ONLY valid JSON, no explanations or markdown.`;
       reply = faqMatch.answer;
       console.log(`[Chat] Returning FAQ answer directly`);
     } else {
-      console.log(`[Chat] Calling AI with model ${receptionistConfig.model || 'google/gemini-2.5-flash'}`);
-      const aiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            contents: toGeminiContents(finalMessages),
-            generationConfig: {
-              temperature: receptionistConfig.temperature || 0.9,
-              maxOutputTokens: 2048,
-            },
-          }),
-        }
+      console.log(`[Chat] Calling AI with model gemini-2.5-flash-lite`);
+      const aiData = await callAIWithCircuitBreaker(
+        "gemini-2.5-flash-lite",
+        async () => {
+          const aiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                contents: toGeminiContents(finalMessages),
+                generationConfig: {
+                  temperature: receptionistConfig.temperature || 0.9,
+                  maxOutputTokens: 2048,
+                },
+              }),
+            }
+          );
+
+          if (!aiRes.ok) {
+            const errorText = await aiRes.text();
+            console.error(`[Chat] AI API error: ${errorText}`);
+            throw new Error(`AI request failed: ${aiRes.status} ${errorText}`);
+          }
+
+          const outRaw = await aiRes.json();
+          return {
+            choices: [{ message: { content: outRaw?.candidates?.[0]?.content?.parts?.[0]?.text || "" } }]
+          };
+        },
+        { choices: [{ message: { content: receptionistConfig.default_response || "I'm sorry, I'm having trouble right now. Please try again in a moment." } }] },
+        30000
       );
 
-      if (!aiRes.ok) {
-        const errorText = await aiRes.text();
-        console.error(`[Chat] AI API error: ${errorText}`);
-        throw new Error(`AI request failed: ${aiRes.status} ${errorText}`);
-      }
-
-      const outRaw = await aiRes.json();
-      const out = {
-        choices: [{ message: { content: outRaw?.candidates?.[0]?.content?.parts?.[0]?.text || "" } }]
-      };
+      const out = aiData;
       
       if (!out?.choices?.[0]?.message?.content) {
         console.warn(`[Chat] Unexpected AI response structure:`, out);
@@ -676,7 +686,7 @@ async function logAnalytics(
       user_id: userId || null,
       request_message: sanitizeInput(request),
       reply_text: sanitizeInput(reply),
-      model: config.model || 'google/gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite',
       latency_ms: latencyMs,
       temperature: config.temperature || 0.4,
       quality_score: qualityScore,

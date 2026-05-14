@@ -7,7 +7,7 @@ Generated from full system audit. All test scenarios for fixes and edge cases.
 ## SCENARIO GROUPS
 
 1. **Conversational Flow Fixes** — Tests for REMOVE/SOFTEN/CONDITIONALIZE instruction changes
-2. **UI Overlap Fixes** — Tests for dual UI system consolidation
+2. **UI Overlap Fixes** — Tests for single UISignalRenderer system (dual system consolidated)
 3. **Engine Unification** — Tests for single engine migration
 4. **State Unification** — Tests for consolidated state system
 5. **Revenue Tracking** — Tests for money mode and analytics
@@ -334,7 +334,6 @@ Generated from full system audit. All test scenarios for fixes and edge cases.
 - (Simulate fallback or error path)
 
 **Expected:**
-- WidgetUIManager receives null intentSignal → renders nothing → chat continues as text-only
 - UISignalRenderer receives null signal → renders nothing → chat continues as text-only
 - No crash, no error, no blank page
 - Chat messages still render normally

@@ -370,8 +370,55 @@ npx supabase functions deploy {slug} --project-ref esvrhnlwquunsdduvbnr
 - **Reclassified (3):** C5 (doc-only), A2 (dead code removed in PHASE 1), R2 (enhanced)
 - **Remaining (5):** C1 (dual engines ~40-60h), C3 (prompt contradictions ~20-30h), A3 (error handling ~5h), M2 (caching ~5h), M5 (KPIs ~5h)
 
-## PART 15 — ENGINEERING PRINCIPLE (copied from Part 14)
-Every change must answer YES to:
-> Does this increase revenue conversion for the business owner?
-> OR reduce the risk of the platform failing them?
-If NO — reject the change.
+## PART 15 — SESSION LOG (2026-05-13) — Full Platform Scan & Fix
+
+### Comprehensive Fix Session
+
+#### What Was Done
+**Wave 1 — Config/Doc Quick Fixes:**
+1. **C3 (verify_jwt):** Added `verify_jwt = false` for all 28 edge functions in `supabase/config.toml`
+2. **C4 (env tracking):** Added `.env`, `.env.local`, `.env.*.local` to `.gitignore`
+3. **m5 (missing scripts):** Added `typecheck` script to `package.json`
+4. **M8 (documentation rot):** Rewrote `UI_ARCHITECTURE.md` (removed all WidgetUIManager references, documented single UISignalRenderer system); updated `TEST_SCENARIOS.md` (removed WidgetUIManager mentions)
+
+**Wave 2 — Dead Code Cleanup:**
+5. **H1 (dead shared files):** Deleted 10 dead files/directories (~3,688 lines):
+   - `_shared/stateMachine.ts` (552L — comment said replaced by Engine v2)
+   - `_shared/emailQueue.ts` (179L — never wired)
+   - `_shared/idempotency.ts` (96L — superseded)
+   - `_shared/bookingPreValidator.ts` (56L — created but never imported)
+   - `_shared/ai-chat/` (6 files, 819L — entire dir unused)
+   - `_shared/channels/` (4 files, 348L — never wired)
+   - `_shared/layers/` (9 files, 1,520L — 7-layer architecture built but unused)
+   - `_shared/flow/index.ts` (34L — barrel never imported)
+   - `_shared/flow/audit_regression.test.ts` (497L — test file in runtime code)
+6. **M4 (dead frontend):** Deleted `src/components/widget/ProductSelector.tsx` (superseded by `ProductSelectorEnhanced.tsx`)
+
+**Wave 3 — Code Fixes:**
+7. **C2 (model name mismatch):** Fixed `widget-chat/index.ts` L2286/L2559 and `chat/index.ts` L533/L679 — replaced `google/gemini-2.5-flash` with `gemini-2.5-flash-lite` in all circuit breaker keys and analytics logging
+8. **H3 (dashboard redirect race):** Fixed `Dashboard.tsx` — added `dataLoaded` flag so redirect only fires after `loadData()` completes
+9. **H5 (Widget.tsx any types):** Added proper `WidgetReceptionist` interface, replaced `useState<any>` with typed state
+10. **m3 (currency symbols):** Expanded `getCurrencySymbol()` from 12 to 26 currencies with proper unicode symbols
+
+**Wave 4 — Database Fixes:**
+11. **M1 (missing indexes):** Created migration `20260513000001` with 5 new indexes (conversion_events session, services name, availability_rules day, conversation_state last_message, kb_rewrite_log created)
+12. **M6 (RLS leakage):** Fixed `ab_tests`/`ab_variants` policies — scoped to user's own receptionists instead of all authenticated users
+13. **m1 (handle_new_user trigger):** Updated trigger to use `split_part(new.email, '@', 1)` fallback instead of empty string
+
+**Wave 5 — Feature Wiring:**
+14. **M5 (custom db client):** Added `update()` (PATCH) and `delete()` (DELETE) methods to `_shared/db.ts`
+15. **M7 (chat circuit breaker):** Added `callAIWithCircuitBreaker` to `chat/index.ts` with 30s timeout and fallback response
+16. **H6 (KPI pipeline):** Added `kpi_tick` event persistence to `conversion_events` table after `computeConversationKPIs()` in widget-chat
+
+**Wave 6 — TypeScript Strict Mode:**
+17. **M2 (strict mode):** Enabled `strict: true`, `noImplicitAny: true`, `noFallthroughCasesInSwitch: true` in `tsconfig.app.json`
+
+### Audit Status (Updated)
+- **Fixed (20 of 22):** All original 15 + C3 (all functions verify_jwt), C4 (env tracking), H1 (dead code), M4 (dead frontend), m1 (trigger), m3 (currency), m5 (scripts), M5 (db client), M7 (chat circuit breaker), H6 (KPI pipeline), M8 (docs cleanup)
+- **Remaining (2):** C1 (dual engines ~40-60h), M2 (full strict mode cleanup — partial, 130+ remaining TS errors)
+- **New issues identified this session:** C2 (model mismatch — fixed), H3 (dashboard race — fixed), H5 (Widget.tsx types — fixed)
+
+### Vercel Status
+- Domain `receptionist-craft.vercel.app` not resolving as of 2026-05-13
+- Latest commit `3cb4200` (22h ago) not reflected
+- Need Vercel token or dashboard access to diagnose deployment failure

@@ -154,9 +154,14 @@ const corsHeaders = {
 //                                                                            
 function getCurrencySymbol(currency: string | null | undefined): string {
   const map: Record<string, string> = {
-    USD: '$', NGN: ' ', GBP: ' ', EUR: ' ',
-    KES: 'KSh', GHS: ' ', ZAR: 'R', CAD: 'CA$',
-    AUD: 'A$', INR: ' ', JPY: ' ', CNY: ' ',
+    USD: '$', NGN: '\u20A6', GBP: '\u00A3', EUR: '\u20AC',
+    KES: 'KSh', GHS: '\u20B5', ZAR: 'R', CAD: 'CA$',
+    AUD: 'A$', INR: '\u20B9', JPY: '\u00A5', CNY: '\u00A5',
+    BRL: 'R$', RUB: '\u20BD', KRW: '\u20A9', MXN: 'MX$',
+    SEK: 'kr', NOK: 'kr', DKK: 'kr', PLN: 'z\u0142',
+    CHF: 'CHF', TRY: '\u20BA', SAR: '\u0631.\u0633', AED: '\u062F.\u0625',
+    TZS: 'TSh', UGX: 'USh', RWF: 'RF', ETB: 'Br',
+    ZMW: 'ZK', MAD: '\u062F.\u0645.', EGP: '\u00A3',
   };
   return map[(currency || 'USD').toUpperCase()] || '$';
 }
@@ -2283,7 +2288,7 @@ if (!GEMINI_API_KEY) {
     // PHASE 8: AI CALL WITH CIRCUIT BREAKER + TIMEOUT
     //                                                                        
     const aiData = await callAIWithCircuitBreaker(
-      receptionist.model || "google/gemini-2.5-flash",
+      "gemini-2.5-flash-lite",
       async () => {
         const aiRes = await fetch(
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
@@ -2449,6 +2454,33 @@ return {
     const conversationKPIs = computeConversationKPIs(history || [], conversationContext);
     console.log(`[KPIs] Engaged: ${conversationKPIs.is_engaged}, Repetition: ${conversationKPIs.repetition_rate.toFixed(2)}, Hallucination risk: ${conversationKPIs.hallucination_risk.toFixed(2)}`);
 
+    // Persist KPI data to conversion_events for analytics pipeline
+    try {
+      await supabase.from('conversion_events').insert({
+        receptionist_id: receptionistId,
+        session_id: sessionId,
+        event_type: 'kpi_tick',
+        revenue_value: 0,
+        currency: receptionistCurrency,
+        metadata: {
+          total_messages: conversationKPIs.total_messages,
+          is_engaged: conversationKPIs.is_engaged,
+          goal_completion_likely: conversationKPIs.goal_completion_likely,
+          fallback_triggered: conversationKPIs.fallback_triggered,
+          escalation_triggered: conversationKPIs.escalation_triggered,
+          repetition_rate: conversationKPIs.repetition_rate,
+          hallucination_risk: conversationKPIs.hallucination_risk,
+          session_length: conversationKPIs.session_length,
+          user_said_thanks: conversationKPIs.user_said_thanks,
+          user_expressed_frustration: conversationKPIs.user_expressed_frustration,
+          ai_mode: effectiveMode,
+          intent_score: intentScore,
+        }
+      });
+    } catch (kpiErr) {
+      console.warn("[KPIs] Failed to persist:", kpiErr);
+    }
+
     // Store user message
     const { error: userMsgErr } = await supabase.from("chat_messages").insert({
       receptionist_id: receptionistId,
@@ -2556,7 +2588,7 @@ return {
           fallback: isLowConfidence,
           unanswered: isUnanswered,
         },
-        model: receptionist.model || "google/gemini-2.5-flash",
+        model: "gemini-2.5-flash-lite",
         latency_ms: latencyMs,
         channel: "widget",
         tags: [
