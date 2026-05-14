@@ -53,10 +53,11 @@ export function DateSelector({ onSelect, disabled, minDate }: DateSelectorProps)
               onClick={() => handleQuickSelect(qd.date)}
               disabled={disabled}
               className={cn(
-                "text-xs h-9 rounded-lg transition-all",
+                "text-xs h-9 rounded-lg transition-all pressable",
                 "hover:border-primary hover:bg-primary/5",
                 selectedDate?.toDateString() === qd.date.toDateString() && "border-primary bg-primary/10"
               )}
+              aria-label={`Select ${qd.label}`}
             >
               {qd.label}
             </Button>
@@ -87,7 +88,8 @@ export function DateSelector({ onSelect, disabled, minDate }: DateSelectorProps)
             onClick={handleConfirm} 
             disabled={disabled} 
             size="sm"
-            className="gap-1.5 rounded-lg"
+            className="gap-1.5 rounded-lg pressable"
+            aria-label="Confirm date"
           >
             <Check className="h-4 w-4" />
             Confirm

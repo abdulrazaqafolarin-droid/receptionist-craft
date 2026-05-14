@@ -52,6 +52,8 @@ export function FloatingBackground({ className, variant = 'default' }: FloatingB
               ...pos,
               animationDelay: `${delay}s`,
               animationDuration: `${8 + index * 0.5}s`,
+              transform: 'translateZ(0)',
+              willChange: 'transform',
             }}
           >
             <Icon 
@@ -63,18 +65,18 @@ export function FloatingBackground({ className, variant = 'default' }: FloatingB
         );
       })}
       
-      {/* Gradient orbs for extra depth */}
+      {/* Gradient orbs for extra depth — will-change for GPU compositing */}
       <div 
         className="absolute top-[20%] left-[10%] w-64 h-64 rounded-full bg-primary/5 blur-3xl animate-pulse"
-        style={{ animationDuration: '8s' }}
+        style={{ animationDuration: '8s', transform: 'translateZ(0)', willChange: 'transform' }}
       />
       <div 
         className="absolute bottom-[30%] right-[5%] w-48 h-48 rounded-full bg-accent/5 blur-3xl animate-pulse"
-        style={{ animationDuration: '10s', animationDelay: '2s' }}
+        style={{ animationDuration: '10s', animationDelay: '2s', transform: 'translateZ(0)', willChange: 'transform' }}
       />
       <div 
         className="absolute top-[60%] left-[50%] w-32 h-32 rounded-full bg-secondary/5 blur-2xl animate-pulse"
-        style={{ animationDuration: '6s', animationDelay: '4s' }}
+        style={{ animationDuration: '6s', animationDelay: '4s', transform: 'translateZ(0)', willChange: 'transform' }}
       />
     </div>
   );

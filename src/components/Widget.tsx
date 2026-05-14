@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 type WidgetReceptionist = {
@@ -16,8 +16,10 @@ type Props = {
 
 export default function Widget({ receptionistId }: Props) {
   const [receptionist, setReceptionist] = useState<WidgetReceptionist | null>(null);
+  const [loading, setLoading] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const greetingSentRef = useRef(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let sid = localStorage.getItem(`widget_session_${receptionistId}`);
@@ -33,6 +35,7 @@ export default function Widget({ receptionistId }: Props) {
     let mounted = true;
     (async () => {
       try {
+        setLoading(true);
         const { data, error } = await supabase
           .from("widget_receptionists")
           .select("id, name, business_name, greeting_message, timezone, tone")
@@ -47,6 +50,8 @@ export default function Widget({ receptionistId }: Props) {
         setReceptionist(data as WidgetReceptionist | null);
       } catch (e) {
         console.warn("Widget: failed to load receptionist", e);
+      } finally {
+        if (mounted) setLoading(false);
       }
     })();
     return () => {
@@ -79,11 +84,52 @@ export default function Widget({ receptionistId }: Props) {
     })();
   }, [receptionist, sessionId, receptionistId]);
 
+  // Keyboard navigation: focus sentinel for Escape to close
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      const panel = document.querySelector('[data-widget-panel]') as HTMLElement;
+      panel?.focus();
+    }
+  }, []);
+
+  if (loading) {
+    return (
+      <div
+        className="widget-root animate-in fade-in-0 duration-300"
+        role="region"
+        aria-label="Loading receptionist"
+      >
+        <header className="widget-header">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="h-8 w-8 rounded-full bg-muted shimmer" />
+            <div className="h-4 w-32 bg-muted shimmer rounded" />
+          </div>
+        </header>
+        <div className="p-4 space-y-3">
+          <div className="h-3 w-3/4 bg-muted shimmer rounded" />
+          <div className="h-3 w-1/2 bg-muted shimmer rounded" />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="widget-root">
+    <div
+      className="widget-root animate-in fade-in-0 duration-300"
+      role="region"
+      aria-label={`Chat with ${receptionist?.business_name || "Reception"}`}
+      onKeyDown={handleKeyDown}
+    >
       <header className="widget-header">
-        <div className="widget-title">{receptionist?.business_name || "Reception"}</div>
+        <div
+          className="widget-title"
+          tabIndex={0}
+          aria-label={`${receptionist?.business_name || "Reception"} chat`}
+        >
+          {receptionist?.business_name || "Reception"}
+        </div>
       </header>
+      <div ref={sentinelRef} tabIndex={0} aria-hidden="true" />
     </div>
   );
 }

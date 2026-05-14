@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,11 @@ export function LeadForm({ onSubmit, onSkip, disabled, componentData }: LeadForm
   const customerFields = componentData?.customerFields;
   const requiredFields = componentData?.requiredFields ?? ["name"];
   const [name, setName] = useState(componentData?.prefillName ?? "");
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    nameRef.current?.focus();
+  }, []);
   const [email, setEmail] = useState(componentData?.prefillEmail ?? "");
   const [phone, setPhone] = useState(componentData?.prefillPhone ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +118,7 @@ export function LeadForm({ onSubmit, onSkip, disabled, componentData }: LeadForm
             <div className="relative">
               <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
+                ref={nameRef}
                 id="lead-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -173,7 +179,8 @@ export function LeadForm({ onSubmit, onSkip, disabled, componentData }: LeadForm
             onClick={handleSubmit}
             disabled={disabled}
             size="sm"
-            className="gap-1.5 rounded-lg flex-1"
+            className="gap-1.5 rounded-lg flex-1 pressable"
+            aria-label="Submit contact details"
           >
             <Send className="h-4 w-4" />
             Submit
@@ -184,7 +191,8 @@ export function LeadForm({ onSubmit, onSkip, disabled, componentData }: LeadForm
               onClick={onSkip}
               disabled={disabled}
               size="sm"
-              className="gap-1.5 rounded-lg text-muted-foreground"
+              className="gap-1.5 rounded-lg text-muted-foreground pressable"
+              aria-label="Skip contact form"
             >
               <SkipForward className="h-4 w-4" />
               Skip

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ArrowRight, X } from "lucide-react";
@@ -17,9 +18,18 @@ export function SwitchConfirmation({ onConfirm, onCancel, disabled, componentDat
   const message = componentData?.message ?? "You're currently in the middle of something. Do you want to switch?";
   const fromLabel = componentData?.fromFlow ?? "current task";
   const toLabel = componentData?.toFlow ?? "new task";
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    cancelRef.current?.focus();
+  }, []);
 
   return (
-    <Card className="p-4 mt-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 border-amber-200/50 bg-amber-50/30">
+    <Card
+      className="p-4 mt-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 border-amber-200/50 bg-amber-50/30"
+      role="alertdialog"
+      aria-label="Switch task confirmation"
+    >
       <div className="flex items-start gap-3">
         <div className="mt-0.5">
           <AlertTriangle className="h-5 w-5 text-amber-500" />
@@ -36,17 +46,19 @@ export function SwitchConfirmation({ onConfirm, onCancel, disabled, componentDat
               disabled={disabled}
               size="sm"
               variant="default"
-              className="gap-1.5 rounded-lg"
+              className="gap-1.5 rounded-lg pressable"
+              aria-label={`Switch to ${toLabel}`}
             >
               <ArrowRight className="h-4 w-4" />
               Switch to {toLabel}
             </Button>
             <Button
+              ref={cancelRef}
               onClick={onCancel}
               disabled={disabled}
               size="sm"
               variant="outline"
-              className="gap-1.5 rounded-lg"
+              className="gap-1.5 rounded-lg pressable"
             >
               <X className="h-4 w-4" />
               Stay

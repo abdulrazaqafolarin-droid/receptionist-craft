@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ServiceSelector } from "@/components/widget/ServiceSelector";
 import { ProductSelectorEnhanced } from "@/components/widget/ProductSelectorEnhanced";
 import { DateSelector } from "@/components/widget/DateSelector";
@@ -97,6 +97,24 @@ export function UISignalRenderer({
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const isMounted = useRef(true);
   const processingDismiss = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const launcherRef = useRef<HTMLButtonElement>(null);
+
+  // Focus panel content when opening
+  useEffect(() => {
+    if (isPanelOpen && panelRef.current) {
+      const firstFocusable = panelRef.current.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      firstFocusable?.focus();
+    }
+  }, [isPanelOpen]);
+
+  // Focus launcher when panel closes
+  const closePanel = useCallback(() => {
+    setIsPanelOpen(false);
+    setTimeout(() => launcherRef.current?.focus(), 100);
+  }, []);
 
   useEffect(() => {
     if (!isMounted.current) return;
@@ -118,11 +136,18 @@ export function UISignalRenderer({
     if (!isMounted.current) return;
     if (processingDismiss.current) return;
     processingDismiss.current = true;
-    setIsPanelOpen(false);
+    closePanel();
     onDismiss?.();
     setTimeout(() => {
       processingDismiss.current = false;
     }, 300);
+  };
+
+  const handlePanelKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      closePanel();
+    }
   };
 
   if (!visible?.activeComponent && !visible?.moneyModeActive) return null;
@@ -202,26 +227,36 @@ export function UISignalRenderer({
           </div>
         )}
         <Button
+          ref={launcherRef}
           variant="outline"
-          className="w-full justify-start gap-2 rounded-xl border-primary/30 bg-primary/5 backdrop-blur-sm hover:bg-primary/10 transition-all duration-200 shadow-sm hover:shadow"
+          className="w-full justify-start gap-2 rounded-xl border-primary/30 bg-primary/5 backdrop-blur-sm hover:bg-primary/10 transition-all duration-200 shadow-sm hover:shadow active:scale-[0.97]"
           onClick={() => setIsPanelOpen((prev) => !prev)}
           disabled={loading}
+          aria-expanded={isPanelOpen}
+          aria-haspopup="dialog"
         >
           <Layers3 className="h-4 w-4 text-primary" />
           {activeComponent ? launcherLabel[activeComponent] : null}
         </Button>
         {isPanelOpen && (
-          <Card className="mt-2 rounded-xl border border-primary/15 bg-background/80 backdrop-blur-md p-3 shadow-md shadow-primary/5 animate-in zoom-in-95 fade-in-0 duration-200">
+          <Card
+            ref={panelRef}
+            className="mt-2 rounded-xl border border-primary/15 bg-background/80 backdrop-blur-md p-3 shadow-md shadow-primary/5 animate-in zoom-in-95 fade-in-0 duration-200"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Interactive panel"
+            onKeyDown={handlePanelKeyDown}
+          >
             <div className="mb-3 flex items-center justify-between border-b border-border/60 pb-2">
               <p className="text-sm font-semibold flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5 text-primary" />
                 Interactive Panel
               </p>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsPanelOpen(false)} aria-label="Minimize panel">
+                <Button variant="ghost" size="icon" className="h-8 w-8 pressable" onClick={() => { closePanel(); }} aria-label="Minimize panel">
                   <Minimize2 className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleDismiss} aria-label="Close panel">
+                <Button variant="ghost" size="icon" className="h-8 w-8 pressable" onClick={handleDismiss} aria-label="Close panel">
                   <X className="h-4 w-4" />
                 </Button>
               </div>

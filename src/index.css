@@ -450,6 +450,12 @@
     @apply font-medium transition-all duration-200;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
     @apply disabled:pointer-events-none disabled:opacity-50;
+    @apply active:scale-[0.97];
+  }
+
+  /* Press feedback for clickable elements */
+  .pressable {
+    @apply active:scale-[0.97] transition-transform duration-75;
   }
 
   /* Icon button */
@@ -592,5 +598,37 @@
   }
   to {
     opacity: 1;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACCESSIBILITY — REDUCED MOTION
+   Respects user's system preference for reduced motion (WCAG 2.1 SC 2.3.3)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+
+  .shimmer {
+    background: hsl(var(--muted));
+    animation: none;
+  }
+
+  .float,
+  .bounce-subtle,
+  .neon-pulse,
+  .pulse-ring::before {
+    animation: none;
   }
 }

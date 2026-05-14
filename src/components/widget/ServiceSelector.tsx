@@ -33,13 +33,17 @@ export function ServiceSelector({ services, onSelect, disabled, initialLimit = 1
       {displayedServices.map((service, idx) => (
         <Card
           key={service.id}
+          role="button"
+          tabIndex={disabled ? -1 : 0}
+          aria-label={`Select ${service.name}${service.price ? `, $${service.price.toFixed(0)}` : ''}`}
           className={cn(
             "p-3 cursor-pointer transition-all duration-200",
-            "hover:border-primary hover:shadow-lg hover:scale-[1.01]",
+            "hover:border-primary hover:shadow-lg hover:scale-[1.01] active:scale-[0.98]",
             "group relative overflow-hidden",
             disabled && "opacity-50 cursor-not-allowed"
           )}
           onClick={() => !disabled && onSelect(service.id, service.name)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !disabled) onSelect(service.id, service.name); }}
           style={{ animationDelay: `${idx * 75}ms` }}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/0 to-primary/5 group-hover:from-primary/5 group-hover:via-primary/3 group-hover:to-primary/10 transition-all duration-300" />
@@ -77,9 +81,10 @@ export function ServiceSelector({ services, onSelect, disabled, initialLimit = 1
         <Button
           variant="ghost"
           size="sm"
-          className="w-full text-muted-foreground hover:text-primary mt-2"
+          className="w-full text-muted-foreground hover:text-primary mt-2 pressable"
           onClick={() => setShowAll(!showAll)}
           disabled={disabled}
+          aria-label={showAll ? "Show fewer services" : `Show ${remainingCount} more services`}
         >
           {showAll ? (
             <>

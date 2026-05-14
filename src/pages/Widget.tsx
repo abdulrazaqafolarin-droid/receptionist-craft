@@ -1343,10 +1343,8 @@ export default function Widget() {
           {messages.map((msg, idx) => (
             <div 
               key={idx} 
-              className={cn(
-                "space-y-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
-                `animation-delay-${idx % 3}`
-              )}
+              className="space-y-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
+              style={{ animationDelay: `${Math.min(idx * 30, 500)}ms` }}
             >
               <div
                 className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}

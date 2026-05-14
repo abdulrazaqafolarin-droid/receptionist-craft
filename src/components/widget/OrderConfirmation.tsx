@@ -140,7 +140,8 @@ export function OrderConfirmation({
                 variant="outline"
                 size="sm"
                 onClick={onEdit}
-                className="flex-1 text-xs"
+                className="flex-1 text-xs pressable"
+                aria-label="Edit order details"
               >
                 Edit Details
               </Button>
@@ -150,7 +151,8 @@ export function OrderConfirmation({
                 variant="outline"
                 size="sm"
                 onClick={onCancel}
-                className="flex-1 text-xs text-red-600 border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
+                className="flex-1 text-xs text-red-600 border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950 pressable"
+                aria-label="Cancel order"
               >
                 Cancel Order
               </Button>

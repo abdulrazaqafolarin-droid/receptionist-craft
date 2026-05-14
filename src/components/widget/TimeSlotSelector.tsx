@@ -71,11 +71,12 @@ export function TimeSlotSelector({ slots, onSelect, disabled, showMore, onShowMo
             className={cn(
               "flex items-center gap-2 justify-center h-10",
               "border-primary/20 hover:border-primary hover:bg-primary/5",
-              "transition-all duration-200 hover:scale-[1.02] hover:shadow-md",
+              "transition-all duration-200 hover:scale-[1.02] hover:shadow-md pressable",
               "rounded-xl font-medium",
               disabled && "opacity-50 cursor-not-allowed"
             )}
             style={{ animationDelay: `${idx * 50}ms` }}
+            aria-label={`Select ${formatSlotToLocalTime(slot)}`}
           >
             <Clock className="h-3.5 w-3.5 text-primary" />
             <span>{formatSlotToLocalTime(slot)}</span>
@@ -88,7 +89,8 @@ export function TimeSlotSelector({ slots, onSelect, disabled, showMore, onShowMo
           size="sm"
           onClick={onShowMore}
           disabled={disabled}
-          className="w-full text-primary hover:text-primary hover:bg-primary/5"
+          className="w-full text-primary hover:text-primary hover:bg-primary/5 pressable"
+          aria-label="Show more time slots"
         >
           Show more times
         </Button>
