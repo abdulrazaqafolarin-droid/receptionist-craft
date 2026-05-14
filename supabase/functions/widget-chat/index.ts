@@ -1323,6 +1323,25 @@ You've noticed this customer seems ready to take a step forward. Match their rea
 }
 
 //                                                                              
+// DERIVE LEAD FORM FIELDS FROM CUSTOMER FIELDS CONFIG
+//                                                                              
+function deriveRequiredFieldLabels(customerFields: any): string[] {
+  if (!customerFields || !Array.isArray(customerFields)) return ["name"];
+  const labels: string[] = [];
+  for (const f of customerFields) {
+    if (!f.required) continue;
+    if (f.key === 'full_name' || f.key === 'first_name') {
+      if (!labels.includes('name')) labels.push('name');
+    } else if (f.key === 'email') {
+      labels.push('email');
+    } else if (f.key === 'phone' || f.key === 'whatsapp') {
+      labels.push('phone');
+    }
+  }
+  return labels.length > 0 ? labels : ["name"];
+}
+
+//                                                                              
 // MASTER SYSTEM PROMPT BUILDER (COMPOSABLE BLOCKS)
 //                                                                              
 function buildMasterSystemPrompt(
@@ -2142,7 +2161,7 @@ if (!GEMINI_API_KEY) {
         selectedProducts: conversationContext.selectedProducts,
       };
       
-      preActionGateResult = validateActionGate(detectedAction, conversationState.slots || {}, gateContext);
+      preActionGateResult = validateActionGate(detectedAction, conversationState.slots || {}, gateContext, receptionist?.customer_fields);
       console.log(`[Action Gate] Pre-check for ${detectedAction}: ${preActionGateResult.summary}`);
     }
     
@@ -2591,7 +2610,8 @@ return {
         customerName: mergedCustomerName,
         customerPhone: mergedCustomerPhone,
         customerEmail: mergedCustomerEmail,
-      }
+      },
+      receptionist?.customer_fields
     );
     
     console.log(`[Action Gate] Booking: ${bookingGate.summary}`);
@@ -2733,7 +2753,8 @@ return {
         customerPhone: conversationContext.customerPhone || engineState?.entities?.customer?.phone,
         customerEmail: conversationContext.customerEmail || engineState?.entities?.customer?.email,
         selectedProducts: conversationContext.selectedProducts,
-      }
+      },
+      receptionist?.customer_fields
     );
     
     console.log(`[Action Gate] Order: ${orderGate.summary}`);
@@ -3079,7 +3100,15 @@ return {
       version: "1.0",
       intent: uiIntent,
       activeComponent,
-      componentData: activeComponent === "time_picker"
+      componentData: activeComponent === "lead_form"
+        ? {
+            customerFields: receptionist?.customer_fields || [],
+            requiredFields: deriveRequiredFieldLabels(receptionist?.customer_fields),
+            prefillName: mergedCustomerName || conversationContext.customerName || '',
+            prefillEmail: mergedCustomerEmail || conversationContext.customerEmail || '',
+            prefillPhone: mergedCustomerPhone || conversationContext.customerPhone || '',
+          }
+        : activeComponent === "time_picker"
         ? { date: mergedDate || null }
         : activeComponent === "booking_confirmation" && bookingResult
           ? {

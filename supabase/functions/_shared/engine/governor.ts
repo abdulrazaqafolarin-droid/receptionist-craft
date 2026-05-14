@@ -211,6 +211,7 @@ export function buildPromptBlock(
   if (uiHints.show_time_slots) activeWidgets.push('Time Slot Picker');
   if (uiHints.show_confirmation) activeWidgets.push('Booking Confirmation Card');
   if (uiHints.show_order_confirmation) activeWidgets.push('Order Confirmation Card');
+  if (uiHints.show_lead_form) activeWidgets.push('Contact Information Form');
   
   lines.push(`
 # 🔒 EXECUTION GOVERNOR (CONVERSATIONAL COLLECTION ENGINE)

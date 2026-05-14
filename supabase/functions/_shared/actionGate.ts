@@ -22,6 +22,17 @@ export type ActionType =
   | 'reschedule';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CUSTOMER FIELD CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+export interface CustomerFieldConfig {
+  key: string;
+  label: string;
+  type: "standard" | "custom";
+  required: boolean;
+  order: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SLOT REQUIREMENTS PER ACTION
 // ─────────────────────────────────────────────────────────────────────────────
 export interface SlotRequirement {
@@ -40,7 +51,7 @@ export const ACTION_REQUIREMENTS: Record<ActionType, SlotRequirement[]> = {
   ],
   create_order: [
     { field: 'productId', label: 'product', required: true },
-    { field: 'quantity', label: 'quantity', required: false }, // Defaults to 1
+    { field: 'quantity', label: 'quantity', required: false },
     { field: 'customerName', label: 'name', required: true },
     { field: 'contact', label: 'phone or email', required: true },
   ],
@@ -56,6 +67,58 @@ export const ACTION_REQUIREMENTS: Record<ActionType, SlotRequirement[]> = {
     { field: 'contact', label: 'phone or email', required: true },
   ],
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BUILD DYNAMIC REQUIREMENTS FROM CUSTOMER FIELDS CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+export function buildDynamicRequirements(
+  action: ActionType,
+  customerFields?: CustomerFieldConfig[] | null
+): SlotRequirement[] {
+  const base = ACTION_REQUIREMENTS[action].map(r => ({ ...r }));
+
+  if (!customerFields || !Array.isArray(customerFields) || customerFields.length === 0) {
+    return base;
+  }
+
+  const requiredKeys = new Set(
+    customerFields.filter(f => f.required).map(f => f.key)
+  );
+
+  // Map customer_field keys to whether they require customerName, customerEmail, customerPhone
+  const needsName = requiredKeys.has('full_name') || requiredKeys.has('first_name');
+  const needsEmail = requiredKeys.has('email');
+  const needsPhone = requiredKeys.has('phone') || requiredKeys.has('whatsapp');
+
+  // Check if gate requires name
+  const nameReq = base.find(r => r.field === 'customerName');
+  if (nameReq) {
+    nameReq.required = needsName;
+  }
+
+  // Replace 'contact' with specific field checks
+  const contactIdx = base.findIndex(r => r.field === 'contact');
+  if (contactIdx !== -1) {
+    if (needsEmail && needsPhone) {
+      // Both email AND phone are required: split into individual checks
+      base.splice(contactIdx, 1,
+        { field: 'customerEmail', label: 'email', required: true },
+        { field: 'customerPhone', label: 'phone', required: true }
+      );
+    } else if (needsEmail) {
+      // Only email required: replace contact with customerEmail
+      base[contactIdx] = { field: 'customerEmail', label: 'email', required: true };
+    } else if (needsPhone) {
+      // Only phone required: replace contact with customerPhone
+      base[contactIdx] = { field: 'customerPhone', label: 'phone', required: true };
+    } else {
+      // Neither required: make contact optional
+      base[contactIdx].required = false;
+    }
+  }
+
+  return base;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VALIDATION RESULT
@@ -126,9 +189,10 @@ export function validateActionGate(
     timeMentioned?: string | null;
     quantity?: number | null;
     selectedProducts?: Array<{ productId: string; productName: string; quantity: number; price?: number }>;
-  }
+  },
+  customerFields?: CustomerFieldConfig[] | null
 ): ActionGateResult {
-  const requirements = ACTION_REQUIREMENTS[action];
+  const requirements = buildDynamicRequirements(action, customerFields);
   
   // Merge context into slots (slots take priority)
   const mergedSlots: FlowSlots = {
@@ -256,9 +320,10 @@ Suggested next question: "${gateResult.nextQuestion}"`}
 // ─────────────────────────────────────────────────────────────────────────────
 export function checkBookingGate(
   slots: FlowSlots,
-  context?: Parameters<typeof validateActionGate>[2]
+  context?: Parameters<typeof validateActionGate>[2],
+  customerFields?: CustomerFieldConfig[] | null
 ): ActionGateResult {
-  return validateActionGate('book_appointment', slots, context);
+  return validateActionGate('book_appointment', slots, context, customerFields);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -266,9 +331,10 @@ export function checkBookingGate(
 // ─────────────────────────────────────────────────────────────────────────────
 export function checkOrderGate(
   slots: FlowSlots,
-  context?: Parameters<typeof validateActionGate>[2]
+  context?: Parameters<typeof validateActionGate>[2],
+  customerFields?: CustomerFieldConfig[] | null
 ): ActionGateResult {
-  return validateActionGate('create_order', slots, context);
+  return validateActionGate('create_order', slots, context, customerFields);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -276,9 +342,10 @@ export function checkOrderGate(
 // ─────────────────────────────────────────────────────────────────────────────
 export function checkCancelGate(
   slots: FlowSlots,
-  context?: Parameters<typeof validateActionGate>[2]
+  context?: Parameters<typeof validateActionGate>[2],
+  customerFields?: CustomerFieldConfig[] | null
 ): ActionGateResult {
-  return validateActionGate('cancel_booking', slots, context);
+  return validateActionGate('cancel_booking', slots, context, customerFields);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -286,7 +353,8 @@ export function checkCancelGate(
 // ─────────────────────────────────────────────────────────────────────────────
 export function checkRescheduleGate(
   slots: FlowSlots,
-  context?: Parameters<typeof validateActionGate>[2]
+  context?: Parameters<typeof validateActionGate>[2],
+  customerFields?: CustomerFieldConfig[] | null
 ): ActionGateResult {
-  return validateActionGate('reschedule', slots, context);
+  return validateActionGate('reschedule', slots, context, customerFields);
 }

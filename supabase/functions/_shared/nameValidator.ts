@@ -67,8 +67,7 @@ const NAME_BLOCKLIST = new Set([
   'everything', 'nothing', 'done', 'again', 'new', 'old',
   // Common short words that look like names
   'sir', 'mam', 'miss', 'mrs', 'dear',
-  // Business names that could leak
-  'nazdac', 'tess',
+  // Business-specific names (removed — caused false rejections of real names)
   'specifically', 'definitely', 'actually', 'basically', 'honestly',
 ]);
 
@@ -146,26 +145,10 @@ export function validateDirectNameInput(input: string): string | null {
   if (!input) return null;
   const trimmed = input.trim();
 
-  // PRE-CHECK: Reject anything that is clearly a sentence or non-name phrase
-  // This catches: "I'll like to browse sorry", "The same name give you earlier", etc.
-  const HARD_REJECT_WORDS = new Set([
-    'browse', 'sorry', 'want', 'like', 'give', 'earlier', 'same',
-    'please', 'wait', 'trying', 'thinking', 'actually', 'basically',
-    'correct', 'that', 'which', 'earlier', 'previous', 'already',
-    'the', 'you', 'your', 'my', 'our', 'their',
-  ]);
-
   const words = trimmed.split(/\s+/);
 
   // Reject if more than 4 words — no name needs that many
   if (words.length > 4) return null;
-
-  // Reject if any word is in the hard reject list (for multi-word inputs)
-  if (words.length > 1) {
-    for (const word of words) {
-      if (HARD_REJECT_WORDS.has(word.toLowerCase())) return null;
-    }
-  }
 
   // Reject if it looks like a sentence (contains verbs, apologies, etc.)
   for (const pattern of SENTENCE_PATTERNS) {

@@ -143,8 +143,7 @@ export function UISignalRenderer({
     if (!visible.activeComponent) return null;
     if (visible.activeComponent === "service_selector") {
       const safeServices = services
-        .filter((s) => typeof s.duration_minutes === "number")
-        .map((s) => ({ id: s.id, name: s.name, duration_minutes: s.duration_minutes as number, price: s.price ?? null }));
+        .map((s) => ({ id: s.id, name: s.name, duration_minutes: typeof s.duration_minutes === "number" ? s.duration_minutes : 0, price: s.price ?? null }));
       return safeServices.length > 0 ? <ServiceSelector services={safeServices} onSelect={onServiceSelect} disabled={loading} /> : null;
     }
     if (visible.activeComponent === "product_selector") {
