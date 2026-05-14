@@ -41,15 +41,8 @@ import {
 // UNIFIED FLOW ENGINE IMPORTS (CANONICAL CONVERSATION FLOW)
 //                                                                            
 import { StateManager } from "../_shared/flow/stateManager.ts";
+import { routeIntent } from "../_shared/flow/flowRouter.ts";
 import { 
-  routeIntent, 
-  getNextBookingStep, 
-  getNextOrderingStep,
-  getStepQuestion 
-} from "../_shared/flow/flowRouter.ts";
-import { 
-  extractSlots, 
-  mergeSlots, 
   buildSlotSummary 
 } from "../_shared/flow/slotExtractor.ts";
 import { extractValidatedName, extractNameWithHistory, isNameBackReference } from "../_shared/nameValidator.ts";
@@ -61,15 +54,10 @@ import { createEmptyActiveTask } from "../_shared/flow/types.ts";
 // TASK INTELLIGENCE MODULE (ACTIVE_TASK SYSTEM)
 //                                                                            
 import {
-  startTask,
   updateTaskEntities,
   confirmTask,
-  resetTask,
-  detectFlowExit,
-  isMessageOnTopic,
   buildTaskContinuityPrompt,
   buildFlowLockPrompt,
-  detectTaskIntent,
   buildSmartMemorySummary,
 } from "../_shared/flow/taskIntelligence.ts";
 
@@ -1964,6 +1952,54 @@ if (!GEMINI_API_KEY) {
       engineState: JSON.stringify(engineState),
     };
     
+    //                                                                        
+    // C1: ENGINE v2 IS THE SINGLE SOURCE OF TRUTH
+    // Map Engine v2 intent + entities to legacy formats, replacing Flow Engine's
+    // duplicate `extractSlots` and inline `detectIntent`.
+    //                                                                        
+    
+    // Map Engine v2 UserIntent to legacy messageAnalysis format
+    const ENGINE_TO_MSG_INTENT: Record<string, string> = {
+      book: 'book_appointment',
+      book_explicit: 'book_appointment',
+      availability_casual: 'book_appointment',
+      order: 'order_product',
+      price: 'ask_price',
+      hours: 'ask_hours',
+      info: 'ask_info',
+      complaint: 'complaint',
+      escalate: 'escalation_request',
+      farewell: 'farewell',
+      greeting: 'greeting',
+      confirm: 'confirm',
+      deny: 'deny',
+      cancel: 'conversation_end',
+      ack: 'acknowledgment',
+      small_talk: 'small_talk',
+      continue: 'general_query',
+      ambiguous: 'general_query',
+      correction: 'correct_previous_info',
+    };
+    if (engineResult?.intent?.intent && ENGINE_TO_MSG_INTENT[engineResult.intent.intent]) {
+      messageAnalysis.detectedIntent = ENGINE_TO_MSG_INTENT[engineResult.intent.intent];
+    }
+    
+    // Map Engine v2 entities to FlowSlots format (replaces extractSlots)
+    if (engineResult?.entities) {
+      const e = engineResult.entities;
+      if (e.service_id) conversationState.slots.serviceId = e.service_id;
+      if (e.service_name) conversationState.slots.serviceName = e.service_name;
+      if (e.date) conversationState.slots.date = e.date;
+      if (e.time) conversationState.slots.time = e.time;
+      if (e.customer_name) conversationState.slots.customerName = e.customer_name;
+      if (e.customer_phone) conversationState.slots.customerPhone = e.customer_phone;
+      if (e.customer_email) conversationState.slots.customerEmail = e.customer_email;
+      if (e.delivery_address) conversationState.slots.deliveryLocation = e.delivery_address;
+      if (e.product_id) conversationState.slots.productId = e.product_id;
+      if (e.product_name) conversationState.slots.productName = e.product_name;
+      if (e.quantity) conversationState.slots.quantity = e.quantity;
+    }
+    
     // Build Engine v2 governor prompt block (PRIMARY - highest priority)
     const enginePromptBlock = engineResult.prompt_block;
 
@@ -2026,15 +2062,6 @@ if (!GEMINI_API_KEY) {
       .select("question, answer")
       .eq("receptionist_id", receptionistId)
       .order("priority", { ascending: false });
-
-    //                                                                        
-    // UNIFIED FLOW ENGINE: SLOT EXTRACTION & STATE UPDATE
-    //                                                                        
-    const extractedSlots = extractSlots(message, conversationState.slots || {}, serviceItems || [], productItems || []);
-    if (extractedSlots && extractedSlots.slots && Object.keys(extractedSlots.slots).length > 0) {
-      console.log(`[Flow Engine] Extracted slots:`, extractedSlots.slots);
-      conversationState.slots = mergeSlots(conversationState.slots, extractedSlots.slots, extractedSlots.corrections);
-    }
 
     // Route intent and update flow state (with defensive guards)
     let intentRouting: any = { flowType: null, shouldStartFlow: false, shouldResetCurrentFlow: false, topicShift: null, initialStep: null };
