@@ -1,7 +1,10 @@
 -- Add business_model to the get_public_receptionist RPC
 -- so widget can correctly determine services/products/both mode
+-- Must DROP first because return type changed
 
-CREATE OR REPLACE FUNCTION public.get_public_receptionist(p_receptionist_id uuid)
+DROP FUNCTION IF EXISTS public.get_public_receptionist(uuid);
+
+CREATE FUNCTION public.get_public_receptionist(p_receptionist_id uuid)
 RETURNS TABLE (
   id uuid,
   name text,
@@ -29,3 +32,7 @@ AS $$
   FROM public.receptionists r
   WHERE r.id = p_receptionist_id AND r.active = true;
 $$;
+
+-- Re-grant execute permissions (lost on DROP)
+GRANT EXECUTE ON FUNCTION public.get_public_receptionist(uuid) TO anon;
+GRANT EXECUTE ON FUNCTION public.get_public_receptionist(uuid) TO authenticated;
