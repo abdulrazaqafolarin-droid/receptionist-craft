@@ -41,8 +41,8 @@ serve(async (req) => {
       );
     }
 
-    // Validate confirmation token
-    const storedToken = appointment.metadata?.confirmation_token;
+    // Validate confirmation token (check column first, then metadata)
+    const storedToken = appointment.confirmation_token || appointment.metadata?.confirmation_token;
     if (storedToken !== confirmationToken) {
       console.log(`[confirm-appointment] Invalid token for appointment ${appointmentId}`);
       return new Response(

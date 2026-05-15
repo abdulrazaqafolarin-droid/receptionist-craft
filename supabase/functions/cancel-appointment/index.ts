@@ -41,8 +41,8 @@ serve(async (req) => {
       );
     }
 
-    // Validate cancellation token
-    const storedToken = appointment.metadata?.cancellation_token;
+    // Validate cancellation token (check column first, then metadata)
+    const storedToken = appointment.cancellation_token || appointment.metadata?.cancellation_token;
     if (storedToken !== cancellationToken) {
       console.log(`[cancel-appointment] Invalid token for appointment ${appointmentId}`);
       return new Response(

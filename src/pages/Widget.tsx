@@ -508,48 +508,21 @@ export default function Widget() {
   }, [messages]);
 
   async function loadReceptionist() {
-    // First try the public-safe view (works for unauthenticated widget users)
+    // Use RPC which returns all public-safe fields including business_model
     let data: any = null;
-    let error: any = null;
     
-    const viewResult = await supabase
-      .from("widget_receptionists")
-      .select("id, name, business_name, greeting_message, timezone, tone")
-      .eq("id", receptionistId)
-      .maybeSingle();
-    
-    if (viewResult.data) {
-      data = viewResult.data;
-    } else {
-      // Fallback: try RPC function for additional fields
-      const rpcResult = await supabase.rpc("get_public_receptionist", { p_receptionist_id: receptionistId });
-      if (rpcResult.data && rpcResult.data.length > 0) {
-        data = rpcResult.data[0];
-      } else {
-        error = viewResult.error || rpcResult.error;
-      }
+    const rpcResult = await supabase.rpc("get_public_receptionist", { p_receptionist_id: receptionistId });
+    if (rpcResult.data && rpcResult.data.length > 0) {
+      data = rpcResult.data[0];
     }
     
-    // Also try to get business_info and business_model (authenticated owners only, will silently fail for widget)
-    const fullResult = await supabase
-      .from("receptionists")
-      .select("business_info, business_model")
-      .eq("id", receptionistId!)
-      .maybeSingle();
-    
-    if (fullResult.data) {
-      data = { ...data, ...fullResult.data };
-    }
-
     if (!data) {
       toast({ title: "Error", description: "Receptionist not found", variant: "destructive" });
       return;
     }
 
     setReceptionist(data);
-    
-    // Set business model
-    setBusinessModel((data as any).business_model || 'services');
+    setBusinessModel(data.business_model || 'services');
     
     // Apply widget customization colors if available
     const businessInfo = data.business_info as any;

@@ -1936,6 +1936,7 @@ export type Database = {
           p_metadata?: Json
           p_notes?: string
           p_receptionist_id: string
+          p_idempotency_key?: string
         }
         Returns: string
       }
@@ -1978,6 +1979,7 @@ export type Database = {
         Returns: {
           active: boolean
           business_name: string
+          business_model: string | null
           greeting_message: string
           id: string
           name: string
