@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { AlertCircle, RefreshCw } from "lucide-react";
 
 type WidgetReceptionist = {
   id: string;
@@ -17,6 +18,7 @@ type Props = {
 export default function Widget({ receptionistId }: Props) {
   const [receptionist, setReceptionist] = useState<WidgetReceptionist | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const greetingSentRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -44,12 +46,20 @@ export default function Widget({ receptionistId }: Props) {
 
         if (error) {
           console.warn("Widget: view query error", error);
+          if (!mounted) return;
+          setLoadError(true);
+          return;
         }
 
         if (!mounted) return;
+        if (!data) {
+          setLoadError(true);
+          return;
+        }
         setReceptionist(data as WidgetReceptionist | null);
       } catch (e) {
         console.warn("Widget: failed to load receptionist", e);
+        if (mounted) setLoadError(true);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -92,6 +102,29 @@ export default function Widget({ receptionistId }: Props) {
     }
   }, []);
 
+  if (loadError) {
+    return (
+      <div className="widget-root animate-in fade-in-0 duration-300" role="region" aria-label="Error loading chat">
+        <header className="widget-header">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="h-4 w-32 bg-muted/50 rounded" />
+          </div>
+        </header>
+        <div className="flex flex-col items-center justify-center p-8 text-center gap-3">
+          <AlertCircle className="h-8 w-8 text-destructive" />
+          <p className="text-sm text-muted-foreground">Could not load chat. Please try again later.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center gap-2 text-xs text-primary hover:underline pressable"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Reload
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div
@@ -126,7 +159,7 @@ export default function Widget({ receptionistId }: Props) {
           tabIndex={0}
           aria-label={`${receptionist?.business_name || "Reception"} chat`}
         >
-          {receptionist?.business_name || "Reception"}
+          <span className="truncate">{receptionist?.business_name || "Reception"}</span>
         </div>
       </header>
       <div ref={sentinelRef} tabIndex={0} aria-hidden="true" />

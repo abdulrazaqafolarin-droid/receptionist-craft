@@ -112,10 +112,10 @@ export default function VoiceInputButton({ onTranscript, disabled, className }: 
         className={[
           "relative flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           state === "recording"
-            ? "bg-destructive text-destructive-foreground shadow-lg scale-110"
+            ? "bg-destructive text-destructive-foreground shadow-lg scale-110 pressable"
             : state === "processing"
             ? "bg-muted text-muted-foreground cursor-not-allowed"
-            : "bg-secondary text-secondary-foreground hover:bg-primary hover:text-primary-foreground shadow-sm hover:shadow-md hover:scale-105",
+            : "bg-secondary text-secondary-foreground hover:bg-primary hover:text-primary-foreground shadow-sm hover:shadow-md hover:scale-105 pressable",
           isDisabled && state !== "recording" ? "opacity-50 cursor-not-allowed" : "",
         ].join(" ")}
       >

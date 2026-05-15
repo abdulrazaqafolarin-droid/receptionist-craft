@@ -38,12 +38,13 @@ export function ServiceSelector({ services, onSelect, disabled, initialLimit = 1
           aria-label={`Select ${service.name}${service.price ? `, $${service.price.toFixed(0)}` : ''}`}
           className={cn(
             "p-3 cursor-pointer transition-all duration-200",
-            "hover:border-primary hover:shadow-lg hover:scale-[1.01] active:scale-[0.98]",
+            "hover:border-primary hover:shadow-lg hover:scale-[1.01] pressable",
             "group relative overflow-hidden",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             disabled && "opacity-50 cursor-not-allowed"
           )}
           onClick={() => !disabled && onSelect(service.id, service.name)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !disabled) onSelect(service.id, service.name); }}
+          onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !disabled) { e.preventDefault(); onSelect(service.id, service.name); } }}
           style={{ animationDelay: `${idx * 75}ms` }}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/0 to-primary/5 group-hover:from-primary/5 group-hover:via-primary/3 group-hover:to-primary/10 transition-all duration-300" />
@@ -52,7 +53,7 @@ export function ServiceSelector({ services, onSelect, disabled, initialLimit = 1
               <Briefcase className="h-5 w-5 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <h4 className="font-semibold text-sm group-hover:text-primary transition-colors">{service.name}</h4>
+              <h4 className="font-semibold text-sm group-hover:text-primary transition-colors truncate">{service.name}</h4>
               {service.description && (
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{service.description}</p>
               )}

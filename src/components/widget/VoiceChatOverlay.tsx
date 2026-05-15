@@ -265,7 +265,7 @@ export default function VoiceChatOverlay({
       {/* Close button */}
       <button
         onClick={handleClose}
-        className="absolute top-6 right-6 h-10 w-10 rounded-full bg-muted/50 flex items-center justify-center hover:bg-muted transition-colors"
+        className="absolute top-6 right-6 h-10 w-10 rounded-full bg-muted/50 flex items-center justify-center hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 pressable"
         aria-label="Close voice chat"
       >
         <X className="h-5 w-5 text-muted-foreground" />
@@ -282,7 +282,7 @@ export default function VoiceChatOverlay({
           if (state === "idle") startListening();
           else if (state === "listening") stopListening();
         }}
-        className="relative flex items-center justify-center focus:outline-none"
+        className="relative flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4"
         aria-label={state === "listening" ? "Stop listening" : "Start listening"}
       >
         {/* Outer glow rings */}

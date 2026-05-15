@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ShoppingBag, DollarSign, Minus, Plus, ShoppingCart, AlertTriangle, Package, XCircle, ChevronDown } from "lucide-react";
+import { ShoppingBag, DollarSign, Minus, Plus, ShoppingCart, AlertTriangle, Package, XCircle, ChevronDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Product {
@@ -114,20 +114,23 @@ export function ProductSelectorEnhanced({ products, onConfirm, disabled, initial
         return (
           <Card
             key={product.id}
+            role={isOutOfStock ? undefined : "button"}
+            tabIndex={disabled || isOutOfStock ? -1 : 0}
+            aria-label={isOutOfStock ? `${product.name} - Out of Stock` : `Select ${product.name}${product.price ? `, $${product.price.toFixed(0)}` : ''}`}
             className={cn(
               "p-3 transition-all duration-200",
-              disabled || isOutOfStock ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              disabled || isOutOfStock ? "opacity-60 cursor-not-allowed" : "cursor-pointer pressable",
               isSelected ? "border-primary ring-1 ring-primary/20 bg-primary/5" : "hover:border-primary/50 hover:shadow-md",
               isOutOfStock && "bg-muted/50"
             )}
+            onClick={() => !isOutOfStock && toggleProductSelection(product)}
+            onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !disabled && !isOutOfStock) { e.preventDefault(); toggleProductSelection(product); } }}
             style={{ animationDelay: `${idx * 50}ms` }}
           >
             <div className="flex items-start gap-3">
               {/* Checkbox */}
-              <div 
-                className="pt-0.5"
-                onClick={() => !isOutOfStock && toggleProductSelection(product)}
-              >
+              <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
                 {isOutOfStock ? (
                   <div className="h-5 w-5 rounded-sm border border-muted-foreground/30 flex items-center justify-center">
                     <XCircle className="h-3 w-3 text-muted-foreground" />
@@ -136,16 +139,13 @@ export function ProductSelectorEnhanced({ products, onConfirm, disabled, initial
                   <Checkbox 
                     checked={isSelected}
                     disabled={disabled}
-                    className="h-5 w-5"
+                    className="h-5 w-5 pointer-events-none"
                   />
                 )}
               </div>
 
               {/* Product Info */}
-              <div 
-                className="flex-1 min-w-0"
-                onClick={() => !isOutOfStock && toggleProductSelection(product)}
-              >
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <div className={cn(
                     "h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0",
@@ -203,7 +203,7 @@ export function ProductSelectorEnhanced({ products, onConfirm, disabled, initial
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6"
+                    className="h-6 w-6 pressable"
                     onClick={() => updateQuantity(product.id, product, -1)}
                     disabled={disabled || (selectedItem?.quantity || 1) <= 1}
                   >
@@ -215,7 +215,7 @@ export function ProductSelectorEnhanced({ products, onConfirm, disabled, initial
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6"
+                    className="h-6 w-6 pressable"
                     onClick={() => updateQuantity(product.id, product, 1)}
                     disabled={disabled || (selectedItem?.quantity || 1) >= stockInfo.maxQty}
                   >
@@ -233,7 +233,7 @@ export function ProductSelectorEnhanced({ products, onConfirm, disabled, initial
         <Button
           variant="ghost"
           size="sm"
-          className="w-full text-muted-foreground hover:text-primary mt-2"
+          className="w-full text-muted-foreground hover:text-primary mt-2 pressable"
           onClick={() => setShowAll(!showAll)}
           disabled={disabled}
         >
@@ -257,10 +257,10 @@ export function ProductSelectorEnhanced({ products, onConfirm, disabled, initial
           <Button 
             onClick={handleConfirm}
             disabled={disabled}
-            className="w-full gap-2"
+            className="w-full gap-2 pressable"
           >
-            <ShoppingCart className="h-4 w-4" />
-            Confirm Selection
+            {disabled ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+            {disabled ? "Processing..." : "Confirm Selection"}
             <Badge variant="secondary" className="ml-1 bg-primary-foreground/20">
               {totalItems} item{totalItems !== 1 ? 's' : ''}
               {totalPrice > 0 && ` • $${totalPrice.toFixed(2)}`}

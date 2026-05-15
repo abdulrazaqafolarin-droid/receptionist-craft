@@ -13,6 +13,7 @@ interface QuickReplyButtonsProps {
 }
 
 export function QuickReplyButtons({ buttons, onSelect, disabled }: QuickReplyButtonsProps) {
+  if (buttons.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-2 mt-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
       {buttons.map((button, idx) => (
@@ -23,10 +24,10 @@ export function QuickReplyButtons({ buttons, onSelect, disabled }: QuickReplyBut
           onClick={() => onSelect(button.value)}
           disabled={disabled}
           className={cn(
-            "text-xs sm:text-sm px-3 py-2 h-auto",
+            "text-xs sm:text-sm px-3 py-2 h-auto pressable",
             "border-primary/30 hover:border-primary hover:bg-primary/5",
             "transition-all duration-200 hover:scale-[1.02] hover:shadow-md",
-            "rounded-full",
+            "rounded-full truncate max-w-[200px]",
             disabled && "opacity-50 cursor-not-allowed"
           )}
           style={{
