@@ -34,3 +34,5 @@ supabase/.env.local-gateway
 # Supabase CLI temp artifacts
 supabase/.temp/
 supabase/.branches/
+
+.vercel
