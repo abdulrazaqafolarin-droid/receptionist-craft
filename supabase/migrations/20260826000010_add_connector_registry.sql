@@ -150,47 +150,54 @@ INSERT INTO public.connector_definitions (connector_key, display_name, descripti
 
 ('smtp_custom', 'Custom SMTP Server', 'Use any email provider with your AI for outbound emails.', 'messaging', 'api_key',
  'Your AI sends emails through your configured SMTP server.',
- 'Not applicable — SMTP is for sending, not receiving.',
+ 'Not applicable - SMTP is for sending, not receiving.',
  'Connect any email provider to enable AI-sent messages.',
  ARRAY['email_sender', 'customer_feedback', 'analytics_digest'],
+ false, false),
 
 -- SMS connector
 ('twilio_sms', 'Twilio SMS', 'Let your AI send text messages to customers.', 'messaging', 'api_key',
  'Your AI sends appointment reminders, follow-ups, and campaigns via SMS.',
  'Your AI drafts text messages — you send them yourself.',
  'Connect Twilio to enable AI-sent text messages.',
- ARRAY['sms_campaign', 'appointment_reminders', 'customer_feedback', 'referral_program', 'invoice_followup']),
+ ARRAY['sms_campaign', 'appointment_reminders', 'customer_feedback', 'referral_program', 'invoice_followup'],
+ false, false),
 
 -- Social media connectors
 ('instagram', 'Instagram', 'Let your AI post content and respond to DMs on Instagram.', 'social', 'oauth',
  'Your AI posts content, responds to comments, and manages DMs.',
  'Your AI drafts posts and replies — you copy and post them.',
  'Connect Instagram to let your AI manage your business presence.',
- ARRAY['social_posting', 'social_responder', 'review_management']),
+ ARRAY['social_posting', 'social_responder', 'review_management'],
+ false, false),
 
 ('facebook', 'Facebook', 'Let your AI post to your Facebook page and respond to messages.', 'social', 'oauth',
  'Your AI posts content and responds to page messages automatically.',
  'Your AI drafts posts and messages — you publish them manually.',
  'Connect Facebook to let your AI manage your page presence.',
- ARRAY['social_posting', 'social_responder']),
+ ARRAY['social_posting', 'social_responder'],
+ false, false),
 
 ('tiktok', 'TikTok', 'Let your AI schedule and publish TikTok videos.', 'social', 'oauth',
  'Your AI schedules and publishes TikTok content from your content plan.',
  'Your AI drafts video descriptions and captions — you post manually.',
  'Connect TikTok to automate your video publishing.',
- ARRAY['social_posting']),
+ ARRAY['social_posting'],
+ false, false),
 
 ('linkedin', 'LinkedIn', 'Let your AI post professional content on LinkedIn.', 'social', 'oauth',
  'Your AI posts content and responds to messages on LinkedIn.',
  'Your AI drafts posts and replies — you publish them.',
  'Connect LinkedIn to automate your professional presence.',
- ARRAY['social_posting', 'social_responder']),
+ ARRAY['social_posting', 'social_responder'],
+ false, false),
 
 ('twitter_x', 'X (Twitter)', 'Let your AI post and respond on X.', 'social', 'oauth',
  'Your AI posts content and responds to mentions on X.',
  'Your AI drafts tweets and replies — you post them.',
  'Connect X to automate your presence on the platform.',
- ARRAY['social_posting', 'social_responder']),
+ ARRAY['social_posting', 'social_responder'],
+ false, false),
 
 -- Calendar connectors
 ('google_calendar', 'Google Calendar', 'Keep your Google Calendar in sync with FrontDesk bookings.', 'calendar', 'oauth',
@@ -204,7 +211,8 @@ INSERT INTO public.connector_definitions (connector_key, display_name, descripti
  'Two-way sync between Outlook Calendar and FrontDesk.',
  'Your AI notes scheduling conflicts — you resolve them manually.',
  'Connect Outlook Calendar for automatic sync.',
- ARRAY['calendar_sync']),
+ ARRAY['calendar_sync'],
+ false, false),
 
 ('google_meet', 'Google Meet', 'Auto-generate video call links for consultations and meetings.', 'calendar', 'oauth',
  'Your AI creates Google Meet links for every virtual appointment.',
@@ -225,26 +233,30 @@ INSERT INTO public.connector_definitions (connector_key, display_name, descripti
  'Your AI monitors Yelp reviews and drafts professional responses.',
  'Your AI drafts responses — you post them on Yelp manually.',
  'Connect Yelp to monitor your reputation.',
- ARRAY['review_management']),
+ ARRAY['review_management'],
+ false, false),
 
 ('trustpilot', 'Trustpilot', 'Monitor and respond to Trustpilot reviews.', 'reviews', 'api_key',
  'Your AI monitors Trustpilot reviews and drafts responses.',
  'Your AI drafts responses — you post them on Trustpilot manually.',
  'Connect Trustpilot to monitor your reputation.',
- ARRAY['review_management']),
+ ARRAY['review_management'],
+ false, false),
 
 -- Payment connectors
 ('stripe', 'Stripe', 'Accept payments, deposits, and subscriptions through Stripe.', 'payments', 'api_key',
  'Your AI collects payments, deposits, and processes refunds automatically.',
  'Payment links are generated — you share them with customers.',
  'Connect Stripe to enable AI-powered payment collection.',
- ARRAY['payment_collection', 'invoice_followup', 'subscription_billing']),
+ ARRAY['payment_collection', 'invoice_followup', 'subscription_billing'],
+ false, false),
 
 ('paystack', 'Paystack', 'Accept payments through Paystack.', 'payments', 'api_key',
  'Your AI collects payments and processes transactions via Paystack.',
  'Payment links are generated — you share them manually.',
  'Connect Paystack to enable payment collection.',
- ARRAY['payment_collection', 'invoice_followup']),
+ ARRAY['payment_collection', 'invoice_followup'],
+ false, false),
 
 -- Storage connectors
 ('google_drive', 'Google Drive', 'Store generated documents, contracts, and reports in Google Drive.', 'storage', 'oauth',
@@ -273,13 +285,15 @@ INSERT INTO public.connector_definitions (connector_key, display_name, descripti
  'Your AI manages targeting, budget, and reports on Google Ads.',
  'Your AI analyzes performance and suggests changes — you make them manually.',
  'Connect Google Ads to let your AI manage campaigns.',
- ARRAY['ad_campaign']),
+ ARRAY['ad_campaign'],
+ false, false),
 
 ('meta_ads', 'Meta Ads', 'Manage and monitor Facebook/Instagram ad campaigns.', 'ads', 'oauth',
  'Your AI manages Meta ad campaigns and reports performance.',
  'Your AI drafts ad copy and suggests targeting — you run campaigns manually.',
  'Connect Meta Ads to let your AI manage campaigns.',
- ARRAY['ad_campaign']),
+ ARRAY['ad_campaign'],
+ false, false),
 
 -- Calendar sync (Google family)
 ('google_maps', 'Google Maps', 'Show your business location and check service areas.', 'calendar', 'api_key',
