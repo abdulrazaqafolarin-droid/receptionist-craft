@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { forwardToWidgetChat, ChannelForwardError } from "../_shared/channelForward.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,12 +8,54 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+/**
+ * Constant-time string comparison — prevents timing attacks on the
+ * HMAC signature check. Returns false on length mismatch.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+/**
+ * Verify Meta's X-Hub-Signature-256 header against the raw request body.
+ * Meta computes HMAC-SHA256(app_secret, raw_body) and prefixes "sha256=".
+ */
+async function verifyMetaSignature(
+  appSecret: string,
+  rawBody: string,
+  signatureHeader: string | null,
+): Promise<boolean> {
+  if (!signatureHeader || !signatureHeader.startsWith("sha256=")) return false;
+  const received = signatureHeader.slice("sha256=".length).toLowerCase();
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(appSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
+  const expected = Array.from(new Uint8Array(mac))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  return timingSafeEqual(received, expected);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN") ?? "rutex_verify";
+  // ── Configuration (fail-closed: no insecure defaults) ──────────────────
+  const VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN");
+  const APP_SECRET = Deno.env.get("WHATSAPP_APP_SECRET");
   const ACCESS_TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
   const PHONE_NUMBER_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -20,12 +63,16 @@ serve(async (req) => {
 
   // ── Webhook verification (GET) ──────────────────────────────────────────────
   if (req.method === "GET") {
+    if (!VERIFY_TOKEN) {
+      console.error("[WhatsApp] WHATSAPP_VERIFY_TOKEN not configured");
+      return new Response("Forbidden", { status: 403 });
+    }
     const url = new URL(req.url);
     const mode = url.searchParams.get("hub.mode");
     const token = url.searchParams.get("hub.verify_token");
     const challenge = url.searchParams.get("hub.challenge");
 
-    if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    if (mode === "subscribe" && token && timingSafeEqual(token, VERIFY_TOKEN)) {
       console.log("[WhatsApp] Webhook verified");
       return new Response(challenge, { status: 200 });
     }
@@ -34,9 +81,23 @@ serve(async (req) => {
 
   // ── Incoming messages (POST) ────────────────────────────────────────────────
   if (req.method === "POST") {
+    // Signature verification happens over the RAW body bytes — read them
+    // before any JSON parsing.
+    const rawBody = await req.text();
+
+    if (!APP_SECRET) {
+      console.error("[WhatsApp] WHATSAPP_APP_SECRET not configured — rejecting unverifiable payload");
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    const isValid = await verifyMetaSignature(APP_SECRET, rawBody, req.headers.get("x-hub-signature-256"));
+    if (!isValid) {
+      console.warn("[WhatsApp] Invalid or missing X-Hub-Signature-256 — rejected");
+      return new Response("Unauthorized", { status: 401 });
+    }
+
     try {
-      const body = await req.json();
-      console.log("[WhatsApp] Incoming payload:", JSON.stringify(body));
+      const body = JSON.parse(rawBody);
 
       const entry = body?.entry?.[0];
       const change = entry?.changes?.[0];
@@ -82,25 +143,24 @@ serve(async (req) => {
           console.warn("[WhatsApp] No receptionist_id in integration config");
           return new Response("ok", { status: 200 });
         }
-
-        // Route through the AI chat engine
-        const chatUrl = `${SUPABASE_URL}/functions/v1/widget-chat`;
-        const chatRes = await fetch(chatUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-          },
-          body: JSON.stringify({
+        // Route through the AI chat engine (shared channel forwarder)
+        let reply: string;
+        try {
+          const fwd = await forwardToWidgetChat({
             message: userMessage,
             receptionistId,
             sessionId,
             source: "whatsapp",
-          }),
-        });
-
-        const chatData = await chatRes.json();
-        const reply: string = chatData?.reply ?? chatData?.message ?? "Sorry, I couldn't process that.";
+            timeoutMs: 55_000, // Meta re-delivers after ~60s; leave headroom
+          });
+          reply = fwd.reply;
+        } catch (e) {
+          const kind = e instanceof ChannelForwardError ? e.kind : "unreachable";
+          console.error("[WhatsApp] forward failed:", kind, e);
+          reply = kind === "timeout"
+            ? "That took a little too long — could you send that again?"
+            : "Sorry, I couldn't process that right now. Please try again in a moment.";
+        }
 
         // Send reply back via WhatsApp Cloud API
         if (ACCESS_TOKEN && PHONE_NUMBER_ID) {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { MessageSquare, Phone, CheckCircle2, XCircle, Copy, ExternalLink, Info } from "lucide-react";
+import { MessageSquare, Phone, CreditCard, CheckCircle2, XCircle, Copy, ExternalLink, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,11 @@ interface ChannelConfig {
   phone_number_id?: string;
   account_sid?: string;
   phone_number?: string;
+  secret_key?: string;
+  webhook_secret?: string;
+  publishable_key?: string;
+  public_key?: string;
+  _provider?: string;
 }
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
@@ -43,6 +48,11 @@ export default function Channels() {
   const [phoneConfig, setPhoneConfig] = useState<ChannelConfig>({});
   const [phoneEnabled, setPhoneEnabled] = useState(false);
   const [phoneSaving, setPhoneSaving] = useState(false);
+
+  // Payment provider state
+  const [paymentConfig, setPaymentConfig] = useState<ChannelConfig>({});
+  const [paymentEnabled, setPaymentEnabled] = useState(false);
+  const [paymentSaving, setPaymentSaving] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -70,6 +80,18 @@ export default function Channels() {
     if (ph) {
       setPhoneEnabled(ph.enabled ?? false);
       setPhoneConfig((ph.config_json as ChannelConfig) ?? {});
+    }
+
+    // Load payment provider (stripe or paystack)
+    const payStripe = integrations?.find((i) => i.type === "stripe");
+    const payPaystack = integrations?.find((i) => i.type === "paystack");
+    const pay = payStripe ?? payPaystack;
+    if (pay) {
+      setPaymentEnabled(pay.enabled ?? false);
+      setPaymentConfig({
+        ...(pay.config_json as ChannelConfig) ?? {},
+        _provider: pay.type as string,
+      });
     }
 
     setLoading(false);
@@ -124,6 +146,20 @@ export default function Channels() {
     }
   }
 
+  async function handleSavePayment() {
+    setPaymentSaving(true);
+    try {
+      const providerType = (paymentConfig._provider as "stripe" | "paystack") || "stripe";
+      const { _provider, ...configJson } = paymentConfig;
+      await saveIntegration(providerType, configJson, paymentEnabled);
+      toast({ title: "Payment provider saved" });
+    } catch (e: unknown) {
+      toast({ title: "Error saving", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setPaymentSaving(false);
+    }
+  }
+
   function copyToClipboard(text: string, label: string) {
     navigator.clipboard.writeText(text);
     toast({ title: `${label} copied!` });
@@ -147,12 +183,15 @@ export default function Channels() {
       </div>
 
       <Tabs defaultValue="whatsapp">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="whatsapp" className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" /> WhatsApp
           </TabsTrigger>
           <TabsTrigger value="phone" className="flex items-center gap-2">
             <Phone className="h-4 w-4" /> Phone (Twilio)
+          </TabsTrigger>
+          <TabsTrigger value="payments" className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4" /> Payments
           </TabsTrigger>
         </TabsList>
 
@@ -388,6 +427,147 @@ export default function Channels() {
                 </label>
                 <Button onClick={handleSavePhone} disabled={phoneSaving}>
                   {phoneSaving ? "Saving…" : "Save"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Payments Tab ────────────────────────────────────────── */}
+        <TabsContent value="payments" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5 text-primary" />
+                    Payment Collection
+                  </CardTitle>
+                  <CardDescription>
+                    Accept deposits and payments from customers via Stripe or Paystack.
+                  </CardDescription>
+                </div>
+                <Badge variant={paymentEnabled ? "default" : "secondary"} className="flex items-center gap-1">
+                  {paymentEnabled ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                  {paymentEnabled ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Provider selector */}
+              <div className="space-y-2">
+                <Label>Payment Provider</Label>
+                <Select
+                  value={(paymentConfig._provider as string) ?? "stripe"}
+                  onValueChange={(v) => setPaymentConfig((c) => ({ ...c, _provider: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a provider…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="stripe">Stripe (Global)</SelectItem>
+                    <SelectItem value="paystack">Paystack (Africa)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Secret Key */}
+              <div className="space-y-2">
+                <Label htmlFor="pay-secret">Secret Key</Label>
+                <Input
+                  id="pay-secret"
+                  type="password"
+                  placeholder={(paymentConfig._provider as string) === "paystack" ? "sk_live_..." : "sk_live_..."}
+                  value={paymentConfig.secret_key ?? ""}
+                  onChange={(e) => setPaymentConfig((c) => ({ ...c, secret_key: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Found in your {(paymentConfig._provider as string) === "paystack" ? "Paystack" : "Stripe"} dashboard → API Keys
+                </p>
+              </div>
+
+              {/* Webhook Secret */}
+              <div className="space-y-2">
+                <Label htmlFor="pay-webhook">Webhook Secret</Label>
+                <Input
+                  id="pay-webhook"
+                  type="password"
+                  placeholder="whsec_... or hash..."
+                  value={paymentConfig.webhook_secret ?? ""}
+                  onChange={(e) => setPaymentConfig((c) => ({ ...c, webhook_secret: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used to verify payment confirmations. Get from webhook settings.
+                </p>
+              </div>
+
+              {/* Webhook URL */}
+              <div className="space-y-2">
+                <Label>Webhook URL</Label>
+                <div className="flex items-center gap-2">
+                  <Input readOnly value={webhookUrl("payment-webhook")} className="font-mono text-xs" />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => copyToClipboard(webhookUrl("payment-webhook"), "Webhook URL")}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Add this as a webhook endpoint in your provider dashboard.
+                </p>
+              </div>
+
+              {/* Setup instructions */}
+              <Card className="bg-muted/40 border-border/50">
+                <CardContent className="pt-4 space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Info className="h-4 w-4 text-primary" /> Setup Steps
+                  </div>
+                  <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                    <li>Create a {(paymentConfig._provider as string) === "paystack" ? "Paystack" : "Stripe"} account.</li>
+                    <li>Copy your API keys from the dashboard.</li>
+                    <li>Paste the Secret Key and Webhook Secret above.</li>
+                    <li>Add the Webhook URL to your provider's webhook settings.</li>
+                    <li>Enable the payment channel and save.</li>
+                  </ol>
+                  <div className="flex gap-4 mt-2">
+                    {(paymentConfig._provider as string) === "paystack" ? (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-0 h-auto text-xs text-primary"
+                        onClick={() => window.open("https://paystack.com/docs/payments", "_blank")}
+                      >
+                        Paystack Docs <ExternalLink className="h-3 w-3 ml-1" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-0 h-auto text-xs text-primary"
+                        onClick={() => window.open("https://stripe.com/docs/payments/accept-a-payment", "_blank")}
+                      >
+                        Stripe Docs <ExternalLink className="h-3 w-3 ml-1" />
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="flex items-center justify-between pt-2">
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={paymentEnabled}
+                    onChange={(e) => setPaymentEnabled(e.target.checked)}
+                    className="h-4 w-4 rounded border-border accent-primary"
+                  />
+                  Enable payment collection
+                </label>
+                <Button onClick={handleSavePayment} disabled={paymentSaving}>
+                  {paymentSaving ? "Saving…" : "Save"}
                 </Button>
               </div>
             </CardContent>

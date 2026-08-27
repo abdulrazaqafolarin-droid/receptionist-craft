@@ -39,7 +39,14 @@ import FAQManagement from "./pages/FAQManagement";
 import OrganizationPage from "./pages/Organization";
 import CalendarView from "./pages/CalendarView";
 import Channels from "./pages/Channels";
+import Customers from "./pages/Customers";
+import StaffPage from "./pages/Staff";
+import Escalations from "./pages/Escalations";
+import Billing from "./pages/Billing";
 import MoneyModePage from "./pages/MoneyMode";
+import ConversationalOnboarding from "./pages/ConversationalOnboarding";
+import ConversationalManagementPage from "./pages/ConversationalManagementPage";
+import TestConversations from "./pages/TestConversations";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -178,7 +185,14 @@ const App = () => {
                               <Route path="/realtime-logs" element={<RealtimeLogs />} />
                               <Route path="/organization" element={<OrganizationPage />} />
                               <Route path="/channels" element={<Channels />} />
+                              <Route path="/customers" element={<Customers />} />
+                              <Route path="/staff" element={<StaffPage />} />
+                              <Route path="/escalations" element={<Escalations />} />
+                              <Route path="/billing" element={<Billing />} />
                               <Route path="/money-mode" element={<MoneyModePage />} />
+                              <Route path="/conversational-onboarding" element={<ConversationalOnboarding />} />
+                              <Route path="/operator-management" element={<ConversationalManagementPage />} />
+                              <Route path="/test/:id" element={<TestConversations />} />
                               <Route path="/settings" element={<Settings />} />
                               <Route path="/widget-install/:id" element={<WidgetInstall />} />
                               <Route path="*" element={<NotFound />} />

@@ -27,3 +27,10 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# Supabase local gateway env (secrets)
+supabase/.env.local-gateway
+
+# Supabase CLI temp artifacts
+supabase/.temp/
+supabase/.branches/

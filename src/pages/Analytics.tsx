@@ -36,6 +36,11 @@ type Analytics = {
     appointments_booked: number;
     lead_captures: number;
     booking_conversion_rate: number;
+    cancelled_appointments?: number;
+    completed_appointments?: number;
+    no_show_rate?: number;
+    service_breakdown?: Array<{ service: string; count: number }>;
+    product_breakdown?: Array<{ product: string; count: number; revenue: number }>;
   };
   revenue_metrics: {
     total_revenue: number;
@@ -321,7 +326,7 @@ export default function Analytics() {
             )}
 
             {/* Key Metrics */}
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard 
                 title="Conversations" 
                 value={analytics.conversation_metrics.total_conversations}
@@ -332,7 +337,7 @@ export default function Analytics() {
               <StatCard 
                 title="Appointments" 
                 value={analytics.business_metrics.appointments_booked}
-                subtitle="Total booked"
+                subtitle={`${analytics.business_metrics.completed_appointments ?? 0} completed`}
                 icon={Calendar}
                 color="bg-secondary/10 text-secondary"
               />
@@ -350,6 +355,32 @@ export default function Analytics() {
                 icon={Award}
                 color="bg-primary/10 text-primary"
               />
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard 
+                title="Conversion" 
+                value={formatPercent(analytics.business_metrics.booking_conversion_rate)}
+                subtitle="Booking rate"
+                icon={TrendingUp}
+                color="bg-green-500/10 text-green-600"
+              />
+              <StatCard 
+                title="No-Show Rate" 
+                value={formatPercent(analytics.business_metrics.no_show_rate ?? 0)}
+                subtitle={`${analytics.business_metrics.cancelled_appointments ?? 0} cancelled`}
+                icon={Target}
+                color="bg-red-500/10 text-red-600"
+              />
+              <StatCard 
+                title="Avg Booking Value" 
+                value={analytics.revenue_metrics?.avg_booking_value 
+                  ? formatCurrency(analytics.revenue_metrics.avg_booking_value, analytics.revenue_metrics.currency)
+                  : "—"
+                }
+                subtitle="Per booking"
+                icon={DollarSign}
+                color="bg-amber-500/10 text-amber-600"
+              />
               <StatCard 
                 title="Response Time" 
                 value={analytics.performance_metrics.average_response_time 
@@ -359,13 +390,6 @@ export default function Analytics() {
                 subtitle="Average latency"
                 icon={Clock}
                 color="bg-secondary/10 text-secondary"
-              />
-              <StatCard 
-                title="Conversion" 
-                value={formatPercent(analytics.business_metrics.booking_conversion_rate)}
-                subtitle="Booking rate"
-                icon={TrendingUp}
-                color="bg-green-500/10 text-green-600"
               />
             </div>
 
@@ -568,6 +592,81 @@ export default function Analytics() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Phase 5: Service & Product Breakdown */}
+            <div className="grid lg:grid-cols-2 gap-6">
+              {/* Most-Booked Services */}
+              {analytics.business_metrics.service_breakdown?.length > 0 && (
+                <Card className="border-2 border-border/50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Calendar className="h-5 w-5 text-primary" />
+                      Most-Booked Services
+                    </CardTitle>
+                    <CardDescription>Top services by appointment count</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {analytics.business_metrics.service_breakdown.slice(0, 8).map((item, i) => {
+                        const maxCount = analytics.business_metrics.service_breakdown![0].count;
+                        const pct = maxCount > 0 ? (item.count / maxCount) * 100 : 0;
+                        return (
+                          <div key={item.service} className="space-y-1">
+                            <div className="flex justify-between text-sm">
+                              <span className="font-medium truncate">{item.service}</span>
+                              <span className="text-muted-foreground ml-2 whitespace-nowrap">{item.count}</span>
+                            </div>
+                            <div className="h-2 rounded-full bg-muted overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-primary transition-all"
+                                style={{ width: `${Math.max(pct, 4)}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Most-Ordered Products */}
+              {analytics.business_metrics.product_breakdown?.length > 0 && (
+                <Card className="border-2 border-border/50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <ShoppingCart className="h-5 w-5 text-amber-600" />
+                      Most-Ordered Products
+                    </CardTitle>
+                    <CardDescription>Top products by quantity sold</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Product</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead className="text-right">Revenue</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {analytics.business_metrics.product_breakdown.slice(0, 8).map((item) => (
+                          <TableRow key={item.product}>
+                            <TableCell className="font-medium truncate max-w-[180px]">{item.product}</TableCell>
+                            <TableCell className="text-right">{item.count}</TableCell>
+                            <TableCell className="text-right">
+                              {item.revenue > 0
+                                ? formatCurrency(item.revenue, analytics.revenue_metrics.currency)
+                                : "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             {/* Receptionist Breakdown Table */}

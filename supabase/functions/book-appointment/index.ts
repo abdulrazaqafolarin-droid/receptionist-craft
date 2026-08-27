@@ -259,6 +259,7 @@ serve(async (req) => {
         booking_source: bookingSource,
         created_by: userId || null,
         notes: notes || null,
+        staff_id: metadata?.staff_id || null,
         idempotency_key: idempotencyKey,
         cancellation_token: cancellationToken,
         confirmation_token: confirmationToken,

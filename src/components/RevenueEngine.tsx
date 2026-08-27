@@ -116,7 +116,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
         <div key={`${p.name}-${i}`} className="flex items-center gap-2">
           <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color }} />
           <span className="text-muted-foreground">{p.name}:</span>
-          <span className="font-semibold">{p.name === "revenue" ? `£${Number(p.value).toLocaleString()}` : p.value}</span>
+          <span className="font-semibold">{p.name === "revenue" ? fmtCurrency(Number(p.value), conversionStats.currency) : p.value}</span>
         </div>
       ))}
     </div>
@@ -299,21 +299,21 @@ export function RevenueEngine({ receptionistIds, receptionistNames = {}, scopeLa
           id: "dropped-leads",
           type: "lost",
           msg: `${droppedLeads} lead sessions exited before conversion in selected scope`,
-          amount: `£${Math.max(0, leakageEstimate).toLocaleString()}`,
+          amount: fmtCurrency(Math.max(0, leakageEstimate), conversionStats.currency),
           time: "7d window",
         },
         {
           id: "suggestion",
           type: "suggest",
           msg: "Enable proactive deposit nudges in high-intent chats to improve close rate",
-          amount: `+£${Math.round(Math.max(0, leakageEstimate) * 0.2).toLocaleString()}/wk`,
+          amount: `+${fmtCurrency(Math.round(Math.max(0, leakageEstimate) * 0.2), conversionStats.currency)}/wk`,
           time: "AI tip",
         },
         {
           id: "after-hours",
           type: "lost",
           msg: `${afterHoursMissed} after-hours conversations detected in this scope`,
-          amount: `£${Math.round(afterHoursMissed * (avgConversionValue * 0.5)).toLocaleString()}`,
+          amount: fmtCurrency(Math.round(afterHoursMissed * (avgConversionValue * 0.5)), conversionStats.currency),
           time: "last 7d",
         },
       ]);
@@ -481,7 +481,7 @@ export function RevenueEngine({ receptionistIds, receptionistNames = {}, scopeLa
 
           <TabsContent value="dashboard" className="space-y-4">
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <StatTile icon={<TrendingUp className="h-4 w-4" />} label="Revenue This Week" value={`£${weekRevenue.toLocaleString()}`} sub="Live rolling 7-day total" />
+              <StatTile icon={<TrendingUp className="h-4 w-4" />} label="Revenue This Week" value={fmtCurrency(weekRevenue, conversionStats.currency)} sub="Live rolling 7-day total" />
               <StatTile icon={<Target className="h-4 w-4" />} label="Conversions" value={`${conversionStats.bookings + conversionStats.orders}`} sub="Scoped conversion events" />
               <StatTile icon={<Users className="h-4 w-4" />} label="Conversations" value={`${conversionData.reduce((s, d) => s + d.conversations, 0)}`} />
               <StatTile icon={<Sparkles className="h-4 w-4" />} label="AI Revenue (30d)" value={fmtCurrency(conversionStats.totalRevenue, conversionStats.currency)} />
@@ -627,7 +627,7 @@ export function RevenueEngine({ receptionistIds, receptionistNames = {}, scopeLa
           <TabsContent value="meo" className="space-y-4">
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-500">Revenue leaked this week</div>
-              <div className="font-mono text-4xl font-bold text-red-500">£{leakedRevenue.toLocaleString()}</div>
+              <div className="font-mono text-4xl font-bold text-red-500">{fmtCurrency(leakedRevenue, conversionStats.currency)}</div>
               <div className="text-xs text-muted-foreground">Across missed leads, abandoned flows and lost upsells in selected scope.</div>
             </div>
 

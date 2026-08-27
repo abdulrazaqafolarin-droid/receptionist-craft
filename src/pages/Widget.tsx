@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
 import { ChatSessionOverlay } from "@/components/widget/ChatSessionOverlay";
 import { UISignalRenderer, type UISignal } from "@/components/widget/UISignalRenderer";
+import { buildCartMessage, buildLeadFormMessage, buildTimeSlotMessage } from "@/lib/widgetMessages";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -36,21 +37,14 @@ export default function Widget() {
   const [services, setServices] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [businessModel, setBusinessModel] = useState<'services' | 'products' | 'both'>('services');
+  // Presentation-only booking state: tracks what the visitor has picked so the
+  // UI can resume visually after a page close. It NO LONGER executes anything —
+  // all bookings/orders run server-side through widget-chat (Phase 0.3).
   const defaultBookingState = {
     serviceId: null as string | null,
     serviceName: null as string | null,
     date: null as Date | null,
     timeSlot: null as any,
-    customerName: null as string | null,
-    customerEmail: null as string | null,
-    customerPhone: null as string | null,
-    collectingInfo: null as 'name' | 'contact' | null,
-    productId: null as string | null,
-    productName: null as string | null,
-    quantity: 1 as number,
-    orderMode: false as boolean,
-    awaitingOrderConfirmation: false as boolean,
-    pendingProducts: [] as Array<{ productId: string; productName: string; quantity: number; price?: number }>,
   };
   // Persist booking state to localStorage so mid-booking flows survive page close
   const BOOKING_STATE_KEY = `widget_booking_state_${receptionistId}`;
@@ -132,8 +126,6 @@ export default function Widget() {
     });
   }
 
-
-
   function normalizeUISignal(rawSignal: unknown): UISignal | null {
     if (!rawSignal || typeof rawSignal !== "object") return null;
     const signal = rawSignal as Record<string, unknown>;
@@ -197,102 +189,12 @@ export default function Widget() {
     }
   }
 
-  // ─── Client-side name validation (mirrors edge function nameValidator.ts) ───
-  const NAME_BLOCKLIST_CLIENT = new Set([
-    'hello','hi','hey','thanks','thank','please','yes','no','sure','okay','ok',
-    'great','good','fine','nice','cool','right','perfect','awesome','wonderful',
-    'amazing','excellent','fantastic','monday','tuesday','wednesday','thursday',
-    'friday','saturday','sunday','january','february','march','april','may','june',
-    'july','august','september','october','november','december','morning','afternoon',
-    'evening','noon','midnight','tonight','today','tomorrow','ridiculous','terrible',
-    'awful','horrible','angry','upset','frustrated','confused','worried','anxious',
-    'nervous','happy','sad','mad','desperate','annoyed','furious','disgusted',
-    'shocked','scared','interested','excited','curious','concerned','disappointed',
-    'looking','waiting','trying','going','coming','leaving','calling','booking',
-    'ordering','buying','getting','having','making','taking','running','sitting',
-    'standing','walking','talking','asking','helping','wondering','thinking',
-    'feeling','working','living','doing','browse','browsing','like','sorry',
-    'want','need','know','think','see','look','tell','give','take','come','make',
-    'find','keep','in','so','much','very','really','quite','too','also','just',
-    'not','but','and','for','with','about','here','there','back','the','this',
-    'that','what','when','where','how','why','who','some','any','all','each',
-    'every','well','still','already','bread','cake','dental','clinic','store',
-    'shop','service','product','appointment','booking','order','delivery','urgent',
-    'emergency','available','open','closed','free','busy','ready','someone',
-    'anyone','everyone','nobody','something','anything','everything','nothing',
-    'done','again','new','old','sir','mam','miss','mrs','dear',
-    'specifically','definitely','actually','basically','honestly',
-  ]);
-
-  const SENTENCE_REJECT_PATTERNS = [
-    /\b(i'll|i'd|i'm|i've|i am|i was|i will|i would|i could|i should|i might|i can|i want|i need|i think|i know|i see|i hope|i wish|i like|i love|i hate|i don't|i didn't|i won't|i can't|i couldn't|i shouldn't|i wouldn't)\b/i,
-    /\bto\s+(browse|order|book|buy|get|see|check|look|find|make|take|have|know|ask|try|go|come|leave|start|stop|cancel)\b/i,
-    /\b(sorry|apolog|excuse me|pardon|forgive|my bad|oops|whoops)\b/i,
-    /\b(can you|could you|would you|will you|do you|is there|are there|what is|how do|how can)\b/i,
-    /\b(because|although|however|therefore|instead|otherwise|meanwhile|furthermore)\b/i,
-    /^(let|let's|please|just|maybe|perhaps|actually|honestly|basically|well|so|oh|um|uh|hmm|ah)\b/i,
-    /\blike\s+to\b/i,
-    /\b(never\s*mind|forget\s*it|hold\s*on|wait\s*a|not\s+sure|no\s+thanks|no\s+thank)\b/i,
-  ];
-
-  function validateDirectNameInput(input: string): string | null {
-    if (!input) return null;
-    const trimmed = input.trim();
-    // Reject sentences
-    for (const pattern of SENTENCE_REJECT_PATTERNS) {
-      if (pattern.test(trimmed)) return null;
-    }
-    const words = trimmed.split(/\s+/);
-    // Reject more than 3 words
-    if (words.length > 3) return null;
-    // Validate each word
-    for (const word of words) {
-      if (!/^[A-Za-z][A-Za-z'-]*$/.test(word)) return null;
-      if (word.length < 2 || word.length > 15) return null;
-      if (NAME_BLOCKLIST_CLIENT.has(word.toLowerCase())) return null;
-    }
-    return words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-  }
-
   // Helper: add a user message to UI and persist to DB
   function addUserMessage(content: string) {
     const msg: Message = { role: "user", content, timestamp: new Date() };
     setMessages(prev => [...prev, msg]);
     persistMessage('user', content);
     return msg;
-  }
-
-  // Helper: find a previously provided customer name from conversation history
-  // Scans bot messages for "Thank you, <Name>" patterns and user messages for name declarations
-  function findPreviousNameInHistory(msgs: Message[]): string | null {
-    // 1. Check if we already have a name in booking state
-    if (bookingState.customerName && bookingState.customerName.length >= 2) {
-      return bookingState.customerName;
-    }
-    // 2. Scan bot messages for "Thank you, Name" acknowledgements
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      const msg = msgs[i];
-      if (msg.role === 'assistant') {
-        const thankYouMatch = msg.content.match(/Thank you,?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[!.]/);
-        if (thankYouMatch?.[1]) return thankYouMatch[1];
-      }
-    }
-    // 3. Scan user messages for explicit name declarations
-    const NAME_PATTERNS = [
-      /(?:my\s+name\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-      /(?:(?:you\s+can\s+)?call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-      /\bi'?m\s+([A-Z][a-z]+)\s*[.!?,]?\s*$/i,
-    ];
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].role !== 'user') continue;
-      for (const pattern of NAME_PATTERNS) {
-        const match = msgs[i].content.match(pattern);
-        if (match?.[1] && match[1].length >= 2 && match[1].length <= 20) {
-          return match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
-        }
-      }
-    }
-    return null;
   }
 
   // Initialize persistent session ID and check for existing conversation
@@ -302,16 +204,14 @@ export default function Widget() {
     const SESSION_KEY = `widget_session_${receptionistId}`;
     const TIMESTAMP_KEY = `widget_session_ts_${receptionistId}`;
     const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
-    
+
     let sid = localStorage.getItem(SESSION_KEY);
     const sessionTimestamp = localStorage.getItem(TIMESTAMP_KEY);
     const now = Date.now();
     
-    // Check if session has expired (older than 24 hours)
     const isExpired = sid && sessionTimestamp && (now - parseInt(sessionTimestamp, 10)) > SESSION_MAX_AGE_MS;
     
     if (!sid || isExpired) {
-      // No session or expired — create fresh
       sid = crypto.randomUUID();
       localStorage.setItem(SESSION_KEY, sid);
       localStorage.setItem(TIMESTAMP_KEY, now.toString());
@@ -321,15 +221,12 @@ export default function Widget() {
     }
     
     setSessionId(sid);
-    
-    // Session exists and is within 24 hours — check for messages
     checkExistingConversation(sid);
   }, [receptionistId]);
   
-  // Check if there's an existing conversation for this session
   async function checkExistingConversation(sid: string) {
+    if (!sid || !receptionistId) return;
     try {
-      // Set session header so RLS policy can match widget user's messages
       const { data, error } = await supabase
         .from('chat_messages')
         .select('message, sender, created_at')
@@ -339,12 +236,9 @@ export default function Widget() {
         .limit(50)
         .setHeader('x-session-id', sid);
       
-      if (error) {
-        console.warn('Error loading conversation history:', error);
-      }
+      if (error) console.warn('Error loading conversation history:', error);
       
       if (!error && data && data.length > 0) {
-        // Has existing conversation — show overlay
         setExistingMessages(data);
         setHasExistingSession(true);
         setShowSessionOverlay(true);
@@ -352,25 +246,21 @@ export default function Widget() {
     } catch (err) {
       console.error('Error checking existing conversation:', err);
     } finally {
-      // Mark session check as complete regardless of outcome
       setSessionCheckComplete(true);
     }
   }
   
-  // Handle continue existing chat - show BOTH user and assistant messages + resume booking flow
   function handleContinueChat() {
     setShowSessionOverlay(false);
-    setGreetingStored(true); // Prevent re-storing greeting
+    setGreetingStored(true);
     
-    // Restore persisted booking state from localStorage
     const restoredBooking = loadPersistedBookingState();
     setBookingState(restoredBooking);
     setActiveUISignal(null);
     
-    // Restore messages from the existing conversation - include both user and AI messages
     if (existingMessages.length > 0) {
       const restoredMessages: Message[] = existingMessages
-        .filter(msg => msg.message && msg.message.trim()) // Filter out empty messages
+        .filter(msg => msg.message && msg.message.trim())
         .map(msg => ({
           role: msg.sender === 'user' ? 'user' as const : 'assistant' as const,
           content: msg.message,
@@ -379,33 +269,12 @@ export default function Widget() {
         }));
       
       setMessages(restoredMessages);
-      
-      // After restoring messages, detect incomplete booking stage and auto-resume
-      // Use setTimeout to let state settle before appending resumption message
       setTimeout(() => resumeBookingFlow(restoredBooking), 400);
     }
   }
-  
-  // Detect the last incomplete booking stage and re-render the appropriate UI widget
+
+  // Detect the last incomplete booking stage and re-render the appropriate widget
   async function resumeBookingFlow(state: typeof defaultBookingState) {
-    // If collecting info (name or contact), just prompt again
-    if (state.collectingInfo === 'name') {
-      emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
-      addBotMessage("Welcome back! 👋 We were just getting your details to complete the booking. What's your name?");
-      return;
-    }
-    if (state.collectingInfo === 'contact') {
-      emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
-      addBotMessage(`Welcome back, ${state.customerName}! 👋 To finish your booking, could you share your email or phone number?`);
-      return;
-    }
-    // If awaiting order confirmation
-    if (state.awaitingOrderConfirmation && state.productName) {
-      emitUISignal({ intent: "ordering", activeComponent: null, reason: "step_progression" });
-      addBotMessage(`Welcome back! 👋 You had selected ${state.productName}. Would you like to go ahead with this order, make changes, or start fresh?`);
-      return;
-    }
-    // If service + date selected but no time slot — fetch fresh slots and show
     if (state.serviceId && state.date && !state.timeSlot) {
       const formattedDate = format(state.date, "EEEE, MMMM d");
       setLoading(true);
@@ -414,53 +283,38 @@ export default function Widget() {
         const nextDay = new Date(state.date);
         nextDay.setDate(nextDay.getDate() + 1);
         const endDateStr = format(nextDay, "yyyy-MM-dd");
-        
-        const { data: slotsData, error: slotsError } = await supabase.functions.invoke("check-availability", {
+
+        const { data: slotsData } = await supabase.functions.invoke("check-availability", {
           body: { receptionistId, serviceId: state.serviceId, startDate: dateStr, endDate: endDateStr, maxSlots: 8 }
         });
-        
+
         const slots = slotsData?.slots || [];
         if (slots.length > 0) {
-          addBotMessage(
-            `Welcome back! 👋 You were booking ${state.serviceName} for ${formattedDate}. Here are today's available times — pick one to continue!`
-          );
+          addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName} for ${formattedDate}. Here are available times — pick one to continue!`);
           emitUISignal({ intent: "booking", activeComponent: "time_picker", componentData: { slots } });
         } else {
-          // Date no longer has slots — offer date picker again
           setBookingState(prev => ({ ...prev, date: null }));
-          addBotMessage(
-            `Welcome back! 👋 You were booking ${state.serviceName}, but ${formattedDate} no longer has open slots. Please pick another date.`
-          );
+          addBotMessage(`Welcome back! 👋 ${formattedDate} no longer has open slots for ${state.serviceName}. Please pick another date.`);
           emitUISignal({ intent: "booking", activeComponent: "date_picker" });
         }
       } catch (e) {
         console.error("[Widget] Error resuming booking flow:", e);
         setBookingState(prev => ({ ...prev, date: null }));
-        addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName}. Please pick a date to continue.`);
         emitUISignal({ intent: "booking", activeComponent: "date_picker" });
       } finally {
         setLoading(false);
       }
       return;
     }
-    // If service selected but no date — show date picker
     if (state.serviceId && !state.date) {
-      addBotMessage(
-        `Welcome back! 👋 You were booking ${state.serviceName}. Go ahead and pick a date that works for you!`
-      );
+      addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName}. Pick a date that works for you!`);
       emitUISignal({ intent: "booking", activeComponent: "date_picker" });
       return;
     }
-    // If time slot selected but info not yet collected — start collecting
-    if (state.serviceId && state.date && state.timeSlot && !state.customerName) {
-      const formattedDate = format(state.date, "EEEE, MMMM d");
-      const formattedTime = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(state.timeSlot.startTime || state.timeSlot.start));
-      setBookingState(prev => ({ ...prev, collectingInfo: 'name' }));
-      emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
-      addBotMessage(`Welcome back! 👋 You were booking ${state.serviceName} on ${formattedDate} at ${formattedTime}. To complete your booking, may I have your name please?`);
+    if (state.serviceId && state.date && state.timeSlot) {
+      addBotMessage(`Welcome back! 👋 We were finishing your ${state.serviceName} booking. Tell me anything to confirm or change!`);
       return;
     }
-    // No active booking flow — show quick replies
     const lastMsg = messages[messages.length - 1];
     if (!lastMsg || lastMsg.role !== 'assistant' || !lastMsg.showQuickReplies) {
       setMessages(prev => {
@@ -472,35 +326,25 @@ export default function Widget() {
       });
     }
   }
-  
-  // Handle start new chat
+
   async function handleNewChat() {
     setShowSessionOverlay(false);
     setHasExistingSession(false);
     setExistingMessages([]);
     
-    // Generate new session ID with fresh timestamp
     const newSid = crypto.randomUUID();
     localStorage.setItem(`widget_session_${receptionistId}`, newSid);
     localStorage.setItem(`widget_session_ts_${receptionistId}`, Date.now().toString());
     setSessionId(newSid);
     
-    // Reset booking state and clear persisted copy
     setBookingState({...defaultBookingState});
     localStorage.removeItem(BOOKING_STATE_KEY);
     setActiveUISignal(null);
     
-    // Show fresh greeting with a proper "Hi" conversation start
     if (receptionist?.greeting_message) {
-      setMessages([{
-        role: "assistant",
-        content: receptionist.greeting_message,
-        timestamp: new Date(),
-        showQuickReplies: true,
-      }]);
+      setMessages([{ role: "assistant", content: receptionist.greeting_message, timestamp: new Date(), showQuickReplies: true }]);
     }
-    
-    setGreetingStored(false); // Allow greeting to be stored for new session
+    setGreetingStored(false);
   }
 
   useEffect(() => {
@@ -508,13 +352,11 @@ export default function Widget() {
   }, [messages]);
 
   async function loadReceptionist() {
-    // Use RPC which returns all public-safe fields including business_model
+    if (!receptionistId) return;
     let data: any = null;
     
     const rpcResult = await supabase.rpc("get_public_receptionist", { p_receptionist_id: receptionistId });
-    if (rpcResult.data && rpcResult.data.length > 0) {
-      data = rpcResult.data[0];
-    }
+    if (rpcResult.data && rpcResult.data.length > 0) data = rpcResult.data[0];
     
     if (!data) {
       toast({ title: "Error", description: "Receptionist not found", variant: "destructive" });
@@ -524,32 +366,19 @@ export default function Widget() {
     setReceptionist(data);
     setBusinessModel(data.business_model || 'services');
     
-    // Apply widget customization colors if available
     const businessInfo = data.business_info as any;
     if (businessInfo?.widget_customization) {
-      const customization = businessInfo.widget_customization;
-      setWidgetColors({
-        primaryColor: customization.primaryColor || "#8B5CF6",
-        secondaryColor: customization.secondaryColor || "#A78BFA",
-        logoUrl: customization.logoUrl || "",
-      });
+      const c = businessInfo.widget_customization;
+      setWidgetColors({ primaryColor: c.primaryColor || "#8B5CF6", secondaryColor: c.secondaryColor || "#A78BFA", logoUrl: c.logoUrl || "" });
     }
     
-    // Only display greeting message for NEW sessions (not when continuing existing conversation)
-    // If hasExistingSession is true, the overlay will show and user will choose to continue or start fresh
     if (data.greeting_message && !hasExistingSession) {
-      setMessages([{
-        role: "assistant",
-        content: data.greeting_message,
-        timestamp: new Date(),
-        showQuickReplies: true,
-      }]);
+      setMessages([{ role: "assistant", content: data.greeting_message, timestamp: new Date(), showQuickReplies: true }]);
     }
   }
 
   async function storeInitialGreeting() {
     try {
-      // Call widget-chat with empty message to store the greeting in database
       await supabase.functions.invoke("widget-chat", {
         body: {
           message: "",
@@ -566,13 +395,12 @@ export default function Widget() {
   }
 
   async function loadServicesAndProducts() {
-    // Use the public_catalog view or RPC for unauthenticated widget access
+    if (!receptionistId) return;
     const { data: rpcData, error: rpcError } = await supabase
-      .rpc("get_services_for_receptionist", { p_receptionist_id: receptionistId! });
+      .rpc("get_services_for_receptionist", { p_receptionist_id: receptionistId });
     
-    let items = rpcData;
+    let items = rpcData as any[] | null;
     
-    // Fallback to direct table query (works if user is authenticated owner)
     if (rpcError || !items) {
       const { data, error } = await supabase
         .from("services")
@@ -585,13 +413,11 @@ export default function Widget() {
     if (items) {
       const serviceItems = items.filter((item: any) => item.duration_minutes > 0);
       const productItems = items.filter((item: any) => item.duration_minutes === 0 || item.is_product === true);
-      console.log("[Widget] Services:", serviceItems.length, "Products:", productItems.length);
       setServices(serviceItems);
       setProducts(productItems);
     }
   }
 
-  // Load receptionist and services when sessionId is ready AND session check is complete
   useEffect(() => {
     if (receptionistId && sessionId && sessionCheckComplete) {
       loadReceptionist();
@@ -599,320 +425,36 @@ export default function Widget() {
     }
   }, [receptionistId, sessionId, sessionCheckComplete, hasExistingSession]);
 
-  // Store initial greeting in database to prevent re-greeting
   useEffect(() => {
     if (receptionist && receptionist.greeting_message && !greetingStored && sessionId) {
       storeInitialGreeting();
     }
   }, [receptionist, greetingStored, sessionId]);
 
-  // Intent patterns that match quick action button behavior
-  const QUICK_ACTION_INTENTS: { pattern: RegExp; action: string }[] = [
-    // Book Appointment intent → matches "book_appointment" button
-    { pattern: /\b(book|schedule|make|set\s*up|arrange|reserve)\b.*\b(appointment|booking|visit|session|consultation|meeting|slot)\b/i, action: 'book_appointment' },
-    { pattern: /\b(appointment|booking|visit|session|consultation)\b.*\b(book|schedule|make|set\s*up|arrange|reserve)\b/i, action: 'book_appointment' },
-    { pattern: /\b(i('d| would| want to| wanna| need to) like to (book|schedule|come in|make an appointment|set up))\b/i, action: 'book_appointment' },
-    { pattern: /\bi('m| am) ready to book\b/i, action: 'book_appointment' },
-    { pattern: /\bcan i (book|schedule|get|make)\b/i, action: 'book_appointment' },
-    { pattern: /\b(when (can|could) (i|we) come in|when are you (available|free|open))\b/i, action: 'book_appointment' },
-    { pattern: /\b(any (availability|openings|slots)|do you have (availability|openings))\b/i, action: 'book_appointment' },
-    { pattern: /\bi need (an? )?(appointment|booking|slot|session)\b/i, action: 'book_appointment' },
-    { pattern: /\bwhat (days|dates|times?) (are |do you have )?(available|open|free)\b/i, action: 'book_appointment' },
-    { pattern: /\b(what times do you have|what time slots|show me (the |your )?(schedule|availability|calendar))\b/i, action: 'book_appointment' },
-    { pattern: /\bi('d| would) like to come in\b/i, action: 'book_appointment' },
-    { pattern: /\blet('s| us) (book|schedule|set up|make)\b/i, action: 'book_appointment' },
-    { pattern: /\b(sign me up|put me down|pencil me in)\b/i, action: 'book_appointment' },
-    { pattern: /\b(next available|earliest available|soonest)\b/i, action: 'book_appointment' },
-    // View Products intent → matches "view_products" button
-    { pattern: /\b(show|see|view|browse|look at|check out|what)\b.*\b(products?|items?|catalog|menu|stock|inventory|merchandise)\b/i, action: 'view_products' },
-    { pattern: /\b(products?|items?|catalog|menu|stock|inventory|merchandise)\b.*\b(show|see|view|browse|available|have|offer|sell)\b/i, action: 'view_products' },
-    { pattern: /\bwhat (do you|can i) (buy|order|purchase|get)\b/i, action: 'view_products' },
-    { pattern: /\b(i('d| would) like to|i want to|can i|let me)\b.*\b(buy|order|purchase|shop|get something)\b/i, action: 'view_products' },
-    { pattern: /\b(buy|order|purchase|shop|get)\b.*\b(something|anything|stuff)\b/i, action: 'view_products' },
-    { pattern: /\bwhat('s| is) (for sale|on (the )?menu|available (to buy|for purchase))\b/i, action: 'view_products' },
-    { pattern: /\bdo you (sell|carry|have|stock)\b/i, action: 'view_products' },
-    // View Services intent → matches "view_services" button
-    { pattern: /\b(show|see|view|list|what are)\b.*\b(services?|offerings?|treatments?|options?)\b/i, action: 'view_services' },
-    { pattern: /\b(services?|offerings?|treatments?)\b.*\b(show|see|view|offer|available|provide|have)\b/i, action: 'view_services' },
-    { pattern: /\bwhat (do you|can you) (do|offer|provide)\b/i, action: 'view_services' },
-    { pattern: /\bwhat (services?|options?) (do you|are) (have|available|offer)\b/i, action: 'view_services' },
-    { pattern: /\b(how can you help|what can you help with|what do you specialize in)\b/i, action: 'view_services' },
-    // Contact intent → matches "contact" button
-    { pattern: /\b(contact|reach|call|phone|email|address|location|directions|where are you|how (do i|can i|to) (reach|contact|find|get to))\b/i, action: 'contact' },
-  ];
-
-  // Try to match a typed service name from user input for direct booking
-  function matchServiceFromText(text: string): { id: string; name: string } | null {
-    if (services.length === 0) return null;
-    const lowerText = text.toLowerCase();
-    // Check if user typed "book a [service name]" or similar
-    for (const s of services) {
-      if (lowerText.includes(s.name.toLowerCase())) {
-        return { id: s.id, name: s.name };
-      }
-    }
-    return null;
-  }
-
   async function sendMessage(messageText?: string) {
     const textToSend = messageText || input.trim();
     if (!textToSend || !receptionistId) return;
 
-    // ─── QUICK ACTION INTENT ROUTING ───────────────────────────────
-    // Quick action intents are now handled by the AI on the backend for typed messages.
-    // The QUICK_ACTION_INTENTS pattern matching was removed because it intercepted
-    // user messages and replaced them with hardcoded responses, causing the AI to
-    // ignore what the customer actually typed. The quick action buttons below the
-    // chat (QuickReplyButtons) remain as UI shortcuts for users who click them.
-    // See defect U1 from conversational flow audit.
-    const isInActiveFlow = bookingState.collectingInfo || 
-                           bookingState.awaitingOrderConfirmation || 
-                           bookingState.serviceId || 
-                           bookingState.productId;
-
-    // REMOVED: QUICK_ACTION_INTENTS pre-processing override that discarded user messages.
-    // Message always reaches the AI for proper intent detection.
-    // This fixes the CRITICAL bug where "Do you have consultations?" was intercepted
-    // and never sent to the AI (U1).
-
-    const userMessage: Message = {
-      role: "user",
-      content: textToSend,
-      timestamp: new Date()
-    };
-
+    const userMessage: Message = { role: "user", content: textToSend, timestamp: new Date() };
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setLoading(true);
     
-    // Refresh session timestamp on each interaction (keeps 24h window rolling)
     if (receptionistId) {
       localStorage.setItem(`widget_session_ts_${receptionistId}`, Date.now().toString());
     }
 
     try {
-      // Handle soft order confirmation step (client-side flow — persist user message)
-      if (bookingState.awaitingOrderConfirmation) {
-        persistMessage('user', textToSend);
-        const lowerText = textToSend.toLowerCase().trim();
-        const isConfirm = /^(yes|yep|yeah|sure|go ahead|proceed|confirm|let's do it|ready|ok|okay|place it|place the order|place order|do it|absolutely|definitely|yea|sounds good|let's go|i'm ready)/.test(lowerText);
-        const isChange = /^(change|modify|edit|update|different|swap|switch|actually|wait|hold on|let me change|i want to change|make changes|no.*change|want.*change)/.test(lowerText) || 
-                         /change|modify|different|swap|switch/.test(lowerText);
-        const isCancel = /^(no|nope|nah|cancel|never\s*mind|not really|not now|not ready|maybe later|i('ll| will) pass|forget it|stop|back off|leave me)/.test(lowerText);
-        
-        if (isConfirm) {
-          // User confirmed — NOW start collecting info
-          setBookingState(prev => ({ 
-            ...prev, 
-            awaitingOrderConfirmation: false,
-            collectingInfo: 'name',
-          }));
-          emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
-          
-          addBotMessage("Perfect, let's get your order placed! What's your name?");
-          setLoading(false);
-          return;
-        } else if (isChange) {
-          // User wants to change — show product selector again
-          setBookingState(prev => ({ 
-            ...prev, 
-            awaitingOrderConfirmation: false,
-            pendingProducts: [],
-            productId: null,
-            productName: null,
-            quantity: 1,
-            orderMode: false,
-          }));
-          emitUISignal({ intent: "ordering", activeComponent: "product_selector", reason: "intent_switch" });
-          
-          addBotMessage("No problem at all! Here are our products again — take your time and pick whatever you'd like.");
-          setLoading(false);
-          return;
-        } else if (isCancel) {
-          // User not ready — back off completely
-          setBookingState({...defaultBookingState});
-          emitUISignal({ intent: "browsing", activeComponent: null, reason: "user_cancel" });
-          addBotMessage("No worries at all! Feel free to browse or ask me anything whenever you're ready. I'm here to help! 😊");
-          setLoading(false);
-          return;
-        }
-        // Default: route unrecognized messages to the AI for proper handling.
-        // The AI can understand questions ("Can I get it in blue?"),
-        // modifications ("Actually make it 3"), or anything else the
-        // regex patterns would miss. This fixes defect U2.
-        setBookingState(prev => ({ ...prev, awaitingOrderConfirmation: false }));
-        // Fall through to normal AI flow below
-      }
-
-      // Handle booking info collection (client-side flow — persist user message)
-      if (bookingState.collectingInfo === 'name') {
-        persistMessage('user', textToSend);
-        let name = textToSend.trim();
-
-        // Detect back-references like "same name", "the name I gave you", "use my earlier name"
-        const isBackReference = /\b(same\s+name|name\s+i\s+(?:gave|told|provided|said|mentioned)|(?:use|keep)\s+(?:my|the)\s+(?:earlier|previous|last|same)\s+name|already\s+(?:gave|told|said)|you\s+(?:already\s+)?have\s+(?:my|it|the)\s+name)\b/i.test(name);
-        if (isBackReference) {
-          const previousName = findPreviousNameInHistory(messages);
-          if (previousName) {
-            name = previousName;
-          } else {
-            addBotMessage("I don't seem to have your name from earlier in our conversation. Could you please tell me your name?");
-            setLoading(false);
-            return;
-          }
-        } else {
-          // Validate the input as a direct name — reject sentences, verbs, apologies
-          const validated = validateDirectNameInput(name);
-          if (!validated) {
-            addBotMessage("I didn't catch a valid name there. Could you please share just your first name or full name? For example: \"John\" or \"Jane Smith\"");
-            setLoading(false);
-            return;
-          }
-          name = validated;
-        }
-
-        if (name.length < 2) {
-          addBotMessage("I didn't quite catch that. Could you please provide your full name?");
-          setLoading(false);
-          return;
-        }
-        
-        setBookingState(prev => ({ ...prev, customerName: name, collectingInfo: 'contact' }));
-        emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
-        
-        addBotMessage(`Thank you, ${name}! And what's the best way to reach you? You can share your email address or phone number.`);
-        setLoading(false);
-        return;
-      }
-
-      if (bookingState.collectingInfo === 'contact') {
-        persistMessage('user', textToSend);
-        // User provided contact info - complete the booking or order
-        const contactInfo = textToSend.trim();
-        const isEmail = contactInfo.includes('@');
-        const isPhone = /^\+?[\d\s\-\(\)]{7,}$/.test(contactInfo.replace(/\s/g, ''));
-        
-        // Validate contact info
-        if (!isEmail && !isPhone) {
-          addBotMessage("I couldn't recognize that as an email or phone number. Could you please provide a valid email address (e.g., you@example.com) or phone number?");
-          setLoading(false);
-          return;
-        }
-        
-        setBookingState(prev => ({
-          ...prev,
-          customerEmail: isEmail ? contactInfo : null,
-          customerPhone: !isEmail ? contactInfo : null,
-          collectingInfo: null,
-        }));
-
-        // Check if this is a product order or appointment booking
-        if (bookingState.orderMode && bookingState.productName) {
-          // Write the order to the database via the create_widget_order RPC
-          try {
-            const orderItems = bookingState.pendingProducts.length > 0
-              ? bookingState.pendingProducts.map(p => ({
-                  product_id: p.productId,
-                  product_name: p.productName,
-                  quantity: p.quantity,
-                  unit_price: p.price || null,
-                }))
-              : [{
-                  product_id: bookingState.productId,
-                  product_name: bookingState.productName,
-                  quantity: bookingState.quantity || 1,
-                  unit_price: null,
-                }];
-
-            const totalAmount = orderItems.reduce((sum, item) => sum + ((item.unit_price || 0) * item.quantity), 0);
-
-            const { data: orderId, error: orderError } = await supabase.rpc('create_widget_order', {
-              p_receptionist_id: receptionistId,
-              p_customer_name: bookingState.customerName!,
-              p_items: orderItems,
-              p_customer_email: isEmail ? contactInfo : null,
-              p_customer_phone: !isEmail ? contactInfo : null,
-              p_notes: null,
-              p_metadata: { session_id: sessionId, source: 'widget' },
-            });
-
-            if (orderError) {
-              console.error("[Widget] Order creation error:", orderError);
-              throw orderError;
-            }
-
-            addBotMessage(`Wonderful! Your order has been placed successfully. Here are the details:`);
-            emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: {
-              products: orderItems.map(i => ({ name: i.product_name, quantity: i.quantity, price: i.unit_price })),
-              customerName: bookingState.customerName,
-              contactInfo: contactInfo,
-              orderId: orderId || crypto.randomUUID(),
-              totalAmount,
-            } });
-          } catch (orderErr: any) {
-            console.error("[Widget] Order error:", orderErr);
-            addBotMessage("I apologize, but I encountered an issue placing your order. Please try again or contact us directly.");
-          }
-          
-          // Reset booking state
-          setBookingState({...defaultBookingState});
-          localStorage.removeItem(BOOKING_STATE_KEY);
-          
-          setLoading(false);
-          return;
-        }
-
-        // Book the appointment
-        try {
-          const { data: bookingData, error: bookingError } = await supabase.functions.invoke("book-appointment", {
-            body: {
-              receptionistId,
-              serviceId: bookingState.serviceId,
-              startTime: bookingState.timeSlot.startTime,
-              customerName: bookingState.customerName,
-              customerEmail: isEmail ? contactInfo : null,
-              customerPhone: !isEmail ? contactInfo : null,
-              source: "widget",
-            }
-          });
-
-          if (bookingError) throw bookingError;
-
-          // Format nice date/time
-          const appointmentDate = format(new Date(bookingState.timeSlot.startTime), "EEEE, MMMM d, yyyy");
-          const appointmentTime = format(new Date(bookingState.timeSlot.startTime), "h:mm a");
-
-          addBotMessage(`Your appointment has been confirmed! Here are your booking details:`);
-          emitUISignal({ intent: "confirmation", activeComponent: "booking_confirmation", componentData: {
-            serviceName: bookingState.serviceName,
-            dateTime: bookingState.timeSlot.startTime,
-            customerName: bookingState.customerName,
-            contactInfo: contactInfo,
-            duration: services.find(s => s.id === bookingState.serviceId)?.duration_minutes,
-          } });
-          
-          // Reset booking state
-          setBookingState({...defaultBookingState});
-          localStorage.removeItem(BOOKING_STATE_KEY);
-          
-          setLoading(false);
-          return;
-        } catch (bookErr: any) {
-          console.error("Booking error:", bookErr);
-          addBotMessage("I apologize, but I encountered an issue while confirming your appointment. Please try again, or feel free to contact us directly for assistance.");
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Normal conversation flow - include abuse protection fields
+      // ─── SINGLE EXECUTION PATH (Phase 0.3) ─────────────────────────────
+      // Every message — including widget-driven selections, cart intents,
+      // and contact details — goes through widget-chat. Slot collection,
+      // validation, action gates, idempotency, and booking/order execution
+      // are owned server-side. This client only renders results.
       const { data, error } = await supabase.functions.invoke("widget-chat", {
         body: {
           message: textToSend,
           receptionistId,
           sessionId,
-          bookingContext: bookingState,
-          // Honeypot and timing for bot detection
           _hp_field: honeypotValue,
           _form_load_time: formLoadTimeRef.current,
         }
@@ -920,16 +462,10 @@ export default function Widget() {
 
       if (error) throw error;
 
-      // Detect if we should show special UI
       const reply = data.reply || "";
       
-      let botMessage: Message = {
-        role: "assistant",
-        content: reply,
-        timestamp: new Date(),
-      };
+      let botMessage: Message = { role: "assistant", content: reply, timestamp: new Date() };
 
-      // Check if booking was created by the backend
       if (data.bookingCreated && data.bookingDetails) {
         setBookingState({...defaultBookingState});
         emitUISignal({ intent: "confirmation", activeComponent: "booking_confirmation", componentData: {
@@ -943,7 +479,6 @@ export default function Widget() {
         } });
       }
       
-      // Check if order was created by the backend
       if (data.orderCreated && data.orderDetails) {
         setBookingState({...defaultBookingState});
         emitUISignal({ intent: "confirmation", activeComponent: "order_summary", componentData: {
@@ -967,18 +502,14 @@ export default function Widget() {
       setMessages(prev => [...prev, botMessage]);
     } catch (err: any) {
       console.error("Chat error:", err);
-      toast({ 
-        title: "Error", 
-        description: err.message || "Failed to send message", 
-        variant: "destructive" 
-      });
+      toast({ title: "Error", description: err.message || "Failed to send message", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }
 
   async function handleServiceSelect(serviceId: string, serviceName: string) {
-    setBookingState(prev => ({ ...prev, serviceId, serviceName, orderMode: false }));
+    setBookingState(prev => ({ ...prev, serviceId, serviceName }));
     emitUISignal({ intent: "booking", activeComponent: "date_picker" });
     addUserMessage(`I'd like to book ${serviceName}`);
     addBotMessage(`Great choice! Go ahead and pick a date that works for you.`);
@@ -986,34 +517,16 @@ export default function Widget() {
 
   async function handleProductsConfirm(selectedProducts: Array<{ productId: string; productName: string; quantity: number; price?: number }>) {
     if (selectedProducts.length === 0) return;
-    
-    // Build summary for soft confirmation
-    const productNames = selectedProducts.map(p => `${p.quantity}x ${p.productName}`).join(', ');
-    const totalPrice = selectedProducts.reduce((sum, p) => sum + ((p.price || 0) * p.quantity), 0);
-    const priceText = totalPrice > 0 ? ` for a total of $${totalPrice.toFixed(2)}` : '';
-    
-    // Store pending products but DON'T start collecting info yet
-    setBookingState(prev => ({ 
-      ...prev, 
-      awaitingOrderConfirmation: true,
-      pendingProducts: selectedProducts,
-      productId: selectedProducts[0].productId,
-      productName: productNames,
-      quantity: selectedProducts.reduce((sum, p) => sum + p.quantity, 0),
-      orderMode: true,
-      collectingInfo: null, // NOT collecting info yet
-    }));
-    emitUISignal({ intent: "ordering", activeComponent: null, reason: "step_progression" });
-    
-    // Soft confirmation message — ask if they want to proceed
-    const botContent = `Great choices! You've selected ${productNames}${priceText}. Are you ready to go ahead with this order, or would you like to make any changes?`;
-    addBotMessage(botContent);
+    // Phase 0.3: route the cart through the AI backend — widget-chat
+    // validates stock/pricing and owns the transaction.
+    const cartMessage = buildCartMessage(selectedProducts);
+    if (!cartMessage) return;
+    await sendMessage(cartMessage);
   }
 
   async function handleDateSelect(date: Date) {
     setBookingState(prev => ({ ...prev, date }));
     
-    // Immediately fetch time slots for that date
     const dateStr = format(date, "yyyy-MM-dd");
     const formattedDate = format(date, "EEEE, MMMM d");
     
@@ -1025,21 +538,10 @@ export default function Widget() {
       nextDay.setDate(nextDay.getDate() + 1);
       const endDateStr = format(nextDay, "yyyy-MM-dd");
       
-      console.log("[Widget] Fetching availability:", { receptionistId, serviceId: bookingState.serviceId, startDate: dateStr, endDate: endDateStr });
-      
       const { data: slotsData, error: slotsError } = await supabase.functions.invoke("check-availability", {
-        body: {
-          receptionistId,
-          serviceId: bookingState.serviceId,
-          startDate: dateStr,
-          endDate: endDateStr,
-          maxSlots: 8,
-        }
+        body: { receptionistId, serviceId: bookingState.serviceId, startDate: dateStr, endDate: endDateStr, maxSlots: 8 }
       });
       
-      console.log("[Widget] check-availability response:", { slotsData, slotsError });
-      
-      // Handle edge function error
       if (slotsError) {
         console.error("[Widget] check-availability error:", slotsError);
         setBookingState(prev => ({ ...prev, date: null }));
@@ -1047,16 +549,14 @@ export default function Widget() {
         return;
       }
 
-      // Extract slots - handle both direct response and nested data
       const slots = slotsData?.slots || [];
-      console.log("[Widget] Extracted slots count:", slots.length);
       
       if (slots.length > 0) {
         addBotMessage(`Here are the available slots for ${formattedDate} — pick the one that works best for you!`);
         emitUISignal({ intent: "booking", activeComponent: "time_picker", componentData: { slots } });
       } else {
         setBookingState(prev => ({ ...prev, date: null }));
-        addBotMessage(`I'm sorry, but there are no available time slots on ${formattedDate}. Would you like to try a different date?`);
+        addBotMessage(`I'm sorry, there are no available time slots on ${formattedDate}. Would you like to try a different date?`);
         emitUISignal({ intent: "booking", activeComponent: "date_picker" });
       }
     } catch (error) {
@@ -1073,22 +573,20 @@ export default function Widget() {
     const startTime = slot.startTime || slot.start;
     setBookingState(prev => ({ 
       ...prev, 
-      timeSlot: { ...slot, startTime }, 
-      collectingInfo: 'name' 
+      timeSlot: { ...slot, startTime }
     }));
-    emitUISignal({ intent: "lead_capture", activeComponent: null, reason: "step_progression" });
     
     const formattedTime = format(new Date(startTime), "h:mm a");
     const formattedDate = bookingState.date ? format(bookingState.date, "EEEE, MMMM d") : "";
-    
-    addUserMessage(`I'll take the ${formattedTime} slot`);
-    addBotMessage(`Excellent! You've selected ${bookingState.serviceName} on ${formattedDate} at ${formattedTime}.\n\nTo complete your booking, may I have your name please?`);
+
+    // Phase 0.3: tell the AI which slot was chosen — the server-side engine
+    // owns slot capture and decides what to collect next.
+    await sendMessage(buildTimeSlotMessage(formattedTime, formattedDate));
   }
 
   async function handleQuickReply(value: string) {
     if (value === "book_appointment") {
       if (services.length === 1) {
-        // Only one service — skip selection, go straight to calendar
         await handleServiceSelect(services[0].id, services[0].name);
       } else if (services.length > 1) {
         addBotMessage("Which service would you like to book? Just tap one below!");
@@ -1121,18 +619,10 @@ export default function Widget() {
       const contactInfo = receptionist?.business_info as any;
       let contactMessage = "Here's how you can reach us:\n\n";
       
-      if (contactInfo?.phone || receptionist?.phone) {
-        contactMessage += `📞 Phone: ${contactInfo?.phone || receptionist?.phone}\n`;
-      }
-      if (contactInfo?.email) {
-        contactMessage += `✉️ Email: ${contactInfo.email}\n`;
-      }
-      if (contactInfo?.address) {
-        contactMessage += `📍 Address: ${contactInfo.address}\n`;
-      }
-      if (contactInfo?.website) {
-        contactMessage += `🌐 Website: ${contactInfo.website}\n`;
-      }
+      if (contactInfo?.phone || receptionist?.phone) contactMessage += `📞 Phone: ${contactInfo?.phone || receptionist?.phone}\n`;
+      if (contactInfo?.email) contactMessage += `✉️ Email: ${contactInfo.email}\n`;
+      if (contactInfo?.address) contactMessage += `📍 Address: ${contactInfo.address}\n`;
+      if (contactInfo?.website) contactMessage += `🌐 Website: ${contactInfo.website}\n`;
       
       if (contactMessage === "Here's how you can reach us:\n\n") {
         contactMessage = `You can reach ${receptionist?.business_name || 'us'} through this chat! I'm here to help with any questions.`;
@@ -1148,52 +638,34 @@ export default function Widget() {
     }
   }
 
-  // Refresh conversation - now creates a truly new chat with new session ID
   async function handleRefreshConversation() {
     if (!receptionistId) return;
     
-    // Generate new session ID with fresh timestamp
     const newSid = crypto.randomUUID();
     localStorage.setItem(`widget_session_${receptionistId}`, newSid);
     localStorage.setItem(`widget_session_ts_${receptionistId}`, Date.now().toString());
     setSessionId(newSid);
     
-    // Reset local booking state and clear persisted copy
     setBookingState({...defaultBookingState});
     localStorage.removeItem(BOOKING_STATE_KEY);
     setActiveUISignal(null);
-    
-    // Reset session tracking
     setHasExistingSession(false);
     setExistingMessages([]);
     setGreetingStored(false);
     
-    // Clear messages and show fresh greeting
     if (receptionist?.greeting_message) {
-      setMessages([{
-        role: "assistant",
-        content: receptionist.greeting_message,
-        timestamp: new Date(),
-        showQuickReplies: true,
-      }]);
+      setMessages([{ role: "assistant", content: receptionist.greeting_message, timestamp: new Date(), showQuickReplies: true }]);
     } else {
-      setMessages([{
-        role: "assistant",
-        content: `Hello! How can I help you today?`,
-        timestamp: new Date(),
-        showQuickReplies: true,
-      }]);
+      setMessages([{ role: "assistant", content: `Hello! How can I help you today?`, timestamp: new Date(), showQuickReplies: true }]);
     }
     
     setInput("");
   }
 
-
   const handleSendClick = () => {
     sendMessage();
   };
 
-  // Voice chat: send message and return AI reply text
   const handleVoiceSendMessage = async (text: string): Promise<string> => {
     if (!text || !receptionistId) return "";
     
@@ -1207,7 +679,6 @@ export default function Widget() {
           message: text,
           receptionistId,
           sessionId,
-          bookingContext: bookingState,
           _hp_field: "",
           _form_load_time: formLoadTimeRef.current,
         }
@@ -1281,11 +752,7 @@ export default function Widget() {
           <div className="relative flex items-center gap-3">
             {widgetColors.logoUrl ? (
               <div className="h-14 w-14 rounded-full overflow-hidden ring-2 ring-white/30 shadow-lg">
-                <img 
-                  src={widgetColors.logoUrl} 
-                  alt="Logo" 
-                  className="h-full w-full object-cover"
-                />
+                <img src={widgetColors.logoUrl} alt="Logo" className="h-full w-full object-cover" />
               </div>
             ) : (
               <div className="h-14 w-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center ring-2 ring-white/30 shadow-lg">
@@ -1319,9 +786,7 @@ export default function Widget() {
               className="space-y-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
               style={{ animationDelay: `${Math.min(idx * 30, 500)}ms` }}
             >
-              <div
-                className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
+              <div className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 {msg.role === "assistant" && (
                   <div 
                     className="h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center mt-1"
@@ -1348,26 +813,21 @@ export default function Widget() {
               </div>
 
               {/* Interactive UI Components */}
-              {msg.role === "assistant" && (
-                <>
-                  {msg.showQuickReplies && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%]">
-                        <QuickReplyButtons
-                          buttons={[
-                            ...(businessModel === 'services' || businessModel === 'both' ? [{ label: "📅 Book Appointment", value: "book_appointment" }] : []),
-                            ...(businessModel === 'services' || businessModel === 'both' ? [{ label: "💼 View Services", value: "view_services" }] : []),
-                            ...(businessModel === 'products' || businessModel === 'both' ? [{ label: "🛍️ View Products", value: "view_products" }] : []),
-                            { label: "📞 Contact", value: "contact" },
-                          ]}
-                          onSelect={handleQuickReply}
-                          disabled={loading}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                </>
+              {msg.role === "assistant" && msg.showQuickReplies && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%]">
+                    <QuickReplyButtons
+                      buttons={[
+                        ...(businessModel === 'services' || businessModel === 'both' ? [{ label: "📅 Book Appointment", value: "book_appointment" }] : []),
+                        ...(businessModel === 'services' || businessModel === 'both' ? [{ label: "💼 View Services", value: "view_services" }] : []),
+                        ...(businessModel === 'products' || businessModel === 'both' ? [{ label: "🛍️ View Products", value: "view_products" }] : []),
+                        { label: "📞 Contact", value: "contact" },
+                      ]}
+                      onSelect={handleQuickReply}
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
               )}
             </div>
           ))}
@@ -1404,11 +864,11 @@ export default function Widget() {
           onTimeSlotSelect={handleTimeSlotSelect}
           onDismiss={() => setActiveUISignal(null)}
           onLeadFormSubmit={(data) => {
-            if (data.name) {
-              setBookingState(prev => ({ ...prev, customerName: data.name, customerEmail: data.email || prev.customerEmail, customerPhone: data.phone || prev.customerPhone, collectingInfo: null }));
-              addUserMessage(`My name is ${data.name}${data.email ? `, email: ${data.email}` : ''}${data.phone ? `, phone: ${data.phone}` : ''}`);
-              addBotMessage(`Thanks ${data.name}! Let me process that for you.`);
-            }
+            // Phase 0.3: server-side name validator and slot extractor own
+            // lead capture — hand form data to widget-chat as a message.
+            setActiveUISignal(null);
+            const leadMessage = buildLeadFormMessage(data);
+            if (leadMessage) sendMessage(leadMessage);
           }}
           onLeadFormSkip={() => setActiveUISignal(null)}
           onSwitchConfirm={() => {
@@ -1425,7 +885,7 @@ export default function Widget() {
         {/* Input */}
         <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
           <div className="flex gap-2 items-end">
-            {/* Invisible honeypot field - bots will fill this, humans won't see it */}
+            {/* Invisible honeypot field - bots fill this, humans never see it */}
             <input
               type="text"
               name="_hp_email_confirm"
@@ -1447,13 +907,7 @@ export default function Widget() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendClick(); } }}
-              placeholder={
-                bookingState.collectingInfo === 'name' 
-                  ? "Enter your name..." 
-                  : bookingState.collectingInfo === 'contact'
-                  ? "Enter your email or phone..."
-                  : "Type your message..."
-              }
+              placeholder="Type your message..."
               disabled={loading}
               className="flex-1 min-h-[44px] text-base rounded-xl border-border/50 focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
               autoFocus

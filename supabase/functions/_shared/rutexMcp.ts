@@ -110,7 +110,11 @@ export async function askRutex(conversationId: string, prompt: string, opts?: { 
 
 /** Health probe of gateway + its OpenCode backend. */
 export async function rutexHealth(): Promise<{ gateway: string; opencode: string }> {
-  const result = await rpc<{ content?: Array<{ type: string; text?: string }> }>("tools/call", { name: "rutex_health" }, 15_000);
+  const result = await rpc<{ content?: Array<{ type: string; text?: string }> }>(
+    "tools/call",
+    { name: "rutex_health", arguments: {} },
+    15_000,
+  );
   try {
     return JSON.parse(firstText(result));
   } catch {
@@ -120,9 +124,11 @@ export async function rutexHealth(): Promise<{ gateway: string; opencode: string
 
 /** Forget a conversation so its next message starts fresh. */
 export async function resetRutexConversation(conversationId: string, project?: string): Promise<boolean> {
+  const args: Record<string, unknown> = { conversationId };
+  if (project) args.project = project;
   const result = await rpc<{ content?: Array<{ type: string; text?: string }> }>("tools/call", {
     name: "rutex_reset_conversation",
-    arguments: project ? { conversationId, project } : { conversationId },
+    arguments: args,
   });
   try {
     return Boolean(JSON.parse(firstText(result)).cleared);

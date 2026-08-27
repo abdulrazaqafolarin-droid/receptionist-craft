@@ -38,7 +38,7 @@ Dev Environment:  Phone-only (Android + Termux) — no laptop access
 ```
 Project Ref:      esvrhnlwquunsdduvbnr
 Project URL:      https://esvrhnlwquunsdduvbnr.supabase.co
-Anon Key:         sb_publishable_jbVlP7sXJ3TmGM-njwZ2Jw_KN2yUEt1
+Publishable Key:  (see VITE_SUPABASE_PUBLISHABLE_KEY env var — never commit keys)
 Region:           eu-west-2
 DB Pooler Host:   aws-1-eu-west-2.pooler.supabase.com (IPv4 compatible)
 DB Pooler Port:   5432
@@ -223,9 +223,7 @@ Widget replied "I'm experiencing a temporary issue. Please try again in a moment
 - Deployed as widget-chat v23
 
 #### 3. Gemini API Free Tier Quota Exhausted (🔴 STILL BROKEN)
-- API key `AIzaSyDGJTWoGOEyoMepwI0rLgvLNe3ZP3Gt-xA` is valid but on free tier
-- Limits: 20 requests/day for gemini-2.5-flash-lite (all consumed)
-- Per-minute and per-day quotas also exhausted for gemini-2.0-flash
+- The Gemini API key in use was on free tier; limits: 20 requests/day for gemini-2.5-flash-lite
 - **Fix needed:** Enable billing in Google AI Studio for this key, or wait ~24h for daily reset
 - Added `_diagnostic` field in catch block response to surface Gemini errors to frontend (widget-chat v24)
 
@@ -243,9 +241,9 @@ body: { "verify_jwt": false }
 npx supabase functions deploy {slug} --project-ref esvrhnlwquunsdduvbnr
 ```
 
-### Secrets (actual values)
-- `GEMINI_API_KEY` = `AIzaSyDGJTWoGOEyoMepwI0rLgvLNe3ZP3Gt-xA`
-- `SUPABASE_SERVICE_ROLE_KEY` (JWT) = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzdnJobmx3cXV1bnNkZHV2Ym5yIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTUxMzkzOCwiZXhwIjoyMDkxMDg5OTM4fQ.zRc_SlrPbLO85hWX9dbqVc4yDrbONJvqY4NAgR7ey7s`
+### Secrets (VALUES REMOVED — SECURITY SCRUB; rotate after exposure)
+- `GEMINI_API_KEY`            → Supabase secret only
+- `SUPABASE_SERVICE_ROLE_KEY` → Supabase secret only; rotate in dashboard
 
 ### Active Receptionist for Testing
 - **Name:** Ruth

@@ -3,9 +3,11 @@
 
 set -e
 
-# Configuration
-PROJECT_ID="xhihzexkqezhpwsryxqv"
-ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoaWh6ZXhrcWV6aHB3c3J5eHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NjA0MTksImV4cCI6MjA3NjIzNjQxOX0.r6k7USvWZX-0A-yC11-tp0r3B9qVCX858Opja1ZWdIY"
+# Configuration — credentials come from the environment, never hardcoded
+: "${SUPABASE_PROJECT_ID:?Set SUPABASE_PROJECT_ID (project ref)}"
+: "${SUPABASE_ANON_KEY:?Set SUPABASE_ANON_KEY}"
+PROJECT_ID="${SUPABASE_PROJECT_ID}"
+ANON_KEY="${SUPABASE_ANON_KEY}"
 BASE_URL="https://${PROJECT_ID}.supabase.co/functions/v1"
 
 # Colors

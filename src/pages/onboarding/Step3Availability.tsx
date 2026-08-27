@@ -29,10 +29,13 @@ const QUICK_PRESETS = [
 ];
 
 export default function Step3Availability() {
-  const { availabilityRules, setAvailabilityRules, setStep, receptionistId } = useOnboardingStore();
+  const { availabilityRules, setAvailabilityRules, setStep, receptionistId, timezone: configTimezone } = useOnboardingStore();
   const [mode, setMode] = useState<"quick" | "advanced">("quick");
-  // Auto-detect the business owner's browser timezone — never hardcode
-  const [timezone, setTimezone] = useState(() => findClosestTimezone(detectBrowserTimezone()));
+  // Prefer the configurator's inferred timezone (Phase 1) when present;
+  // otherwise auto-detect the business owner's browser timezone.
+  const [timezone, setTimezone] = useState(() =>
+    configTimezone ? configTimezone : findClosestTimezone(detectBrowserTimezone())
+  );
   const [loading, setLoading] = useState(false);
 
   // Advanced mode
@@ -67,6 +70,8 @@ export default function Step3Availability() {
       toast.error("Please set at least one availability rule");
       return;
     }
+
+    if (!receptionistId) return;
 
     setLoading(true);
     try {

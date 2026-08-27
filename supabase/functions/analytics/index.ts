@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
 
       const { data: appointments } = await supabase
         .from("appointments")
-        .select("id, created_at, receptionist_id, status")
+        .select("id, created_at, receptionist_id, status, service")
         .in("receptionist_id", receptionistIds);
 
       const { data: aiResponses } = await supabase
@@ -94,6 +94,11 @@ Deno.serve(async (req) => {
         .from("orders")
         .select("id, total_amount, status, receptionist_id, created_at")
         .in("receptionist_id", receptionistIds);
+
+      const { data: orderItems } = await supabase
+        .from("order_items")
+        .select("product_name, quantity, order_id")
+        .in("order_id", (orders ?? []).map(o => o.id));
 
       const recentConversations = conversations?.filter(c => 
         new Date(c.created_at).getTime() > daysAgo
@@ -202,6 +207,40 @@ Deno.serve(async (req) => {
           appointments_booked: appointments?.length || 0,
           lead_captures: leadEvents.length,
           booking_conversion_rate: conversations?.length ? ((appointments?.length || 0) / conversations.length) : 0,
+          // Phase 5: No-show / cancellation rate
+          cancelled_appointments: appointments?.filter(a => a.status === "cancelled").length || 0,
+          completed_appointments: appointments?.filter(a => a.status === "completed").length || 0,
+          no_show_rate: (() => {
+            const total = appointments?.length || 0;
+            if (total === 0) return 0;
+            const cancelled = appointments?.filter(a => a.status === "cancelled").length || 0;
+            return cancelled / total;
+          })(),
+          // Phase 5: Most-booked services
+          service_breakdown: (() => {
+            const counts: Record<string, number> = {};
+            appointments?.forEach(a => {
+              if (a.service) counts[a.service] = (counts[a.service] || 0) + 1;
+            });
+            return Object.entries(counts)
+              .map(([service, count]) => ({ service, count }))
+              .sort((a, b) => b.count - a.count);
+          })(),
+          // Phase 5: Most-ordered products
+          product_breakdown: (() => {
+            const productMap: Record<string, { count: number; revenue: number }> = {};
+            const orderIdToRevenue: Record<string, number> = {};
+            orders?.forEach(o => { orderIdToRevenue[o.id] = Number(o.total_amount) || 0; });
+            orderItems?.forEach(item => {
+              const name = item.product_name || "Unknown";
+              if (!productMap[name]) productMap[name] = { count: 0, revenue: 0 };
+              productMap[name].count += item.quantity || 1;
+              productMap[name].revenue += orderIdToRevenue[item.order_id] || 0;
+            });
+            return Object.entries(productMap)
+              .map(([product, data]) => ({ product, ...data }))
+              .sort((a, b) => b.count - a.count);
+          })(),
         },
         revenue_metrics: {
           total_revenue: totalRevenue, currency: primaryCurrency,

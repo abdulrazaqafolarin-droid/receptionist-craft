@@ -37,7 +37,8 @@ export const operationsConfigSchema = z
         website: z.string().url().max(200).optional(),
         address: z.string().max(200).optional(),
       })
-      .strict(),
+      .strict()
+      .optional(),
     timezone: z.string().min(3).max(64),
     hours: z.array(dayHoursSchema).max(28),
     workflows: z

@@ -251,6 +251,7 @@ export function buildOrderPayload(
     ordered_via: 'widget_chat_auto',
     delivery_address: options?.deliveryAddress || null,
     inventory_validated: true,
+    test_mode: options?.testMode || false,
   };
   if (options?.idempotencyKey) {
     metadata.idempotency_key = options.idempotencyKey;
@@ -364,6 +365,7 @@ export function createInventoryValidator(supabase: any) {
         deliveryAddress?: string | null;
         sessionId?: string;
         idempotencyKey?: string | null;
+        testMode?: boolean;
       }
     ): Promise<{
       success: boolean;

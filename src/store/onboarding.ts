@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { OperationsConfig } from '@/lib/operationsConfig';
 
 export type ItemType = 'service' | 'product';
 
@@ -12,6 +13,8 @@ export type BusinessCapabilities = {
   delivers: boolean;
   requires_compliance: boolean;
   supports_emergency: boolean;
+  deposit_required: boolean;
+  deposit_percent: number;
 };
 
 type ServiceOrProduct = {
@@ -56,6 +59,7 @@ type OnboardingState = {
   services: ServiceOrProduct[];
   availabilityRules: AvailabilityRule[];
   faqs: FAQ[];
+  timezone: string;
   setStep: (step: number) => void;
   setReceptionistId: (id: string) => void;
   setReceptionist: (data: Partial<OnboardingState['receptionist']>) => void;
@@ -67,8 +71,55 @@ type OnboardingState = {
   addFAQ: (faq: FAQ) => void;
   removeFAQ: (index: number) => void;
   setFAQs: (faqs: FAQ[]) => void;
+  applyOperationsConfig: (config: OperationsConfig) => void;
   reset: () => void;
 };
+
+/**
+ * Derive store-facing fields from a validated OperationsConfig draft
+ * produced by the Business Configuration Agent (Phase 1).
+ */
+export function deriveReceptionistPatch(config: OperationsConfig) {
+  const booking = config.workflows.appointment_booking?.enabled === true;
+  const ordering = config.workflows.product_ordering?.enabled === true;
+  const delivery = config.workflows.product_ordering?.delivery === true;
+
+  return {
+    receptionist: {
+      name: config.business.display_name,
+      business_name: config.business.display_name,
+      business_type: config.business.business_type,
+      business_model: (booking && ordering ? 'both' : ordering ? 'products' : 'services') as 'services' | 'products' | 'both',
+      phone: config.contact?.phone ?? '',
+      greeting_message: config.business.greeting_message ?? '',
+      goal: '',
+      tone: (config.business.tone ?? 'friendly') as 'friendly' | 'professional' | 'playful',
+      language: 'English',
+      primary_goal: ((booking && ordering) || (!booking && ordering)
+        ? 'sales'
+        : booking
+        ? 'bookings'
+        : 'support') as PrimaryGoal,
+      capabilities: {
+        sells_products: ordering,
+        books_appointments: booking,
+        offers_services: booking,
+        delivers: delivery,
+        requires_compliance: false,
+        supports_emergency: false,
+        deposit_required: false,
+        deposit_percent: 20,
+      },
+    },
+    timezone: config.timezone,
+    availabilityRules: config.hours.map((h) => ({
+      day_of_week: h.day_of_week,
+      start_time: h.start_time,
+      end_time: h.end_time,
+      timezone: config.timezone,
+    })),
+  };
+}
 
 const DEFAULT_CAPABILITIES: BusinessCapabilities = {
   sells_products: false,
@@ -77,6 +128,8 @@ const DEFAULT_CAPABILITIES: BusinessCapabilities = {
   delivers: false,
   requires_compliance: false,
   supports_emergency: false,
+  deposit_required: false,
+  deposit_percent: 20,
 };
 
 const initialState = {
@@ -98,6 +151,7 @@ const initialState = {
   services: [],
   availabilityRules: [],
   faqs: [],
+  timezone: '',
 };
 
 export const useOnboardingStore = create<OnboardingState>()(
@@ -126,6 +180,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       removeFAQ: (index) =>
         set((state) => ({ faqs: state.faqs.filter((_, i) => i !== index) })),
       setFAQs: (faqs) => set({ faqs }),
+      applyOperationsConfig: (config) => set(deriveReceptionistPatch(config)),
       reset: () => set(initialState),
     }),
     {
@@ -133,6 +188,9 @@ export const useOnboardingStore = create<OnboardingState>()(
       // Migrate old persisted state that may be missing capabilities
       migrate: (persistedState: any, version: number) => {
         const state = persistedState as OnboardingState;
+        if (version < 2 && !state.timezone) {
+          (state as any).timezone = '';
+        }
         // Ensure capabilities exists
         if (!state.receptionist?.capabilities) {
           return {
@@ -146,7 +204,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         }
         return state;
       },
-      version: 1, // Increment version to trigger migration
+      version: 2, // v2: adds timezone field (Phase 1 configurator)
     }
   )
 );

@@ -128,6 +128,9 @@ import {
   resolvePrimaryGoal 
 } from "../_shared/capabilities/index.ts";
 import type { BusinessCapabilities, PrimaryGoal, UniversalIntent } from "../_shared/capabilities/types.ts";
+import { resolveCustomer, bumpVisitCount } from "../_shared/customers/resolveCustomer.ts";
+import { getCustomerHistory, formatHistoryForPrompt } from "../_shared/customers/getCustomerHistory.ts";
+import { findAvailableStaff } from "../_shared/staff/index.ts";
 
 //                                                                            
 // CORS HEADERS
@@ -160,6 +163,11 @@ function getCurrencySymbol(currency: string | null | undefined): string {
 function sanitizeInput(input: string, maxLength: number = 2000): string {
   if (!input || typeof input !== 'string') return '';
   return input.slice(0, maxLength).replace(/[<>]/g, '').trim();
+}
+
+function safeParseKeyFacts(v: unknown): Record<string, unknown> {
+  if (v && typeof v === "object") return v as Record<string, unknown>;
+  try { return JSON.parse(String(v)); } catch { return {}; }
 }
 
 async function generateBookingIdempotencyKey(sessionId: string, serviceId: string, date: string, time: string): Promise<string> {
@@ -1206,7 +1214,11 @@ function buildKnowledgeBase(receptionist: any, faqs: any[], services: any[], pro
       let serviceDesc = `- **${s.name}**`;
       if (s.duration_minutes) serviceDesc += ` (${s.duration_minutes} minutes)`;
       if (s.price) serviceDesc += ` - $${parseFloat(s.price).toFixed(2)}`;
+      else if (s.pricing_model?.type === 'quote') serviceDesc += ` (custom quote — ask for details to send a quote)`;
       if (s.description) serviceDesc += `: ${s.description}`;
+      if (s.service_fields && Array.isArray(s.service_fields) && s.service_fields.length > 0) {
+        serviceDesc += ` (requires before booking: ${s.service_fields.map((f: any) => f.label || f.key).join(', ')})`;
+      }
       sections.push(serviceDesc);
     });
   }
@@ -1627,6 +1639,7 @@ Deno.serve(async (req) => {
     const sessionId = payload.sessionId ?? null;
     const displayedGreeting = payload.displayedGreeting ?? null;
     const source = payload.source ?? "widget";
+    const testMode = payload.test_mode === true; // Real capability: test conversations before go-live
     
     // Honeypot and timing fields for bot detection
     const honeypotValue = payload._hp_field ?? null;
@@ -1698,6 +1711,10 @@ if (!GEMINI_API_KEY) {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Currency resolved once, used by KPI persistence + conversion events.
+    // (Hoisted: was declared AFTER its first use in the KPI insert — TDZ ReferenceError.)
+    const receptionistCurrency = receptionist.currency || 'USD';
 
     //                                                                        
     // UNIFIED FLOW ENGINE: INITIALIZE STATE MANAGER
@@ -1840,7 +1857,7 @@ if (!GEMINI_API_KEY) {
     // Fetch services/products early for entity extraction
     const { data: services } = await supabase
       .from("services")
-      .select("id, name, description, duration_minutes, price, is_product, stock_quantity, low_stock_threshold")
+      .select("id, name, description, duration_minutes, price, is_product, stock_quantity, low_stock_threshold, service_fields, pricing_model")
       .eq("receptionist_id", receptionistId)
       .eq("active", true);
     
@@ -1888,6 +1905,112 @@ if (!GEMINI_API_KEY) {
     }
     
     //                                                                        
+    // PHASE 7: CHECK FOR OWNER RESPONSE TO ESCALATION
+    // If the owner responded to an escalation, deliver their message
+    //                                                                        
+    try {
+      const { data: pendingEscalation } = await supabase
+        .from("escalations")
+        .select("id, owner_response")
+        .eq("session_id", sessionId)
+        .eq("status", "open")
+        .not("owner_response", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (pendingEscalation?.owner_response) {
+        console.log(`[Phase7] Delivering owner response for escalation ${pendingEscalation.id}`);
+        const ownerMsg = pendingEscalation.owner_response;
+
+        // Mark escalation as resolved after delivering response
+        await supabase
+          .from("escalations")
+          .update({ status: "resolved", resolved_at: new Date().toISOString() })
+          .eq("id", pendingEscalation.id);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            reply: ownerMsg,
+            session_id: sessionId,
+            escalation_response: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    } catch (escCheckErr) {
+      console.warn("[Phase7] Escalation response check failed (non-fatal):", escCheckErr);
+    }
+
+    //                                                                        
+    // REAL CAPABILITY: CANCELLATION POLICY ENFORCEMENT
+    // If customer wants to cancel, check real policy BEFORE AI generates response
+    //                                                                        
+    if (messageAnalysis.detectedIntent === 'cancel_appointment') {
+      try {
+        const { checkCancellationAllowed, executeCancellation, loadCancellationPolicy } = await import("../_shared/policies/cancellationPolicy.ts");
+
+        // Find the customer's existing booking for this session
+        const existingBooking = await getExistingBookingForSession(supabase, receptionistId, sessionId);
+        if (existingBooking && existingBooking.id) {
+          const check = await checkCancellationAllowed(supabase, existingBooking.id);
+
+          if (!check.allowed) {
+            // Policy blocks cancellation — return real policy response
+            const cancelResponse = check.reason || "Cancellation not allowed per policy.";
+            console.log(`[CancellationPolicy] Blocked: ${cancelResponse}`);
+
+            // Save the AI response
+            await supabase.from("chat_messages").insert({
+              receptionist_id: receptionistId,
+              session_id: sessionId,
+              sender: "bot",
+              message: cancelResponse,
+            });
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                reply: cancelResponse,
+                session_id: sessionId,
+                cancellation_blocked: true,
+                policy_reason: check.reason,
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+
+          // Policy allows cancellation — execute it
+          const cancelResult = await executeCancellation(supabase, existingBooking.id, "Customer requested cancellation");
+          if (cancelResult.success) {
+            console.log(`[CancellationPolicy] Cancelled appointment ${existingBooking.id}`);
+
+            await supabase.from("chat_messages").insert({
+              receptionist_id: receptionistId,
+              session_id: sessionId,
+              sender: "bot",
+              message: cancelResult.message,
+            });
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                reply: cancelResult.message,
+                session_id: sessionId,
+                cancellation_confirmed: true,
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+        }
+        // If no existing booking found, fall through to AI to handle gracefully
+      } catch (cancelErr) {
+        console.warn("[CancellationPolicy] Enforcement failed (falling through to AI):", cancelErr);
+      }
+    }
+
+    //                                                                        
     // ENGINE v2: RUN MAIN PIPELINE
     // Input   Clean   Detect Intent   Extract Entities   Update State   Govern
     //                                                                        
@@ -1901,7 +2024,9 @@ if (!GEMINI_API_KEY) {
         id: s.id, 
         name: s.name, 
         duration_minutes: s.duration_minutes, 
-        price: s.price 
+        price: s.price,
+        pricing_model: (s as any).pricing_model || null,
+        service_fields: (s as any).service_fields || null
       })),
       products: productItems.map(p => ({ 
         id: p.id, 
@@ -1998,6 +2123,22 @@ if (!GEMINI_API_KEY) {
       if (e.product_id) conversationState.slots.productId = e.product_id;
       if (e.product_name) conversationState.slots.productName = e.product_name;
       if (e.quantity) conversationState.slots.quantity = e.quantity;
+    }
+    // ── PHASE 4: CROSS-VISIT IDENTITY ────────────────────────────────────────
+    // Stable per-human fingerprint from captured contact info. Enables the
+    // memory summarizer's existing .or(session_id, user_fingerprint) lookup so
+    // returning customers are recognized across sessions and channels.
+    const computeContactFingerprint = (email?: string | null, phone?: string | null): string | null => {
+      if (email && String(email).trim()) return `email:${String(email).trim().toLowerCase()}`;
+      if (phone && String(phone).trim()) return `tel:${String(phone).replace(/[^0-9]/g, "")}`;
+      return null;
+    };
+    const contactFingerprint =
+      computeContactFingerprint(conversationState.slots.customerEmail, conversationState.slots.customerPhone) ||
+      (conversationState.slots as any).contact_fingerprint ||
+      null;
+    if (contactFingerprint) {
+      (conversationState.slots as any).contact_fingerprint = contactFingerprint;
     }
     
     // Build Engine v2 governor prompt block (PRIMARY - highest priority)
@@ -2120,7 +2261,93 @@ if (!GEMINI_API_KEY) {
     // UNIFIED FLOW ENGINE: LONG-TERM MEMORY
     //                                                                        
     // Get relevant memory summaries
-    const memorySummaries = await memorySummarizer.getRelevantSummaries(receptionistId, sessionId);
+    const memorySummaries = await memorySummarizer.getRelevantSummaries(receptionistId, sessionId, contactFingerprint ?? undefined);
+
+    // Recognize returning customers: prior sessions sharing this fingerprint.
+    const priorVisits = memorySummaries.filter((s: any) => s.session_id !== sessionId);
+    let returningCustomerBlock = "";
+    let customerId: string | null = (conversationState.slots as any).customer_id || null;
+
+    // Phase 4: Resolve unified customer record
+    if (contactFingerprint || conversationState.slots.customerName) {
+      try {
+        // Plan limit check: skip customer creation if at limit
+        let customerAllowed = true;
+        try {
+          const { data: recData } = await supabase
+            .from("receptionists")
+            .select("user_id")
+            .eq("id", receptionistId)
+            .maybeSingle();
+          if (recData?.user_id) {
+            const { data: profData } = await supabase
+              .from("profiles")
+              .select("plan")
+              .eq("id", recData.user_id)
+              .maybeSingle();
+            const plan = profData?.plan || "free";
+            const limits: Record<string, number> = { free: 50, pro: 500, enterprise: 999999 };
+            const { count: cCount } = await supabase
+              .from("customers")
+              .select("id", { count: "exact", head: true })
+              .eq("receptionist_id", receptionistId);
+            if ((cCount || 0) >= (limits[plan] || 50)) {
+              customerAllowed = false;
+              console.warn(`[Phase4] Customer limit reached (${cCount}/${limits[plan]}) on ${plan} plan`);
+            }
+          }
+        } catch (limitErr) {
+          console.warn("[PlanLimit] Check failed (non-fatal):", limitErr);
+        }
+
+        if (customerAllowed) {
+          const { customer, created } = await resolveCustomer(supabase, {
+            receptionist_id: receptionistId,
+            name: conversationState.slots.customerName,
+            email: conversationState.slots.customerEmail,
+            phone: conversationState.slots.customerPhone,
+          });
+          customerId = customer.id;
+          (conversationState.slots as any).customer_id = customer.id;
+          if (!created) {
+            console.log(`[Phase4] Customer resolved: ${customer.id} (visits: ${customer.visit_count})`);
+          }
+        }
+      } catch (custErr) {
+        console.warn("[Phase4] Customer resolution failed (non-fatal):", custErr);
+      }
+    }
+
+    // Phase 4: Enhanced returning customer block with full visit history
+    if (customerId && priorVisits.length > 0) {
+      try {
+        const history = await getCustomerHistory(supabase, customerId);
+        if (history && history.is_returning) {
+          returningCustomerBlock = formatHistoryForPrompt(history);
+          console.log(`[Phase4] Returning customer: ${history.total_visits} visits, preferred=${history.known_facts.preferred_service ?? "none"}`);
+        }
+      } catch (histErr) {
+        console.warn("[Phase4] History load failed, falling back to summary:", histErr);
+        // Fallback to existing summary-based block
+        const NL = String.fromCharCode(92) + "n";
+        returningCustomerBlock = [
+          "---",
+          "RETURNING CUSTOMER DETECTED:",
+          `- This visitor has ${priorVisits.length} previous conversation(s) with this business.`,
+          '- Acknowledge them warmly as a returning customer (e.g. "Welcome back!") - do NOT re-ask for details they already gave.',
+        ].filter(Boolean).join(NL);
+      }
+    } else if (contactFingerprint && priorVisits.length > 0) {
+      // Fallback: no customer_id but we have prior sessions via fingerprint
+      const NL = String.fromCharCode(92) + "n";
+      returningCustomerBlock = [
+        "---",
+        "RETURNING CUSTOMER DETECTED:",
+        `- This visitor has ${priorVisits.length} previous conversation(s) with this business.`,
+        '- Acknowledge them warmly as a returning customer (e.g. "Welcome back!") - do NOT re-ask for details they already gave.',
+      ].filter(Boolean).join(NL);
+      console.log(`[Phase4] Returning customer (summary-only): ${priorVisits.length} prior visit(s)`);
+    }
     const memoryContext = memorySummarizer.buildMemoryContext(memorySummaries);
     
     // Build slot summary for prompt
@@ -2286,7 +2513,7 @@ if (!GEMINI_API_KEY) {
       receptionist.customer_fields,
       engineResult,
       engineState,
-    ) + '\n\n' + empathyPromptBlock + '\n\n' + tonePromptBlock + '\n\n' + memoryAwarenessBlock + '\n\n' + qualityStandardsBlock;
+    ) + '\n\n' + empathyPromptBlock + '\n\n' + tonePromptBlock + '\n\n' + memoryAwarenessBlock + '\n\n' + qualityStandardsBlock + (returningCustomerBlock ? '\n\n' + returningCustomerBlock : '');
 
     const startTime = Date.now();
 
@@ -2476,14 +2703,34 @@ return {
     const escalationCheck = checkEscalationNeeded(message, conversationContext, history || []);
     if (escalationCheck.shouldEscalate) {
       console.log(`[Escalation] Triggered: ${escalationCheck.reason}, Type: ${escalationCheck.escalationType}`);
+
+      // Phase 7: Persist escalation to database
+      try {
+        await supabase.from("escalations").insert({
+          receptionist_id: receptionistId,
+          session_id: sessionId,
+          customer_name: conversationState.slots.customerName || null,
+          customer_email: conversationState.slots.customerEmail || null,
+          customer_phone: conversationState.slots.customerPhone || null,
+          reason: escalationCheck.escalationType || "unknown",
+          summary: (history || []).slice(-6).map((m: any) =>
+            `${m.sender === "user" ? "Customer" : "AI"}: ${m.message}`
+          ).join("\n"),
+          status: "open",
+        });
+        console.log("[Escalation] Record created in escalations table");
+      } catch (escErr) {
+        console.warn("[Escalation] Failed to persist escalation record:", escErr);
+      }
     }
     
     const conversationKPIs = computeConversationKPIs(history || [], conversationContext);
     console.log(`[KPIs] Engaged: ${conversationKPIs.is_engaged}, Repetition: ${conversationKPIs.repetition_rate.toFixed(2)}, Hallucination risk: ${conversationKPIs.hallucination_risk.toFixed(2)}`);
 
-    // Persist KPI data to conversion_events for analytics pipeline
-    try {
-      await supabase.from('conversion_events').insert({
+    // Persist KPI data to conversion_events for analytics pipeline (skip in test mode)
+    if (!testMode) {
+      try {
+        await supabase.from('conversion_events').insert({
         receptionist_id: receptionistId,
         session_id: sessionId,
         event_type: 'kpi_tick',
@@ -2507,6 +2754,8 @@ return {
     } catch (kpiErr) {
       console.warn("[KPIs] Failed to persist:", kpiErr);
     }
+    } // end testMode KPI check
+    }
 
     // Store user message
     const { error: userMsgErr } = await supabase.from("chat_messages").insert({
@@ -2521,7 +2770,8 @@ return {
         intent_score: intentScore,
         effective_mode: effectiveMode,
         is_acknowledgment: messageAnalysis.isAcknowledgment,
-        is_correction: messageAnalysis.isCorrection
+        is_correction: messageAnalysis.isCorrection,
+        test_mode: testMode,
       }
     });
     
@@ -2547,7 +2797,8 @@ return {
           emotional_state: conversationContext.emotionalState,
           effective_mode: effectiveMode,
           intent_score: intentScore
-        }
+        },
+        test_mode: testMode,
       }
     });
     
@@ -2557,8 +2808,9 @@ return {
       console.log('[Widget Chat] Bot message stored successfully');
     }
 
-    // Log conversation for analytics
-    await supabase.from("conversations").insert({
+    // Log conversation for analytics (skip in test mode)
+    if (!testMode) {
+      await supabase.from("conversations").insert({
       receptionist_id: receptionistId,
       user_message: message,
       bot_message: reply,
@@ -2587,11 +2839,14 @@ return {
         conversation_phase: conversationContext.conversationPhase
       }
     });
+    }
 
     //                                                                        
     // KB GAP DETECTION: Log low-confidence responses for KB optimization
+    // (Skip in test mode to avoid polluting analytics)
     //                                                                        
-    const isLowConfidence = qualityRubric.overall_score < 0.6;
+    if (!testMode) {
+      const isLowConfidence = qualityRubric.overall_score < 0.6;
     const isUnanswered = /i don't have that information|i'm not sure|let me check|i can't find/i.test(reply);
     const isEscalation = escalationCheck.shouldEscalate;
 
@@ -2631,6 +2886,7 @@ return {
     } catch (gapErr) {
       console.warn("[Analytics] Failed to log response:", gapErr);
     }
+    } // end testMode check
 
     const hasBookingIntent = messageAnalysis.detectedIntent === 'book_appointment' || 
       /book|appointment|schedule|reserve/i.test(message);
@@ -2739,6 +2995,18 @@ return {
             }
 
             if (startTime && !isNaN(startTime.getTime())) {
+              // Phase 6: Assign available staff member
+              let assignedStaffId: string | null = null;
+              try {
+                const staffResult = await findAvailableStaff(supabase, receptionistId, startTime.toISOString());
+                if (staffResult.staff) {
+                  assignedStaffId = staffResult.staff.id;
+                  console.log(`[Phase6] Staff assigned: ${staffResult.staff.name} (${assignedStaffId})`);
+                }
+              } catch (staffErr) {
+                console.warn("[Phase6] Staff assignment skipped (non-fatal):", staffErr);
+              }
+
               const bookingPayload = {
                 receptionistId,
                 serviceId: mergedServiceId,
@@ -2752,7 +3020,12 @@ return {
                   idempotency_key: idempotencyKey,
                   booked_via: 'widget_chat_auto',
                   conversation_phase: conversationContext.conversationPhase,
-                  service_name: mergedServiceName
+                  service_name: mergedServiceName,
+                  customer_id: customerId || undefined,
+                  staff_id: assignedStaffId || undefined,
+                  test_mode: testMode,
+                  // Business-type mechanics: pass service config so booking RPC can honor it
+                  service_config: buildBookingServiceConfig(serviceItems, mergedServiceId),
                 }
               };
 
@@ -2777,6 +3050,15 @@ return {
                     bookingExecutionLocked: true,
                   };
                   console.log(`[Widget Chat] Appointment created: ${bookingResult.id}`);
+
+                  // Phase 4: Bump customer visit count after successful booking
+                  if (customerId) {
+                    try {
+                      await bumpVisitCount(supabase, customerId);
+                    } catch (bvErr) {
+                      console.warn("[Phase4] bumpVisitCount failed (non-fatal):", bvErr);
+                    }
+                  }
                 } else {
                   console.error('[Widget Chat] Booking failed:', bookingData.error);
                 }
@@ -2902,6 +3184,7 @@ return {
                 deliveryAddress,
                 sessionId,
                 idempotencyKey: orderIdempotencyKey,
+                testMode,
             }
           );
 
@@ -2921,6 +3204,15 @@ return {
               ...conversationState.slots,
               orderExecutionLocked: true,
             };
+
+            // Phase 4: Bump customer visit count after successful order
+            if (customerId) {
+              try {
+                await bumpVisitCount(supabase, customerId);
+              } catch (bvErr) {
+                console.warn("[Phase4] bumpVisitCount failed (non-fatal):", bvErr);
+              }
+            }
             
             // Send notification to receptionist owner
             const { data: receptionist2 } = await supabase
@@ -2964,7 +3256,6 @@ return {
     //                                                                        
     // CONVERSION EVENT LOGGING (MONEY MODE ANALYTICS)
     //                                                                        
-    const receptionistCurrency = receptionist.currency || 'USD';
 
     if (bookingResult && !bookingReusedFromSession) {
       // Estimate revenue from booking - use service price if available
@@ -3127,7 +3418,7 @@ return {
     if (memorySummarizer.shouldSummarize(history || [], conversationContext)) {
       const summaryText = memorySummarizer.generateSummaryText(history || [], conversationContext);
       const keyFacts = memorySummarizer.extractKeyFacts(history || [], conversationContext);
-      await memorySummarizer.saveSummary(receptionistId, sessionId, summaryText, keyFacts);
+      await memorySummarizer.saveSummary(receptionistId, sessionId, summaryText, keyFacts, contactFingerprint ?? undefined);
       console.log(`[Flow Engine] Memory summary saved`);
     }
 
@@ -3376,4 +3667,21 @@ function parseBookingDateTime(dateStr: string, timeStr: string): Date | null {
     console.error('Failed to parse date/time:', e);
     return null;
   }
+}
+
+/**
+ * Build the service config block that is attached to booking metadata.
+ * Preserves business-type mechanics: intake form fields, quote pricing,
+ * and any service-level flags so downstream booking can honor them.
+ */
+function buildBookingServiceConfig(serviceItems: any[], serviceId: string | null): any {
+  if (!serviceId) return null;
+  const svc = serviceItems.find((s: any) => s.id === serviceId);
+  if (!svc) return null;
+  return {
+    service_id: svc.id,
+    name: svc.name,
+    service_fields: svc.service_fields || null,
+    pricing_model: svc.pricing_model || null,
+  };
 }

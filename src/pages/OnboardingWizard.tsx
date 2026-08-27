@@ -4,6 +4,7 @@ import { useOnboardingStore } from "@/store/onboarding";
 import { Progress } from "@/components/ui/progress";
 import { Check, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Step0Describe from "./onboarding/Step0Describe";
 import Step1CreateReceptionist from "./onboarding/Step1CreateReceptionist";
 import Step2Services from "./onboarding/Step2Services";
 import Step3Availability from "./onboarding/Step3Availability";
@@ -12,6 +13,7 @@ import Step5Test from "./onboarding/Step5Test";
 import Step6Install from "./onboarding/Step6Install";
 
 const STEPS = [
+  { number: 0, title: "Describe" },
   { number: 1, title: "Create" },
   { number: 2, title: "Services" },
   { number: 3, title: "Availability" },
@@ -86,6 +88,7 @@ export default function OnboardingWizard() {
 
         {/* Step Content */}
         <div className="animate-fade-in">
+          {currentStep === 0 && <Step0Describe />}
           {currentStep === 1 && <Step1CreateReceptionist />}
           {currentStep === 2 && <Step2Services />}
           {currentStep === 3 && <Step3Availability />}

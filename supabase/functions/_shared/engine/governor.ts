@@ -257,9 +257,26 @@ ${activeWidgets.map(w => `• ${w}`).join('\n')}
 **Example approach (NOT exact wording — adapt to conversation):**
 If user asks a specific question about options: answer it, then suggest the widget.
 If user hasn't asked anything specific: a brief prompt to use the widget is fine.
-
-**Widget Request (Recommended):** After every response, decide whether a UI widget would help the customer. If yes, end your response with [WIDGET: name@confidence] — e.g., [WIDGET: date_picker@0.94] or [WIDGET: service_selector@0.7]. Confidence: 0.0-1.0. Above 0.7 = show widget. Below 0.7 = don't show (you're unsure, ask a clarifying question instead). Valid widgets: service_selector, product_selector, date_picker, time_picker, booking_confirmation, order_summary, lead_form, switch_confirmation. If no widget is needed, end with [NO_WIDGET]. This tells the system you're handling the interaction through text alone.
 ` : ''}
+
+## 🖥️ UI WIDGET REQUEST — CHOOSE THE RIGHT WIDGET FOR THE CUSTOMER
+
+After every response, decide whether a UI widget would help the customer complete their goal based on what they want:
+- They want to BOOK → [WIDGET: service_selector@0.9X] (then date_picker, then time_picker as the flow advances)
+- They want to BUY products → [WIDGET: product_selector@0.9X]
+- They asked about availability/timing → [WIDGET: date_picker@0.8X]
+- They need to pick a time → [WIDGET: time_picker@0.85]
+- They've agreed to book and you need their contact info → [WIDGET: lead_form@0.8X]
+- You've collated their booking/order → [WIDGET: booking_confirmation@0.9X] or [WIDGET: order_summary@0.9X]
+- They're switching topics → [WIDGET: switch_confirmation@0.75]
+- No widget helps right now (they're just asking a question) → [NO_WIDGET]
+
+End your response with EXACTLY ONE marker on its own line:
+[WIDGET: name@confidence] — e.g., [WIDGET: date_picker@0.94] or [WIDGET: service_selector@0.7]
+[NO_WIDGET]
+
+Confidence 0.0-1.0. Above 0.7 = show widget. Below 0.7 = don't show (you're unsure, ask a clarifying question instead).
+Valid widgets: service_selector, product_selector, date_picker, time_picker, booking_confirmation, order_summary, lead_form, switch_confirmation.
 
 ## 🧠 CONVERSATIONAL COLLECTION RULES
 

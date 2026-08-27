@@ -43,6 +43,19 @@ serve(async (req) => {
     const created: any[] = [];
 
     for (const a of appts || []) {
+      // Resolve the receptionist owner — notifications.user_id is NOT NULL,
+      // so we must attribute each reminder to the owning user.
+      const { data: rec } = await supabase
+        .from("receptionists")
+        .select("user_id")
+        .eq("id", a.receptionist_id)
+        .maybeSingle();
+
+      if (!rec?.user_id) {
+        console.warn(`Skipping reminder for appointment ${a.id}: no owning user found`);
+        continue;
+      }
+
       const { data, error: insertErr } = await supabase
         .from("notifications")
         .insert({
@@ -51,7 +64,7 @@ serve(async (req) => {
           message: `Appointment with ${a.customer_name} starting soon`,
           body: `Appointment with ${a.customer_name} at ${new Date(a.start_time).toLocaleString()}`,
           receptionist_id: a.receptionist_id,
-          user_id: null,
+          user_id: rec.user_id,
           severity: "info",
           priority: "normal",
           category: "appointments",

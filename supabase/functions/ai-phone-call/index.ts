@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { forwardToWidgetChat, ChannelForwardError } from "../_shared/channelForward.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,10 +31,14 @@ serve(async (req) => {
     const callSid = params.get("CallSid") ?? "unknown";
     const speechResult = params.get("SpeechResult") ?? "";
     const to = params.get("To") ?? "";
+    // Parity with WhatsApp sessions: key on the CALLER's number so returning
+    // callers keep conversation history. Sanitize to [A-Za-z0-9].
+    const callerId = (params.get("From") ?? "").replace(/[^a-zA-Z0-9]/g, "");
 
-    console.log(`[PhoneCall] CallSid=${callSid} To=${to} Speech="${speechResult}"`);
+    console.log(`[PhoneCall] CallSid=${callSid} To=${to} From=${callerId || "hidden"} Speech="${speechResult}"`);
 
-    const sessionId = `phone_${callSid}`;
+    // Fall back to CallSid only when Twilio hides the caller (anonymous calls).
+    const sessionId = `phone_${callerId || callSid}`;
 
     // Look up receptionist tied to this Twilio phone number
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -82,25 +87,22 @@ serve(async (req) => {
       );
     }
 
-    // Route through the AI chat engine
-    const chatUrl = `${SUPABASE_URL}/functions/v1/widget-chat`;
-    const chatRes = await fetch(chatUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      },
-      body: JSON.stringify({
+    // Route through the AI chat engine (shared channel forwarder).
+    // Twilio waits only ~15s for TwiML — keep the budget under that.
+    let reply: string;
+    try {
+      const fwd = await forwardToWidgetChat({
         message: speechResult,
         receptionistId,
         sessionId,
         source: "phone",
-      }),
-    });
-
-    const chatData = await chatRes.json();
-    const reply: string =
-      chatData?.reply ?? chatData?.message ?? "I'm sorry, I had trouble understanding. Could you please try again?";
+        timeoutMs: 13_000,
+      });
+      reply = fwd.reply;
+    } catch (e) {
+      console.error("[PhoneCall] forward failed:", e);
+      reply = "I'm sorry, that took a moment too long. Let's try again — how can I help?";
+    }
 
     // Continue conversation
     return twiml(

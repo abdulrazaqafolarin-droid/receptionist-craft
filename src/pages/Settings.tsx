@@ -1,10 +1,19 @@
+/**
+ * Consolidated Settings Page
+ *
+ * Merges: Settings (account/profile) + Channels (WhatsApp/Twilio/Payments)
+ * + ConnectorRegistry (tier-aware connectors) + ModuleRegistry (growth modules)
+ *
+ * Tabs: Account | Notifications | Connectors | Modules
+ */
+
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Zap, Bell, User, Lock, CreditCard, Palette, Globe, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Zap, Bell, User, Lock, CreditCard, Palette, Globe, Eye, EyeOff, Puzzle, Bot } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TIMEZONE_OPTIONS, detectBrowserTimezone, findClosestTimezone } from "@/lib/timezones";
@@ -15,6 +24,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "next-themes";
 import { FloatingBackground } from "@/components/FloatingBackground";
+import { ConnectorRegistryPage } from "@/components/ConnectorRegistry";
+import { ModuleRegistry } from "@/components/ModuleRegistry";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +47,9 @@ export default function Settings() {
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ newPassword: "", confirmPassword: "" });
+  const [selectedReceptionistId, setSelectedReceptionistId] = useState<string>("");
+  const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string }>>([]);
+  const [userId, setUserId] = useState<string>("");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -56,6 +70,7 @@ export default function Settings() {
         navigate("/auth");
         return;
       }
+      setUserId(user.id);
 
       const { data: profileData, error } = await supabase
         .from("profiles")
@@ -73,6 +88,17 @@ export default function Settings() {
         emailNotifications: true,
         pushNotifications: true,
       });
+
+      // Load receptionists for connector/module tabs
+      const { data: recs } = await supabase
+        .from("receptionists")
+        .select("id, name, business_name")
+        .eq("user_id", user.id);
+
+      if (recs && recs.length > 0) {
+        setReceptionists(recs);
+        setSelectedReceptionistId(recs[0].id);
+      }
     } catch (error) {
       console.error("Error loading profile:", error);
       toast.error("Failed to load profile");
@@ -109,7 +135,6 @@ export default function Settings() {
           .update({ timezone: formData.timezone })
           .eq("user_id", user.id);
         
-        // Also update availability_rules timezone for all receptionists
         for (const rec of recs) {
           await supabase
             .from("availability_rules")
@@ -118,7 +143,7 @@ export default function Settings() {
         }
       }
 
-      toast.success("Profile updated successfully — timezone synced to all receptionists");
+      toast.success("Profile updated successfully");
     } catch (error: any) {
       console.error("Error saving profile:", error);
       toast.error(error.message || "Failed to save profile");
@@ -150,20 +175,13 @@ export default function Settings() {
     }
   };
 
-  const integrations = [
-    { id: "twilio", name: "Twilio", description: "Connect your phone number for real calls", status: "Not Connected" },
-    { id: "openai", name: "OpenAI", description: "Advanced AI capabilities", status: "Not Connected" },
-    { id: "google_calendar", name: "Google Calendar", description: "Sync appointments automatically", status: "Not Connected" },
-    { id: "stripe", name: "Stripe", description: "Accept payments", status: "Not Connected" },
-  ];
-
   const sendTestNotification = async () => {
     setSendingTest(true);
     try {
       await notify({
         type: "test",
         title: "Test Notification",
-        body: "Your notification system is working perfectly! 🎉",
+        body: "Your notification system is working perfectly!",
         severity: "info",
         category: "system",
       });
@@ -185,7 +203,7 @@ export default function Settings() {
 
         <div className="mb-8">
           <h1 className="text-3xl lg:text-4xl font-bold mb-2">Settings</h1>
-          <p className="text-muted-foreground">Manage your account and preferences</p>
+          <p className="text-muted-foreground">Manage your account, integrations, and operator capabilities</p>
         </div>
 
         {loading ? (
@@ -194,7 +212,7 @@ export default function Settings() {
           </div>
         ) : (
           <Tabs defaultValue="account" className="space-y-8">
-            <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid h-auto p-1">
+            <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid h-auto p-1">
               <TabsTrigger value="account" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground py-2.5">
                 <User className="mr-2 h-4 w-4" />
                 Account
@@ -203,13 +221,17 @@ export default function Settings() {
                 <Bell className="mr-2 h-4 w-4" />
                 Notifications
               </TabsTrigger>
-              <TabsTrigger value="integrations" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground py-2.5">
-                <Zap className="mr-2 h-4 w-4" />
-                Integrations
+              <TabsTrigger value="connectors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground py-2.5">
+                <Puzzle className="mr-2 h-4 w-4" />
+                Connectors
+              </TabsTrigger>
+              <TabsTrigger value="modules" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground py-2.5">
+                <Bot className="mr-2 h-4 w-4" />
+                Modules
               </TabsTrigger>
             </TabsList>
 
-            {/* Account Settings */}
+            {/* ── Account Tab ──────────────────────────────────── */}
             <TabsContent value="account" className="space-y-6">
               <Card className="border-2 border-border/50 shadow-lg">
                 <CardHeader>
@@ -268,9 +290,6 @@ export default function Settings() {
                       disabled
                       className="h-11 bg-muted/50"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Email cannot be changed directly. Contact support if needed.
-                    </p>
                   </div>
                   <Button onClick={saveProfile} disabled={saving} className="h-11">
                     {saving ? "Saving..." : "Save Changes"}
@@ -286,17 +305,12 @@ export default function Settings() {
                     </div>
                     Appearance
                   </CardTitle>
-                  <CardDescription>
-                    Customize the look and feel of the application
-                  </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-5">
+                <CardContent>
                   <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
                     <div className="space-y-1">
                       <Label className="text-base">Dark Mode</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Toggle between light and dark themes
-                      </p>
+                      <p className="text-sm text-muted-foreground">Toggle between light and dark themes</p>
                     </div>
                     <Switch
                       checked={theme === "dark"}
@@ -339,7 +353,7 @@ export default function Settings() {
               </div>
             </TabsContent>
 
-            {/* Notification Settings */}
+            {/* ── Notifications Tab ────────────────────────────── */}
             <TabsContent value="notifications" className="space-y-6">
               <Card className="border-2 border-border/50 shadow-lg">
                 <CardHeader>
@@ -349,37 +363,27 @@ export default function Settings() {
                     </div>
                     Notification Preferences
                   </CardTitle>
-                  <CardDescription>
-                    Choose how you want to receive notifications
-                  </CardDescription>
+                  <CardDescription>Choose how you want to receive notifications</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
                     <div className="space-y-1">
                       <Label className="text-base">Push Notifications</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Receive browser notifications for important events
-                      </p>
+                      <p className="text-sm text-muted-foreground">Receive browser notifications for important events</p>
                     </div>
                     <Switch
                       checked={formData.pushNotifications}
-                      onCheckedChange={(checked) =>
-                        setFormData({ ...formData, pushNotifications: checked })
-                      }
+                      onCheckedChange={(checked) => setFormData({ ...formData, pushNotifications: checked })}
                     />
                   </div>
                   <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
                     <div className="space-y-1">
                       <Label className="text-base">Email Notifications</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Receive email updates about appointments and activity
-                      </p>
+                      <p className="text-sm text-muted-foreground">Receive email updates about appointments and activity</p>
                     </div>
                     <Switch
                       checked={formData.emailNotifications}
-                      onCheckedChange={(checked) =>
-                        setFormData({ ...formData, emailNotifications: checked })
-                      }
+                      onCheckedChange={(checked) => setFormData({ ...formData, emailNotifications: checked })}
                     />
                   </div>
                   <Button onClick={sendTestNotification} disabled={sendingTest} variant="outline" className="h-11">
@@ -390,34 +394,52 @@ export default function Settings() {
               </Card>
             </TabsContent>
 
-            {/* Integration Settings */}
-            <TabsContent value="integrations" className="space-y-6">
-              <div className="grid gap-6">
-                {integrations.map((integration) => (
-                  <Card key={integration.id} className="border-2 border-border/50 shadow-lg hover:border-primary/20 transition-colors">
-                    <CardHeader>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-start gap-4">
-                          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            <Globe className="h-6 w-6 text-primary" />
-                          </div>
-                          <div>
-                            <CardTitle className="flex items-center gap-3 text-lg">
-                              {integration.name}
-                              <Badge variant="outline" className="text-xs">{integration.status}</Badge>
-                            </CardTitle>
-                            <CardDescription className="mt-1">{integration.description}</CardDescription>
-                          </div>
-                        </div>
-                        <Button variant="outline" disabled className="h-11 sm:w-auto w-full">
-                          <Zap className="mr-2 h-4 w-4" />
-                          Connect Later
-                        </Button>
-                      </div>
-                    </CardHeader>
-                  </Card>
-                ))}
-              </div>
+            {/* ── Connectors Tab (replaces old fake Integrations) ─ */}
+            <TabsContent value="connectors" className="space-y-6">
+              {receptionists.length > 1 && (
+                <div className="flex items-center gap-3">
+                  <Label>Select Business:</Label>
+                  <Select value={selectedReceptionistId} onValueChange={setSelectedReceptionistId}>
+                    <SelectTrigger className="w-64">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {receptionists.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.business_name || r.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {userId && (
+                <ConnectorRegistryPage userId={userId} />
+              )}
+            </TabsContent>
+
+            {/* ── Modules Tab (new — growth & operations) ──────── */}
+            <TabsContent value="modules" className="space-y-6">
+              {receptionists.length > 1 && (
+                <div className="flex items-center gap-3">
+                  <Label>Select Business:</Label>
+                  <Select value={selectedReceptionistId} onValueChange={setSelectedReceptionistId}>
+                    <SelectTrigger className="w-64">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {receptionists.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.business_name || r.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {selectedReceptionistId && (
+                <ModuleRegistry receptionistId={selectedReceptionistId} />
+              )}
             </TabsContent>
           </Tabs>
         )}
@@ -431,9 +453,7 @@ export default function Settings() {
               <Lock className="h-5 w-5 text-primary" />
               Change Password
             </DialogTitle>
-            <DialogDescription>
-              Enter a new password for your account. Must be at least 8 characters.
-            </DialogDescription>
+            <DialogDescription>Enter a new password for your account. Must be at least 8 characters.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">

@@ -278,6 +278,25 @@ export default function BuilderPage() {
         toast({ title: "Success", description: "Receptionist updated successfully!" });
         await loadReceptionist(receptionistId);
       } else {
+        // Check plan limit before creating
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("plan")
+          .eq("id", currentUserId)
+          .maybeSingle();
+        const userPlan = profileData?.plan || "free";
+        const { count: rCount } = await supabase
+          .from("receptionists")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", currentUserId);
+        const limits: Record<string, number> = { free: 1, pro: 5, enterprise: 9999 };
+        if ((rCount || 0) >= (limits[userPlan] || 1)) {
+          setError(`Receptionist limit reached (${rCount}/${limits[userPlan]}) on ${userPlan} plan. Upgrade to add more.`);
+          toast({ title: "Plan Limit", description: `Upgrade to add more receptionists.`, variant: "destructive" });
+          setSaving(false);
+          return;
+        }
+
         // insert new
         const { data, error } = await supabase.from("receptionists").insert([{
           user_id: currentUserId,
@@ -742,6 +761,8 @@ export default function BuilderPage() {
               <>
                 <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => document.getElementById('builder-faqs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>FAQs</button>
                 <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => document.getElementById('builder-embed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Widget Install</button>
+                <button className="px-3 py-1.5 text-xs rounded-lg border border-blue-500/40 bg-blue-500/10 text-blue-700 hover:bg-blue-500/20" onClick={() => navigate(`/test/${receptionistId}`)}>Test Operator</button>
+                <button className="px-3 py-1.5 text-xs rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20" onClick={() => navigate('/operator-management')}>Manage Operator</button>
                 <button className="px-3 py-1.5 text-xs rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20" onClick={() => navigate('/money-mode')}>Money Mode</button>
               </>
             )}

@@ -45,6 +45,17 @@ class SelectQuery<T = Record<string, unknown>> {
     return this;
   }
 
+  /**
+   * Raw PostgREST logical expression, e.g.
+   *   .or("session_id.eq.X,user_fingerprint.eq.Y")
+   * Passed through as the `or` query parameter verbatim (values must be
+   * pre-encoded by the caller if they contain reserved characters).
+   */
+  or(expr: string): this {
+    this.filters.push({ col: "or", val: expr, op: "raw" });
+    return this;
+  }
+
   order(col: string, opts?: { ascending?: boolean }): this {
     this.orderCol = col;
     this.orderAsc = opts?.ascending ?? true;
@@ -73,6 +84,8 @@ class SelectQuery<T = Record<string, unknown>> {
         for (const f of this.filters) {
           if (f.op === "cs") {
             params[f.col] = `cs.${f.val}`;
+          } else if (f.op === "raw") {
+            params[f.col] = f.val;
           } else {
             params[f.col] = `eq.${f.val}`;
           }
