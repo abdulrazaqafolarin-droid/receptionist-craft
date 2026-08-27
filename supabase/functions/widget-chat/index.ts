@@ -2755,7 +2755,6 @@ return {
       console.warn("[KPIs] Failed to persist:", kpiErr);
     }
     } // end testMode KPI check
-    }
 
     // Store user message
     const { error: userMsgErr } = await supabase.from("chat_messages").insert({
