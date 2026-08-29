@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Sparkles, ArrowLeft, Send, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { recordSignal } from "@/lib/successSignals";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,8 +22,19 @@ type Step = "describe" | "review" | "building" | "done";
 
 export default function ConversationalOnboarding() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const businessName = searchParams.get("businessName") || "";
+  const businessType = searchParams.get("businessType") || "";
   const [step, setStep] = useState<Step>("describe");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(() => {
+    if (businessName && businessType) {
+      return `I run ${businessName}, ${businessType}. Please set up my AI operator for it.`;
+    }
+    if (businessName) {
+      return `I run ${businessName}. Please set up my AI operator for it.`;
+    }
+    return "";
+  });
   const [planData, setPlanData] = useState<{
     planText: string;
     sections: PlanSection[];
@@ -128,6 +140,8 @@ export default function ConversationalOnboarding() {
         .from("profiles")
         .update({ onboarding_completed: true })
         .eq("id", user.id);
+
+      recordSignal("configured_operator", { path: "conversational", receptionist_id: recId });
 
       setStep("done");
       toast.success("Your AI Operator is ready!");

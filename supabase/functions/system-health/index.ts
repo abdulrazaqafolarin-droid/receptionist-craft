@@ -11,9 +11,11 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    const supabaseKey = (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
+    const credentialFormat = supabaseKey.startsWith("eyJ") ? "legacy_jwt" : "opaque";
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      supabaseKey
     );
 
     // Verify caller is authenticated
@@ -211,6 +213,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         timestamp: now.toISOString(),
+        credentialFormat,
         health: {
           score: healthScore,
           status: healthStatus,

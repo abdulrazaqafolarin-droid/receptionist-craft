@@ -39,6 +39,7 @@ export function AppointmentCalendar({ appointments, onEdit, onRefresh }: Appoint
   const datesWithAppointments = appointments.map(apt => new Date(apt.start_time));
 
   const handleCancel = async (apt: Appointment) => {
+    if (!apt.id) return;
     setCancellingId(apt.id);
     try {
       const { error } = await supabase

@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { QuickReplyButtons } from "@/components/widget/QuickReplyButtons";
 import { ChatSessionOverlay } from "@/components/widget/ChatSessionOverlay";
 import { UISignalRenderer, type UISignal } from "@/components/widget/UISignalRenderer";
+import { ChatShell } from "@/components/widget/ChatShell";
 import { buildCartMessage, buildLeadFormMessage, buildTimeSlotMessage } from "@/lib/widgetMessages";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -778,114 +779,68 @@ export default function Widget() {
           </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-gradient-to-b from-muted/20 to-background scroll-smooth">
-          {messages.map((msg, idx) => (
-            <div 
-              key={idx} 
-              className="space-y-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
-              style={{ animationDelay: `${Math.min(idx * 30, 500)}ms` }}
-            >
-              <div className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                {msg.role === "assistant" && (
-                  <div 
-                    className="h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center mt-1"
-                    style={{
-                      background: `linear-gradient(135deg, ${widgetColors.primaryColor}, ${widgetColors.secondaryColor})`
-                    }}
-                  >
-                    <MessageCircle className="h-4 w-4 text-white" />
-                  </div>
-                )}
-                <div
-                  className={cn(
-                    "max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 shadow-sm transition-all duration-200 hover:shadow-md",
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground rounded-br-md"
-                      : "bg-card border border-border/50 rounded-bl-md"
-                  )}
-                >
-                  <p className="text-sm sm:text-base whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                  <p className="text-xs opacity-60 mt-2 flex items-center gap-1">
-                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              </div>
-
-              {/* Interactive UI Components */}
-              {msg.role === "assistant" && msg.showQuickReplies && (
-                <div className="flex justify-start">
-                  <div className="max-w-[80%]">
-                    <QuickReplyButtons
-                      buttons={[
-                        ...(businessModel === 'services' || businessModel === 'both' ? [{ label: "📅 Book Appointment", value: "book_appointment" }] : []),
-                        ...(businessModel === 'services' || businessModel === 'both' ? [{ label: "💼 View Services", value: "view_services" }] : []),
-                        ...(businessModel === 'products' || businessModel === 'both' ? [{ label: "🛍️ View Products", value: "view_products" }] : []),
-                        { label: "📞 Contact", value: "contact" },
-                      ]}
-                      onSelect={handleQuickReply}
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-          {loading && (
-            <div className="flex gap-2 justify-start animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
-              <div 
-                className="h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center"
-                style={{
-                  background: `linear-gradient(135deg, ${widgetColors.primaryColor}, ${widgetColors.secondaryColor})`
-                }}
-              >
-                <MessageCircle className="h-4 w-4 text-white" />
-              </div>
-              <div className="bg-card border border-border rounded-2xl rounded-bl-md px-5 py-3 shadow-sm">
-                <div className="flex gap-1">
-                  <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce"></div>
-                  <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:0.2s]"></div>
-                  <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:0.4s]"></div>
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        <UISignalRenderer
-          signal={activeUISignal}
-          services={services}
-          products={products}
+        {/* ChatShell: shared chat UI (message list + input) used by both the
+            customer Responder and the owner Configurator, themed per context. */}
+        <ChatShell
+          theme="responder"
+          messages={messages}
+          isUser={(m) => m.role === "user"}
           loading={loading}
-          onServiceSelect={handleServiceSelect}
-          onProductsConfirm={handleProductsConfirm}
-          onDateSelect={handleDateSelect}
-          onTimeSlotSelect={handleTimeSlotSelect}
-          onDismiss={() => setActiveUISignal(null)}
-          onLeadFormSubmit={(data) => {
-            // Phase 0.3: server-side name validator and slot extractor own
-            // lead capture — hand form data to widget-chat as a message.
-            setActiveUISignal(null);
-            const leadMessage = buildLeadFormMessage(data);
-            if (leadMessage) sendMessage(leadMessage);
+          scrollRef={messagesEndRef}
+          inputValue={input}
+          onInputChange={setInput}
+          onSend={handleSendClick}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendClick(); }
           }}
-          onLeadFormSkip={() => setActiveUISignal(null)}
-          onSwitchConfirm={() => {
-            addUserMessage("Yes, let's switch");
-            setActiveUISignal(null);
-            sendMessage("Yes, let's switch");
-          }}
-          onSwitchCancel={() => {
-            addUserMessage("No, stay");
-            setActiveUISignal(null);
-          }}
-        />
-
-        {/* Input */}
-        <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
-          <div className="flex gap-2 items-end">
-            {/* Invisible honeypot field - bots fill this, humans never see it */}
+          disabled={loading}
+          placeholder="Type your message..."
+          showAvatar
+          showTimestamp
+          autoFocus
+          listClassName="p-4 sm:p-6 bg-gradient-to-b from-muted/20 to-background scroll-smooth"
+          sendIcon={<Send className="h-5 w-5" />}
+          accentGradient={`linear-gradient(135deg, ${widgetColors.primaryColor}, ${widgetColors.secondaryColor})`}
+          renderQuickReplies={(msg) =>
+            msg.role === "assistant" && msg.showQuickReplies ? (
+              <div className="flex justify-start">
+                <div className="max-w-[80%]">
+                  <QuickReplyButtons
+                    buttons={[
+                      ...(businessModel === 'services' || businessModel === 'both' ? [{ label: "📅 Book Appointment", value: "book_appointment" }] : []),
+                      ...(businessModel === 'services' || businessModel === 'both' ? [{ label: "💼 View Services", value: "view_services" }] : []),
+                      ...(businessModel === 'products' || businessModel === 'both' ? [{ label: "🛍️ View Products", value: "view_products" }] : []),
+                      { label: "📞 Contact", value: "contact" },
+                    ]}
+                    onSelect={handleQuickReply}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+            ) : null
+          }
+          typingIndicator={
+            loading ? (
+              <div className="flex gap-2 justify-start animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                <div
+                  className="h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center"
+                  style={{ background: `linear-gradient(135deg, ${widgetColors.primaryColor}, ${widgetColors.secondaryColor})` }}
+                >
+                  <MessageCircle className="h-4 w-4 text-white" />
+                </div>
+                <div className="bg-card border border-border rounded-2xl rounded-bl-md px-5 py-3 shadow-sm">
+                  <div className="flex gap-1">
+                    <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce"></div>
+                    <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:0.2s]"></div>
+                    <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:0.4s]"></div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <></>
+            )
+          }
+          footerBefore={
             <input
               type="text"
               name="_hp_email_confirm"
@@ -903,15 +858,8 @@ export default function Widget() {
               }}
               aria-hidden="true"
             />
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendClick(); } }}
-              placeholder="Type your message..."
-              disabled={loading}
-              className="flex-1 min-h-[44px] text-base rounded-xl border-border/50 focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
-              autoFocus
-            />
+          }
+          inputAfter={
             <VoiceInputButton
               onTranscript={(text) => {
                 setInput(text);
@@ -919,38 +867,54 @@ export default function Widget() {
               }}
               disabled={loading}
             />
-            <Button 
-              onClick={handleSendClick} 
-              disabled={loading || !input.trim()}
-              className="h-11 w-11 rounded-xl shadow-md hover:shadow-lg transition-all disabled:opacity-50"
-              style={{
-                background: input.trim() ? `linear-gradient(135deg, ${widgetColors.primaryColor}, ${widgetColors.secondaryColor})` : undefined
-              }}
-            >
-              {loading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
-            </Button>
-          </div>
-          <div className="flex items-center justify-between mt-3 px-1">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRefreshConversation}
-                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <RefreshCw className="h-3 w-3 mr-1" />
-                Start Fresh
-              </Button>
+          }
+          footerAfter={
+            <div className="flex items-center justify-between mt-3 px-1">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRefreshConversation}
+                  className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Start Fresh
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground/70">
+                Powered by AI
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground/70">
-              Powered by AI
-            </p>
-          </div>
-        </div>
+          }
+          betweenPanel={
+            <UISignalRenderer
+              signal={activeUISignal}
+              services={services}
+              products={products}
+              loading={loading}
+              onServiceSelect={handleServiceSelect}
+              onProductsConfirm={handleProductsConfirm}
+              onDateSelect={handleDateSelect}
+              onTimeSlotSelect={handleTimeSlotSelect}
+              onDismiss={() => setActiveUISignal(null)}
+              onLeadFormSubmit={(data) => {
+                setActiveUISignal(null);
+                const leadMessage = buildLeadFormMessage(data);
+                if (leadMessage) sendMessage(leadMessage);
+              }}
+              onLeadFormSkip={() => setActiveUISignal(null)}
+              onSwitchConfirm={() => {
+                addUserMessage("Yes, let's switch");
+                setActiveUISignal(null);
+                sendMessage("Yes, let's switch");
+              }}
+              onSwitchCancel={() => {
+                addUserMessage("No, stay");
+                setActiveUISignal(null);
+              }}
+            />
+          }
+        />
       </Card>
     </div>
   );

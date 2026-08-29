@@ -39,6 +39,7 @@ import FAQManagement from "./pages/FAQManagement";
 import OrganizationPage from "./pages/Organization";
 import CalendarView from "./pages/CalendarView";
 import Channels from "./pages/Channels";
+import Connections from "./pages/Connections";
 import Customers from "./pages/Customers";
 import StaffPage from "./pages/Staff";
 import Escalations from "./pages/Escalations";
@@ -185,6 +186,7 @@ const App = () => {
                               <Route path="/realtime-logs" element={<RealtimeLogs />} />
                               <Route path="/organization" element={<OrganizationPage />} />
                               <Route path="/channels" element={<Channels />} />
+                              <Route path="/connections" element={<Connections />} />
                               <Route path="/customers" element={<Customers />} />
                               <Route path="/staff" element={<StaffPage />} />
                               <Route path="/escalations" element={<Escalations />} />

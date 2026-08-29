@@ -17,8 +17,19 @@ export interface ConfigVersion {
   plan_text: string | null;
   change_source: string;
   owner_input: string | null;
+  reasoning_notes: string | null;
   approved_by: string | null;
   approved_at: string | null;
+  created_at: string;
+}
+
+/** Minimal shape used to render the Configurator's reasoning-history trail. */
+export interface ReasoningHistoryEntry {
+  version_number: number;
+  change_source: string;
+  plan_text: string | null;
+  owner_input: string | null;
+  reasoning_notes: string | null;
   created_at: string;
 }
 
@@ -33,7 +44,9 @@ export async function saveConfigVersion(
     plan_text?: string;
     change_source: string;
     owner_input?: string;
+    reasoning_notes?: string;
     approved_by?: string;
+    approved_at?: string;
   },
 ): Promise<ConfigVersion> {
   // Get next version number
@@ -56,6 +69,7 @@ export async function saveConfigVersion(
       plan_text: params.plan_text || null,
       change_source: params.change_source,
       owner_input: params.owner_input || null,
+      reasoning_notes: params.reasoning_notes || null,
       approved_by: params.approved_by || null,
       approved_at: params.approved_at || new Date().toISOString(),
     })
@@ -64,6 +78,26 @@ export async function saveConfigVersion(
 
   if (error) throw error;
   return data as ConfigVersion;
+}
+
+/**
+ * Get the Configurator's reasoning-history trail — the 'why' behind every past
+ * plan/change (Step 8 / §4.1b). Newest first. This is what the same Configurator
+ * reads back so it can explain WHY a setting is what it is, not just restate it.
+ */
+export async function getReasoningHistory(
+  supabase: SupabaseClient,
+  receptionistId: string,
+  limit = 8,
+): Promise<ReasoningHistoryEntry[]> {
+  const { data } = await supabase
+    .from("config_versions")
+    .select("version_number, change_source, plan_text, owner_input, reasoning_notes, created_at")
+    .eq("receptionist_id", receptionistId)
+    .order("version_number", { ascending: false })
+    .limit(limit);
+
+  return (data as ReasoningHistoryEntry[]) || [];
 }
 
 /**
@@ -156,6 +190,9 @@ export async function revertToVersion(
   if (config.contact) updatePayload.contact_info = config.contact;
   if (config.hours) updatePayload.operating_hours = config.hours;
   if (config.policies) updatePayload.policies = config.policies;
+  if (typeof config.knowledge_base === "string" && config.knowledge_base.trim()) {
+    updatePayload.knowledge_base = config.knowledge_base.trim();
+  }
   if (Object.keys(channels).length > 0) updatePayload.channels = channels;
   if (Object.keys(capabilities).length > 0) updatePayload.capabilities = capabilities;
   if (customerFields.length > 0) updatePayload.customer_fields = customerFields;
@@ -176,7 +213,7 @@ export async function revertToVersion(
   return saveConfigVersion(supabase, {
     receptionist_id: receptionistId,
     config_json: target.config_json,
-    plan_text: target.plan_text,
+    plan_text: target.plan_text || undefined,
     change_source: "owner_revert",
     owner_input: `Reverted to version ${targetVersionNumber}`,
     approved_by: revertedBy,

@@ -597,7 +597,7 @@ export default function Analytics() {
             {/* Phase 5: Service & Product Breakdown */}
             <div className="grid lg:grid-cols-2 gap-6">
               {/* Most-Booked Services */}
-              {analytics.business_metrics.service_breakdown?.length > 0 && (
+              {(analytics.business_metrics?.service_breakdown?.length ?? 0) > 0 && (
                 <Card className="border-2 border-border/50">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -608,7 +608,7 @@ export default function Analytics() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {analytics.business_metrics.service_breakdown.slice(0, 8).map((item, i) => {
+                      {(analytics.business_metrics?.service_breakdown ?? []).slice(0, 8).map((item, i) => {
                         const maxCount = analytics.business_metrics.service_breakdown![0].count;
                         const pct = maxCount > 0 ? (item.count / maxCount) * 100 : 0;
                         return (
@@ -632,7 +632,7 @@ export default function Analytics() {
               )}
 
               {/* Most-Ordered Products */}
-              {analytics.business_metrics.product_breakdown?.length > 0 && (
+              {(analytics.business_metrics?.product_breakdown?.length ?? 0) > 0 && (
                 <Card className="border-2 border-border/50">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -651,7 +651,7 @@ export default function Analytics() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {analytics.business_metrics.product_breakdown.slice(0, 8).map((item) => (
+                        {(analytics.business_metrics?.product_breakdown ?? []).slice(0, 8).map((item) => (
                           <TableRow key={item.product}>
                             <TableCell className="font-medium truncate max-w-[180px]">{item.product}</TableCell>
                             <TableCell className="text-right">{item.count}</TableCell>

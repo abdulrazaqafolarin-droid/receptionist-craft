@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Zap, Bell, User, Lock, CreditCard, Palette, Globe, Eye, EyeOff, Puzzle, Bot } from "lucide-react";
+import { ArrowLeft, Zap, Bell, User, Lock, CreditCard, Palette, Globe, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TIMEZONE_OPTIONS, detectBrowserTimezone, findClosestTimezone } from "@/lib/timezones";
@@ -24,8 +24,6 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "next-themes";
 import { FloatingBackground } from "@/components/FloatingBackground";
-import { ConnectorRegistryPage } from "@/components/ConnectorRegistry";
-import { ModuleRegistry } from "@/components/ModuleRegistry";
 import {
   Dialog,
   DialogContent,
@@ -47,9 +45,6 @@ export default function Settings() {
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ newPassword: "", confirmPassword: "" });
-  const [selectedReceptionistId, setSelectedReceptionistId] = useState<string>("");
-  const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string }>>([]);
-  const [userId, setUserId] = useState<string>("");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -70,7 +65,6 @@ export default function Settings() {
         navigate("/auth");
         return;
       }
-      setUserId(user.id);
 
       const { data: profileData, error } = await supabase
         .from("profiles")
@@ -88,17 +82,6 @@ export default function Settings() {
         emailNotifications: true,
         pushNotifications: true,
       });
-
-      // Load receptionists for connector/module tabs
-      const { data: recs } = await supabase
-        .from("receptionists")
-        .select("id, name, business_name")
-        .eq("user_id", user.id);
-
-      if (recs && recs.length > 0) {
-        setReceptionists(recs);
-        setSelectedReceptionistId(recs[0].id);
-      }
     } catch (error) {
       console.error("Error loading profile:", error);
       toast.error("Failed to load profile");
@@ -212,7 +195,7 @@ export default function Settings() {
           </div>
         ) : (
           <Tabs defaultValue="account" className="space-y-8">
-            <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid h-auto p-1">
+            <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-grid h-auto p-1">
               <TabsTrigger value="account" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground py-2.5">
                 <User className="mr-2 h-4 w-4" />
                 Account
@@ -220,14 +203,6 @@ export default function Settings() {
               <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground py-2.5">
                 <Bell className="mr-2 h-4 w-4" />
                 Notifications
-              </TabsTrigger>
-              <TabsTrigger value="connectors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground py-2.5">
-                <Puzzle className="mr-2 h-4 w-4" />
-                Connectors
-              </TabsTrigger>
-              <TabsTrigger value="modules" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground py-2.5">
-                <Bot className="mr-2 h-4 w-4" />
-                Modules
               </TabsTrigger>
             </TabsList>
 
@@ -394,53 +369,6 @@ export default function Settings() {
               </Card>
             </TabsContent>
 
-            {/* ── Connectors Tab (replaces old fake Integrations) ─ */}
-            <TabsContent value="connectors" className="space-y-6">
-              {receptionists.length > 1 && (
-                <div className="flex items-center gap-3">
-                  <Label>Select Business:</Label>
-                  <Select value={selectedReceptionistId} onValueChange={setSelectedReceptionistId}>
-                    <SelectTrigger className="w-64">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {receptionists.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.business_name || r.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {userId && (
-                <ConnectorRegistryPage userId={userId} />
-              )}
-            </TabsContent>
-
-            {/* ── Modules Tab (new — growth & operations) ──────── */}
-            <TabsContent value="modules" className="space-y-6">
-              {receptionists.length > 1 && (
-                <div className="flex items-center gap-3">
-                  <Label>Select Business:</Label>
-                  <Select value={selectedReceptionistId} onValueChange={setSelectedReceptionistId}>
-                    <SelectTrigger className="w-64">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {receptionists.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.business_name || r.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {selectedReceptionistId && (
-                <ModuleRegistry receptionistId={selectedReceptionistId} />
-              )}
-            </TabsContent>
           </Tabs>
         )}
       </div>

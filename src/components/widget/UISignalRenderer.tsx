@@ -62,7 +62,7 @@ interface Props {
   onServiceSelect: (serviceId: string, serviceName: string) => void;
   onProductsConfirm: (selectedProducts: Array<{ productId: string; productName: string; quantity: number; price?: number }>) => void;
   onDateSelect: (date: Date) => void;
-  onTimeSlotSelect: (slot: { startTime: string; endTime?: string }) => void;
+  onTimeSlotSelect: (slot: { startTime?: string; start?: string; endTime?: string; end?: string; display?: string }) => void;
   onDismiss?: () => void;
   onEditBooking?: () => void;
   onCancelBooking?: () => void;

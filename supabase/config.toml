@@ -84,3 +84,27 @@ verify_jwt = false
 
 [functions.kb-rewrite]
 verify_jwt = false
+
+[functions.request-change]
+verify_jwt = false
+
+[functions.propose-operator-plan]
+verify_jwt = false
+
+[functions.approve-operator-plan]
+verify_jwt = false
+
+[functions.onboard-configurator]
+verify_jwt = false
+
+[functions.create-payment-intent]
+verify_jwt = false
+
+[functions.create-subscription-checkout]
+verify_jwt = false
+
+[functions.payment-webhook]
+verify_jwt = false
+
+[functions.test-mode]
+verify_jwt = false

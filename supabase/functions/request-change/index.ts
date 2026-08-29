@@ -1,8 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateChangePlan } from "../_shared/config/enhancedConfigurator.ts";
-import { getLatestVersion, saveConfigVersion } from "../_shared/config/versioning.ts";
-import { generatePlanFromConfig } from "../_shared/config/planGenerator.ts";
+import { getLatestVersion, getReasoningHistory, saveConfigVersion, type ReasoningHistoryEntry } from "../_shared/config/versioning.ts";
+import { RutexMcpError } from "../_shared/rutexMcp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,7 +43,7 @@ serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
     );
 
     // Verify ownership
@@ -64,10 +64,21 @@ serve(async (req) => {
       return jsonRes({ ok: false, error: "no_existing_config" }, 400);
     }
 
+    // Step 8 / §4.1b: retrieve the reasoning-history trail ('why' behind each
+    // past plan) so the Configurator explains things from memory, not just the
+    // final config. Non-fatal — degrade to empty if unavailable.
+    let reasoningHistory: ReasoningHistoryEntry[] = [];
+    try {
+      reasoningHistory = await getReasoningHistory(supabase, receptionist_id, 8);
+    } catch {
+      reasoningHistory = [];
+    }
+
     // Generate the change plan
     const result = await generateChangePlan(
       latestVersion.config_json,
       change_request.trim(),
+      reasoningHistory,
     );
 
     // Save as a draft version
@@ -77,6 +88,7 @@ serve(async (req) => {
       plan_text: result.plan.full_text,
       change_source: "owner_change",
       owner_input: change_request.trim(),
+      reasoning_notes: result.reasoning_notes || undefined,
     });
 
     return jsonRes({
@@ -90,6 +102,17 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("[request-change] Error:", e);
+    if (e instanceof RutexMcpError) {
+      const map: Record<string, string> = {
+        not_configured: "gateway_not_configured",
+        auth: "gateway_auth_failed",
+        timeout: "gateway_timeout",
+        unreachable: "gateway_unreachable",
+        tool_error: "gateway_empty_response",
+        protocol: "gateway_protocol_error",
+      };
+      return jsonRes({ ok: false, error: map[e.kind] ?? "gateway_unreachable", details: String(e).slice(0, 200) }, 502);
+    }
     return jsonRes({ ok: false, error: "internal_error", details: String(e).slice(0, 300) }, 500);
   }
 });

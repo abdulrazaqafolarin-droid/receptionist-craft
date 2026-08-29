@@ -9,10 +9,15 @@
  *    b. The OperationsConfig that plan compiles into
  * 4. Nothing goes live until the owner approves
  *
- * Uses Gemini directly (no Lovable gateway dependency).
+ * Routes through the Rutex gateway (Opencode) via _shared/rutexMcp.ts —
+ * the SAME Configurator identity as onboard-configurator. No direct
+ * Gemini calls.
  */
 
 import { generatePlanFromConfig, type GeneratedPlan } from "./planGenerator.ts";
+import { buildManifestPrompt } from "./manifest.ts";
+import type { ReasoningHistoryEntry } from "./versioning.ts";
+import { askRutex } from "../rutexMcp.ts";
 
 interface ConfiguratorResult {
   plan: GeneratedPlan;
@@ -20,7 +25,26 @@ interface ConfiguratorResult {
   reasoning_notes: string;
 }
 
-const SYSTEM_PROMPT = `You are an expert business operations consultant working for Rutex FrontDesk, an AI Business Operator platform for small businesses.
+/** Route a Configurator prompt through the Rutex gateway (single identity). */
+async function callGateway(kind: "operator" | "change", prompt: string): Promise<string> {
+  const r = await askRutex(`configurator-${kind}-${crypto.randomUUID()}`, prompt);
+  return r.text;
+}
+
+/** Parse the Configurator's strict-JSON reply, tolerating markdown fences. */
+function parseConfiguratorJson(text: string): { config: Record<string, unknown>; reasoning_notes: string } {
+  try {
+    return JSON.parse(text);
+  } catch {
+    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (jsonMatch) return JSON.parse(jsonMatch[1]);
+    throw new Error("Could not parse configurator response as JSON");
+  }
+}
+
+const SYSTEM_PROMPT = `You are the Configurator — an opencode agent for Rutex, an AI Business Operator platform for small businesses. You are accessed through the Rutex gateway. Your sibling is the Responder, the customer-facing agent also reached through the gateway.
+
+You act as an expert business operations consultant: reason with care about each specific business, recommend the configuration that genuinely serves it, and flag uncertainty honestly.
 
 Your job: take a business description and produce TWO things in ONE response:
 
@@ -32,6 +56,7 @@ CRITICAL RULES:
 - Only use capabilities that actually make sense for this business type.
 - If the business description is ambiguous, make reasonable assumptions and note them.
 - Never invent business details not in the description (prices, hours, etc.) — leave those fields null.
+- knowledge_base: write 1-3 warm, conversational paragraphs (complete sentences, light bullet points where useful) that a customer-facing AI can use to answer questions about services, hours, policies, location, and typical FAQs. Never use field labels like "Business name:" — write it naturally.
 - For the config, follow this EXACT schema:
 {
   "version": 1,
@@ -76,21 +101,21 @@ CRITICAL RULES:
     "widget": boolean,
     "whatsapp": boolean,
     "phone": boolean
-  }
+  },
+  "knowledge_base": string
 }
 
 OUTPUT FORMAT (STRICT JSON, no markdown fences):
 {
   "config": { ... the OperationsConfig above ... },
   "reasoning_notes": "Your detailed notes about WHY you chose each option, what you're confident about, and what you're uncertain about. Be honest about uncertainty."
-}`;
+}
+
+${buildManifestPrompt()}`;
 
 export async function generateOperatorPlan(
   businessDescription: string,
 ): Promise<ConfiguratorResult> {
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
-
   const userPrompt = `Business description from the owner:
 
 "${businessDescription}"
@@ -105,44 +130,12 @@ Analyze this business description carefully. Think about:
 
 Then produce the OperationsConfig and your reasoning notes.`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `${SYSTEM_PROMPT}\n\n${userPrompt}` }] }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 4096,
-          responseMimeType: "application/json",
-        },
-      }),
-    },
+  const text = await callGateway(
+    "operator",
+    `${SYSTEM_PROMPT}\n\n${userPrompt}`,
   );
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini API failed (${res.status}): ${err.slice(0, 300)}`);
-  }
-
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("No content returned from Gemini");
-
-  // Parse the JSON response
-  let parsed: { config: Record<string, unknown>; reasoning_notes: string };
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    // Try extracting JSON from markdown fences
-    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[1]);
-    } else {
-      throw new Error("Could not parse configurator response as JSON");
-    }
-  }
+  const parsed = parseConfiguratorJson(text);
 
   // Generate the plain-language plan from the config
   const plan = generatePlanFromConfig(parsed.config);
@@ -155,21 +148,48 @@ Then produce the OperationsConfig and your reasoning notes.`;
 }
 
 /**
+ * Render the Configurator's reasoning-history trail (Step 8 / §4.1b). This is
+ * the memory of WHY each past setting was chosen — every prior owner request,
+ * the plan produced, and the agent's own reasoning. The SAME Configurator reads
+ * this back so continuity is preserved across the business's lifetime.
+ */
+function buildReasoningHistoryPrompt(history: ReasoningHistoryEntry[]): string {
+  if (!history || history.length === 0) return "";
+  // Only entries that actually carry a decision ('why') — skip empty stubs.
+  const meaningful = history.filter(
+    (h) => h.owner_input || h.reasoning_notes || h.plan_text,
+  );
+  if (meaningful.length === 0) return "";
+
+  const lines = meaningful.map((h, i) => {
+    const who = h.owner_input ? `Owner requested: "${h.owner_input}"` : "";
+    const why = h.reasoning_notes ? `Your reasoning then: ${h.reasoning_notes}` : "";
+    const what = h.plan_text ? `Plan summary: ${h.plan_text.slice(0, 600)}` : "";
+    return `#${meaningful.length - i} (config version ${h.version_number}, source: ${h.change_source})
+${[who, why, what].filter(Boolean).join("\n")}`;
+  }).join("\n\n");
+
+  return `=== WHY THINGS ARE THE WAY THEY ARE (CONFIGURATOR'S PAST REASONING, newest first) ===
+${lines}
+
+Use this memory deliberately: if the owner refers to a past decision, recall it from here — do NOT ask them to re-explain something they already decided. If a new request conflicts with a past decision, acknowledge the conflict and flag it.`;
+}
+
+/**
  * Generate a plan for a configuration change (post-onboarding).
  * Takes the current config and the owner's requested change.
  */
 export async function generateChangePlan(
   currentConfig: Record<string, unknown>,
   ownerChangeRequest: string,
+  reasoningHistory: ReasoningHistoryEntry[] = [],
 ): Promise<ConfiguratorResult> {
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
-
-  const systemPrompt = `You are an expert business operations consultant. The business owner wants to change their AI operator's configuration.
+  const systemPrompt = `You are the Configurator — an opencode agent for Rutex (accessed through the Rutex gateway; your sibling is the Responder agent for customers). You act as an expert business operations consultant: recommend changes that genuinely serve this business and flag uncertainty honestly. The business owner wants to change their AI operator's configuration.
 
 You will receive:
 1. The current configuration
 2. The owner's change request (in plain language)
+3. The reasoning-history trail — the WHY behind past decisions (may be empty if this is the first change)
 
 Your job:
 1. Produce the UPDATED OperationsConfig with the change applied
@@ -181,12 +201,15 @@ RULES:
 - If the change is ambiguous, make your best interpretation and note it
 - If the change conflicts with existing config, resolve it reasonably and note the conflict
 - The updated config must be valid and complete
+- If the owner's change touches business knowledge (services, products, hours, policies, location, FAQs), update the config's knowledge_base text to match
 
 OUTPUT FORMAT (STRICT JSON, no markdown fences):
 {
-  "config": { ... the updated OperationsConfig ... },
+  "config": { ... the updated OperationsConfig — same shape as onboarding, INCLUDING "knowledge_base": string ... },
   "reasoning_notes": "What changed, why, and what you're uncertain about"
-}`;
+}
+
+${buildManifestPrompt()}`;
 
   const userPrompt = `CURRENT CONFIGURATION:
 ${JSON.stringify(currentConfig, null, 2)}
@@ -194,44 +217,15 @@ ${JSON.stringify(currentConfig, null, 2)}
 OWNER'S CHANGE REQUEST:
 "${ownerChangeRequest}"
 
+${buildReasoningHistoryPrompt(reasoningHistory)}
 Apply this change to the configuration. Only modify what's necessary.`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 4096,
-          responseMimeType: "application/json",
-        },
-      }),
-    },
+  const text = await callGateway(
+    "change",
+    `${systemPrompt}\n\n${userPrompt}`,
   );
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini API failed (${res.status}): ${err.slice(0, 300)}`);
-  }
-
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("No content returned from Gemini");
-
-  let parsed: { config: Record<string, unknown>; reasoning_notes: string };
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[1]);
-    } else {
-      throw new Error("Could not parse change plan response as JSON");
-    }
-  }
+  const parsed = parseConfiguratorJson(text);
 
   const plan = generatePlanFromConfig(parsed.config);
 

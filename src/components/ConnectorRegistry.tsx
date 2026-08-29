@@ -35,6 +35,7 @@ interface ConnectorDef {
   is_coming_soon: boolean;
   setup_url: string | null;
   help_url: string | null;
+  required_by_modules: string[];
 }
 
 interface ConnectorStatus {

@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CurrencySelect } from "@/components/ui/currency-select";
 import { FloatingBackground } from "@/components/FloatingBackground";
+import { ConfiguratorAffordance } from "@/components/ConfiguratorAffordance";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -110,7 +111,7 @@ export default function Services() {
         .order("name");
 
       if (error) throw error;
-      setItems(data || []);
+      setItems((data || []) as ServiceOrProduct[]);
     } catch (err) {
       console.error("loadItems error", err);
       toast({ title: "Error", description: "Failed to load items", variant: "destructive" });
@@ -402,10 +403,19 @@ export default function Services() {
               <p className="text-muted-foreground">Manage products and services for your AI receptionist</p>
             </div>
           </div>
-          <Button onClick={() => loadItems()} disabled={loading} variant="outline" className="h-11">
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          {selectedReceptionist && (
+            <Button onClick={() => loadItems()} disabled={loading} variant="outline" className="h-11">
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          )}
+          {selectedReceptionist && (
+            <ConfiguratorAffordance
+              receptionistId={selectedReceptionist}
+              context="Products & Services"
+              title="Change products & services"
+            />
+          )}
         </div>
 
         {/* Receptionist Selector */}

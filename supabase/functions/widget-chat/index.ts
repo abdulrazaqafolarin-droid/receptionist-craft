@@ -1,4 +1,5 @@
 import { supabase } from "../_shared/db.ts";
+import { buildBusinessContext, buildLiveStatePromptBlock } from "../_shared/context/businessContext.ts";
 
 //                                                                            
 // PHASE 8: PRODUCTION HARDENING IMPORTS
@@ -1367,6 +1368,7 @@ function buildMasterSystemPrompt(
   customerFields: any[] | null = null,
   engineResult: any = null,
   engineState: any = null,
+  liveStateBlock: string = '',
 ): string {
   const emotionalGuidance: Record<string, string> = {
     neutral: 'Maintain a warm, professional tone.',
@@ -1617,6 +1619,13 @@ Listen to what the customer needs and respond naturally.
   // Add Money Mode block if active
   if (moneyModeBlock) {
     blocks.push('---', moneyModeBlock);
+  }
+  
+  // Add Live Business State block (Step 8 / §4.2-4.4) — current live truth,
+  // checked at the moment of this message. Highest-priority grounding: an agent
+  // must never promise a payment link / capability the business cannot deliver.
+  if (liveStateBlock) {
+    blocks.push('---', liveStateBlock);
   }
   
   blocks.push('---', finalBlock);
@@ -2493,6 +2502,27 @@ if (!GEMINI_API_KEY) {
     const qualityStandardsBlock = buildQualityPrompt();
 
     //                                                                        
+    // STEP 8 / §4.2-4.4: BUILD SHARED LIVE BUSINESS-STATE BLOCK (checked live)
+    // The Responder reads the business's real current operational state —
+    // payment/connector readiness especially — before generating a reply, so it
+    // never promises a payment link or capability the business cannot deliver.
+    //                                                                        
+    let liveStateBlock = '';
+    try {
+      const liveCtx = await buildBusinessContext(supabase, {
+        receptionist: receptionist || {},
+        includeRecentActivity: false,
+      });
+      liveStateBlock = buildLiveStatePromptBlock(liveCtx, { channel: source });
+      console.log(
+        `[Widget Chat] Live state: canCollectPayments=${liveCtx.payment.canCollectPayments}, ` +
+        `provider=${liveCtx.payment.provider || 'none'}, configVersion=${liveCtx.configVersionNumber ?? 'none'}`,
+      );
+    } catch (ctxErr) {
+      console.warn('[Widget Chat] Live state build failed (non-fatal):', ctxErr);
+    }
+
+    //                                                                        
     // BUILD MASTER SYSTEM PROMPT (ALL 7 LAYERS + ENGINE v2 GOVERNOR + PHASE 2)
     //                                                                        
     const systemPrompt = buildMasterSystemPrompt(
@@ -2513,6 +2543,7 @@ if (!GEMINI_API_KEY) {
       receptionist.customer_fields,
       engineResult,
       engineState,
+      liveStateBlock,
     ) + '\n\n' + empathyPromptBlock + '\n\n' + tonePromptBlock + '\n\n' + memoryAwarenessBlock + '\n\n' + qualityStandardsBlock + (returningCustomerBlock ? '\n\n' + returningCustomerBlock : '');
 
     const startTime = Date.now();
@@ -3034,7 +3065,7 @@ return {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+                  'apikey': Deno.env.get("RUTEX_SERVICE_ROLE_KEY")
                 },
                 body: JSON.stringify(bookingPayload)
               });

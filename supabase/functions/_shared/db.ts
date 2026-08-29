@@ -3,15 +3,18 @@
 // Supports all query patterns used by widget-chat
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
+const SERVICE_KEY = Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
 
 function authHeaders(): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "Accept": "application/json",
     "apikey": SERVICE_KEY,
-    "Authorization": `Bearer ${SERVICE_KEY}`,
   };
+  if (SERVICE_KEY.startsWith("eyJ")) {
+    headers["Authorization"] = `Bearer ${SERVICE_KEY}`;
+  }
+  return headers;
 }
 
 type QueryResult<T> = { data: T | null; error: { message: string } | null };

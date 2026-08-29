@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, MessageSquare, ChevronDown, ChevronUp, AlertCircle, Sparkles } from "lucide-react";
+import { Check, MessageSquare, ChevronDown, ChevronUp, AlertCircle, Sparkles, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ interface PlanReviewProps {
   onEdit: (feedback: string) => void;
   loading?: boolean;
   mode?: "onboarding" | "change";
+  onTest?: () => void;
 }
 
 const CONFIDENCE_COLORS = {
@@ -43,6 +44,7 @@ export function PlanReview({
   onEdit,
   loading,
   mode = "onboarding",
+  onTest,
 }: PlanReviewProps) {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(sections.map((s) => s.id)),
@@ -181,6 +183,17 @@ export function PlanReview({
       )}
 
       <div className="flex gap-3">
+        {onTest && (
+          <Button
+            variant="secondary"
+            onClick={onTest}
+            disabled={loading}
+            className="flex-1"
+          >
+            <FlaskConical className="h-4 w-4 mr-2" />
+            Test conversation
+          </Button>
+        )}
         {needsAction && (
           <Button
             variant="outline"

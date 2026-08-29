@@ -28,6 +28,7 @@ export default function CancelAppointment() {
   }, [token]);
 
   async function loadAppointment() {
+    if (!token) return;
     try {
       // Use the secure RPC function that works without auth
       const { data, error: rpcError } = await supabase

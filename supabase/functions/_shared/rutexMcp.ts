@@ -6,7 +6,7 @@
  * functions, browsers, and Node alike.
  *
  * Required env vars:
- *   RUTEX_GATEWAY_URL  e.g. https://<tunnel-host>      (no trailing slash needed)
+ *   RUTEX_GATEWAY_URL  e.g. https://<gateway-host>      (stable; no longer rotating)
  *   RUTEX_GATEWAY_KEY  the project's bearer key (e.g. "frontdesk" row)
  *
  * Rules (from GATEWAY-BATTLE-LOG.docx):

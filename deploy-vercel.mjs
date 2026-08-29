@@ -2,7 +2,11 @@ import { readFileSync, readdirSync, existsSync } from "fs";
 import { join, relative } from "path";
 import { fileURLToPath } from "url";
 
-const TOKEN = "vcp_36qiXQ7cT4ws70EJJQF4dblrBe0g2T7Vm9ZFEXifo5VLONPHDl1WKLKW";
+const TOKEN = process.env.VERCEL_TOKEN;
+if (!TOKEN) {
+  console.error("Missing VERCEL_TOKEN env var. Set it before running.");
+  process.exit(1);
+}
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const DIST = join(__dirname, "dist");
 

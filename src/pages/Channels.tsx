@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ConfiguratorAffordance } from "@/components/ConfiguratorAffordance";
 
 interface Receptionist {
   id: string;
@@ -97,7 +98,7 @@ export default function Channels() {
     setLoading(false);
   }
 
-  async function saveIntegration(type: "whatsapp" | "twilio", config: ChannelConfig, enabled: boolean) {
+  async function saveIntegration(type: "whatsapp" | "twilio" | "stripe" | "paystack", config: ChannelConfig, enabled: boolean) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -175,13 +176,37 @@ export default function Channels() {
 
   return (
     <div className="container mx-auto p-6 max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Channels</h1>
-        <p className="text-muted-foreground mt-1">
-          Connect your AI receptionist to WhatsApp, phone calls, and more.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Channels</h1>
+          <p className="text-muted-foreground mt-1">
+            Connect your AI receptionist to WhatsApp, phone calls, and more.
+          </p>
+        </div>
+        {receptionists[0] && (
+          <ConfiguratorAffordance
+            receptionistId={receptionists[0].id}
+            context="Channels"
+            title="Change channels & integrations"
+            className="sm:self-start"
+          />
+        )}
       </div>
 
+      {receptionists.length === 0 ? (
+        <Card className="border-2 border-dashed mt-6">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Create your AI operator first</h3>
+            <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
+              Connect channels to your AI receptionist once it's set up. It takes just a minute to create one.
+            </p>
+            <Button onClick={() => (window.location.href = "/onboarding")}>
+              Set up my AI operator
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
       <Tabs defaultValue="whatsapp">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="whatsapp" className="flex items-center gap-2">
@@ -574,6 +599,7 @@ export default function Channels() {
           </Card>
         </TabsContent>
       </Tabs>
+      )}
     </div>
   );
 }

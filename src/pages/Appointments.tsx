@@ -205,7 +205,9 @@ export default function Appointments() {
 
   function selectAll() {
     const map: Record<string, boolean> = {};
-    filteredAppointments.forEach((a) => (map[a.id] = true));
+    filteredAppointments.forEach((a) => {
+      if (a.id) map[a.id] = true;
+    });
     setSelected(map);
   }
 

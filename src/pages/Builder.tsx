@@ -190,7 +190,7 @@ export default function BuilderPage() {
       if (data) {
         setReceptionist((prev) => ({ 
           ...prev, 
-          ...data,
+          ...(data as unknown as Receptionist),
           primary_goal: (data.primary_goal as PrimaryGoal) || 'bookings',
           capabilities: (data.capabilities as BusinessCapabilities) || prev.capabilities,
           currency: (data as any).currency || 'USD',
@@ -625,6 +625,7 @@ export default function BuilderPage() {
   
   // Auto-generate and auto-save content
   async function autoGenerateContent(generateKB: boolean, generatePrompt: boolean) {
+    if (!receptionistId) return;
     try {
       // Fetch services and FAQs for this receptionist
       let services: Array<{ name: string; description: string | null; duration_minutes: number; price: number }> = [];
@@ -635,7 +636,7 @@ export default function BuilderPage() {
           .from('services')
           .select('*')
           .eq('receptionist_id', receptionistId);
-        services = servicesData || [];
+        services = (servicesData || []) as Array<{ name: string; description: string | null; duration_minutes: number; price: number }>;
 
         const { data: faqsData } = await supabase
           .from('receptionist_faqs')

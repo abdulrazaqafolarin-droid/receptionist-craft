@@ -94,7 +94,7 @@ export default function Customers() {
         .limit(10),
     ]);
 
-    setAppointments(appts ?? []);
+    setAppointments((appts ?? []) as Appointment[]);
     setOrders(ords ?? []);
     setDetailLoading(false);
   }

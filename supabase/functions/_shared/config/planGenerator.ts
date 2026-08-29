@@ -40,7 +40,18 @@ export function generatePlanFromConfig(config: Record<string, unknown>): Generat
     confidence: "high",
   });
 
-  // Section 2: Operating Hours
+  // Section 2: Business Knowledge
+  if (typeof config.knowledge_base === "string" && config.knowledge_base.trim()) {
+    sections.push({
+      id: "knowledge",
+      title: "Business Knowledge",
+      content: config.knowledge_base.trim(),
+      confidence: "medium",
+      owner_action: "This is what your AI will know about your business. Any inaccuracy here would be repeated to customers — does this look right?",
+    });
+  }
+
+  // Section: Operating Hours
   if (hours.length > 0) {
     sections.push({
       id: "hours",

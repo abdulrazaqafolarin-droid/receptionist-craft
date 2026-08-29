@@ -39,7 +39,7 @@ export default function Widget({ receptionistId }: Props) {
       try {
         setLoading(true);
         const { data, error } = await supabase
-          .from("widget_receptionists")
+          .from("widget_receptionists" as any)
           .select("id, name, business_name, greeting_message, timezone, tone")
           .eq("id", receptionistId)
           .maybeSingle();
@@ -56,7 +56,7 @@ export default function Widget({ receptionistId }: Props) {
           setLoadError(true);
           return;
         }
-        setReceptionist(data as WidgetReceptionist | null);
+        setReceptionist(data as unknown as WidgetReceptionist | null);
       } catch (e) {
         console.warn("Widget: failed to load receptionist", e);
         if (mounted) setLoadError(true);

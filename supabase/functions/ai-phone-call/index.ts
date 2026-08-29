@@ -22,7 +22,7 @@ serve(async (req) => {
   }
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const RUTEX_SERVICE_ROLE_KEY = (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
 
   try {
     // Parse Twilio form body
@@ -41,7 +41,7 @@ serve(async (req) => {
     const sessionId = `phone_${callerId || callSid}`;
 
     // Look up receptionist tied to this Twilio phone number
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = createClient(SUPABASE_URL, RUTEX_SERVICE_ROLE_KEY);
     const { data: integration } = await supabase
       .from("integrations")
       .select("config_json")

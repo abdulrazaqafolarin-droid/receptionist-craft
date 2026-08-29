@@ -38,7 +38,7 @@ export default function MoneyModePage() {
 
         if (!mounted) return;
         const rows = data || [];
-        setReceptionists(rows);
+        setReceptionists(rows as Array<{ id: string; name: string; ai_mode?: string; active?: boolean }>);
 
         if (rows.length > 0) {
           setSingleReceptionistId(rows[0].id);

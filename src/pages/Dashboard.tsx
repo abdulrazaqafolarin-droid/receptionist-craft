@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { RevenueEngine } from "@/components/RevenueEngine";
 import { DashboardCharts } from "@/components/DashboardCharts";
+import { SuccessSignalsCard } from "@/components/SuccessSignalsCard";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -46,7 +47,7 @@ export default function Dashboard() {
       .select("*")
       .eq("user_id", user.id);
 
-    setReceptionists(recs || []);
+    setReceptionists((recs || []) as Array<{ id: string; name: string; business_name: string; active: boolean; mock_mode?: boolean; ai_mode?: string }>);
 
     if (recs && recs.length > 0) {
       const receptionistIds = recs.map(r => r.id);
@@ -186,6 +187,11 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           ))}
+        </section>
+
+        {/* Success Signals */}
+        <section className="mb-8 sm:mb-10 animate-fade-in" aria-label="Success signals">
+          <SuccessSignalsCard />
         </section>
 
         {/* Charts Section */}

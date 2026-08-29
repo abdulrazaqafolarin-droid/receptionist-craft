@@ -37,7 +37,7 @@ export class ChannelForwardError extends Error {
 
 export async function forwardToWidgetChat(opts: ForwardOptions): Promise<ForwardResult> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceKey = Deno.env.get("RUTEX_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceKey) {
     throw new ChannelForwardError("Missing SUPABASE_URL or service key", "unreachable");
   }
@@ -51,7 +51,7 @@ export async function forwardToWidgetChat(opts: ForwardOptions): Promise<Forward
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
       },
       body: JSON.stringify({
         message: opts.message,

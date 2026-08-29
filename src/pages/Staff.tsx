@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { ConfiguratorAffordance } from "@/components/ConfiguratorAffordance";
 
 interface StaffMember {
   id: string;
@@ -27,6 +28,7 @@ export default function StaffPage() {
   const [newRole, setNewRole] = useState("");
   const [saving, setSaving] = useState(false);
   const [receptionistId, setReceptionistId] = useState<string | null>(null);
+  const [noReceptionist, setNoReceptionist] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -34,6 +36,7 @@ export default function StaffPage() {
 
   async function loadData() {
     setLoading(true);
+    setNoReceptionist(false);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -46,6 +49,7 @@ export default function StaffPage() {
       .maybeSingle();
 
     if (!rec) {
+      setNoReceptionist(true);
       setLoading(false);
       return;
     }
@@ -113,12 +117,23 @@ export default function StaffPage() {
           </div>
         </div>
 
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="h-4 w-4 mr-1" /> Add Staff
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          {receptionistId && (
+            <ConfiguratorAffordance
+              receptionistId={receptionistId}
+              context="Staff"
+              title="Change staff"
+              label="Tell me what to change"
+              variant="outline"
+              className="h-9"
+            />
+          )}
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="h-4 w-4 mr-1" /> Add Staff
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add Staff Member</DialogTitle>
@@ -150,12 +165,26 @@ export default function StaffPage() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-32">
           <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
         </div>
+      ) : noReceptionist ? (
+        <Card className="border-2 border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <Users className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Create your AI operator first</h3>
+            <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
+              You need to set up your AI receptionist before you can add staff. It takes just a minute.
+            </p>
+            <Button onClick={() => (window.location.href = "/onboarding")}>
+              Set up my AI operator
+            </Button>
+          </CardContent>
+        </Card>
       ) : staff.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">

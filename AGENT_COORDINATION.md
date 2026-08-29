@@ -30,7 +30,7 @@ of accident is preventable.
    - `src/pages/Widget.tsx` — single server-side execution path (no `bookingContext`, no client booking/order)
    - `src/lib/{gateway,operationsConfig,widgetMessages}.ts`
    - `supabase/functions/_shared/rutexMcp.ts`, `_shared/operationsConfigSchema.ts`, `_shared/channelForward.ts`
-   - `supabase/functions/onboard-configurator/`
+   - `supabase/functions/onboard-configurator/` and the Configurator set: `_shared/config/enhancedConfigurator.ts`, `propose-operator-plan/`, `request-change/`, `approve-operator-plan/` (all gateway-routed; KB propagation via `receptionists.knowledge_base`)
    - Reminder pipeline fixes listed above; HMAC-gated whatsapp-webhook
 4. **Secrets never live in tracked files.** If you see key-shaped strings
    (`AIza…`, `eyJhbGciOi…`, `sb_publishable_`) in any `.md`/script — remove and flag.

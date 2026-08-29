@@ -56,7 +56,7 @@ export default function Step4FAQs() {
     setLoading(true);
     try {
       const faqsToInsert = faqs.map((faq) => ({
-        receptionist_id: receptionistId,
+        receptionist_id: receptionistId as string,
         question: faq.question,
         answer: faq.answer,
         priority: faq.priority,

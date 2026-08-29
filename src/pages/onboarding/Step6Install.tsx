@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Code, Copy, ExternalLink, Check, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { recordSignal } from "@/lib/successSignals";
 
 export default function Step6Install() {
   const navigate = useNavigate();
@@ -30,6 +31,7 @@ export default function Step6Install() {
       if (user) {
         await supabase.from("profiles").update({ onboarding_completed: true }).eq("id", user.id);
       }
+      recordSignal("configured_operator", { path: "form", receptionist_id: receptionistId });
       reset();
       toast.success("🎉 Your AI Receptionist is live!");
       navigate("/dashboard");

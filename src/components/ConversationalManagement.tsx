@@ -1,12 +1,11 @@
-import { useState, useEffect, useRef } from "react";
-import { Send, Loader2, Sparkles, History, RotateCcw } from "lucide-react";
+import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { Sparkles, History, RotateCcw, Send, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { PlanReview } from "@/components/PlanReview";
+import { ChatShell } from "@/components/widget/ChatShell";
 
 interface PlanSection {
   id: string;
@@ -44,6 +43,7 @@ interface ConversationalManagementProps {
 }
 
 export function ConversationalManagement({ receptionistId }: ConversationalManagementProps) {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -51,10 +51,6 @@ export function ConversationalManagement({ receptionistId }: ConversationalManag
   const [history, setHistory] = useState<ConfigVersion[]>([]);
   const [pendingPlan, setPendingPlan] = useState<ChatMessage["planData"] | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, pendingPlan]);
 
   async function handleSubmit() {
     if (!input.trim() || loading) return;
@@ -199,83 +195,69 @@ export function ConversationalManagement({ receptionistId }: ConversationalManag
 
   return (
     <div className="flex flex-col h-full">
-      {/* Chat Messages */}
-      <div className="flex-1 overflow-auto p-4 space-y-4">
-        {messages.length === 0 && (
+      <ChatShell
+        theme="configurator"
+        messages={messages}
+        isUser={(m) => m.role === "owner"}
+        loading={loading}
+        scrollRef={messagesEndRef}
+        contextLabel="Configurator · editing your operator"
+        inputValue={input}
+        onInputChange={setInput}
+        onSend={handleSubmit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit();
+          }
+        }}
+        disabled={loading}
+        placeholder="Describe the change you want..."
+        multiline
+        sendIcon={<Send className="h-4 w-4" />}
+        emptyState={
           <div className="text-center py-12 text-muted-foreground">
             <Sparkles className="h-8 w-8 mx-auto mb-3 text-primary/50" />
             <p className="text-sm">Tell me what you'd like to change about your AI operator.</p>
             <p className="text-xs mt-1">For example: "Add a new service — beard trims, 15 minutes, $20"</p>
           </div>
+        }
+        renderMessage={({ message, loading: planLoading }) => (
+          <>
+            {message.content && <p className="text-sm whitespace-pre-wrap">{message.content}</p>}
+            {message.planData && (
+              <div className="mt-3 pt-3 border-t border-border/50">
+                <PlanReview
+                  planText={message.planData.planText}
+                  sections={message.planData.sections}
+                  reasoningNotes={message.planData.reasoningNotes}
+                  onApprove={handleApprovePlan}
+                  onEdit={handleEditPlan}
+                  loading={planLoading}
+                  mode="change"
+                  onTest={() => navigate(`/test/${receptionistId}`)}
+                />
+              </div>
+            )}
+          </>
         )}
-
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`flex ${msg.role === "owner" ? "justify-end" : "justify-start"}`}>
-            <div
-              className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                msg.role === "owner"
-                  ? "bg-primary text-primary-foreground rounded-br-md"
-                  : "bg-card border border-border shadow-sm rounded-bl-md"
-              }`}
-            >
-              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-              {msg.planData && (
-                <div className="mt-3 pt-3 border-t border-border/50">
-                  <PlanReview
-                    planText={msg.planData.planText}
-                    sections={msg.planData.sections}
-                    reasoningNotes={msg.planData.reasoningNotes}
-                    onApprove={handleApprovePlan}
-                    onEdit={handleEditPlan}
-                    loading={loading}
-                    mode="change"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-
-        {loading && !pendingPlan && (
-          <div className="flex justify-start">
-            <div className="bg-card border border-border rounded-2xl rounded-bl-md px-4 py-3">
-              <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            </div>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input */}
-      <div className="p-4 border-t border-border">
-        <div className="flex gap-2">
+        footerBefore={
           <Button variant="ghost" size="icon" onClick={loadHistory} title="Version history">
             <History className="h-4 w-4" />
           </Button>
-          <Textarea
-            placeholder="Describe the change you want..."
-            className="resize-none flex-1"
-            rows={2}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
-            disabled={loading}
-          />
-          <Button
-            onClick={handleSubmit}
-            disabled={!input.trim() || loading}
-            size="icon"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+        }
+        typingIndicator={
+          loading && !pendingPlan ? (
+            <div className="flex gap-2 justify-start">
+              <div className="bg-card border border-border rounded-2xl rounded-bl-md px-4 py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              </div>
+            </div>
+          ) : (
+            <></>
+          )
+        }
+      />
 
       {/* Version History Panel */}
       {showHistory && (

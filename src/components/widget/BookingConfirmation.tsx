@@ -202,7 +202,7 @@ export function BookingConfirmation({
               variant="outline"
               size="sm"
               onClick={generateICS}
-              disabled={disabled}
+              disabled={!displayDateTime}
               className="w-full bg-green-100 dark:bg-green-900/50 border-green-200 dark:border-green-800 hover:bg-green-200 dark:hover:bg-green-900 pressable"
             >
               <Download className="h-3 w-3 mr-2" />

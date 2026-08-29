@@ -59,7 +59,7 @@ serve(async (req) => {
   const ACCESS_TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
   const PHONE_NUMBER_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const RUTEX_SERVICE_ROLE_KEY = (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
 
   // ── Webhook verification (GET) ──────────────────────────────────────────────
   if (req.method === "GET") {
@@ -123,7 +123,7 @@ serve(async (req) => {
         const sessionId = `whatsapp_${from}`;
 
         // Look up receptionist tied to this WhatsApp phone number
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        const supabase = createClient(SUPABASE_URL, RUTEX_SERVICE_ROLE_KEY);
         const { data: integration } = await supabase
           .from("integrations")
           .select("config_json, user_id")

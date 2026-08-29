@@ -144,7 +144,7 @@ export default function Notifications() {
         .limit(100);
 
       if (error) throw error;
-      setNotifications(data || []);
+      setNotifications((data || []) as Notification[]);
     } catch (error: any) {
       toast.error("Failed to load notifications");
       console.error(error);

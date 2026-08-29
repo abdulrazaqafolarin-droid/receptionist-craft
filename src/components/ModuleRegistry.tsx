@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronRight, Zap, FileText, Lock, Bot } from "lucide-react";
+import { InlineConnectPrompt } from "@/components/InlineConnectPrompt";
 
 interface ModuleDefinition {
   key: string;
@@ -71,9 +72,10 @@ const TIER_INFO: Record<number, { label: string; color: string; icon: typeof Zap
 
 interface ModuleRegistryProps {
   receptionistId: string;
+  userId: string;
 }
 
-export function ModuleRegistry({ receptionistId }: ModuleRegistryProps) {
+export function ModuleRegistry({ receptionistId, userId }: ModuleRegistryProps) {
   const [enabledModules, setEnabledModules] = useState<Map<string, EnabledModule>>(new Map());
   const [loading, setLoading] = useState(true);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(["growth", "acquisition"]));
@@ -250,6 +252,22 @@ export function ModuleRegistry({ receptionistId }: ModuleRegistryProps) {
                             </Button>
                           )}
                         </div>
+                        {/* §2.4 / Step 5 — when an enabled module needs a connector
+                            that isn't live yet, surface the inline connect prompt
+                            right here, at the moment the capability is touched. */}
+                        {isEnabled &&
+                          module.required_connectors.length > 0 &&
+                          module.tier !== 3 &&
+                          module.required_connectors.map((key) => (
+                            <div key={key} className="mt-3">
+                              <InlineConnectPrompt
+                                connectorKey={key}
+                                userId={userId}
+                                why={`The ${module.name} module needs this connection to actually send messages.`}
+                                compact
+                              />
+                            </div>
+                          ))}
                       </CardContent>
                     </Card>
                   );

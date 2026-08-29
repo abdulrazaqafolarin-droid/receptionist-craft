@@ -38,7 +38,7 @@ fallback path      ──POST /v1/ask──► same gateway (unchanged)
 **Env vars (the only two secrets ever needed):**
 | Name | Value |
 |---|---|
-| `RUTEX_GATEWAY_URL` | current public tunnel URL — **source of truth: `C:\Users\HP\tunnel-url.txt` on the owner's PC** (rotates on tunnel restart until permanent domain lands) |
+| `RUTEX_GATEWAY_URL` | **stable** gateway URL (per owner directive, no longer rotating; source of truth: `C:\Users\HP\tunnel-url.txt` on the owner's PC) |
 | `RUTEX_GATEWAY_KEY` | owner's `.env` → `RUTEX_PROJECT_KEYS` → `"frontdesk"` value |
 
 ## 4. How your paused plan changes — phase-by-phase guidance
@@ -57,7 +57,7 @@ fallback path      ──POST /v1/ask──► same gateway (unchanged)
 3. Client timeouts ≥ 90 s (gateway caps at 120 s).
 4. `conversationId` required, stable per end-user thread.
 5. Keys come only from the owner's `.env` — never generate/paste/share keys.
-6. If the public URL returns Cloudflare 1033 → tunnel rotated: read fresh URL from `tunnel-url.txt`, update the secret, redeploy env vars.
+6. If the public URL returns Cloudflare 1033 → the gateway process/OS is behind; verify the gateway is up on the owner's PC. Do NOT hunt for a new tunnel URL — the URL is stable now.
 7. Gateway output is untrusted input: keep every `validate*` gate you built.
 
 ## 6. Resume checklist

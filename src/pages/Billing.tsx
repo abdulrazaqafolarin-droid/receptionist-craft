@@ -152,7 +152,7 @@ export default function Billing() {
           if (insErr) throw insErr;
         }
 
-        await supabase.from("profiles").update({ plan: planId }).eq("id", user.id);
+        await supabase.from("profiles").update({ plan: planId as "free" | "pro" | "enterprise" }).eq("id", user.id);
         toast.success(`Upgraded to ${planId.charAt(0).toUpperCase() + planId.slice(1)} plan`);
         await loadSubscription();
       }

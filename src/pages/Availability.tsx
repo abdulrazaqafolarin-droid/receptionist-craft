@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { TIMEZONE_OPTIONS, detectBrowserTimezone, findClosestTimezone } from "@/lib/timezones";
+import { ConfiguratorAffordance } from "@/components/ConfiguratorAffordance";
 
 type AvailabilityRule = {
   id?: string;
@@ -248,16 +249,26 @@ export default function Availability() {
       <FloatingBackground variant="minimal" />
       <div className="relative z-10 container mx-auto p-4 lg:p-8 max-w-6xl">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <Clock className="h-7 w-7 text-primary" />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-8">
+          <div className="flex items-center gap-4 flex-1">
+            <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Clock className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl lg:text-4xl font-bold">Business Hours & Availability</h1>
+              <p className="text-muted-foreground">
+                Set when your AI receptionist can book appointments
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl lg:text-4xl font-bold">Business Hours & Availability</h1>
-            <p className="text-muted-foreground">
-              Set when your AI receptionist can book appointments
-            </p>
-          </div>
+          {selectedReceptionist && (
+            <ConfiguratorAffordance
+              receptionistId={selectedReceptionist}
+              context="Availability"
+              title="Change availability"
+              className="sm:self-center"
+            />
+          )}
         </div>
 
         {/* Receptionist Selector */}

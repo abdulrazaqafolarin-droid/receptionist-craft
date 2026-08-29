@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { FloatingBackground } from "@/components/FloatingBackground";
+import { recordSignal } from "@/lib/successSignals";
 import {
   Accordion,
   AccordionContent,
@@ -190,7 +191,12 @@ export default function Help() {
               <Accordion type="single" collapsible className="w-full">
                 {FAQ_ITEMS.map((faq, idx) => (
                   <AccordionItem key={idx} value={`faq-${idx}`} className="px-6">
-                    <AccordionTrigger className="text-left text-sm font-medium hover:no-underline">
+                    <AccordionTrigger
+                      className="text-left text-sm font-medium hover:no-underline"
+                      onClick={() =>
+                        recordSignal("navigation_help", { question: faq.question })
+                      }
+                    >
                       {faq.question}
                     </AccordionTrigger>
                     <AccordionContent className="text-sm text-muted-foreground leading-relaxed">

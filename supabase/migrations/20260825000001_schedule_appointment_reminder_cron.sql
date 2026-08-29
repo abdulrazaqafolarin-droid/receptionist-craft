@@ -25,7 +25,7 @@ BEGIN
     'appointment-reminders-24h',
     '0 * * * *',
     format(
-      'SELECT net.http_post(url:=%L, headers:=%s::jsonb, body:=%L::jsonb) as request_id;',
+      'SELECT net.http_post(url:=%L, headers:=%L::jsonb, body:=%L::jsonb) as request_id;',
       p_supabase_url || '/functions/v1/appointment-reminder-runner',
       json_build_object(
         'Content-Type', 'application/json',

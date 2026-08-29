@@ -63,6 +63,8 @@ function getDefaultCapabilities(businessType: string): BusinessCapabilities {
     delivers: false,
     requires_compliance: false,
     supports_emergency: false,
+    deposit_required: false,
+    deposit_percent: 0,
   };
 
   switch (businessType) {
@@ -87,7 +89,7 @@ function getDefaultCapabilities(businessType: string): BusinessCapabilities {
       return { ...defaults, books_appointments: true, offers_services: true };
     
     case 'Pharmacy':
-      return { sells_products: true, books_appointments: true, offers_services: true, delivers: true, requires_compliance: true, supports_emergency: true };
+      return { sells_products: true, books_appointments: true, offers_services: true, delivers: true, requires_compliance: true, supports_emergency: true, deposit_required: false, deposit_percent: 0 };
     
     case 'Restaurant':
       return { ...defaults, sells_products: true, books_appointments: true, delivers: true };
@@ -465,7 +467,7 @@ export default function Step1CreateReceptionist() {
                 >
                   <Checkbox
                     id={cap.key}
-                    checked={receptionist.capabilities[cap.key]}
+                    checked={!!receptionist.capabilities[cap.key]}
                     onCheckedChange={(checked) => handleCapabilityChange(cap.key, checked === true)}
                   />
                   <Label htmlFor={cap.key} className="font-normal cursor-pointer flex-1">

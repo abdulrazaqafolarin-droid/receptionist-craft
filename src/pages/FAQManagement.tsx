@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
 import { HelpCircle, Loader2 } from "lucide-react";
 import { FloatingBackground } from "@/components/FloatingBackground";
+import { ConfiguratorAffordance } from "@/components/ConfiguratorAffordance";
 
 export default function FAQManagement() {
   const [receptionists, setReceptionists] = useState<any[]>([]);
@@ -77,11 +78,21 @@ export default function FAQManagement() {
     <div className="animate-in fade-in-0 duration-300 relative min-h-screen">
       <FloatingBackground variant="minimal" />
       <div className="relative z-10 container mx-auto p-6 max-w-5xl">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">FAQ Management</h1>
-          <p className="text-muted-foreground">
-            Manage frequently asked questions for your AI receptionist
-          </p>
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">FAQ Management</h1>
+            <p className="text-muted-foreground">
+              Manage frequently asked questions for your AI receptionist
+            </p>
+          </div>
+          {selectedReceptionist && (
+            <ConfiguratorAffordance
+              receptionistId={selectedReceptionist}
+              context="FAQs"
+              title="Change FAQs"
+              className="sm:self-start"
+            />
+          )}
         </div>
 
         {receptionists.length > 0 ? (

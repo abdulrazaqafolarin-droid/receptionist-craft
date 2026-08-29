@@ -39,7 +39,7 @@ export function FAQManager({ receptionistId }: FAQManagerProps) {
         .order("priority", { ascending: false });
 
       if (error) throw error;
-      setFaqs(data || []);
+      setFaqs((data || []) as FAQ[]);
     } catch (error: any) {
       console.error("Error loading FAQs:", error);
       toast.error("Failed to load FAQs");

@@ -92,7 +92,7 @@ export default function KBRewrite() {
         .order("created_at", { ascending: false });
 
       if (logsError) throw logsError;
-      setLogs(logsData || []);
+      setLogs((logsData || []) as KBRewriteLog[]);
     } catch (err: any) {
       console.error("Failed to load KB rewrite logs:", err);
       toast.error("Failed to load suggestions");

@@ -37,7 +37,7 @@ export default function RealtimeLogs() {
         .limit(200);
 
       if (error) throw error;
-      setItems(data || []);
+      setItems((data || []) as NotificationLog[]);
       toast.success("Logs refreshed");
     } catch (error: any) {
       toast.error("Failed to load logs");

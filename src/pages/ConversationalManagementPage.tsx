@@ -1,31 +1,43 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { MessageSquare, ArrowLeft, Loader2 } from "lucide-react";
+import { GitBranch, MessageSquare, History, ArrowLeft, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { ConversationalManagement } from "@/components/ConversationalManagement";
+import { VersionHistory } from "@/components/VersionHistory";
 import { toast } from "sonner";
 
 /**
- * Conversational Management Page
+ * Operator Management Page — redefined per §5.4 / Step 6.
  *
- * Lets the owner make change requests to any receptionist using natural
- * language (e.g., "change my opening hours", "add a new service", "lower prices").
- * Includes config version history + rollback.
+ * Now that every management page has its own inline "tell me what to change"
+ * entry point (Step 4), this page's distinct, non-redundant purpose is to be
+ * where the HISTORY lives: every past plan, every version, and the rollback
+ * controls — the one place to see everything that's ever changed. Making a
+ * brand-new change is kept here too, but as a clearly secondary, collapsed
+ * surface, not the page's reason for existing.
  */
 export default function ConversationalManagementPage() {
   const navigate = useNavigate();
   const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string }>>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [currentVersion, setCurrentVersion] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
     loadReceptionists();
   }, []);
+
+  useEffect(() => {
+    if (selectedId) loadCurrentVersion();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   async function loadReceptionists() {
     try {
@@ -50,6 +62,17 @@ export default function ConversationalManagementPage() {
     }
   }
 
+  async function loadCurrentVersion() {
+    const { data } = await supabase
+      .from("config_versions" as any)
+      .select("version_number")
+      .eq("receptionist_id", selectedId)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setCurrentVersion((data as any)?.version_number);
+  }
+
   return (
     <div className="relative min-h-screen bg-background">
       <FloatingBackground variant="minimal" />
@@ -60,12 +83,14 @@ export default function ConversationalManagementPage() {
 
         <div className="mb-8">
           <h1 className="text-3xl lg:text-4xl font-bold mb-2 flex items-center gap-3">
-            <MessageSquare className="h-8 w-8 text-primary" />
-            Operator Management
+            <GitBranch className="h-8 w-8 text-primary" />
+            Operator History &amp; Management
           </h1>
-          <p className="text-muted-foreground">
-            Talk to your AI operator in plain language — change hours, pricing, services,
-            or anything else. Review the plan, approve, or roll back to a previous version.
+          <p className="text-muted-foreground max-w-3xl">
+            This is where every change to your operator is recorded. See what's ever changed,
+            what's currently live, and roll back to a previous version with one tap. To make a
+            new change, use the "Tell me what to change" button on the relevant page — or the
+            chat below.
           </p>
         </div>
 
@@ -101,7 +126,51 @@ export default function ConversationalManagementPage() {
               </Card>
             )}
 
-            {selectedId && <ConversationalManagement receptionistId={selectedId} />}
+            {/* PRIMARY — the history / everything that's ever changed (§5.4) */}
+            <Card className="border-2 border-border/50 shadow-lg">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <History className="h-5 w-5 text-primary" />
+                  </div>
+                  Change History
+                </CardTitle>
+                <CardDescription>
+                  Every approved change to your operator, with a snapshot you can roll back to.
+                  {currentVersion ? ` Version ${currentVersion} is currently live.` : ""}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {selectedId && (
+                  <VersionHistory
+                    receptionistId={selectedId}
+                    currentVersion={currentVersion}
+                    onReverted={(_, newVersion) => setCurrentVersion(newVersion)}
+                  />
+                )}
+              </CardContent>
+            </Card>
+
+            {/* SECONDARY — make a new change (kept, but collapsed so history is the focus) */}
+            <Collapsible open={showChat} onOpenChange={setShowChat}>
+              <CollapsibleTrigger asChild>
+                <Button variant="outline" size="lg" className="w-full gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  {showChat ? "Hide" : "Make a change to your operator"} — talk it through
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <Card className="mt-3 border-2 border-border/50 shadow-lg">
+                  <CardContent className="p-0">
+                    {selectedId && (
+                      <div className="h-[34rem]">
+                        <ConversationalManagement receptionistId={selectedId} />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         )}
       </div>

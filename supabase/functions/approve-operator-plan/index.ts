@@ -37,7 +37,7 @@ serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
     );
 
     // Verify ownership
@@ -65,6 +65,10 @@ serve(async (req) => {
     const business = (config.business || {}) as Record<string, string>;
     const capabilities = (config.capabilities || {}) as Record<string, unknown>;
     const channels = (config.channels || {}) as Record<string, boolean>;
+    const knowledgeBase =
+      typeof config.knowledge_base === "string" && config.knowledge_base.trim()
+        ? config.knowledge_base.trim()
+        : undefined;
 
     const { error: updateErr } = await supabase
       .from("receptionists")
@@ -75,6 +79,7 @@ serve(async (req) => {
         greeting_message: business.greeting_message || undefined,
         tone: business.tone || undefined,
         capabilities: capabilities,
+        knowledge_base: knowledgeBase,
         // Preserve existing fields that aren't in the config
       })
       .eq("id", receptionist_id);

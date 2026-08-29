@@ -22,6 +22,7 @@ export default function WidgetInstall() {
   }, [receptionistId]);
 
   async function loadReceptionist() {
+    if (!receptionistId) return;
     const { data } = await supabase
       .from("receptionists")
       .select("*")

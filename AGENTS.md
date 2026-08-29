@@ -52,8 +52,9 @@ DB User:          postgres.esvrhnlwquunsdduvbnr
 ## PART 3 — SECRETS (SET IN SUPABASE DASHBOARD)
 
 ```
-✅ GEMINI_API_KEY              — Direct Gemini 1.5 Flash API key
-✅ SUPABASE_SERVICE_ROLE_KEY   — Service role for edge function DB access
+✅ GEMINI_API_KEY              — Direct Gemini 2.5 Flash Lite API key
+✅ RUTEX_SERVICE_ROLE_KEY      — Service role for edge function DB access (replaces legacy SUPABASE_SERVICE_ROLE_KEY; rotation in progress)
+⚠️ SUPABASE_SERVICE_ROLE_KEY   — LEGACY; to be disabled after rotation completes
 ⚠️ RESEND_API_KEY              — Email confirmations
 ⚠️ ELEVENLABS_API_KEY          — Voice TTS
 ⚠️ ASSEMBLYAI_API_KEY          — Voice STT
@@ -71,6 +72,14 @@ All 6 functions migrated to direct Gemini API — all deployed and operational:
 - `kb-rewrite` ✅
 - `widget-chat` ✅ (FIXED: secret name mismatch + deprecated model)
 - `chat` ✅ (model updated)
+
+> **Configurator — gateway-routed (NOT Gemini):** the Configurator identity
+> (`onboard-configurator`, plus `propose-operator-plan` and `request-change` via
+> `_shared/config/enhancedConfigurator.ts`) routes through the **Rutex gateway →
+> OpenCode** using `_shared/rutexMcp.ts` (`askRutex`). Injected business
+> knowledge from an approved plan is written to `receptionists.knowledge_base`
+> by `approve-operator-plan`. The Responder (`widget-chat`) and the 6 content
+> helpers above call Gemini directly.
 
 ### Critical Fixes Applied (2026-05-10)
 1. **Secret name**: Was `Gemini Api` → corrected to `GEMINI_API_KEY`

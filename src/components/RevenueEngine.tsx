@@ -107,7 +107,7 @@ interface TooltipPayloadEntry {
   value?: number | string;
 }
 
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: TooltipPayloadEntry[]; label?: string }) {
+function CustomTooltip({ active, payload, label, currency = "USD" }: { active?: boolean; payload?: TooltipPayloadEntry[]; label?: string; currency?: string }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-md border bg-popover p-3 text-xs shadow">
@@ -116,7 +116,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
         <div key={`${p.name}-${i}`} className="flex items-center gap-2">
           <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color }} />
           <span className="text-muted-foreground">{p.name}:</span>
-          <span className="font-semibold">{p.name === "revenue" ? fmtCurrency(Number(p.value), conversionStats.currency) : p.value}</span>
+          <span className="font-semibold">{p.name === "revenue" ? formatCurrency(Number(p.value), currency) : p.value}</span>
         </div>
       ))}
     </div>
@@ -506,7 +506,7 @@ export function RevenueEngine({ receptionistIds, receptionistNames = {}, scopeLa
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="day" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip currency={conversionStats.currency} />} />
                     <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="url(#revGrad)" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -664,7 +664,7 @@ export function RevenueEngine({ receptionistIds, receptionistNames = {}, scopeLa
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="day" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<CustomTooltip currency={conversionStats.currency} />} />
                   <Bar dataKey="bookings" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

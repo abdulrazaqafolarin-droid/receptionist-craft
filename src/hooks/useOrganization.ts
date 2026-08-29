@@ -60,9 +60,9 @@ export function useOrganization() {
     if (error) {
       console.error("Error fetching organizations:", error);
     } else {
-      setOrganizations(data || []);
+      setOrganizations((data || []) as Organization[]);
       if (data && data.length > 0 && !currentOrg) {
-        setCurrentOrg(data[0]);
+        setCurrentOrg(data[0] as Organization);
       }
     }
     setLoading(false);
@@ -78,7 +78,7 @@ export function useOrganization() {
     if (error) {
       console.error("Error fetching members:", error);
     } else {
-      setMembers(data || []);
+      setMembers((data || []) as OrgMember[]);
     }
   };
 
@@ -92,7 +92,7 @@ export function useOrganization() {
     if (error) {
       console.error("Error fetching locations:", error);
     } else {
-      setLocations(data || []);
+      setLocations((data || []) as OrgLocation[]);
     }
   };
 
