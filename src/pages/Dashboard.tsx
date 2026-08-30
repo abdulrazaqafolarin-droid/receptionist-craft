@@ -4,12 +4,13 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageCircle, Calendar, CalendarDays, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign, ShoppingBag } from "lucide-react";
+import { MessageCircle, Calendar, CalendarDays, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign, ShoppingBag, LayoutDashboard, Bot } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { RevenueEngine } from "@/components/RevenueEngine";
 import { DashboardCharts } from "@/components/DashboardCharts";
 import { SuccessSignalsCard } from "@/components/SuccessSignalsCard";
+import { OwnerChat } from "@/components/OwnerChat";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -72,7 +73,9 @@ export default function Dashboard() {
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-background via-background to-accent/20">
       <FloatingBackground variant="default" />
-      <main id="main-content" className="relative z-10 container mx-auto px-4 py-6 sm:py-8 lg:py-12">
+      {/* Owner Chat Sidebar - Persistent on Dashboard */}
+      <OwnerChat />
+      <main id="main-content" className="relative z-10 container mx-auto px-4 py-6 sm:py-8 lg:py-12 lg:pr-96">
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 sm:mb-10 animate-fade-in">
           <div>
