@@ -1,0 +1,7 @@
+paddlepaddle==2.6.1
+paddlex[ocr-core]==3.7.2
+pdf2image
+pymupdf
+supabase>=2.114.0
+pyyaml
+requests
