@@ -148,7 +148,7 @@ export default function Conversations() {
     <div className="relative min-h-screen bg-background">
       <FloatingBackground variant="minimal" />
       <div className="relative z-10 container mx-auto px-4 py-8 max-w-5xl">
-        <Card className="border-2 border-border/50 shadow-xl">
+        <Card className="border-2 border-border/50 shadow-xl liquid-glass">
           <div className="p-6 lg:p-8">
             {/* Header */}
             <div className="flex flex-col gap-4 mb-6">
@@ -236,7 +236,7 @@ export default function Conversations() {
             {loading ? (
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
-                  <Card key={i} className="p-5 border-2 border-border/50">
+                  <Card key={i} className="p-5 border-2 border-border/50 liquid-glass">
                     <Skeleton className="h-4 w-3/4 mb-3" />
                     <Skeleton className="h-4 w-full" />
                   </Card>
@@ -265,7 +265,7 @@ export default function Conversations() {
             ) : (
               <div className="space-y-4">
                 {filteredConversations.map((conv: Conversation) => (
-                  <Card key={conv.id} className="p-5 border-2 border-border/50 hover:border-primary/20 hover:shadow-lg transition-all">
+                  <Card key={conv.id} className="p-5 border-2 border-border/50 hover:border-primary/20 hover:shadow-lg transition-all liquid-glass">
                     <div className="space-y-4">
                       {conv.receptionists && (
                         <div className="flex items-center gap-2 pb-3 border-b border-border">

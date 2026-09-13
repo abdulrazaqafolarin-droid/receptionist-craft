@@ -215,7 +215,7 @@ export default function Orders() {
 
         {/* Receptionist Selector */}
         {receptionists.length > 0 && (
-          <Card className="mb-6 border-2 border-border/50">
+          <Card className="mb-6 border-2 border-border/50 liquid-glass">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg">Select Receptionist</CardTitle>
               <CardDescription>View orders for a specific receptionist</CardDescription>
@@ -237,7 +237,7 @@ export default function Orders() {
         )}
 
         {!selectedReceptionist && (
-          <Card className="mb-6 border-2 border-border/50">
+          <Card className="mb-6 border-2 border-border/50 liquid-glass">
             <CardContent className="py-16 text-center">
               <div className="h-20 w-20 rounded-3xl bg-muted/50 flex items-center justify-center mx-auto mb-6">
                 <ShoppingBag className="h-10 w-10 text-muted-foreground" />
@@ -255,25 +255,25 @@ export default function Orders() {
           <>
             {/* Stats Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-              <Card className="border-2 border-border/50">
+              <Card className="border-2 border-border/50 liquid-glass">
                 <CardContent className="p-4 text-center">
                   <div className="text-2xl font-bold">{stats.total}</div>
                   <div className="text-sm text-muted-foreground">Total Orders</div>
                 </CardContent>
               </Card>
-              <Card className="border-2 border-border/50">
+              <Card className="border-2 border-border/50 liquid-glass">
                 <CardContent className="p-4 text-center">
                   <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
                   <div className="text-sm text-muted-foreground">Pending</div>
                 </CardContent>
               </Card>
-              <Card className="border-2 border-border/50">
+              <Card className="border-2 border-border/50 liquid-glass">
                 <CardContent className="p-4 text-center">
                   <div className="text-2xl font-bold text-purple-600">{stats.processing}</div>
                   <div className="text-sm text-muted-foreground">Processing</div>
                 </CardContent>
               </Card>
-              <Card className="border-2 border-border/50">
+              <Card className="border-2 border-border/50 liquid-glass">
                 <CardContent className="p-4 text-center">
                   <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
                   <div className="text-sm text-muted-foreground">Completed</div>
@@ -288,7 +288,7 @@ export default function Orders() {
             </div>
 
             {/* Filter */}
-            <Card className="mb-6 border-2 border-border/50">
+            <Card className="mb-6 border-2 border-border/50 liquid-glass">
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
                   <span className="text-sm font-medium">Filter by status:</span>
@@ -313,7 +313,7 @@ export default function Orders() {
             {loading ? (
               <div className="space-y-4">
                 {[1, 2, 3].map(i => (
-                  <Card key={i} className="border-2 border-border/50">
+                  <Card key={i} className="border-2 border-border/50 liquid-glass">
                     <CardContent className="p-6">
                       <Skeleton className="h-6 w-48 mb-4" />
                       <Skeleton className="h-4 w-full mb-2" />
@@ -331,7 +331,7 @@ export default function Orders() {
             ) : (
               <div className="space-y-4">
                 {orders.map((order) => (
-                  <Card key={order.id} className="border-2 border-border/50 hover:border-primary/20 hover:shadow-lg transition-all">
+                  <Card key={order.id} className="border-2 border-border/50 hover:border-primary/20 hover:shadow-lg transition-all liquid-glass">
                     <CardContent className="p-6">
                       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                         <div className="flex-1">
@@ -501,7 +501,7 @@ export default function Orders() {
 
         {/* Cancel Confirmation Dialog */}
         <AlertDialog open={!!cancelConfirm} onOpenChange={() => setCancelConfirm(null)}>
-          <AlertDialogContent className="border-2">
+          <AlertDialogContent className="border-2 liquid-glass">
             <AlertDialogHeader>
               <AlertDialogTitle>Cancel Order?</AlertDialogTitle>
               <AlertDialogDescription>

@@ -333,7 +333,7 @@ export default function Appointments() {
           </div>
         </div>
 
-        <Alert className="mb-6 border-2 border-primary/20 bg-primary/5">
+        <Alert className="mb-6 border-2 border-primary/20 bg-primary/5 liquid-glass">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
               <Sparkles className="h-5 w-5 text-primary" />
@@ -416,7 +416,7 @@ export default function Appointments() {
             ) : (
               <div className="grid gap-4">
                 {orders.map((order) => (
-                  <Card key={order.id} className="overflow-hidden">
+                  <Card key={order.id} className="overflow-hidden liquid-glass">
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
                         <div className="space-y-1">

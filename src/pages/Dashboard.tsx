@@ -99,7 +99,7 @@ export default function Dashboard() {
         {/* Getting Started Guide */}
         {receptionists.length === 0 && (
           <section 
-            className="mb-8 sm:mb-10 border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card animate-scale-in overflow-hidden relative rounded-xl border p-6 sm:p-8"
+            className="mb-8 sm:mb-10 border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card animate-scale-in overflow-hidden relative rounded-xl border p-6 sm:p-8 liquid-glass"
             aria-labelledby="getting-started-title"
           >
             <div className="absolute top-0 right-0 w-48 sm:w-64 h-48 sm:h-64 bg-gradient-to-br from-primary/10 to-transparent rounded-full blur-3xl" aria-hidden="true" />
@@ -145,7 +145,7 @@ export default function Dashboard() {
 
         {receptionists.length > 0 && (
           <section className="mb-6 animate-fade-in" aria-label="Revenue control center">
-            <Card className="border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-card to-card">
+            <Card className="border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-card to-card liquid-glass">
               <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
                 <div>
                   <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
@@ -174,7 +174,7 @@ export default function Dashboard() {
           ].map((stat, idx) => (
             <Card 
               key={stat.title} 
-              className="group hover:shadow-elevated transition-all duration-300 hover:-translate-y-1 animate-fade-in overflow-hidden relative"
+              className="group hover:shadow-elevated transition-all duration-300 hover:-translate-y-1 animate-fade-in overflow-hidden relative liquid-glass"
               style={{ animationDelay: `${idx * 100}ms` }}
             >
               <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-0 group-hover:opacity-5 transition-opacity`} aria-hidden="true" />
@@ -234,7 +234,7 @@ export default function Dashboard() {
                   {receptionists.map((receptionist) => (
                     <li key={receptionist.id}>
                       <Card 
-                        className="hover:shadow-md hover:border-primary/20 transition-all duration-300 group"
+                        className="hover:shadow-md hover:border-primary/20 transition-all duration-300 group liquid-glass"
                       >
                         <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 sm:p-6 gap-4">
                           <div className="flex items-center gap-3 sm:gap-4">
@@ -291,7 +291,7 @@ export default function Dashboard() {
             ].map((item) => (
               <Card 
                 key={item.path}
-                className="cursor-pointer hover:shadow-elevated hover:-translate-y-1 transition-all duration-300 group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+                className="cursor-pointer hover:shadow-elevated hover:-translate-y-1 transition-all duration-300 group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 liquid-glass"
                 onClick={() => navigate(item.path)}
                 role="link"
                 tabIndex={0}

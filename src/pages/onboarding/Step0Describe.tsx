@@ -39,7 +39,7 @@ export default function Step0Describe() {
   }
 
   return (
-    <Card className="p-6 sm:p-8">
+    <Card className="p-6 sm:p-8 liquid-glass">
       <div className="flex items-center gap-3 mb-2">
         <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
           <Wand2 className="h-5 w-5 text-primary" />

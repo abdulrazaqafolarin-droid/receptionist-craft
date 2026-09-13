@@ -137,7 +137,7 @@ export default function Customers() {
           <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
         </div>
       ) : filtered.length === 0 ? (
-        <Card>
+        <Card className="liquid-glass">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Users className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-muted-foreground">
@@ -152,7 +152,7 @@ export default function Customers() {
           {filtered.map((customer) => (
             <Card
               key={customer.id}
-              className="cursor-pointer hover:bg-accent/50 transition-colors"
+              className="cursor-pointer hover:bg-accent/50 transition-colors liquid-glass"
               onClick={() => loadCustomerDetail(customer)}
             >
               <CardContent className="flex items-center justify-between p-4">
@@ -196,7 +196,7 @@ export default function Customers() {
 
       {/* Customer Detail Dialog */}
       <Dialog open={!!selectedCustomer} onOpenChange={() => setSelectedCustomer(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto liquid-glass">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">

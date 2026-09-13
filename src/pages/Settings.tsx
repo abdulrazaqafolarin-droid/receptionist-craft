@@ -208,7 +208,7 @@ export default function Settings() {
 
             {/* ── Account Tab ──────────────────────────────────── */}
             <TabsContent value="account" className="space-y-6">
-              <Card className="border-2 border-border/50 shadow-lg">
+              <Card className="border-2 border-border/50 shadow-lg liquid-glass">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -272,7 +272,7 @@ export default function Settings() {
                 </CardContent>
               </Card>
 
-              <Card className="border-2 border-border/50 shadow-lg">
+              <Card className="border-2 border-border/50 shadow-lg liquid-glass">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -296,7 +296,7 @@ export default function Settings() {
               </Card>
 
               <div className="grid sm:grid-cols-2 gap-6">
-                <Card className="border-2 border-border/50 shadow-lg">
+                <Card className="border-2 border-border/50 shadow-lg liquid-glass">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-3 text-lg">
                       <Lock className="h-5 w-5 text-primary" />
@@ -311,7 +311,7 @@ export default function Settings() {
                   </CardContent>
                 </Card>
 
-                <Card className="border-2 border-border/50 shadow-lg">
+                <Card className="border-2 border-border/50 shadow-lg liquid-glass">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-3 text-lg">
                       <CreditCard className="h-5 w-5 text-primary" />
@@ -330,7 +330,7 @@ export default function Settings() {
 
             {/* ── Notifications Tab ────────────────────────────── */}
             <TabsContent value="notifications" className="space-y-6">
-              <Card className="border-2 border-border/50 shadow-lg">
+              <Card className="border-2 border-border/50 shadow-lg liquid-glass">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
