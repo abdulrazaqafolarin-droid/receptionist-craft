@@ -58,7 +58,7 @@ const HeroBenefitCard = ({
       opacity-0 animate-hero-fade-up
       transition-all duration-300 ease-out
       hover:-translate-y-0.5 hover:bg-white/80 hover:border-primary/20
-      cursor-default
+      cursor-default liquid-glass
     "
     style={{ 
       animationDelay: `${0.3 + index * 0.12}s`,
@@ -277,7 +277,7 @@ export default function Landing() {
               >
                 <Button 
                   size="lg" 
-                  className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-full shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all group"
+                  className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-full shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all group liquid-glass"
                   onClick={() => navigate("/auth")}
                 >
                   Start Free — Build My Receptionist
@@ -286,7 +286,7 @@ export default function Landing() {
                 <Button 
                   size="lg" 
                   variant="outline" 
-                  className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-full border-2 border-primary/20 bg-white/70 backdrop-blur hover:bg-white text-primary hover:text-primary transition-all"
+                  className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-full border-2 border-primary/20 bg-white/70 backdrop-blur hover:bg-white text-primary hover:text-primary transition-all liquid-glass"
                   onClick={() => navigate("/help")}
                 >
                   Watch Demo
@@ -307,7 +307,7 @@ export default function Landing() {
           </p>
         </div>
 
-        <Card className="mb-6 sm:mb-8 lg:mb-10 p-5 sm:p-6 lg:p-8 border-primary/20 bg-primary/5">
+        <Card className="mb-6 sm:mb-8 lg:mb-10 p-5 sm:p-6 lg:p-8 border-primary/20 bg-primary/5 liquid-glass">
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <Badge className="bg-primary text-primary-foreground">Spotlight</Badge>
             <span className="text-sm sm:text-base font-medium text-foreground">Highest-impact automations</span>
@@ -350,7 +350,7 @@ export default function Landing() {
           {features.map((feature, idx) => (
             <Card 
               key={idx} 
-              className="group p-5 sm:p-6 lg:p-8 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 border-2 border-transparent hover:border-primary/20 bg-card/50 backdrop-blur-sm focus-within:ring-2 focus-within:ring-ring"
+              className="group p-5 sm:p-6 lg:p-8 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 border-2 border-transparent hover:border-primary/20 bg-card/50 backdrop-blur-sm focus-within:ring-2 focus-within:ring-ring liquid-glass"
               tabIndex={0}
             >
               <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-primary/15 transition-colors" aria-hidden="true">
@@ -365,7 +365,7 @@ export default function Landing() {
 
       {/* CTA Section */}
       <section className="container mx-auto px-4 py-12 sm:py-16 lg:py-24" aria-labelledby="cta-title">
-        <Card className="relative overflow-hidden p-6 sm:p-8 lg:p-16 text-center border-2 border-primary/10">
+        <Card className="relative overflow-hidden p-6 sm:p-8 lg:p-16 text-center border-2 border-primary/10 liquid-glass">
           {/* Background gradient */}
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" aria-hidden="true" />
           
@@ -377,7 +377,7 @@ export default function Landing() {
             </p>
             <Button 
               size="lg" 
-              className="text-base sm:text-lg px-6 sm:px-10 h-12 sm:h-14 shadow-lg shadow-primary/25 hover:shadow-xl transition-all group touch-target w-full sm:w-auto"
+              className="text-base sm:text-lg px-6 sm:px-10 h-12 sm:h-14 shadow-lg shadow-primary/25 hover:shadow-xl transition-all group touch-target w-full sm:w-auto liquid-glass"
               onClick={() => navigate("/auth")}
             >
               Get Started for Free
