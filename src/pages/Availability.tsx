@@ -41,9 +41,18 @@ const DAYS = [
 
 // TIMEZONE_OPTIONS is now imported from @/lib/timezones — never hardcode timezone lists
 
+interface ReceptionistRow {
+  id: string;
+  name: string;
+  business_name: string;
+  timezone: string | null;
+  active: boolean | null;
+  [key: string]: unknown;
+}
+
 export default function Availability() {
   const { toast } = useToast();
-  const [receptionists, setReceptionists] = useState<any[]>([]);
+  const [receptionists, setReceptionists] = useState<ReceptionistRow[]>([]);
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("");
   const [rules, setRules] = useState<AvailabilityRule[]>([]);
   const [exceptions, setExceptions] = useState<AvailabilityException[]>([]);
@@ -114,9 +123,10 @@ export default function Availability() {
       if (rulesData && rulesData.length > 0) {
         setTimezone(rulesData[0].timezone || "Africa/Lagos");
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error loading availability:", err);
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      const message = err instanceof Error ? err.message : "Error loading availability";
+      toast({ title: "Error", description: message, variant: "destructive" });
     } finally {
       setLoading(false);
     }

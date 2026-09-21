@@ -8,8 +8,14 @@ import { HelpCircle, Loader2 } from "lucide-react";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { ConfiguratorAffordance } from "@/components/ConfiguratorAffordance";
 
+interface ReceptionistSummary {
+  id: string;
+  name: string;
+  business_name: string;
+}
+
 export default function FAQManagement() {
-  const [receptionists, setReceptionists] = useState<any[]>([]);
+  const [receptionists, setReceptionists] = useState<ReceptionistSummary[]>([]);
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

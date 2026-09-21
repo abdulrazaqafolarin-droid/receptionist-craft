@@ -84,8 +84,9 @@ export default function Diagnostics() {
       if (fnErr) throw fnErr;
       setHealth(data);
       setLastRefresh(new Date());
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch system health");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to fetch system health";
+      setError(message);
     } finally {
       setLoading(false);
     }

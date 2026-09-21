@@ -33,11 +33,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+interface ProfileData {
+  id: string;
+  email: string;
+  full_name: string | null;
+  name: string | null;
+  plan: "free" | "pro" | "enterprise";
+  onboarding_completed: boolean | null;
+  timezone: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export default function Settings() {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const [sendingTest, setSendingTest] = useState(false);
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
@@ -74,7 +86,7 @@ export default function Settings() {
 
       if (error) throw error;
 
-      setProfile(profileData);
+      setProfile(profileData as ProfileData);
       setFormData({
         name: profileData.name || "",
         email: profileData.email || user.email || "",

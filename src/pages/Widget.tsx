@@ -465,7 +465,7 @@ export default function Widget() {
 
       const reply = data.reply || "";
       
-      let botMessage: Message = { role: "assistant", content: reply, timestamp: new Date() };
+      const botMessage: Message = { role: "assistant", content: reply, timestamp: new Date() };
 
       if (data.bookingCreated && data.bookingDetails) {
         setBookingState({...defaultBookingState});

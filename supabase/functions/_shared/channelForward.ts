@@ -76,8 +76,8 @@ export async function forwardToWidgetChat(opts: ForwardOptions): Promise<Forward
 
   const raw = await res.json().catch(() => null);
   const reply =
-    (raw && typeof raw === "object" && typeof (raw as any).reply === "string"
-      ? (raw as any).reply
+    (raw && typeof raw === "object" && typeof (raw as Record<string, unknown>).reply === "string"
+      ? (raw as Record<string, unknown>).reply
       : "") || "I'm sorry, I had trouble processing that. Could you please try again?";
 
   return { reply, raw };

@@ -248,7 +248,7 @@ ${receptionistConfig.system_prompt ? `\n${receptionistConfig.system_prompt}` : '
           await logAnalytics(supabase, receptionistId, userId, userMessageRaw, confirmMsg, receptionistConfig, elapsedMs);
           
           return jsonResponse({ reply: confirmMsg, appointment });
-        } catch (err: any) {
+        } catch (err) {
           console.error(`[${correlationId}] Alternative booking failed:`, err);
           const errMsg = "Sorry, I couldn't book that time. Please try again or choose a different option.";
           await logMessages(supabase, receptionistId, userId, userMessageRaw, errMsg);
@@ -275,7 +275,7 @@ Rules:
 
 Return ONLY valid JSON, no explanations or markdown.`;
 
-      let slotOut: any;
+      let slotOut: unknown;
       try {
         slotOut = await retryWithBackoff(async () => {
           const slotRes = await fetch(
@@ -317,12 +317,13 @@ Return ONLY valid JSON, no explanations or markdown.`;
             choices: [{ message: { content: slotText } }]
           };
         });
-      } catch (err: any) {
+      } catch (err) {
         console.error(`[${correlationId}] Slot extraction error:`, err);
+        const message = err instanceof Error ? err.message : String(err);
         let errMsg = "I'm having trouble processing your request. Could you rephrase that?";
-        if (err.message.includes("Rate limit")) {
+        if (message.includes("Rate limit")) {
           errMsg = "System is busy. Please try again in a moment.";
-        } else if (err.message.includes("Payment required")) {
+        } else if (message.includes("Payment required")) {
           errMsg = "Service temporarily unavailable. Please contact support.";
         }
         await logMessages(supabase, receptionistId, userId, userMessageRaw, errMsg);
@@ -332,7 +333,7 @@ Return ONLY valid JSON, no explanations or markdown.`;
       const slotText = slotOut?.choices?.[0]?.message?.content || "{}";
       const slotJsonStr = extractJSON(slotText);
 
-      let slots: any = {};
+      let slots: Record<string, unknown> = {};
       try {
         slots = JSON.parse(slotJsonStr);
         console.log(`[${correlationId}] Extracted slots:`, slots);
@@ -370,7 +371,7 @@ Return ONLY valid JSON, no explanations or markdown.`;
         try {
           requestedDateTime = parseISOLocal(date, time, r.timezone || 'UTC');
           console.log(`[${correlationId}] Requested datetime: ${requestedDateTime}`);
-        } catch (err: any) {
+        } catch (err) {
           console.error(`[${correlationId}] Date parse error:`, err);
           const errMsg = "I couldn't understand that date/time. Could you provide it in format like 'December 1 at 2:30pm'?";
           await logMessages(supabase, receptionistId, userId, userMessageRaw, errMsg);
@@ -380,7 +381,7 @@ Return ONLY valid JSON, no explanations or markdown.`;
         // CHECK AVAILABILITY with retry
         console.log(`[${correlationId}] Checking availability for ${service} on ${date} at ${time}`);
         
-        let checkRes: any;
+        let checkRes: unknown;
         try {
           checkRes = await retryWithBackoff(() => 
             supabase.functions.invoke("check-availability", {
@@ -396,12 +397,13 @@ Return ONLY valid JSON, no explanations or markdown.`;
           );
           
           if (checkRes.error) throw new Error(checkRes.error.message);
-        } catch (err: any) {
-          console.error(`[${correlationId}] check-availability error:`, err);
-          const errMsg = "I can't check availability right now. Please try again shortly.";
-          await logMessages(supabase, receptionistId, userId, userMessageRaw, errMsg);
-          return jsonResponse({ reply: errMsg });
-        }
+} catch (err) {
+        console.error(`[${correlationId}] check-availability error:`, err);
+        const message = err instanceof Error ? err.message : String(err);
+        const errMsg = "I can't check availability right now. Please try again shortly.";
+        await logMessages(supabase, receptionistId, userId, userMessageRaw, errMsg);
+        return jsonResponse({ reply: errMsg });
+      }
 
         const availableSlots = checkRes.data?.slots || [];
         const isAvailable = checkRes.data?.available === true;
@@ -420,7 +422,7 @@ Return ONLY valid JSON, no explanations or markdown.`;
         if (!isAvailable) {
           // Offer alternatives
           const topAlts = (checkRes.data?.alternatives || availableSlots).slice(0, 3);
-          const alternatives = topAlts.map((slot: any, i: number) => {
+          const alternatives = topAlts.map((slot: Record<string, unknown>, i: number) => {
             const slotTime = typeof slot === 'string' ? slot : slot.start;
             return formatHumanSlot(slotTime, r.timezone || 'UTC');
           });
@@ -450,7 +452,7 @@ Return ONLY valid JSON, no explanations or markdown.`;
         // BOOK APPOINTMENT with retry
         console.log(`[${correlationId}] Booking appointment`);
         
-        let bookRes: any;
+        let bookRes: unknown;
         try {
           bookRes = await retryWithBackoff(() => 
             supabase.functions.invoke("book-appointment", {
@@ -472,7 +474,7 @@ Return ONLY valid JSON, no explanations or markdown.`;
           );
           
           if (bookRes.error) throw new Error(bookRes.error.message);
-        } catch (err: any) {
+        } catch (err) {
           console.error(`[${correlationId}] book-appointment error:`, err);
           const errMsg = "Sorry, I couldn't create that appointment right now. Please try again in a moment.";
           await logMessages(supabase, receptionistId, userId, userMessageRaw, errMsg);
@@ -585,11 +587,13 @@ Return ONLY valid JSON, no explanations or markdown.`;
 
     return jsonResponse({ reply });
 
-  } catch (err: any) {
+  } catch (err) {
     console.error(`[Chat] Error:`, err);
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
     return new Response(JSON.stringify({ 
-      error: err.message || "Internal server error",
-      details: err.stack 
+      error: message || "Internal server error",
+      details: stack 
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -614,7 +618,7 @@ function toGeminiContents(messages: Array<{ role: string; content: string }>) {
   });
 }
 
-function jsonResponse(obj: any) {
+function jsonResponse(obj: Record<string, unknown>) {
   return new Response(JSON.stringify(obj), {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -622,13 +626,13 @@ function jsonResponse(obj: any) {
 }
 
 async function logMessages(
-  supabase: any, 
+  supabase: SupabaseClient, 
   receptionistId: string, 
   userId: string | null, 
   userMessage: string, 
   reply: string, 
-  faqMatch?: any,
-  extraMetadata?: Record<string, any>
+  faqMatch?: Record<string, unknown> | null,
+  extraMetadata?: Record<string, unknown>
 ) {
   if (!userId) return;
   try {
@@ -662,15 +666,15 @@ async function logMessages(
 }
 
 async function logAnalytics(
-  supabase: any, 
+  supabase: SupabaseClient, 
   receptionistId: string, 
   userId: string | null, 
   request: string, 
   reply: string, 
-  config: any, 
+  config: Record<string, unknown>, 
   latencyMs: number, 
-  faqMatch?: any,
-  extraTags?: Record<string, any>
+  faqMatch?: Record<string, unknown> | null,
+  extraTags?: Record<string, unknown>
 ) {
   try {
     const qualityScore = {
@@ -701,7 +705,7 @@ async function logAnalytics(
   }
 }
 
-function buildClarifyingQuestion(missing: string[], slots: any) {
+function buildClarifyingQuestion(missing: string[], slots: Record<string, unknown>) {
   if (missing.includes("service") && missing.includes("date") && missing.includes("time")) {
     return "I'd be happy to help you book an appointment! Which service would you like, and what date and time work best for you?";
   }

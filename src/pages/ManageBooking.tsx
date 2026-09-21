@@ -8,11 +8,26 @@ import { Calendar, Clock, MapPin, Phone, Mail, CheckCircle2, XCircle, Loader2 } 
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
+interface AppointmentData {
+  id: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  service: string;
+  customer_name: string;
+  customer_email?: string | null;
+  customer_phone?: string | null;
+  cancellation_token: string;
+  services?: { name: string; description?: string; duration_minutes: number };
+  receptionists?: { business_name: string; business_phone?: string; name: string };
+  [key: string]: unknown;
+}
+
 export default function ManageBooking() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [appointment, setAppointment] = useState<any>(null);
+  const [appointment, setAppointment] = useState<AppointmentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
 
@@ -35,12 +50,13 @@ export default function ManageBooking() {
         .single();
 
       if (error) throw error;
-      setAppointment(data);
-    } catch (err: any) {
+      setAppointment(data as AppointmentData | null);
+    } catch (err) {
       console.error("Error loading appointment:", err);
+      const message = err instanceof Error ? err.message : "Failed to load appointment details";
       toast({
         title: "Error",
-        description: "Failed to load appointment details",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -70,11 +86,12 @@ export default function ManageBooking() {
       });
 
       loadAppointment();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error cancelling appointment:", err);
+      const message = err instanceof Error ? err.message : "Failed to cancel appointment";
       toast({
         title: "Error",
-        description: err.message || "Failed to cancel appointment",
+        description: message,
         variant: "destructive",
       });
     } finally {

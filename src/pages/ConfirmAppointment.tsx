@@ -5,6 +5,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { CheckCircle, XCircle, Loader2, Calendar } from "lucide-react";
 
+interface AppointmentData {
+  id: string;
+  service: string;
+  start_time: string;
+  customer_name: string;
+  customer_phone?: string | null;
+  customer_email?: string | null;
+  [key: string]: unknown;
+}
+
 export default function ConfirmAppointment() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
@@ -13,7 +23,7 @@ export default function ConfirmAppointment() {
   const [confirming, setConfirming] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [appointment, setAppointment] = useState<any>(null);
+  const [appointment, setAppointment] = useState<AppointmentData | null>(null);
 
   useEffect(() => {
     if (token) {
@@ -41,7 +51,7 @@ export default function ConfirmAppointment() {
       }
 
       setAppointment(appt);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Load appointment error:", err);
       setError("Failed to load appointment");
     } finally {
@@ -70,9 +80,10 @@ export default function ConfirmAppointment() {
       }
 
       setSuccess(true);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Confirm error:", err);
-      setError(err.message || "Failed to confirm appointment");
+      const message = err instanceof Error ? err.message : "Failed to confirm appointment";
+      setError(message);
     } finally {
       setConfirming(false);
     }
@@ -117,10 +128,10 @@ export default function ConfirmAppointment() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="p-4 bg-muted rounded-lg">
-              <p><strong>Service:</strong> {appointment.service}</p>
-              <p><strong>Date:</strong> {new Date(appointment.start_time).toLocaleDateString()}</p>
-              <p><strong>Time:</strong> {new Date(appointment.start_time).toLocaleTimeString()}</p>
-              <p><strong>Customer:</strong> {appointment.customer_name}</p>
+              <p><strong>Service:</strong> {appointment?.service ?? "Unknown"}</p>
+              <p><strong>Date:</strong> {appointment?.start_time ? new Date(appointment.start_time).toLocaleDateString() : "Unknown"}</p>
+              <p><strong>Time:</strong> {appointment?.start_time ? new Date(appointment.start_time).toLocaleTimeString() : "Unknown"}</p>
+              <p><strong>Customer:</strong> {appointment?.customer_name ?? "Unknown"}</p>
             </div>
             <p className="text-sm text-muted-foreground">
               You will receive a reminder 24 hours before your appointment.
@@ -143,22 +154,22 @@ export default function ConfirmAppointment() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 bg-muted rounded-lg space-y-2">
-            <p><strong>Service:</strong> {appointment.service}</p>
-            <p><strong>Date:</strong> {new Date(appointment.start_time).toLocaleDateString('en-US', {
+            <p><strong>Service:</strong> {appointment?.service ?? "Unknown"}</p>
+            <p><strong>Date:</strong> {appointment?.start_time ? new Date(appointment.start_time).toLocaleDateString('en-US', {
               weekday: 'long',
               year: 'numeric',
               month: 'long',
               day: 'numeric'
-            })}</p>
-            <p><strong>Time:</strong> {new Date(appointment.start_time).toLocaleTimeString('en-US', {
+            }) : "Unknown"}</p>
+            <p><strong>Time:</strong> {appointment?.start_time ? new Date(appointment.start_time).toLocaleTimeString('en-US', {
               hour: '2-digit',
               minute: '2-digit'
-            })}</p>
-            <p><strong>Customer:</strong> {appointment.customer_name}</p>
-            {appointment.customer_phone && (
+            }) : "Unknown"}</p>
+            <p><strong>Customer:</strong> {appointment?.customer_name ?? "Unknown"}</p>
+            {appointment?.customer_phone && (
               <p><strong>Phone:</strong> {appointment.customer_phone}</p>
             )}
-            {appointment.customer_email && (
+            {appointment?.customer_email && (
               <p><strong>Email:</strong> {appointment.customer_email}</p>
             )}
           </div>

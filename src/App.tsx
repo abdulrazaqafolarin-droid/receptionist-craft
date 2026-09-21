@@ -161,7 +161,7 @@ const App = () => {
                             <div className="container mx-auto px-4 flex h-16 items-center gap-4">
                               <SidebarTrigger />
                               <div className="flex-1" />
-                              <Navbar user={session?.user} />
+                              <Navbar user={session?.user ? { id: session.user.id, email: session.user.email ?? null } : null} />
                             </div>
                           </header>
                           <main className="flex-1">

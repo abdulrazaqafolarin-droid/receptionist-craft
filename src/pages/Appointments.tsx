@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { AppointmentCalendar } from "@/components/appointments/AppointmentCalendar";
 import { AppointmentModal } from "@/components/appointments/AppointmentModal";
 import { AppointmentFilters, type FilterState } from "@/components/appointments/AppointmentFilters";
-import type { Appointment } from "@/types/appointments";
+import type { Appointment, AppointmentData } from "@/types/appointments";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RefreshCw, Plus, Download, Calendar, Sparkles, ShoppingBag, Package } from "lucide-react";
 import { toast } from "sonner";
@@ -49,7 +49,7 @@ export default function Appointments() {
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [editingAppointment, setEditingAppointment] = useState<AppointmentData | undefined>(undefined);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<string>("appointments");
   const [filters, setFilters] = useState<FilterState>({
@@ -397,7 +397,7 @@ export default function Appointments() {
             ) : (
               <AppointmentCalendar 
                 appointments={filteredAppointments} 
-                onEdit={(apt) => setEditingAppointment(apt)}
+                onEdit={(apt) => setEditingAppointment(apt as unknown as AppointmentData)}
                 onRefresh={loadAppointments}
               />
             )}
@@ -532,7 +532,7 @@ export default function Appointments() {
         {/* Edit Modal */}
         <AppointmentModal
           open={!!editingAppointment}
-          onOpenChange={(open) => !open && setEditingAppointment(null)}
+          onOpenChange={(open) => !open && setEditingAppointment(undefined)}
           onSuccess={loadAppointments}
           appointment={editingAppointment}
         />

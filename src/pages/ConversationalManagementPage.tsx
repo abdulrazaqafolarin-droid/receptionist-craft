@@ -12,6 +12,16 @@ import { ConversationalManagement } from "@/components/ConversationalManagement"
 import { VersionHistory } from "@/components/VersionHistory";
 import { toast } from "sonner";
 
+interface ReceptionistRow {
+  id: string;
+  name: string;
+  business_name: string;
+}
+
+interface ConfigVersionRow {
+  version_number: number;
+}
+
 /**
  * Operator Management Page — redefined per §5.4 / Step 6.
  *
@@ -24,7 +34,7 @@ import { toast } from "sonner";
  */
 export default function ConversationalManagementPage() {
   const navigate = useNavigate();
-  const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string }>>([]);
+  const [receptionists, setReceptionists] = useState<ReceptionistRow[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [currentVersion, setCurrentVersion] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -55,8 +65,9 @@ export default function ConversationalManagementPage() {
       const recs = data || [];
       setReceptionists(recs);
       if (recs.length > 0) setSelectedId(recs[0].id);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to load receptionists");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load receptionists";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -64,13 +75,13 @@ export default function ConversationalManagementPage() {
 
   async function loadCurrentVersion() {
     const { data } = await supabase
-      .from("config_versions" as any)
+      .from("config_versions")
       .select("version_number")
       .eq("receptionist_id", selectedId)
       .order("version_number", { ascending: false })
       .limit(1)
-      .maybeSingle();
-    setCurrentVersion((data as any)?.version_number);
+      .maybeSingle<ConfigVersionRow>();
+    setCurrentVersion(data?.version_number);
   }
 
   return (

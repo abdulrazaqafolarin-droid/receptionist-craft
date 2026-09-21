@@ -59,11 +59,12 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
               });
             }
           };
-        } catch (error: any) {
+        } catch (error) {
           console.error('Error processing audio:', error);
+          const message = error instanceof Error ? error.message : "Failed to transcribe audio";
           toast({
             title: "Error",
-            description: error.message || "Failed to transcribe audio",
+            description: message,
             variant: "destructive",
           });
         } finally {
@@ -80,7 +81,7 @@ export default function VoiceInput({ onTranscript, disabled }: VoiceInputProps) 
         title: "Recording",
         description: "Speak now...",
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error accessing microphone:', error);
       toast({
         title: "Error",

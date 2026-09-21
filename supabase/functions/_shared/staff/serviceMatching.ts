@@ -53,8 +53,15 @@ export async function findServiceStaff(
   }
 
   // 2. Filter to active staff only
-  const activeLinks = serviceStaffLinks.filter(
-    (link: any) => link.staff?.active !== false,
+  interface ServiceStaffLink {
+  staff: { id: string; name: string; role: string | null; active: boolean } | null;
+  price_override: number | null;
+  duration_override_minutes: number | null;
+  priority: number;
+}
+
+const activeLinks = serviceStaffLinks.filter(
+    (link: ServiceStaffLink) => link.staff?.active !== false,
   );
 
   // 3. Check availability for each staff member
@@ -62,7 +69,7 @@ export async function findServiceStaff(
   const results: StaffMatch[] = [];
 
   for (const link of activeLinks) {
-    const staff = link.staff as any;
+    const staff = link.staff;
     if (!staff) continue;
 
     // Check if staff has an availability rule for this day

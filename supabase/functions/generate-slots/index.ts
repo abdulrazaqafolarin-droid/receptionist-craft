@@ -88,7 +88,7 @@ serve(async (req) => {
         .gte("start_time", now.toISOString());
 
       // Generate slots day by day
-      const slotsToInsert: any[] = [];
+      const slotsToInsert: Array<Record<string, unknown>> = [];
       const currentDay = new Date(now);
       currentDay.setHours(0, 0, 0, 0);
 

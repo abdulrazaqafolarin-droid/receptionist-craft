@@ -10,9 +10,15 @@ import { toast } from "sonner";
 import { WidgetSettings } from "@/components/WidgetSettings";
 import { WidgetCustomization } from "@/components/WidgetCustomization";
 
+interface ReceptionistData {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
+
 export default function WidgetInstall() {
   const { id: receptionistId } = useParams();
-  const [receptionist, setReceptionist] = useState<any>(null);
+  const [receptionist, setReceptionist] = useState<ReceptionistData | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {

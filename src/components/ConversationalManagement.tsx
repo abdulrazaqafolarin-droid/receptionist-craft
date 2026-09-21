@@ -99,11 +99,12 @@ export function ConversationalManagement({ receptionistId }: ConversationalManag
       };
       setMessages((prev) => [...prev, aiMsg]);
       setPendingPlan(planData);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to process change");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to process change";
+      toast.error(message);
       const errorMsg: ChatMessage = {
         role: "ai",
-        content: `Sorry, I couldn't process that change: ${err.message}`,
+        content: `Sorry, I couldn't process that change: ${message}`,
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -142,8 +143,9 @@ export function ConversationalManagement({ receptionistId }: ConversationalManag
       setMessages((prev) => [...prev, confirmMsg]);
       setPendingPlan(null);
       toast.success("Change applied successfully");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to apply change");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to apply change";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -161,7 +163,7 @@ export function ConversationalManagement({ receptionistId }: ConversationalManag
       if (!user) return;
 
       // Use the versioning module to revert
-      const { error } = await supabase.rpc("revert_config_version" as any, {
+      const { error } = await supabase.rpc("revert_config_version", {
         p_receptionist_id: receptionistId,
         p_target_version: versionNumber,
       });
@@ -176,8 +178,9 @@ export function ConversationalManagement({ receptionistId }: ConversationalManag
       setMessages((prev) => [...prev, revertMsg]);
       toast.success(`Reverted to version ${versionNumber}`);
       setShowHistory(false);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to revert");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to revert";
+      toast.error(message);
     }
   }
 

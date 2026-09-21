@@ -162,8 +162,8 @@ serve(async (req) => {
       return result;
     }
 
-    const slots: any[] = [];
-    let currentDay = new Date(searchStart);
+    const slots: Array<Record<string, unknown>> = [];
+    const currentDay = new Date(searchStart);
     currentDay.setUTCHours(0, 0, 0, 0);
 
     while (currentDay < searchEnd && slots.length < maxSlots) {
@@ -178,7 +178,14 @@ serve(async (req) => {
       // We need to check rules for the LOCAL day-of-week in each rule's timezone
       // For simplicity & correctness, iterate all rules and check if this UTC date
       // corresponds to the right day_of_week in the rule's timezone
-      const dayRules = (rules || []).filter((r: any) => {
+      interface AvailabilityRule {
+  timezone?: string;
+  day_of_week: number | string;
+  start_time?: string;
+  end_time?: string;
+}
+
+const dayRules = (rules || []).filter((r: AvailabilityRule) => {
         const ruleTz = r.timezone || 'UTC';
         // Check what day_of_week this date is in the rule's timezone
         const localDow = new Intl.DateTimeFormat("en-US", {
@@ -214,8 +221,12 @@ serve(async (req) => {
           const slotStartWithBuffer = new Date(slotStart.getTime() - bufferBefore * 60000);
           const slotEndWithBuffer = new Date(slotEnd.getTime() + bufferAfter * 60000);
 
-          // Check exceptions
-          const hasException = (exceptions || []).some((ex: any) => {
+          interface Exception {
+  start_timestamptz: string;
+  end_timestamptz: string;
+}
+
+          const hasException = (exceptions || []).some((ex: Exception) => {
             const exStart = new Date(ex.start_timestamptz);
             const exEnd = new Date(ex.end_timestamptz);
             return !(slotEndWithBuffer <= exStart || slotStartWithBuffer >= exEnd);
@@ -226,15 +237,24 @@ serve(async (req) => {
             continue;
           }
 
-          // Check appointment collisions
-          const hasCollision = (appointments || []).some((appt: any) => {
+          interface Appointment {
+  start_time: string;
+  end_time: string;
+}
+
+          const hasCollision = (appointments || []).some((appt: Appointment) => {
             const apptStart = new Date(appt.start_time);
             const apptEnd = new Date(appt.end_time);
             return !(slotEndWithBuffer <= apptStart || slotStartWithBuffer >= apptEnd);
           });
 
+          interface BlockedSlot {
+  start_time: string;
+  end_time: string;
+}
+
           // Check manually blocked slots from appointment_slots table
-          const isManuallyBlocked = (blockedSlots || []).some((bs: any) => {
+          const isManuallyBlocked = (blockedSlots || []).some((bs: BlockedSlot) => {
             const bsStart = new Date(bs.start_time);
             const bsEnd = new Date(bs.end_time);
             return !(slotEnd <= bsStart || slotStart >= bsEnd);
@@ -268,14 +288,14 @@ serve(async (req) => {
 
     // Check if specific time was requested
     let available = false;
-    let alternatives: any[] = [];
+    let alternatives: Array<Record<string, unknown>> = [];
 
     if (desiredStart && desiredEnd) {
       const requestedStart = new Date(desiredStart);
       const requestedEnd = new Date(desiredEnd);
       
       // Check if requested time is in our available slots
-      available = slots.some((slot: any) => {
+      available = slots.some((slot: Record<string, unknown>) => {
         const slotStart = new Date(slot.start);
         const slotEnd = new Date(slot.end);
         return Math.abs(slotStart.getTime() - requestedStart.getTime()) < 60000 &&
@@ -284,7 +304,7 @@ serve(async (req) => {
 
       if (!available) {
         // Generate scored alternatives
-        alternatives = slots.slice(0, 5).map((slot: any) => {
+        alternatives = slots.slice(0, 5).map((slot: Record<string, unknown>) => {
           const slotStart = new Date(slot.start);
           const timeDiff = Math.abs(slotStart.getTime() - requestedStart.getTime());
           const hoursDiff = timeDiff / (1000 * 60 * 60);
@@ -296,7 +316,7 @@ serve(async (req) => {
             score,
             reason: `${slot.display} (${hoursDiff.toFixed(1)}h from requested)`
           };
-        }).sort((a: any, b: any) => b.score - a.score);
+        }).sort((a: Record<string, unknown>, b: Record<string, unknown>) => b.score - a.score);
 
         // Save suggestions for analytics
         await supabase.from("ai_booking_suggestions").insert({
@@ -322,10 +342,11 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     );
-  } catch (err: any) {
+  } catch (err) {
     console.error("[check-availability] Error:", err);
+    const message = err instanceof Error ? err.message : String(err);
     return new Response(
-      JSON.stringify({ error: err.message || String(err) }),
+      JSON.stringify({ error: message }),
       { 
         status: 500, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 

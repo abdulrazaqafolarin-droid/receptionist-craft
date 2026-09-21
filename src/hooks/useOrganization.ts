@@ -2,19 +2,23 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+export interface OrganizationMetadata {
+  [key: string]: unknown;
+}
+
 export interface Organization {
   id: string;
   name: string;
   slug: string;
   logo_url: string | null;
-  primary_color: string;
-  accent_color: string;
+  primary_color: string | null;
+  accent_color: string | null;
   custom_domain: string | null;
-  white_label: boolean;
-  plan: string;
-  max_receptionists: number;
-  max_members: number;
-  metadata: any;
+  white_label: boolean | null;
+  plan: string | null;
+  max_receptionists: number | null;
+  max_members: number | null;
+  metadata: OrganizationMetadata | null;
   created_at: string;
   updated_at: string;
 }
@@ -25,9 +29,13 @@ export interface OrgMember {
   user_id: string;
   role: string;
   invited_by: string | null;
-  joined_at: string;
+  joined_at: string | null;
   created_at: string;
   profile?: { email: string; full_name: string | null };
+}
+
+export interface OrgLocationMetadata {
+  [key: string]: unknown;
 }
 
 export interface OrgLocation {
@@ -36,9 +44,9 @@ export interface OrgLocation {
   name: string;
   address: string | null;
   phone: string | null;
-  timezone: string;
-  is_primary: boolean;
-  metadata: any;
+  timezone: string | null;
+  is_primary: boolean | null;
+  metadata: OrgLocationMetadata | null;
   created_at: string;
 }
 
@@ -60,7 +68,7 @@ export function useOrganization() {
     if (error) {
       console.error("Error fetching organizations:", error);
     } else {
-      setOrganizations((data || []) as Organization[]);
+      setOrganizations((data as Organization[]) || []);
       if (data && data.length > 0 && !currentOrg) {
         setCurrentOrg(data[0] as Organization);
       }
@@ -78,7 +86,7 @@ export function useOrganization() {
     if (error) {
       console.error("Error fetching members:", error);
     } else {
-      setMembers((data || []) as OrgMember[]);
+      setMembers(data || []);
     }
   };
 
@@ -92,7 +100,7 @@ export function useOrganization() {
     if (error) {
       console.error("Error fetching locations:", error);
     } else {
-      setLocations((data || []) as OrgLocation[]);
+      setLocations((data as OrgLocation[]) || []);
     }
   };
 
@@ -113,9 +121,15 @@ export function useOrganization() {
   };
 
   const updateOrganization = async (id: string, updates: Partial<Organization>) => {
+    const dbUpdates = { ...updates };
+    if (dbUpdates.metadata !== undefined) {
+      // Convert OrganizationMetadata to Json for database
+      (dbUpdates as any).metadata = dbUpdates.metadata;
+    }
+    // Cast to unknown first to avoid RejectExcessProperties
     const { error } = await supabase
       .from("organizations")
-      .update(updates)
+      .update(dbUpdates as any)
       .eq("id", id);
 
     if (error) {
@@ -127,7 +141,7 @@ export function useOrganization() {
     return true;
   };
 
-  const addMember = async (orgId: string, email: string, role: string) => {
+  const addMember = async (orgId: string, email: string, role: "owner" | "admin" | "member" | "viewer") => {
     // Find user by email in profiles
     const { data: profile } = await supabase
       .from("profiles")
@@ -145,7 +159,7 @@ export function useOrganization() {
       .insert({
         organization_id: orgId,
         user_id: profile.id,
-        role: role as any,
+        role,
       });
 
     if (error) {

@@ -61,7 +61,7 @@ export function runEngine(input: EngineInput): EngineResult {
     input.products
   );
   
-  console.log('[Engine] Entities extracted:', Object.keys(entities).filter(k => (entities as any)[k]));
+  console.log('[Engine] Entities extracted:', Object.keys(entities).filter(k => entities[k as keyof typeof entities]));
   
   // ─────────────────────────────────────────────────────────────────────────
   // STEP 4: Update state
@@ -115,10 +115,20 @@ export function runEngine(input: EngineInput): EngineResult {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STATE PERSISTENCE HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+
+interface SupabaseClient {
+  from(table: string): {
+    select(cols: string): {
+      eq(col: string, val: string): {
+        maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+}
 
 export async function loadState(
-  supabase: any,
+  supabase: SupabaseClient,
   sessionId: string,
   receptionistId: string
 ): Promise<EngineState> {
@@ -145,7 +155,7 @@ export async function loadState(
 }
 
 export async function saveState(
-  supabase: any,
+  supabase: SupabaseClient,
   sessionId: string,
   receptionistId: string,
   state: EngineState

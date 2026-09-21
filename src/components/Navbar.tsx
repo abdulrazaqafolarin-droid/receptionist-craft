@@ -16,13 +16,26 @@ import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import rutexLogo from "@/assets/rutex-logo.jpg";
 
+interface NotificationRow {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string | null;
+  body: string | null;
+  read: boolean;
+  created_at: string;
+}
+
 interface NavbarProps {
-  user?: any;
+  user: {
+    id: string;
+    email?: string | null;
+  } | null;
 }
 
 export const Navbar = ({ user }: NavbarProps) => {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -41,7 +54,8 @@ export const Navbar = ({ user }: NavbarProps) => {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          setNotifications((prev) => [payload.new, ...prev].slice(0, 20));
+          const newNotif = payload.new as NotificationRow;
+          setNotifications((prev) => [newNotif, ...prev].slice(0, 20));
           setUnreadCount((prev) => prev + 1);
         }
       )
@@ -54,8 +68,9 @@ export const Navbar = ({ user }: NavbarProps) => {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
+          const updatedNotif = payload.new as NotificationRow;
           setNotifications((prev) =>
-            prev.map((n) => (n.id === payload.new.id ? payload.new : n))
+            prev.map((n) => (n.id === updatedNotif.id ? updatedNotif : n))
           );
           loadNotifications();
         }

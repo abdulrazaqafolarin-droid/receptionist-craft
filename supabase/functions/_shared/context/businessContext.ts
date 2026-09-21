@@ -61,10 +61,13 @@ const PAYMENT_INTEGRATION_TYPES = ["stripe", "paystack"];
 interface AnyDb {
   from(table: string): {
     select(cols: string): {
-      eq(col: string, val: string | number | boolean): any;
-      order(col: string, opts?: { ascending?: boolean }): any;
-      limit(n: number): any;
-      maybeSingle(): any;
+      eq(col: string, val: string | number | boolean): {
+        order(col: string, opts?: { ascending?: boolean }): {
+          limit(n: number): {
+            maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+          };
+        };
+      };
     };
   };
 }
@@ -76,7 +79,7 @@ interface AnyDb {
 export async function buildBusinessContext(
   supabase: AnyDb,
   opts: {
-    receptionist: Record<string, any>;
+    receptionist: Record<string, unknown>;
     includeRecentActivity?: boolean;
   },
 ): Promise<BusinessStateSnapshot> {
@@ -208,15 +211,21 @@ function normalizeCapabilities(raw: unknown): Record<string, unknown> {
   return {};
 }
 
+interface OperatingHoursConfig {
+  hours?: Record<string, { open?: string; close?: string; start?: string; end?: string; from?: string; to?: string }>;
+  operating_hours?: Record<string, { open?: string; close?: string; start?: string; end?: string; from?: string; to?: string }>;
+}
+
 function deriveOpenNow(config: Record<string, unknown> | null): boolean | null {
   if (!config) return null;
-  const hours = (config as any).hours || (config as any).operating_hours;
+  const typedConfig = config as OperatingHoursConfig;
+  const hours = typedConfig.hours || typedConfig.operating_hours;
   if (!hours || typeof hours !== "object") return null;
   try {
     const now = new Date();
     const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
     const day = dayNames[now.getDay()];
-    const entry = (hours as Record<string, any>)[day] || (hours as Record<string, any>)[now.getDay()];
+    const entry = hours[day] || hours[now.getDay()];
     if (!entry) return null;
     const openStr = String(entry.open ?? entry.start ?? entry.from ?? "").toLowerCase();
     const closeStr = String(entry.close ?? entry.end ?? entry.to ?? "").toLowerCase();

@@ -24,13 +24,7 @@ export function FAQManager({ receptionistId }: FAQManagerProps) {
   const [loading, setLoading] = useState(false);
   const [newFaq, setNewFaq] = useState<FAQ>({ question: "", answer: "", priority: 0 });
 
-  useEffect(() => {
-    if (receptionistId) {
-      loadFAQs();
-    }
-  }, [receptionistId]);
-
-  const loadFAQs = async () => {
+  async function loadFAQs() {
     try {
       const { data, error } = await supabase
         .from("receptionist_faqs")
@@ -40,11 +34,17 @@ export function FAQManager({ receptionistId }: FAQManagerProps) {
 
       if (error) throw error;
       setFaqs((data || []) as FAQ[]);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error loading FAQs:", error);
       toast.error("Failed to load FAQs");
     }
-  };
+  }
+
+  useEffect(() => {
+    if (receptionistId) {
+      loadFAQs();
+    }
+  }, [receptionistId, loadFAQs]);
 
   const saveFAQ = async () => {
     if (!newFaq.question.trim() || !newFaq.answer.trim()) {
@@ -68,7 +68,7 @@ export function FAQManager({ receptionistId }: FAQManagerProps) {
       toast.success("FAQ added successfully");
       setNewFaq({ question: "", answer: "", priority: 0 });
       loadFAQs();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error saving FAQ:", error);
       toast.error("Failed to save FAQ");
     } finally {
@@ -84,7 +84,7 @@ export function FAQManager({ receptionistId }: FAQManagerProps) {
 
       toast.success("FAQ deleted");
       loadFAQs();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error deleting FAQ:", error);
       toast.error("Failed to delete FAQ");
     }
@@ -107,7 +107,7 @@ export function FAQManager({ receptionistId }: FAQManagerProps) {
 
       toast.success("FAQ updated");
       loadFAQs();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error updating FAQ:", error);
       toast.error("Failed to update FAQ");
     }

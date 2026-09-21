@@ -145,7 +145,7 @@ export function generateInstruction(
       instruction.allowed.push('thank_and_close');
       instruction.allowed.push('celebrate_with_customer');
       instruction.allowed.push('offer_one_preparation_tip');
-      instruction.instruction = `${state.task_type === 'booking' ? 'Booking' : 'Order'} confirmed. 1. Celebrate briefly with the customer. 2. Offer ONE natural next-step or preparation tip if relevant. 3. Then ask warmly if there\'s anything else. Keep it conversational, not checklist-like.`;
+      instruction.instruction = `${state.task_type === 'booking' ? 'Booking' : 'Order'} confirmed. 1. Celebrate briefly with the customer. 2. Offer ONE natural next-step or preparation tip if relevant. 3. Then ask warmly if there's anything else. Keep it conversational, not checklist-like.`;
     }
     return instruction;
   }

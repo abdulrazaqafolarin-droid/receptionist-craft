@@ -93,9 +93,10 @@ export default function ConversationalOnboarding() {
         versionId: data.version_id,
       });
       setStep("review");
-    } catch (err: any) {
+    } catch (err) {
       console.error("Onboarding error:", err);
-      toast.error(err.message || "Failed to generate plan");
+      const message = err instanceof Error ? err.message : "Failed to generate plan";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -147,9 +148,10 @@ export default function ConversationalOnboarding() {
       toast.success("Your AI Operator is ready!");
 
       setTimeout(() => navigate(`/builder/${recId}`), 2000);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Approval error:", err);
-      toast.error(err.message || "Failed to apply plan");
+      const message = err instanceof Error ? err.message : "Failed to apply plan";
+      toast.error(message);
       setStep("review");
     } finally {
       setLoading(false);
@@ -192,8 +194,9 @@ export default function ConversationalOnboarding() {
         versionId: data.version_id,
       });
       toast.success("Plan updated with your feedback");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update plan");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update plan";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

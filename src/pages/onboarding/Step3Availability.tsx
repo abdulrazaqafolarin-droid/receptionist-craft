@@ -99,8 +99,9 @@ export default function Step3Availability() {
 
       toast.success("Availability saved!");
       setStep(4);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to save availability");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save availability";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

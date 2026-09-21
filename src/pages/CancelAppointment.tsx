@@ -7,6 +7,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
 
+interface AppointmentData {
+  id: string;
+  service: string;
+  start_time: string;
+  customer_name: string;
+  status: string;
+  [key: string]: unknown;
+}
+
 export default function CancelAppointment() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
@@ -15,7 +24,7 @@ export default function CancelAppointment() {
   const [cancelling, setCancelling] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [appointment, setAppointment] = useState<any>(null);
+  const [appointment, setAppointment] = useState<AppointmentData | null>(null);
   const [reason, setReason] = useState("");
 
   useEffect(() => {
@@ -48,8 +57,8 @@ export default function CancelAppointment() {
         return;
       }
 
-      setAppointment(appt);
-    } catch (err: any) {
+      setAppointment(appt as AppointmentData);
+    } catch (err) {
       console.error("Load appointment error:", err);
       setError("Failed to load appointment");
     } finally {
@@ -79,9 +88,10 @@ export default function CancelAppointment() {
       }
 
       setSuccess(true);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Cancel error:", err);
-      setError(err.message || "Failed to cancel appointment");
+      const message = err instanceof Error ? err.message : "Failed to cancel appointment";
+      setError(message);
     } finally {
       setCancelling(false);
     }
@@ -126,9 +136,9 @@ export default function CancelAppointment() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="p-4 bg-muted rounded-lg">
-              <p><strong>Service:</strong> {appointment.service}</p>
-              <p><strong>Date:</strong> {new Date(appointment.start_time).toLocaleDateString()}</p>
-              <p><strong>Time:</strong> {new Date(appointment.start_time).toLocaleTimeString()}</p>
+              <p><strong>Service:</strong> {appointment?.service ?? "Unknown"}</p>
+              <p><strong>Date:</strong> {appointment?.start_time ? new Date(appointment.start_time).toLocaleDateString() : "Unknown"}</p>
+              <p><strong>Time:</strong> {appointment?.start_time ? new Date(appointment.start_time).toLocaleTimeString() : "Unknown"}</p>
             </div>
             <p className="text-sm text-muted-foreground">
               If you'd like to reschedule, please contact the business directly.
@@ -151,18 +161,18 @@ export default function CancelAppointment() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 bg-muted rounded-lg space-y-2">
-            <p><strong>Service:</strong> {appointment.service}</p>
-            <p><strong>Date:</strong> {new Date(appointment.start_time).toLocaleDateString('en-US', {
+            <p><strong>Service:</strong> {appointment?.service ?? "Unknown"}</p>
+            <p><strong>Date:</strong> {appointment?.start_time ? new Date(appointment.start_time).toLocaleDateString('en-US', {
               weekday: 'long',
               year: 'numeric',
               month: 'long',
               day: 'numeric'
-            })}</p>
-            <p><strong>Time:</strong> {new Date(appointment.start_time).toLocaleTimeString('en-US', {
+            }) : "Unknown"}</p>
+            <p><strong>Time:</strong> {appointment?.start_time ? new Date(appointment.start_time).toLocaleTimeString('en-US', {
               hour: '2-digit',
               minute: '2-digit'
-            })}</p>
-            <p><strong>Customer:</strong> {appointment.customer_name}</p>
+            }) : "Unknown"}</p>
+            <p><strong>Customer:</strong> {appointment?.customer_name ?? "Unknown"}</p>
           </div>
 
           <div>

@@ -26,7 +26,7 @@ type ParsedService = {
 
 type AIServicesParserProps = {
   businessType: string;
-  onAddItems: (items: ParsedService[]) => void;
+  onAddItems: (items: (ParsedService | { type: ItemType })[]) => void;
   disabled?: boolean;
 };
 
@@ -57,7 +57,7 @@ export function AIServicesParser({ businessType, onAddItems, disabled }: AIServi
         return;
       }
 
-      const serviceItems = (data.items || []).filter((item: any) => item.type === 'service');
+      const serviceItems = (data.items || []).filter((item: ParsedService) => item.type === 'service');
       
       if (serviceItems.length === 0) {
         toast.error("Could not identify any services. Please try describing them differently.");
@@ -75,9 +75,10 @@ export function AIServicesParser({ businessType, onAddItems, disabled }: AIServi
       setParsedItems(itemsProcessed);
       setShowResults(true);
       toast.success(`Found ${itemsProcessed.length} services!`);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Parse error:", error);
-      toast.error(error.message || "Failed to parse your input. Please try again.");
+      const message = error instanceof Error ? error.message : "Failed to parse your input. Please try again.";
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -137,10 +138,11 @@ export function AIServicesParser({ businessType, onAddItems, disabled }: AIServi
     if (parsedItems.length === 0) return;
     const itemsToAdd = parsedItems.map(item => ({
       ...item,
+      type: 'service' as ItemType,
       duration_minutes: item.noTime ? 0 : item.duration_minutes,
       price: item.price ?? undefined,
     }));
-    onAddItems(itemsToAdd as any);
+    onAddItems(itemsToAdd);
     toast.success(`Added ${parsedItems.length} services!`);
     setParsedItems([]);
     setInputText("");

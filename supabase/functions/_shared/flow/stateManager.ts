@@ -13,10 +13,24 @@ import {
   deserializeActiveTask,
 } from "./types.ts";
 
+interface SupabaseClient {
+  from(table: string): {
+    select(cols: string): {
+      eq(col: string, val: string): {
+        maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+    upsert(row: Record<string, unknown>, opts?: { onConflict?: string }): Promise<{ error: unknown }>;
+    update(row: Record<string, unknown>): {
+      eq(col: string, val: string): Promise<{ error: unknown }>;
+    };
+  }
+}
+
 export class StateManager {
-  private supabase: any;
+  private supabase: SupabaseClient;
   
-  constructor(supabaseClient: any) {
+  constructor(supabaseClient: SupabaseClient) {
     this.supabase = supabaseClient;
   }
 
@@ -50,18 +64,18 @@ export class StateManager {
         flow_step: data.flow_step,
         topic_confidence: data.topic_confidence || 0,
         slots: slots,
-        greeting_sent: (slots as any)?.greeting_sent || false,
-        booking_confirmed: (slots as any)?.booking_confirmed || false,
-        order_confirmed: (slots as any)?.order_confirmed || false,
-        asked_if_need_more_help: (slots as any)?.asked_if_need_more_help || false,
-        services_shown: (slots as any)?.services_shown || false,
-        products_shown: (slots as any)?.products_shown || false,
+        greeting_sent: slots.greeting_sent || false,
+        booking_confirmed: slots.booking_confirmed || false,
+        order_confirmed: slots.order_confirmed || false,
+        asked_if_need_more_help: slots.asked_if_need_more_help || false,
+        services_shown: slots.services_shown || false,
+        products_shown: slots.products_shown || false,
         last_message_at: data.last_message_at,
         active_task: activeTask,
         // Restore parked flow state (PARK MODE)
-        parkedFlow: (slots as any)?.parkedFlow ?? null,
-        parkedStep: (slots as any)?.parkedStep ?? null,
-        parkedSlots: (slots as any)?.parkedSlots ?? null,
+        parkedFlow: slots.parkedFlow ?? null,
+        parkedStep: slots.parkedStep ?? null,
+        parkedSlots: slots.parkedSlots ?? null,
       };
     }
 
@@ -159,7 +173,7 @@ export class StateManager {
       .eq('session_id', sessionId)
       .maybeSingle();
 
-    const currentSlots = (existing?.slots || {}) as any;
+    const currentSlots = (existing?.slots as FlowSlots) || {};
     currentSlots.greeting_sent = true;
 
     await this.supabase

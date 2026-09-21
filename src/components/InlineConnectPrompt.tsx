@@ -29,7 +29,25 @@ interface ConnectorDef {
 interface ConnectorStatus {
   connector_key: string;
   status: string;
-  current_tier: number;
+  current_tier: number | null;
+  last_error: string | null;
+}
+
+// Supabase table row types for connector tables (not in generated types)
+interface ConnectorDefinitionRow {
+  connector_key: string;
+  display_name: string;
+  description: string;
+  auth_type: string;
+  is_coming_soon: boolean;
+  setup_url: string | null;
+  help_url: string | null;
+}
+
+interface ConnectorRow {
+  connector_key: string;
+  status: string;
+  current_tier: number | null;
   last_error: string | null;
 }
 
@@ -80,23 +98,23 @@ export function InlineConnectPrompt({
       setLoading(true);
       const [defRes, statusRes] = await Promise.all([
         supabase
-          .from("connector_definitions" as any)
+          .from("connector_definitions")
           .select(
             "connector_key, display_name, description, auth_type, is_coming_soon, setup_url, help_url",
           )
           .eq("connector_key", connectorKey)
-          .maybeSingle(),
+          .maybeSingle<ConnectorDefinitionRow>(),
         supabase
-          .from("connectors" as any)
+          .from("connectors")
           .select("connector_key, status, current_tier, last_error")
           .eq("user_id", userId)
           .eq("connector_key", connectorKey)
-          .maybeSingle(),
+          .maybeSingle<ConnectorRow>(),
       ]);
 
       if (!active) return;
-      setDef((defRes.data as unknown as ConnectorDef) || null);
-      setStatus((statusRes.data as unknown as ConnectorStatus) || null);
+      setDef(defRes.data || null);
+      setStatus(statusRes.data || null);
       setLoading(false);
     })();
     return () => {
@@ -129,7 +147,7 @@ export function InlineConnectPrompt({
       const existing = status;
       if (existing) {
         await supabase
-          .from("connectors" as any)
+          .from("connectors")
           .update({
             status: "configured",
             config_json: { api_key: apiKey.trim() },
@@ -137,11 +155,12 @@ export function InlineConnectPrompt({
           .eq("user_id", userId)
           .eq("connector_key", connectorKey);
       } else {
-        await supabase.from("connectors" as any).insert({
+        await supabase.from("connectors").insert({
           user_id: userId,
           connector_key: connectorKey,
           status: "configured",
           config_json: { api_key: apiKey.trim() },
+          display_name: def?.display_name || connectorKey,
         });
       }
       setSaved(true);

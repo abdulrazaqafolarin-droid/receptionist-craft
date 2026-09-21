@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useOnboardingStore, ItemType } from "@/store/onboarding";
+import { useOnboardingStore, ItemType, ServiceOrProduct } from "@/store/onboarding";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -142,9 +142,10 @@ export default function Step2Services() {
 
       toast.success("Services & products saved successfully!");
       setStep(3);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error saving services:", error);
-      toast.error(error.message || "Failed to save services");
+      const message = error instanceof Error ? error.message : "Failed to save services";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -167,14 +168,14 @@ export default function Step2Services() {
           <AIServicesParser
             businessType={receptionist.business_type}
             onAddItems={(items) => {
-              items.forEach((item) => addService(item as any));
+              items.forEach((item) => addService(item as ServiceOrProduct));
             }}
             disabled={loading}
           />
           <AIProductsParser
             businessType={receptionist.business_type}
             onAddItems={(items) => {
-              items.forEach((item) => addService(item as any));
+              items.forEach((item) => addService(item as ServiceOrProduct));
             }}
             disabled={loading}
           />

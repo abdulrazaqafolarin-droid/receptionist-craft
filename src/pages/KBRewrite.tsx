@@ -14,9 +14,9 @@ interface KBRewriteLog {
   receptionist_id: string;
   created_at: string;
   reason: string | null;
-  original: any;
-  rewritten: any;
-  changes: any;
+  original: Record<string, unknown>;
+  rewritten: Record<string, unknown>;
+  changes: Record<string, unknown>;
   auto_suggest: boolean;
 }
 
@@ -34,6 +34,18 @@ interface GapReport {
   gap_rate: string;
   top_gaps: Array<{ topic: string; count: number; examples: string[] }>;
   recent_unanswered: Array<{ question: string; confidence: number; date: string }>;
+  total_gaps?: number;
+}
+
+interface SuggestionItem {
+  type: 'faq' | 'kb_addition';
+  priority: 'high' | 'medium' | 'low';
+  addresses_count?: number;
+  faq_question?: string;
+  faq_answer?: string;
+  section?: string;
+  content?: string;
+  reason: string;
 }
 
 export default function KBRewrite() {
@@ -93,7 +105,7 @@ export default function KBRewrite() {
 
       if (logsError) throw logsError;
       setLogs((logsData || []) as KBRewriteLog[]);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to load KB rewrite logs:", err);
       toast.error("Failed to load suggestions");
     } finally {
@@ -116,8 +128,9 @@ export default function KBRewrite() {
       } else {
         toast.info(data?.message || "No gaps found — KB is performing well!");
       }
-    } catch (err: any) {
-      toast.error(err.message || "Analysis failed");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Analysis failed";
+      toast.error(message);
     } finally {
       setAnalyzing(null);
     }
@@ -131,8 +144,9 @@ export default function KBRewrite() {
       });
       if (error) throw error;
       setGapReport(prev => ({ ...prev, [receptionistId]: data }));
-    } catch (err: any) {
-      toast.error("Failed to load gap report");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load gap report";
+      toast.error(message);
     } finally {
       setLoadingGap(null);
     }
@@ -147,8 +161,9 @@ export default function KBRewrite() {
       toast.success("KB rewrite applied successfully!");
       loadRewriteLogs();
       setSelectedLog(null);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to apply rewrite");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to apply rewrite";
+      toast.error(message);
     }
   }
 
@@ -162,8 +177,9 @@ export default function KBRewrite() {
       toast.success("Suggestion rejected");
       loadRewriteLogs();
       setSelectedLog(null);
-    } catch (err: any) {
-      toast.error("Failed to reject suggestion");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to reject suggestion";
+      toast.error(message);
     }
   }
 
@@ -180,8 +196,9 @@ export default function KBRewrite() {
       setEditMode(false);
       setSelectedLog(null);
       loadRewriteLogs();
-    } catch (err: any) {
-      toast.error("Failed to apply changes");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to apply changes";
+      toast.error(message);
     }
   }
 
@@ -196,8 +213,8 @@ export default function KBRewrite() {
   // Detail view
   if (selectedLog) {
     const receptionist = receptionists[selectedLog.receptionist_id];
-    const suggestions = selectedLog.rewritten?.suggestions || [];
-    const summary = selectedLog.changes?.gap_summary || selectedLog.rewritten?.summary || {};
+    const suggestions = (selectedLog.rewritten?.suggestions || []) as SuggestionItem[];
+    const summary = (selectedLog.changes?.gap_summary || selectedLog.rewritten?.summary) as GapReport | undefined;
     
     return (
       <div className="relative min-h-screen">
@@ -208,22 +225,22 @@ export default function KBRewrite() {
             </Button>
 
             {/* Summary Banner */}
-            {summary.total_gaps && (
+            {summary?.total_gaps && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <Card><CardContent className="pt-4 text-center">
-                  <p className="text-2xl font-bold text-destructive">{summary.total_gaps}</p>
+                  <p className="text-2xl font-bold text-destructive">{summary?.total_gaps}</p>
                   <p className="text-xs text-muted-foreground">Total Gaps</p>
                 </CardContent></Card>
                 <Card><CardContent className="pt-4 text-center">
-                  <p className="text-2xl font-bold text-orange-500">{summary.unanswered_count || 0}</p>
+                  <p className="text-2xl font-bold text-orange-500">{summary?.unanswered_count || 0}</p>
                   <p className="text-xs text-muted-foreground">Unanswered</p>
                 </CardContent></Card>
                 <Card><CardContent className="pt-4 text-center">
-                  <p className="text-2xl font-bold text-yellow-500">{summary.low_confidence_count || 0}</p>
+                  <p className="text-2xl font-bold text-yellow-500">{summary?.low_confidence_count || 0}</p>
                   <p className="text-xs text-muted-foreground">Low Confidence</p>
                 </CardContent></Card>
                 <Card><CardContent className="pt-4 text-center">
-                  <p className="text-2xl font-bold text-red-500">{summary.escalation_count || 0}</p>
+                  <p className="text-2xl font-bold text-red-500">{summary?.escalation_count || 0}</p>
                   <p className="text-xs text-muted-foreground">Escalations</p>
                 </CardContent></Card>
               </div>
@@ -256,7 +273,7 @@ export default function KBRewrite() {
                   <>
                     {/* Structured Suggestions */}
                     <div className="space-y-3">
-                      {suggestions.map((s: any, i: number) => (
+                      {suggestions.map((s: SuggestionItem, i: number) => (
                         <Card key={i} className="border-l-4" style={{ borderLeftColor: s.priority === 'high' ? 'hsl(var(--destructive))' : s.priority === 'medium' ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))' }}>
                           <CardContent className="pt-4">
                             <div className="flex items-start justify-between mb-2">
@@ -295,7 +312,7 @@ export default function KBRewrite() {
                       <Button onClick={() => applyRewrite(selectedLog)} variant="default">
                         <CheckCircle2 className="mr-2 h-4 w-4" /> Approve All
                       </Button>
-                      <Button onClick={() => { setEditMode(true); setEditedKB(selectedLog.original?.knowledge_base || ""); }} variant="outline">
+                      <Button onClick={() => { setEditMode(true); setEditedKB((selectedLog.original?.knowledge_base as string) || ""); }} variant="outline">
                         <Edit className="mr-2 h-4 w-4" /> Edit Manually
                       </Button>
                       <Button onClick={() => rejectRewrite(selectedLog)} variant="destructive">
@@ -425,8 +442,8 @@ export default function KBRewrite() {
             <div className="space-y-4">
               {logs.map((log) => {
                 const receptionist = receptionists[log.receptionist_id];
-                const suggestionsCount = log.rewritten?.suggestions?.length || 0;
-                const gapSummary = log.changes?.gap_summary;
+                const suggestionsCount = (log.rewritten?.suggestions as SuggestionItem[])?.length || 0;
+                const gapSummary = log.changes?.gap_summary as GapReport | undefined;
 
                 return (
                   <Card key={log.id} className="hover:bg-accent/50 transition-colors">
@@ -441,7 +458,7 @@ export default function KBRewrite() {
                           </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                          {gapSummary?.unanswered_count > 0 && (
+                          {gapSummary && gapSummary.unanswered_count > 0 && (
                             <Badge variant="destructive">{gapSummary.unanswered_count} unanswered</Badge>
                           )}
                           <Badge variant="secondary">
@@ -454,7 +471,7 @@ export default function KBRewrite() {
                       <p className="text-sm text-muted-foreground mb-4">
                         {log.reason || "No reason provided"}
                       </p>
-                      <Button onClick={() => { setSelectedLog(log); setEditMode(false); setEditedKB(log.rewritten?.knowledge_base || ""); }} variant="outline" className="w-full">
+                      <Button onClick={() => { setSelectedLog(log); setEditMode(false); setEditedKB((log.rewritten?.knowledge_base as string) || ""); }} variant="outline" className="w-full">
                         <ArrowUpCircle className="mr-2 h-4 w-4" /> Review Suggestions
                       </Button>
                     </CardContent>

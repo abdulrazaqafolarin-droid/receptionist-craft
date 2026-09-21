@@ -41,7 +41,7 @@ interface ConnectorDef {
 interface ConnectorStatus {
   connector_key: string;
   status: string;
-  current_tier: number;
+  current_tier: number | null;
   last_error: string | null;
 }
 
@@ -238,7 +238,7 @@ export function ConnectorRegistryPage({ userId }: ConnectorRegistryPageProps) {
 
   useEffect(() => {
     loadData();
-  }, [userId]);
+  }, [userId, loadData]);
 
   async function loadData() {
     setLoading(true);
@@ -251,8 +251,8 @@ export function ConnectorRegistryPage({ userId }: ConnectorRegistryPageProps) {
     setDefinitions((defsRes.data || []) as ConnectorDef[]);
 
     const statusMap = new Map<string, ConnectorStatus>();
-    (statusRes.data || []).forEach((s: any) =>
-      statusMap.set(s.connector_key, s as ConnectorStatus),
+    (statusRes.data || []).forEach((s: ConnectorStatus) =>
+      statusMap.set(s.connector_key, s),
     );
     setStatuses(statusMap);
 

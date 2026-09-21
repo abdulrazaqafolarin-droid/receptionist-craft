@@ -13,11 +13,27 @@ export interface StaffRecord {
   created_at: string;
 }
 
+interface SupabaseClient {
+  from(table: string): {
+    select(cols: string): {
+      eq(col: string, val: string): {
+        eq(col: string, val: string | boolean): {
+          order(col: string): {
+            // returns Promise<{ data: StaffRecord[] | null; error: unknown }>
+            then<T>(onfulfilled: (value: { data: StaffRecord[] | null; error: unknown }) => T): Promise<T>;
+          };
+        };
+        maybeSingle(): Promise<{ data: StaffRecord | null; error: unknown }>;
+      };
+    };
+  }
+}
+
 /**
  * Get all active staff for a receptionist.
  */
 export async function getActiveStaff(
-  supabase: any,
+  supabase: SupabaseClient,
   receptionistId: string,
 ): Promise<StaffRecord[]> {
   const { data } = await supabase
@@ -34,7 +50,7 @@ export async function getActiveStaff(
  * Get a single staff member by ID.
  */
 export async function getStaffById(
-  supabase: any,
+  supabase: SupabaseClient,
   staffId: string,
 ): Promise<StaffRecord | null> {
   const { data } = await supabase
@@ -50,7 +66,7 @@ export async function getStaffById(
  * Create a new staff member.
  */
 export async function createStaff(
-  supabase: any,
+  supabase: SupabaseClient,
   params: {
     receptionist_id: string;
     name: string;
@@ -75,7 +91,7 @@ export async function createStaff(
  * Deactivate a staff member (soft delete).
  */
 export async function deactivateStaff(
-  supabase: any,
+  supabase: SupabaseClient,
   staffId: string,
 ): Promise<void> {
   const { error } = await supabase
@@ -91,7 +107,7 @@ export async function deactivateStaff(
  * Returns staff who have an availability rule for the day and no conflicting appointment.
  */
 export async function findAvailableStaff(
-  supabase: any,
+  supabase: SupabaseClient,
   params: {
     receptionist_id: string;
     day_of_week: number;
@@ -110,7 +126,11 @@ export async function findAvailableStaff(
     .eq("day_of_week", day_of_week)
     .not("staff_id", "is", null);
 
-  const staffIds = [...new Set((rules ?? []).map((r: any) => r.staff_id).filter(Boolean))];
+  interface AvailabilityRule {
+  staff_id: string | null;
+}
+
+const staffIds = [...new Set((rules ?? []).map((r: AvailabilityRule) => r.staff_id).filter(Boolean))];
   if (staffIds.length === 0) return [];
 
   // 2. Get those staff records
@@ -134,7 +154,11 @@ export async function findAvailableStaff(
     .lte("start_time", dayEnd)
     .neq("status", "cancelled");
 
-  const busyStaffIds = new Set((conflicts ?? []).map((c: any) => c.staff_id));
+  interface AppointmentConflict {
+  staff_id: string;
+}
+
+const busyStaffIds = new Set((conflicts ?? []).map((c: AppointmentConflict) => c.staff_id));
 
   return staffList.filter((s: StaffRecord) => !busyStaffIds.has(s.id));
 }

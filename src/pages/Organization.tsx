@@ -38,7 +38,7 @@ export default function OrganizationPage() {
   const [newOrgSlug, setNewOrgSlug] = useState("");
   const [showAddMember, setShowAddMember] = useState(false);
   const [memberEmail, setMemberEmail] = useState("");
-  const [memberRole, setMemberRole] = useState("member");
+  const [memberRole, setMemberRole] = useState<"owner" | "admin" | "member" | "viewer">("member");
   const [showAddLocation, setShowAddLocation] = useState(false);
   const [locationName, setLocationName] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
@@ -227,7 +227,7 @@ export default function OrganizationPage() {
                       </div>
                       <div className="space-y-2">
                         <Label>Role</Label>
-                        <Select value={memberRole} onValueChange={setMemberRole}>
+                        <Select value={memberRole} onValueChange={(value: string) => setMemberRole(value as "owner" | "admin" | "member" | "viewer")}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="admin">Admin</SelectItem>
@@ -353,37 +353,37 @@ export default function OrganizationPage() {
                     <Label className="text-base">Enable White Label</Label>
                     <p className="text-sm text-muted-foreground">Remove platform branding for your clients</p>
                   </div>
-                  <Switch
-                    checked={currentOrg.white_label}
-                    onCheckedChange={(checked) => updateOrganization(currentOrg.id, { white_label: checked })}
-                  />
+<Switch
+  checked={currentOrg.white_label ?? false}
+  onCheckedChange={(checked) => updateOrganization(currentOrg.id, { white_label: checked })}
+/>
                 </div>
                 <Separator />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Primary Color</Label>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="color"
-                        value={currentOrg.primary_color}
-                        onChange={(e) => setCurrentOrg({ ...currentOrg, primary_color: e.target.value })}
-                        className="h-10 w-10 rounded cursor-pointer border border-border"
-                      />
-                      <Input value={currentOrg.primary_color} onChange={(e) => setCurrentOrg({ ...currentOrg, primary_color: e.target.value })} />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Accent Color</Label>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="color"
-                        value={currentOrg.accent_color}
-                        onChange={(e) => setCurrentOrg({ ...currentOrg, accent_color: e.target.value })}
-                        className="h-10 w-10 rounded cursor-pointer border border-border"
-                      />
-                      <Input value={currentOrg.accent_color} onChange={(e) => setCurrentOrg({ ...currentOrg, accent_color: e.target.value })} />
-                    </div>
-                  </div>
+<div className="space-y-2">
+  <Label>Primary Color</Label>
+  <div className="flex gap-2 items-center">
+    <input
+      type="color"
+      value={currentOrg.primary_color || "#000000"}
+      onChange={(e) => setCurrentOrg({ ...currentOrg, primary_color: e.target.value })}
+      className="h-10 w-10 rounded cursor-pointer border border-border"
+    />
+    <Input value={currentOrg.primary_color || ""} onChange={(e) => setCurrentOrg({ ...currentOrg, primary_color: e.target.value })} />
+  </div>
+</div>
+<div className="space-y-2">
+  <Label>Accent Color</Label>
+  <div className="flex gap-2 items-center">
+    <input
+      type="color"
+      value={currentOrg.accent_color || "#000000"}
+      onChange={(e) => setCurrentOrg({ ...currentOrg, accent_color: e.target.value })}
+      className="h-10 w-10 rounded cursor-pointer border border-border"
+    />
+    <Input value={currentOrg.accent_color || ""} onChange={(e) => setCurrentOrg({ ...currentOrg, accent_color: e.target.value })} />
+  </div>
+</div>
                 </div>
                 <div className="space-y-2">
                   <Label>Custom Domain</Label>

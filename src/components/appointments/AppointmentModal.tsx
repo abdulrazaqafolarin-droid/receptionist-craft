@@ -12,36 +12,73 @@ import { useToast } from "@/hooks/use-toast";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import type { AppointmentData } from "@/types/appointments";
+
+interface ServiceRow {
+  id: string;
+  name: string;
+  duration_minutes: number;
+  active: boolean | null;
+  [key: string]: unknown;
+}
+
+interface ReceptionistRow {
+  id: string;
+  name: string;
+  business_name: string;
+  [key: string]: unknown;
+}
 
 interface AppointmentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
   receptionistId?: string;
-  appointment?: any;
+  appointment?: AppointmentData;
 }
 
 export function AppointmentModal({ open, onOpenChange, onSuccess, receptionistId, appointment }: AppointmentModalProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [services, setServices] = useState<any[]>([]);
-  const [receptionists, setReceptionists] = useState<any[]>([]);
+  const [services, setServices] = useState<ServiceRow[]>([]);
+  const [receptionists, setReceptionists] = useState<ReceptionistRow[]>([]);
   
-  const [selectedReceptionist, setSelectedReceptionist] = useState(receptionistId || appointment?.receptionist_id || "");
-  const [serviceId, setServiceId] = useState(appointment?.service_id || "");
-  const [date, setDate] = useState<Date | undefined>(appointment ? new Date(appointment.start_time) : undefined);
-  const [time, setTime] = useState(appointment ? format(new Date(appointment.start_time), "HH:mm") : "09:00");
-  const [customerName, setCustomerName] = useState(appointment?.customer_name || "");
-  const [customerEmail, setCustomerEmail] = useState(appointment?.customer_email || "");
-  const [customerPhone, setCustomerPhone] = useState(appointment?.customer_phone || "");
-  const [notes, setNotes] = useState(appointment?.notes || "");
+  const [selectedReceptionist, setSelectedReceptionist] = useState<string>("");
+  const [serviceId, setServiceId] = useState<string>("");
+  const [date, setDate] = useState<Date | undefined>(undefined);
+  const [time, setTime] = useState<string>("09:00");
+  const [customerName, setCustomerName] = useState<string>("");
+  const [customerEmail, setCustomerEmail] = useState<string>("");
+  const [customerPhone, setCustomerPhone] = useState<string>("");
+  const [notes, setNotes] = useState<string>("");
 
   useEffect(() => {
     if (open) {
+      // Initialize form values from appointment prop
+      if (appointment) {
+        setSelectedReceptionist((appointment.receptionist_id as string) ?? "");
+        setServiceId((appointment.service_id as string) ?? "");
+        setDate(appointment.start_time ? new Date(appointment.start_time) : undefined);
+        setTime(appointment.start_time ? format(new Date(appointment.start_time), "HH:mm") : "09:00");
+        setCustomerName((appointment.customer_name as string) ?? "");
+        setCustomerEmail((appointment.customer_email as string) ?? "");
+        setCustomerPhone((appointment.customer_phone as string) ?? "");
+        setNotes((appointment.notes as string) ?? "");
+      } else {
+        // Reset to defaults for new appointment
+        setSelectedReceptionist("");
+        setServiceId("");
+        setDate(undefined);
+        setTime("09:00");
+        setCustomerName("");
+        setCustomerEmail("");
+        setCustomerPhone("");
+        setNotes("");
+      }
       loadServices();
       loadReceptionists();
     }
-  }, [open]);
+  }, [open, appointment]);
 
   async function loadServices() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -53,7 +90,7 @@ export function AppointmentModal({ open, onOpenChange, onSuccess, receptionistId
       .eq("user_id", user.id)
       .eq("active", true);
 
-    setServices(data || []);
+    setServices((data as ServiceRow[]) || []);
   }
 
   async function loadReceptionists() {
@@ -65,7 +102,7 @@ export function AppointmentModal({ open, onOpenChange, onSuccess, receptionistId
       .select("id, name, business_name")
       .eq("user_id", user.id);
 
-    setReceptionists(data || []);
+    setReceptionists((data as ReceptionistRow[]) || []);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -127,11 +164,12 @@ export function AppointmentModal({ open, onOpenChange, onSuccess, receptionistId
       onSuccess();
       onOpenChange(false);
       resetForm();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Save appointment error:", err);
+      const message = err instanceof Error ? err.message : "Failed to save appointment";
       toast({ 
         title: "Error", 
-        description: err.message || "Failed to save appointment", 
+        description: message, 
         variant: "destructive" 
       });
     } finally {
@@ -164,7 +202,7 @@ export function AppointmentModal({ open, onOpenChange, onSuccess, receptionistId
           {!receptionistId && (
             <div className="space-y-2">
               <Label htmlFor="receptionist">Receptionist *</Label>
-              <Select value={selectedReceptionist} onValueChange={setSelectedReceptionist}>
+              <Select value={selectedReceptionist} onValueChange={(value: unknown) => setSelectedReceptionist(typeof value === "string" ? value : "")}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select receptionist" />
                 </SelectTrigger>
@@ -181,7 +219,7 @@ export function AppointmentModal({ open, onOpenChange, onSuccess, receptionistId
 
           <div className="space-y-2">
             <Label htmlFor="service">Service *</Label>
-            <Select value={serviceId} onValueChange={setServiceId}>
+            <Select value={serviceId} onValueChange={(value: unknown) => setServiceId(typeof value === "string" ? value : "")}>
               <SelectTrigger>
                 <SelectValue placeholder="Select service" />
               </SelectTrigger>

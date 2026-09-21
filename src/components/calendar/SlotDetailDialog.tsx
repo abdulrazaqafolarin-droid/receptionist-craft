@@ -8,6 +8,12 @@ import { format } from "date-fns";
 import { Clock, User, Mail, Phone, CalendarIcon, Ban, Loader2 } from "lucide-react";
 import { useState } from "react";
 import type { CalendarEvent } from "./types";
+import type { Appointment } from "@/types/appointments";
+
+interface AppointmentMetadata {
+  booked_via_chat?: boolean;
+  [key: string]: unknown;
+}
 
 interface SlotDetailDialogProps {
   event: CalendarEvent | null;
@@ -119,7 +125,7 @@ export function SlotDetailDialog({ event, open, onOpenChange, onBlockSlot }: Slo
                   <p className="mt-1">{event.appointment.notes}</p>
                 </div>
               )}
-              {(event.appointment.metadata as any)?.booked_via_chat && (
+              {(event.appointment.metadata as AppointmentMetadata)?.booked_via_chat && (
                 <Badge variant="outline" className="text-xs">
                   Booked via AI Chat
                 </Badge>

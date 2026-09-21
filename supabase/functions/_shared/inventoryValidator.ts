@@ -279,8 +279,14 @@ export function buildOrderPayload(
 // STOCK DEDUCTION HELPER (POST-ORDER)
 // ═══════════════════════════════════════════════════════════════════════════
 
+interface SupabaseClient {
+  rpc(fn: string, params: Record<string, unknown>): Promise<{ data: unknown; error: unknown }>;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+
 export async function deductStock(
-  supabase: any,
+  supabase: SupabaseClient,
   items: Array<{ product_id: string; quantity: number }>
 ): Promise<{ success: boolean; errors: string[] }> {
   const errors: string[] = [];
@@ -310,7 +316,7 @@ export async function deductStock(
 // CONVENIENCE FACTORY
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function createInventoryValidator(supabase: any) {
+export function createInventoryValidator(supabase: SupabaseClient) {
   return {
     async getProductStock(receptionistId: string): Promise<ProductStock[]> {
       const { data, error } = await supabase

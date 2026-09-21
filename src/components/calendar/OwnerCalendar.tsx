@@ -26,14 +26,40 @@ import { SlotDetailDialog } from "./SlotDetailDialog";
 import type { CalendarEvent, CalendarViewMode } from "./types";
 import type { Appointment } from "@/types/appointments";
 
+interface ReceptionistRow {
+  id: string;
+  name: string;
+  business_name: string;
+  timezone: string | null;
+  [key: string]: unknown;
+}
+
+interface AvailabilityRuleRow {
+  id: string;
+  receptionist_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  [key: string]: unknown;
+}
+
+interface AvailabilityExceptionRow {
+  id: string;
+  receptionist_id: string;
+  start_timestamptz: string;
+  end_timestamptz: string;
+  reason: string | null;
+  [key: string]: unknown;
+}
+
 export function OwnerCalendar() {
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [receptionists, setReceptionists] = useState<any[]>([]);
+  const [receptionists, setReceptionists] = useState<ReceptionistRow[]>([]);
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("all");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [availabilityRules, setAvailabilityRules] = useState<any[]>([]);
-  const [exceptions, setExceptions] = useState<any[]>([]);
+  const [availabilityRules, setAvailabilityRules] = useState<AvailabilityRuleRow[]>([]);
+  const [exceptions, setExceptions] = useState<AvailabilityExceptionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -62,7 +88,7 @@ export function OwnerCalendar() {
     if (!user) return;
     const { data } = await supabase
       .from("receptionists")
-      .select("id, name, business_name")
+      .select("id, name, business_name, timezone")
       .eq("user_id", user.id);
     setReceptionists(data || []);
     if (data && data.length === 1) {
@@ -142,7 +168,7 @@ export function OwnerCalendar() {
         end: new Date(ex.end_timestamptz),
         type: "blocked",
         title: ex.reason || "Blocked",
-        reason: ex.reason,
+        reason: ex.reason ?? undefined,
       });
     });
 
@@ -229,9 +255,10 @@ export function OwnerCalendar() {
       if (error) throw error;
       toast.success("Time slot blocked successfully");
       await loadData();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Block error:", err);
-      toast.error(err.message || "Failed to block slot");
+      const message = err instanceof Error ? err.message : "Failed to block slot";
+      toast.error(message);
     }
   };
 

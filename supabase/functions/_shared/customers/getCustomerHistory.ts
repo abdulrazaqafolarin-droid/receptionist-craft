@@ -28,6 +28,19 @@ export interface VisitHistory {
   };
 }
 
+interface SupabaseClient {
+  from(table: string): {
+    select(cols: string): {
+      eq(col: string, val: string | number | boolean): {
+        order(col: string, opts?: { ascending?: boolean }): {
+          limit(n: number): Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+      maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+}
+
 /**
  * Load full customer history for AI context.
  *
@@ -37,7 +50,7 @@ export interface VisitHistory {
  * @param maxOrders - Max prior orders to include (default 5)
  */
 export async function getCustomerHistory(
-  supabase: any,
+  supabase: SupabaseClient,
   customerId: string,
   maxAppointments = 5,
   maxOrders = 5,
@@ -68,9 +81,9 @@ export async function getCustomerHistory(
     .limit(maxOrders);
 
   // Build order items summary
-  const orderSummaries = (orders ?? []).map((o: any) => {
-    const items = (o.order_items ?? [])
-      .map((i: any) => `${i.quantity}x ${i.product_name}`)
+  const orderSummaries = (orders ?? []).map((o: Record<string, unknown>) => {
+    const items = ((o.order_items as Record<string, unknown>[]) ?? [])
+      .map((i: Record<string, unknown>) => `${i.quantity}x ${i.product_name}`)
       .join(", ");
     return {
       items: items || "Unknown items",
@@ -108,7 +121,7 @@ export async function getCustomerHistory(
     customer_name: customer.name,
     is_returning: (customer.visit_count ?? 0) > 1,
     total_visits: customer.visit_count ?? 1,
-    appointments: (appointments ?? []).map((a: any) => ({
+    appointments: (appointments ?? []).map((a: Record<string, unknown>) => ({
       service: a.service,
       date: a.start_time,
       status: a.status,

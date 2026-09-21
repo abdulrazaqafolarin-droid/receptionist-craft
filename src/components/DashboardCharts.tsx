@@ -31,7 +31,7 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
 
   useEffect(() => {
     if (receptionistIds.length > 0) loadChartData();
-  }, [receptionistIds]);
+  }, [receptionistIds, loadChartData]);
 
   async function loadChartData() {
     setLoading(true);

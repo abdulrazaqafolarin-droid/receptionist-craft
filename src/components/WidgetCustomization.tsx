@@ -9,6 +9,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { Palette, Type, Image as ImageIcon, Save } from "lucide-react";
 
+interface BusinessInfo {
+  widget_customization?: {
+    primary_color?: string;
+    secondary_color?: string;
+    logo_url?: string;
+  };
+  [key: string]: unknown;
+}
+
+interface ReceptionistRow {
+  id: string;
+  business_info: BusinessInfo | null;
+  greeting_message: string | null;
+  [key: string]: unknown;
+}
+
 interface WidgetCustomizationProps {
   receptionistId: string;
 }
@@ -27,12 +43,12 @@ export function WidgetCustomization({ receptionistId }: WidgetCustomizationProps
         .from("receptionists")
         .select("*")
         .eq("id", receptionistId)
-        .single();
+        .single<ReceptionistRow>();
 
       if (error) throw error;
 
       // Load existing customization from business_info
-      const businessInfo = data.business_info as any;
+      const businessInfo = data.business_info as BusinessInfo | null;
       const customization = businessInfo?.widget_customization || {};
       setPrimaryColor(customization.primary_color || "#667eea");
       setSecondaryColor(customization.secondary_color || "#764ba2");
@@ -51,7 +67,7 @@ export function WidgetCustomization({ receptionistId }: WidgetCustomizationProps
         logo_url: logoUrl,
       };
 
-      const businessInfo = (receptionist?.business_info as any) || {};
+      const businessInfo = (receptionist?.business_info as BusinessInfo | null) || {};
       const { error } = await supabase
         .from("receptionists")
         .update({

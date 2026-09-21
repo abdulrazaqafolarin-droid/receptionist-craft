@@ -218,7 +218,12 @@ serve(async (req) => {
     }
 
     // Filter conflicts in code for precise overlap detection
-    const hasConflict = (conflicts || []).some((appt: any) => {
+    interface Appointment {
+  start_time: string;
+  end_time: string;
+}
+
+const hasConflict = (conflicts || []).some((appt: Appointment) => {
       const apptStart = new Date(appt.start_time);
       const apptEnd = new Date(appt.end_time);
       return !(endWithBuffer <= apptStart || startWithBuffer >= apptEnd);
@@ -408,12 +413,13 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (err: any) {
+  } catch (err) {
     console.error("[book-appointment] Error:", err);
+    const message = err instanceof Error ? err.message : String(err);
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: err.message || String(err) 
+        error: message 
       }),
       {
         status: 500,

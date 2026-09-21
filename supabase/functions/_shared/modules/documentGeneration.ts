@@ -125,7 +125,7 @@ function buildDocumentPrompt(
     invoice: "invoice",
   };
 
-  let prompt = `You are a professional document writer for ${businessName}${businessType ? `, a ${businessType}` : ""}.
+  const prompt = `You are a professional document writer for ${businessName}${businessType ? `, a ${businessType}` : ""}.
 
 Generate a ${typeLabels[request.type] || request.type} document.
 

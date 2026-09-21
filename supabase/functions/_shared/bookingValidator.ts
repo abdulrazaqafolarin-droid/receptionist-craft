@@ -25,7 +25,7 @@ export interface BookingRequest {
   customerPhone?: string;
   userId?: string;
   bookingSource?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface Service {
@@ -439,11 +439,17 @@ export class BookingValidator {
     
     const suggestions: SlotSuggestion[] = [];
     const now = new Date();
-    let currentDay = new Date(searchStart);
+    const currentDay = new Date(searchStart);
     
     while (currentDay < searchEnd && suggestions.length < 5) {
       const dayOfWeek = currentDay.getDay();
-      const dayRules = (availRules || []).filter((r: any) => Number(r.day_of_week) === dayOfWeek);
+      interface AvailabilityRule {
+  day_of_week: number | string;
+  start_time?: string;
+  end_time?: string;
+}
+
+const dayRules = (availRules || []).filter((r: AvailabilityRule) => Number(r.day_of_week) === dayOfWeek);
       
       for (const rule of dayRules) {
         const [startH, startM] = (rule.start_time || '09:00').split(':').map(Number);
@@ -467,7 +473,7 @@ export class BookingValidator {
           const slotStartWithBuffer = new Date(slotStart.getTime() - rules.buffer_before_minutes * 60000);
           const slotEndWithBuffer = new Date(slotEnd.getTime() + rules.buffer_after_minutes * 60000);
           
-          const hasConflict = (appointments || []).some((appt: any) => {
+          const hasConflict = (appointments || []).some((appt) => {
             const apptStart = new Date(appt.start_time);
             const apptEnd = new Date(appt.end_time);
             return !(slotEndWithBuffer <= apptStart || slotStartWithBuffer >= apptEnd);

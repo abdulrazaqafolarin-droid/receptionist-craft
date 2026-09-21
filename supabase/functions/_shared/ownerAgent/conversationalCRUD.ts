@@ -19,8 +19,22 @@ import type {
   OwnerAgentContext,
 } from "./types.ts";
 
+interface SupabaseClient {
+  from(table: string): {
+    select(cols: string): {
+      eq(col: string, val: string | number | boolean): {
+        order(col: string, opts?: { ascending?: boolean }): {
+          limit(n: number): Promise<{ data: unknown; error: unknown }>;
+        };
+        maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+        single(): Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+}
+
 interface ConversationalCRUDDeps {
-  supabase: any;
+  supabase: SupabaseClient;
   receptionistId: string;
   userId: string;
   sessionId: string;
@@ -98,7 +112,7 @@ export async function processOwnerMessage(
 
   // If we have pending clarifications and new responses, merge them
   let parsed: ParsedOwnerIntent;
-  let mergedParams: OwnerIntentParams = {};
+  const mergedParams: OwnerIntentParams = {};
 
   if (pendingClarifications && clarificationResponses && clarificationResponses.length > 0) {
     // Merge clarification responses into params
@@ -241,7 +255,7 @@ async function handleConfigChange(
   const result = await generateChangePlan(
     context.current_config,
     changeRequest,
-    (reasoningHistory || []) as any
+    reasoningHistory || []
   );
 
   // Create proposal with diffs
@@ -258,7 +272,7 @@ async function handleConfigChange(
     receptionist_id: receptionistId,
     user_id: userId,
     session_id: sessionId,
-    proposal_json: proposal as any,
+    proposal_json: proposal,
     status: 'pending',
     created_at: new Date().toISOString(),
   });
@@ -349,7 +363,7 @@ async function handleRollback(
     receptionist_id: receptionistId,
     user_id: userId,
     session_id: sessionId,
-    proposal_json: proposal as any,
+    proposal_json: proposal,
     status: 'pending',
     created_at: new Date().toISOString(),
   });
@@ -458,7 +472,7 @@ export async function applyProposal(
 function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
   const result = JSON.parse(JSON.stringify(obj));
   const keys = path.split('.');
-  let current: any = result;
+  let current: Record<string, unknown> = result;
 
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
@@ -618,14 +632,14 @@ function formatConfigSummary(config: Record<string, unknown>): string {
   let output = '⚙️ **Current Configuration:**\n\n';
 
   if (config.business) {
-    const b = config.business as any;
+    const b = config.business as Record<string, unknown>;
     output += `**Business:** ${b.display_name || b.name || 'Unnamed'} (${b.business_type || 'Unknown'})\n`;
     output += `**Tone:** ${b.tone || 'friendly'}\n`;
     output += `**Greeting:** ${b.greeting_message?.slice(0, 80) || 'Default'}\n\n`;
   }
 
   if (config.workflows) {
-    const w = config.workflows as any;
+    const w = config.workflows as Record<string, unknown>;
     output += `**Workflows:**\n`;
     if (w.appointment_booking?.enabled) output += `• Appointment booking ✓ (default ${w.appointment_booking.default_duration_minutes} min)\n`;
     if (w.product_ordering?.enabled) output += `• Product ordering ✓ (delivery: ${w.product_ordering.delivery ? 'yes' : 'no'})\n`;
@@ -633,7 +647,7 @@ function formatConfigSummary(config: Record<string, unknown>): string {
   }
 
   if (config.capabilities) {
-    const c = config.capabilities as any;
+    const c = config.capabilities as Record<string, unknown>;
     output += `**Capabilities:**\n`;
     Object.entries(c).forEach(([k, v]) => {
       if (v) output += `• ${k.replace(/_/g, ' ')} ✓\n`;
@@ -642,7 +656,7 @@ function formatConfigSummary(config: Record<string, unknown>): string {
   }
 
   if (config.channels) {
-    const ch = config.channels as any;
+    const ch = config.channels as Record<string, unknown>;
     output += `**Channels:**\n`;
     Object.entries(ch).forEach(([k, v]) => {
       if (v) output += `• ${k.charAt(0).toUpperCase() + k.slice(1)} ✓\n`;

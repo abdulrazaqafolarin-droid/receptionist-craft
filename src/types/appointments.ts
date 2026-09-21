@@ -1,4 +1,6 @@
 // src/types/appointments.ts
+import type { Json } from "@/integrations/supabase/types";
+
 export type UUID = string;
 
 export type AppointmentStatus = "booked" | "confirmed" | "cancelled" | "completed";
@@ -41,10 +43,10 @@ export interface Appointment {
   customer_email?: string | null;
   start_time: string; // ISO
   end_time: string; // ISO
-  status?: AppointmentStatus;
+  status?: AppointmentStatus | null;
   created_at?: string;
   notes?: string | null;
-  metadata?: Record<string, any> | null;
+  metadata?: Json | null;
   booking_source?: string; // e.g. 'ai_receptionist'
   source?: string; // alias for booking_source
 }
@@ -87,7 +89,7 @@ export interface BookAppointmentRequest {
   customerPhone?: string | null;
   customerEmail?: string | null;
   notes?: string | null;
-  metadata?: Record<string, any> | null;
+  metadata?: Record<string, unknown> | null;
   source?: string; // 'ai_receptionist' | 'manual' | etc
   userId?: UUID | null;
 }
@@ -95,6 +97,15 @@ export interface BookAppointmentRequest {
 export interface BookAppointmentResult {
   success?: boolean;
   appointment?: Appointment | null;
-  existed?: boolean;
   error?: string | null;
+  idempotency_key?: string | null;
+}
+
+export interface AppointmentData {
+  id: string;
+  service: string;
+  start_time: string;
+  customer_name: string;
+  status: string;
+  [key: string]: unknown;
 }

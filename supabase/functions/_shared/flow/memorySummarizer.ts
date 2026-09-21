@@ -26,10 +26,26 @@ export interface ConversationSummary {
   last_updated: string;
 }
 
-export class MemorySummarizer {
-  private supabase: any;
+interface SupabaseClient {
+  from(table: string): {
+    select(cols: string): {
+      eq(col: string, val: string): {
+        order(col: string, opts?: { ascending?: boolean }): {
+          limit(n: number): Promise<{ data: unknown; error: unknown }>;
+        };
+        or(filter: string): {
+          limit(n: number): Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+      upsert(row: Record<string, unknown>, opts?: { onConflict?: string }): Promise<{ error: unknown }>;
+    };
+  }
+}
 
-  constructor(supabaseClient: any) {
+export class MemorySummarizer {
+  private supabase: SupabaseClient;
+
+  constructor(supabaseClient: SupabaseClient) {
     this.supabase = supabaseClient;
   }
 
@@ -90,7 +106,7 @@ export class MemorySummarizer {
   }
 
   // Extract key facts from conversation history
-  extractKeyFacts(history: any[], context: any): KeyFacts {
+  extractKeyFacts(history: Array<{ sender: string; message: string }>, context: Record<string, unknown>): KeyFacts {
     const facts: KeyFacts = {};
     
     // Extract from context
@@ -120,7 +136,7 @@ export class MemorySummarizer {
   }
 
   // Generate summary text from history
-  generateSummaryText(history: any[], context: any): string {
+  generateSummaryText(history: Array<{ sender: string; message: string }>, context: Record<string, unknown>): string {
     const parts: string[] = [];
     
     // Focus on actionable info only
@@ -147,8 +163,8 @@ export class MemorySummarizer {
 
   // Check if summarization should run
   shouldSummarize(
-    history: any[],
-    context: any,
+    history: Array<{ sender: string; message: string }>,
+    context: Record<string, unknown>,
     thresholdMessages: number = 20
   ): boolean {
     // Run on booking/order completion

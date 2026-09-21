@@ -149,11 +149,12 @@ export async function sendEmail(
       tier: 1,
       message_id: data.id,
     };
-  } catch (err: any) {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Email send failed";
     return {
       success: false,
       tier: 1,
-      error: err.message,
+      error: message,
     };
   }
 }

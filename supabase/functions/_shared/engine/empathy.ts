@@ -88,7 +88,7 @@ const EMOTION_PATTERNS: Record<string, { tone: EmotionalTone; intensity: 'low' |
 export function analyzeEmotionalContext(message: string, history?: { sender: string; message: string }[]): EmotionalContext {
   const lower = message.toLowerCase();
   const signals: string[] = [];
-  let scoreMap: Record<EmotionalTone, number> = {
+  const scoreMap: Record<EmotionalTone, number> = {
     neutral: 1, // Base score
     positive: 0,
     negative: 0,

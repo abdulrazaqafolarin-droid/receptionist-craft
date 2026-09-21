@@ -72,9 +72,10 @@ export function AIServiceParser({ businessType, onAddItems, disabled }: AIServic
       setParsedItems(itemsProcessed);
       setShowResults(true);
       toast.success(`Found ${data.items.length} items!`);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Parse error:", error);
-      toast.error(error.message || "Failed to parse your input. Please try again.");
+      const message = error instanceof Error ? error.message : "Failed to parse your input. Please try again.";
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }

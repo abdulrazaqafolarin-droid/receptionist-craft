@@ -29,11 +29,11 @@ interface Notification {
   severity: string;
   read: boolean;
   created_at: string;
-  metadata: any;
+  metadata: Record<string, unknown>;
   receptionist_id: string | null;
 }
 
-const iconMap: Record<string, any> = {
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   AlertCircle,
   AlertTriangle,
   Info,
@@ -145,7 +145,7 @@ export default function Notifications() {
 
       if (error) throw error;
       setNotifications((data || []) as Notification[]);
-    } catch (error: any) {
+    } catch (error) {
       toast.error("Failed to load notifications");
       console.error(error);
     } finally {

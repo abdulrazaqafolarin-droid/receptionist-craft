@@ -10,13 +10,13 @@ interface ABTest {
 interface ABVariant {
   id: string;
   key: string;
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
   weight: number;
 }
 
 interface VariantAssignment {
   variant_key: string;
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
 }
 
 /**
@@ -32,7 +32,7 @@ export async function assignVariant(
   testSlug: string,
   receptionistId: string,
   userId: string | null
-): Promise<Record<string, any> | null> {
+): Promise<Record<string, unknown> | null> {
   try {
     console.log(`[AB] Checking test "${testSlug}" for user ${userId}`);
 
@@ -137,9 +137,9 @@ export async function assignVariant(
  * @returns Merged configuration
  */
 export function mergeVariantConfig(
-  baseConfig: Record<string, any>,
-  variantPayload: Record<string, any> | null
-): Record<string, any> {
+  baseConfig: Record<string, unknown>,
+  variantPayload: Record<string, unknown> | null
+): Record<string, unknown> {
   if (!variantPayload) return baseConfig;
 
   return {

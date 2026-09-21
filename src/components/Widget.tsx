@@ -11,6 +11,16 @@ type WidgetReceptionist = {
   tone: string | null;
 };
 
+// Supabase table row type for widget_receptionists (not in generated types)
+interface WidgetReceptionistRow {
+  id: string;
+  name: string | null;
+  business_name: string | null;
+  greeting_message: string | null;
+  timezone: string | null;
+  tone: string | null;
+}
+
 type Props = {
   receptionistId: string;
 };
@@ -42,7 +52,7 @@ export default function Widget({ receptionistId }: Props) {
           .from("widget_receptionists" as any)
           .select("id, name, business_name, greeting_message, timezone, tone")
           .eq("id", receptionistId)
-          .maybeSingle();
+          .maybeSingle<WidgetReceptionistRow>();
 
         if (error) {
           console.warn("Widget: view query error", error);
@@ -56,7 +66,7 @@ export default function Widget({ receptionistId }: Props) {
           setLoadError(true);
           return;
         }
-        setReceptionist(data as unknown as WidgetReceptionist | null);
+        setReceptionist(data);
       } catch (e) {
         console.warn("Widget: failed to load receptionist", e);
         if (mounted) setLoadError(true);

@@ -5,6 +5,22 @@
 import { FlowSlots } from "./types.ts";
 import { extractValidatedName } from "../nameValidator.ts";
 
+export interface ServiceItem {
+  id: string;
+  name: string;
+  duration_minutes: number;
+  buffer_before_minutes: number;
+  buffer_after_minutes: number;
+  price?: number;
+}
+
+export interface ProductItem {
+  id: string;
+  name: string;
+  price: number | null;
+  stock_quantity: number;
+}
+
 export interface ExtractionResult {
   slots: Partial<FlowSlots>;
   corrections: string[];
@@ -146,8 +162,8 @@ function detectCorrections(message: string, currentSlots: FlowSlots): string[] {
 export function extractSlots(
   message: string,
   currentSlots: FlowSlots,
-  services?: any[],
-  products?: any[]
+  services?: ServiceItem[],
+  products?: ProductItem[]
 ): ExtractionResult {
   const extractedSlots: Partial<FlowSlots> = {};
   const corrections = detectCorrections(message, currentSlots);
@@ -220,7 +236,7 @@ export function mergeSlots(
       // Always update if it's a correction or if slot was empty
       const slotKey = key as keyof FlowSlots;
       if (corrections.includes(slotKey) || !merged[slotKey]) {
-        (merged as any)[slotKey] = value;
+        merged[slotKey] = value;
       }
     }
   }

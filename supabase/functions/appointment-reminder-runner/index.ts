@@ -40,7 +40,7 @@ serve(async (req) => {
 
     console.log(`Found ${appts?.length || 0} appointments`);
 
-    const created: any[] = [];
+    const created: unknown[] = [];
 
     for (const a of appts || []) {
       // Resolve the receptionist owner — notifications.user_id is NOT NULL,

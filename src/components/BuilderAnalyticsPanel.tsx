@@ -93,7 +93,7 @@ export function BuilderAnalyticsPanel({ receptionistId, userId }: BuilderAnalyti
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [receptionistId, userId, startDate, endDate]);
+  }, [receptionistId, userId, startDate, endDate, loadStats]);
 
   async function loadStats() {
     setLoading(true);
@@ -112,9 +112,10 @@ export function BuilderAnalyticsPanel({ receptionistId, userId }: BuilderAnalyti
       if (error) throw error;
       
       setStats(data || null);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to load analytics stats:", err);
-      setError(err.message || "Failed to load analytics");
+      const message = err instanceof Error ? err.message : "Failed to load analytics";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -148,9 +149,10 @@ export function BuilderAnalyticsPanel({ receptionistId, userId }: BuilderAnalyti
       URL.revokeObjectURL(url);
 
       toast.success(`Analytics exported as ${format.toUpperCase()}`);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Export failed:", err);
-      toast.error(err.message || "Export failed");
+      const message = err instanceof Error ? err.message : "Export failed";
+      toast.error(message);
     } finally {
       setExporting(false);
     }

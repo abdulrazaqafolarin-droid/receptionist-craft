@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
 import { FAQManager } from "@/components/FAQManager";
 import { WidgetEmbedCode } from "@/components/WidgetEmbedCode";
@@ -62,8 +63,8 @@ type Receptionist = {
   goal?: string;
   created_at?: string;
   primary_goal?: PrimaryGoal;
-  capabilities?: BusinessCapabilities;
-  customer_fields?: CustomerField[];
+  capabilities?: BusinessCapabilities | Json;
+  customer_fields?: CustomerField[] | Json;
 };
 
 type ChatMessage = {
@@ -170,7 +171,7 @@ export default function BuilderPage() {
       loadReceptionist(receptionistId);
       loadMessages(receptionistId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [receptionistId]);
 
   // Helper: fetch receptionist from DB
@@ -193,16 +194,17 @@ export default function BuilderPage() {
           ...(data as unknown as Receptionist),
           primary_goal: (data.primary_goal as PrimaryGoal) || 'bookings',
           capabilities: (data.capabilities as BusinessCapabilities) || prev.capabilities,
-          currency: (data as any).currency || 'USD',
+          currency: data.currency || 'USD',
           customer_fields: Array.isArray(data.customer_fields) ? (data.customer_fields as unknown as CustomerField[]) : DEFAULT_CUSTOMER_FIELDS,
-        }));
+        } as Receptionist));
       } else {
         // not found
         setError("Receptionist not found");
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("loadReceptionist error", err);
-      setError(err.message || String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -266,8 +268,8 @@ export default function BuilderPage() {
           currency: receptionist.currency || 'USD',
           goal: receptionist.goal,
           primary_goal: receptionist.primary_goal,
-          capabilities: receptionist.capabilities,
-          customer_fields: (receptionist.customer_fields || DEFAULT_CUSTOMER_FIELDS) as unknown as any,
+capabilities: receptionist.capabilities,
+          customer_fields: (receptionist.customer_fields ?? DEFAULT_CUSTOMER_FIELDS) as Json,
         }).eq("id", receptionistId).eq("user_id", currentUserId);
 
         if (error) {
@@ -314,8 +316,8 @@ export default function BuilderPage() {
           currency: receptionist.currency || 'USD',
           goal: receptionist.goal,
           primary_goal: receptionist.primary_goal,
-          capabilities: receptionist.capabilities,
-          customer_fields: (receptionist.customer_fields || DEFAULT_CUSTOMER_FIELDS) as unknown as any,
+capabilities: receptionist.capabilities,
+          customer_fields: (receptionist.customer_fields ?? DEFAULT_CUSTOMER_FIELDS) as Json,
         }]).select().single();
 
         if (error) {
@@ -329,9 +331,9 @@ export default function BuilderPage() {
           navigate(`/builder/${data.id}`, { replace: true });
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("saveReceptionist error", err);
-      const errorMsg = err.message || "Failed to save receptionist";
+      const errorMsg = err instanceof Error ? err.message : "Failed to save receptionist";
       setError(errorMsg);
       toast({ title: "Error", description: errorMsg, variant: "destructive" });
     } finally {
@@ -349,7 +351,7 @@ export default function BuilderPage() {
     messages: { role: string; content: string }[];
     receptionistId: string;
     userId: string | null;
-  }): Promise<{ reply: string; alternatives?: string[]; appointment?: any }> {
+  }): Promise<{ reply: string; alternatives?: string[]; appointment?: Record<string, unknown> }> {
     try {
       const latestMessage = payload.messages[payload.messages.length - 1]?.content?.trim() || "";
       const { data, error } = await supabase.functions.invoke("widget-chat", {
@@ -375,9 +377,10 @@ export default function BuilderPage() {
         alternatives: data.alternatives,
         appointment: data.appointment
       };
-    } catch (err: any) {
+    } catch (err) {
       console.error('Chat function exception:', err);
-      throw new Error(err.message || 'Failed to communicate with AI');
+      const message = err instanceof Error ? err.message : 'Failed to communicate with AI';
+      throw new Error(message);
     }
   }
 
@@ -425,12 +428,19 @@ export default function BuilderPage() {
         });
       }
 
-      // Handle alternatives (if time not available)
+      interface AlternativeTime {
+  start: string;
+  end: string;
+  score?: number;
+  reason?: string;
+}
+
+// Handle alternatives (if time not available)
       if (result.alternatives && Array.isArray(result.alternatives) && result.alternatives.length > 0) {
         console.log('Available alternative times:', result.alternatives);
         
         // Transform alternatives to proper format if needed
-        const formattedAlternatives = result.alternatives.map((alt: any) => {
+        const formattedAlternatives = result.alternatives.map((alt: AlternativeTime | string) => {
           // If it's already an object with start/end, use it
           if (typeof alt === 'object' && alt.start && alt.end) {
             return {
@@ -492,17 +502,18 @@ export default function BuilderPage() {
       // Don't reload messages - keep the optimistic UI
       
       toast({ title: "Success", description: "Response received" });
-    } catch (err: any) {
+    } catch (err) {
       console.error("handleSendMessage error", err);
       
       let errorMsg = "Failed to get response";
+      const errMessage = err instanceof Error ? err.message : String(err);
       
-      if (err.message?.includes("402")) {
+      if (errMessage.includes("402")) {
         errorMsg = "Lovable AI credits exhausted. Please add credits to continue.";
-      } else if (err.message?.includes("429")) {
+      } else if (errMessage.includes("429")) {
         errorMsg = "Rate limit exceeded. Please wait a moment and try again.";
-      } else if (err.message) {
-        errorMsg = err.message;
+      } else if (errMessage) {
+        errorMsg = errMessage;
       }
       
       setError(errorMsg);
@@ -535,9 +546,10 @@ export default function BuilderPage() {
 
       toast({ title: "Success", description: "Receptionist deleted successfully" });
       navigate("/dashboard");
-    } catch (err: any) {
+    } catch (err) {
       console.error("Delete receptionist error:", err);
-      toast({ title: "Error", description: err.message || "Failed to delete receptionist", variant: "destructive" });
+      const message = err instanceof Error ? err.message : "Failed to delete receptionist";
+      toast({ title: "Error", description: message, variant: "destructive" });
     } finally {
       setDeleting(false);
     }
@@ -584,11 +596,12 @@ export default function BuilderPage() {
       } else {
         throw new Error(data?.error || "Booking failed");
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Book alternative error:", err);
+      const message = err instanceof Error ? err.message : "Could not book appointment";
       toast({ 
         title: "Booking Failed", 
-        description: err.message || "Could not book appointment", 
+        description: message, 
         variant: "destructive" 
       });
     } finally {
@@ -697,13 +710,13 @@ export default function BuilderPage() {
 
       // Auto-save the generated content
       if ((generateKB && newKB) || (generatePrompt && newPrompt)) {
-        const updates: any = {};
+        const updates: Record<string, unknown> = {};
         if (generateKB && newKB) updates.knowledge_base = newKB;
         if (generatePrompt && newPrompt) updates.system_prompt = newPrompt;
 
         const { error: updateError } = await supabase
           .from('receptionists')
-          .update(updates)
+          .update(updates as any)
           .eq('id', receptionistId);
 
         if (!updateError) {
@@ -718,7 +731,7 @@ export default function BuilderPage() {
           });
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Auto-generate error:', err);
     }
   }
@@ -847,13 +860,13 @@ export default function BuilderPage() {
                       <label key={cap.key} className="flex items-start gap-2 cursor-pointer group">
                         <input
                           type="checkbox"
-                          checked={receptionist.capabilities?.[cap.key as keyof BusinessCapabilities] ?? false}
+                          checked={((receptionist.capabilities as BusinessCapabilities) ?? {})[cap.key as keyof BusinessCapabilities] ?? false}
                           onChange={(e) => {
                             setReceptionist(prev => ({
                               ...prev,
                               capabilities: {
-                                ...prev.capabilities!,
-                                [cap.key]: e.target.checked,
+                                ...(prev.capabilities as BusinessCapabilities)!,
+                                [cap.key as keyof BusinessCapabilities]: e.target.checked,
                               },
                             }));
                             setHasUnsavedChanges(true);
@@ -872,7 +885,7 @@ export default function BuilderPage() {
 
                 {/* Customer Information Fields */}
                 <CustomerFieldsConfig
-                  fields={receptionist.customer_fields || DEFAULT_CUSTOMER_FIELDS}
+                  fields={(receptionist.customer_fields as CustomerField[]) ?? DEFAULT_CUSTOMER_FIELDS}
                   onChange={(fields) => {
                     setReceptionist(prev => ({ ...prev, customer_fields: fields }));
                     setHasUnsavedChanges(true);

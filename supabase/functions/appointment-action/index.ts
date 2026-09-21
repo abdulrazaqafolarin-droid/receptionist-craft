@@ -298,10 +298,11 @@ serve(async (req) => {
     }
 
     throw new Error("Unknown action");
-  } catch (err: any) {
+  } catch (err) {
     console.error("[appointment-action] error:", err);
+    const message = err instanceof Error ? err.message : String(err);
     return new Response(
-      JSON.stringify({ error: err.message || String(err) }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

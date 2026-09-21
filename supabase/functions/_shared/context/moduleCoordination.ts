@@ -44,10 +44,13 @@ interface AnyDb {
   from(table: string): {
     insert(row: Record<string, unknown>): { then: (cb: (r: { error: { message: string } | null }) => void) => unknown };
     select(cols: string): {
-      eq(col: string, val: string): any;
-      contains(col: string, val: Record<string, unknown>): any;
-      order(col: string, opts?: { ascending?: boolean }): any;
-      limit(n: number): any;
+      eq(col: string, val: string): {
+        contains(col: string, val: Record<string, unknown>): {
+          order(col: string, opts?: { ascending?: boolean }): {
+            limit(n: number): Promise<{ data: unknown; error: unknown }>;
+          };
+        };
+      };
     };
   };
 }

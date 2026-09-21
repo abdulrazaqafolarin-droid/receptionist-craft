@@ -7,7 +7,7 @@ export async function notify(payload: {
   receptionist_id?: string;
   severity?: "info" | "warning" | "critical";
   category?: string;
-  meta?: any;
+  meta?: Record<string, unknown>;
 }) {
   const { data, error } = await supabase.functions.invoke("create-notification", {
     body: payload,

@@ -42,12 +42,42 @@ export function computeFingerprint(
   return null;
 }
 
+interface SupabaseClient {
+  from(table: string): {
+    select(cols: string): {
+      eq(col: string, val: string | number | boolean): {
+        ilike(col: string, val: string): {
+          maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+        };
+        maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+        eq(col: string, val: string): {
+          maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+        };
+        order(col: string, opts?: { ascending?: boolean }): {
+          limit(n: number): Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+      insert(row: Record<string, unknown>): {
+        select(): {
+          single(): Promise<{ data: unknown; error: unknown }>;
+        };
+        select(cols: string): {
+          maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+      update(row: Record<string, unknown>): {
+        eq(col: string, val: string): Promise<{ error: unknown }>;
+      };
+    };
+  };
+}
+
 /**
  * Resolve a customer: find existing or create new.
  * Returns the customer record and whether it was newly created.
  */
 export async function resolveCustomer(
-  supabase: any,
+  supabase: SupabaseClient,
   params: {
     receptionist_id: string;
     name?: string | null;
@@ -154,7 +184,7 @@ export async function resolveCustomer(
  * Uses read-then-write since Supabase client doesn't support raw SQL increments.
  */
 export async function bumpVisitCount(
-  supabase: any,
+  supabase: SupabaseClient,
   customerId: string,
 ): Promise<void> {
   const { data } = await supabase

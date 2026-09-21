@@ -128,7 +128,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
+      <Navbar user={null} />
       
       {/* Hero Section - Premium SaaS Design matching reference */}
       <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 via-background to-background" aria-labelledby="hero-title">

@@ -54,7 +54,7 @@ serve(async (req) => {
 
     // Transform data for export
     const exportData = data.map((row) => {
-      let qualityScore: any = {};
+      let qualityScore: Record<string, unknown> = {};
       try {
         qualityScore = typeof row.quality_score === "string"
           ? JSON.parse(row.quality_score)

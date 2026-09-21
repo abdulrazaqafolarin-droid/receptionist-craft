@@ -213,7 +213,7 @@ export interface ConversationState {
   // Parked flow state for topic switch resume (PARK MODE)
   parkedFlow?: FlowType | null;
   parkedStep?: FlowStep | null;
-  parkedSlots?: Record<string, any> | null;
+  parkedSlots?: Record<string, unknown> | null;
 }
 
 export interface TopicShiftSignal {

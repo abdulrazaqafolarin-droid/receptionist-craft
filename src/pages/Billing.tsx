@@ -156,9 +156,10 @@ export default function Billing() {
         toast.success(`Upgraded to ${planId.charAt(0).toUpperCase() + planId.slice(1)} plan`);
         await loadSubscription();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Upgrade error:", err);
-      toast.error(err.message || "Upgrade failed");
+      const message = err instanceof Error ? err.message : "Upgrade failed";
+      toast.error(message);
     } finally {
       setUpgrading(null);
     }

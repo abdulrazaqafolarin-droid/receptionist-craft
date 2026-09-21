@@ -289,12 +289,30 @@ Before stating ANY fact about prices, hours, services, products, or policies:
 **Violating this rule is a CRITICAL FAILURE that damages customer trust.**`;
 }
 
+interface ServiceRecord {
+  id: string;
+  name: string;
+  is_product?: boolean;
+  active?: boolean;
+  price?: number | null;
+  duration_minutes?: number;
+  description?: string | null;
+  stock_quantity?: number;
+}
+
+interface ReceptionistRecord {
+  id: string;
+  business_hours?: Record<string, string> | null;
+  timezone?: string | null;
+  knowledge_base?: string | null;
+}
+
 /**
  * Extract grounded data from database records
  */
 export function extractGroundedData(
-  services: any[],
-  receptionist: any,
+  services: ServiceRecord[],
+  receptionist: ReceptionistRecord,
   knowledgeBase: string | null
 ): GroundedData {
   const groundedServices: GroundedService[] = services

@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -28,6 +29,14 @@ interface EnabledModule {
   module_key: string;
   enabled: boolean;
   config_json: Record<string, unknown>;
+  tier_override: number | null;
+}
+
+// Supabase table row type for business_modules (not in generated types)
+interface BusinessModuleRow {
+  module_key: string;
+  enabled: boolean;
+  config_json: Record<string, unknown> | null | Json;
   tier_override: number | null;
 }
 
@@ -86,16 +95,16 @@ export function ModuleRegistry({ receptionistId, userId }: ModuleRegistryProps) 
 
   async function loadModules() {
     const { data } = await supabase
-      .from("business_modules" as any)
+      .from("business_modules")
       .select("*")
       .eq("receptionist_id", receptionistId);
 
     const map = new Map<string, EnabledModule>();
-    (data || []).forEach((m: any) => {
+    (data || []).forEach((m: BusinessModuleRow) => {
       map.set(m.module_key, {
         module_key: m.module_key,
         enabled: m.enabled,
-        config_json: m.config_json || {},
+        config_json: (m.config_json as Record<string, unknown>) || {},
         tier_override: m.tier_override,
       });
     });
@@ -109,7 +118,7 @@ export function ModuleRegistry({ receptionistId, userId }: ModuleRegistryProps) 
     if (existing) {
       // Update
       await supabase
-        .from("business_modules" as any)
+        .from("business_modules")
         .update({ enabled })
         .eq("receptionist_id", receptionistId)
         .eq("module_key", moduleKey);
@@ -122,7 +131,7 @@ export function ModuleRegistry({ receptionistId, userId }: ModuleRegistryProps) 
     } else {
       // Insert
       await supabase
-        .from("business_modules" as any)
+        .from("business_modules")
         .insert({
           receptionist_id: receptionistId,
           module_key: moduleKey,

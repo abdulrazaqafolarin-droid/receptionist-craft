@@ -32,6 +32,24 @@ export interface ConfigVersion {
   approved_at: string | null;
 }
 
+// Supabase table row type for config_versions (not in generated types)
+interface ConfigVersionRow {
+  id: string;
+  version_number: number;
+  change_source: string;
+  owner_input: string | null;
+  plan_text: string | null;
+  created_at: string;
+  approved_at: string | null;
+}
+
+// RPC response type for revert_config_version
+interface RevertConfigVersionResponse {
+  ok: boolean;
+  error?: string;
+  new_version: number;
+}
+
 interface VersionHistoryProps {
   receptionistId: string;
   /** Highest version_number — the one currently live. */
@@ -83,14 +101,14 @@ export function VersionHistory({
   async function load() {
     setLoading(true);
     const { data } = await supabase
-      .from("config_versions" as any)
+      .from("config_versions")
       .select(
         "id, version_number, change_source, owner_input, plan_text, created_at, approved_at",
       )
       .eq("receptionist_id", receptionistId)
       .order("version_number", { ascending: false })
       .limit(100);
-    setVersions((data as unknown as ConfigVersion[]) || []);
+    setVersions((data as ConfigVersionRow[]) || []);
     setLoading(false);
   }
 
@@ -108,13 +126,13 @@ export function VersionHistory({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase.rpc("revert_config_version" as any, {
+      const { data, error } = await supabase.rpc("revert_config_version", {
         p_receptionist_id: receptionistId,
         p_target_version: target.version_number,
       });
       if (error) throw error;
 
-      const result = (data as any) || {};
+      const result = (data as unknown as RevertConfigVersionResponse) || {};
       if (result.ok === false) throw new Error(result.error || "Failed to revert");
 
       toast.success(
@@ -122,8 +140,9 @@ export function VersionHistory({
       );
       await load();
       onReverted?.(target.version_number, result.new_version);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to revert");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to revert";
+      toast.error(message);
     } finally {
       setReverting(null);
     }

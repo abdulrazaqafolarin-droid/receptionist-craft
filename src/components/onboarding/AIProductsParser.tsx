@@ -24,7 +24,7 @@ type ParsedProduct = {
 
 type AIProductsParserProps = {
   businessType: string;
-  onAddItems: (items: ParsedProduct[]) => void;
+  onAddItems: (items: (ParsedProduct | { type: ItemType })[]) => void;
   disabled?: boolean;
 };
 
@@ -55,7 +55,7 @@ export function AIProductsParser({ businessType, onAddItems, disabled }: AIProdu
         return;
       }
 
-      const productItems = (data.items || []).filter((item: any) => item.type === 'product');
+      const productItems = (data.items || []).filter((item: ParsedProduct) => item.type === 'product');
       
       if (productItems.length === 0) {
         toast.error("Could not identify any products. Please try describing them differently.");
@@ -73,9 +73,10 @@ export function AIProductsParser({ businessType, onAddItems, disabled }: AIProdu
       setParsedItems(itemsProcessed);
       setShowResults(true);
       toast.success(`Found ${itemsProcessed.length} products!`);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Parse error:", error);
-      toast.error(error.message || "Failed to parse your input. Please try again.");
+      const message = error instanceof Error ? error.message : "Failed to parse your input. Please try again.";
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -129,9 +130,10 @@ export function AIProductsParser({ businessType, onAddItems, disabled }: AIProdu
     if (parsedItems.length === 0) return;
     const itemsToAdd = parsedItems.map(item => ({
       ...item,
+      type: 'product' as ItemType,
       price: item.price ?? undefined,
     }));
-    onAddItems(itemsToAdd as any);
+    onAddItems(itemsToAdd);
     toast.success(`Added ${parsedItems.length} products!`);
     setParsedItems([]);
     setInputText("");

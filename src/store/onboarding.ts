@@ -17,13 +17,18 @@ export type BusinessCapabilities = {
   deposit_percent: number;
 };
 
-type ServiceOrProduct = {
+export type ServiceOrProduct = {
   name: string;
   duration_minutes: number;
   description?: string;
   active: boolean;
   type: ItemType;
   price?: number;
+  // Allow extra fields from AI parsers
+  priceSpecified?: boolean;
+  noTime?: boolean;
+  addPriceChoice?: 'now' | 'later' | null;
+  [key: string]: unknown;
 };
 
 type AvailabilityRule = {
@@ -186,10 +191,10 @@ export const useOnboardingStore = create<OnboardingState>()(
     {
       name: 'onboarding-storage',
       // Migrate old persisted state that may be missing capabilities
-      migrate: (persistedState: any, version: number) => {
+      migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as OnboardingState;
         if (version < 2 && !state.timezone) {
-          (state as any).timezone = '';
+          state.timezone = '';
         }
         // Ensure capabilities exists
         if (!state.receptionist?.capabilities) {

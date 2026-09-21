@@ -50,9 +50,10 @@ export function AppointmentCalendar({ appointments, onEdit, onRefresh }: Appoint
       if (error) throw error;
       toast.success("Appointment cancelled successfully");
       onRefresh?.();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Cancel error:", err);
-      toast.error(err.message || "Failed to cancel appointment");
+      const message = err instanceof Error ? err.message : "Failed to cancel appointment";
+      toast.error(message);
     } finally {
       setCancellingId(null);
       setConfirmCancel(null);

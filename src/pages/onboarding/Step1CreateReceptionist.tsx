@@ -291,8 +291,9 @@ export default function Step1CreateReceptionist() {
       setReceptionist({ greeting_message: greetingMessage });
       toast.success("Receptionist created successfully!");
       setStep(2);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to create receptionist");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create receptionist";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -506,7 +507,7 @@ export default function Step1CreateReceptionist() {
 
         <div className="space-y-2">
           <Label>Tone & Personality *</Label>
-          <RadioGroup value={receptionist.tone} onValueChange={(value: any) => setReceptionist({ tone: value })}>
+          <RadioGroup value={receptionist.tone} onValueChange={(value: "friendly" | "professional" | "playful") => setReceptionist({ tone: value })}>
             <div className="flex items-center space-x-2 p-3 border rounded-md">
               <RadioGroupItem value="friendly" id="friendly" />
               <Label htmlFor="friendly" className="font-normal cursor-pointer flex-1">

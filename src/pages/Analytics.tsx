@@ -14,6 +14,23 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { FloatingBackground } from "@/components/FloatingBackground";
 
+interface User {
+  id: string;
+  email?: string | null;
+  [key: string]: unknown;
+  // Allow additional properties from Supabase User type
+  aud?: string;
+  role?: string;
+  created_at?: string;
+  updated_at?: string;
+  phone?: string;
+  confirmed_at?: string;
+  last_sign_in_at?: string;
+  app_metadata?: Record<string, unknown>;
+  user_metadata?: Record<string, unknown>;
+  identities?: Array<{ identity_data: Record<string, unknown>; provider: string; }>;
+}
+
 type Analytics = {
   conversation_metrics: {
     total_conversations: number;
@@ -89,7 +106,7 @@ const DATE_PRESETS = [
 ];
 
 export default function Analytics() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [cached, setCached] = useState(false);
@@ -105,7 +122,7 @@ export default function Analytics() {
     setLoading(true);
     
     const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
+    setUser(user as User | null);
 
     if (!user) {
       setLoading(false);
@@ -172,7 +189,15 @@ export default function Analytics() {
       ]
     : [];
 
-  const StatCard = ({ title, value, subtitle, icon: Icon, color }: any) => (
+  interface StatCardProps {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  icon: React.ElementType;
+  color: string;
+}
+
+const StatCard = ({ title, value, subtitle, icon: Icon, color }: StatCardProps) => (
     <Card className="border-2 border-border/50 hover:border-primary/20 hover:shadow-lg transition-all">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>

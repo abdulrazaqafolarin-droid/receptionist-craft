@@ -19,11 +19,17 @@ interface Conversation {
   receptionists?: { name: string; business_name: string };
 }
 
+interface ReceptionistSummary {
+  id: string;
+  name: string;
+  business_name: string;
+}
+
 export default function Conversations() {
   const { toast } = useToast();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [filteredConversations, setFilteredConversations] = useState<Conversation[]>([]);
-  const [receptionists, setReceptionists] = useState<any[]>([]);
+  const [receptionists, setReceptionists] = useState<ReceptionistSummary[]>([]);
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");

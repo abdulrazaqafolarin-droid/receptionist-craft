@@ -67,8 +67,9 @@ export default function Step4FAQs() {
 
       toast.success("FAQs saved successfully!");
       setStep(5);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to save FAQs");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save FAQs";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
