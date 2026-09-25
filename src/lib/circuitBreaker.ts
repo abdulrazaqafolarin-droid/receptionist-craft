@@ -113,6 +113,10 @@ export class CircuitBreaker<T> {
     throw new Error(`[${this.name}] Service temporarily unavailable. Last error: ${this.lastError}`);
   }
 
+  getState(): CircuitState {
+    return this.state;
+  }
+
   getStats(): CircuitBreakerStats {
     return {
       failures: this.failures,

@@ -440,15 +440,19 @@ interface SalesModeConfig {
 
 interface SalesModeState {
   score: number;
+  score1to10: number;
+  factors: string[];
   effectiveMode: 'sales' | 'booking' | 'support';
   inSales: boolean;
   holdUntilTurn: number;
   belowExitCount: number;
   turnCounter: number;
   threshold: number;
+  thresholdRaw: number;
   hysteresis: number;
   minHoldTurns: number;
   exitConsecutiveTurns: number;
+  enabled: boolean;
 }
 
 type UIIntent =
@@ -658,6 +662,8 @@ function readSalesModeConfig(receptionist: any): SalesModeConfig {
     hysteresis: clamp01(Number.isFinite(hysteresis) ? hysteresis : 0.1),
     minHoldTurns: Math.max(1, Number.isFinite(minHoldTurns) ? Math.floor(minHoldTurns) : 3),
     exitConsecutiveTurns: Math.max(1, Number.isFinite(exitConsecutiveTurns) ? Math.floor(exitConsecutiveTurns) : 2),
+    // NEW: Return raw 1-10 threshold for UI display
+    thresholdRaw: Math.round(clamp01(Number.isFinite(threshold) ? threshold : 0.65) * 10),
   };
 }
 
@@ -665,8 +671,9 @@ function computeIntentScore(
   message: string,
   messageAnalysis: MessageAnalysis,
   context: ConversationContext,
-): number {
+): { score: number; score1to10: number; factors: string[] } {
   const lowerMsg = message.toLowerCase();
+  const factors: string[] = [];
 
   const intentBaseScores: Record<string, number> = {
     order_product: 0.85,
@@ -688,18 +695,85 @@ function computeIntentScore(
   };
 
   let score = intentBaseScores[messageAnalysis.detectedIntent] ?? 0.25;
+  if (score !== 0.25) factors.push(`intent:${messageAnalysis.detectedIntent}`);
 
+  // Positive signals
   if (/buy|purchase|order|checkout|cart|price|cost|deal|quote|availability|book|schedule|reserve|today|now/i.test(lowerMsg)) {
     score += 0.1;
+    factors.push("buying_keywords");
   }
+  
+  // Time urgency
+  if (/today|now|asap|immediately|this week|tomorrow|soon/i.test(lowerMsg)) {
+    score += 0.08;
+    factors.push("time_urgency");
+  }
+  
+  // Specific intent signals
+  if (/which (one|service|time|slot) (is best|works|available)/i.test(lowerMsg)) {
+    score += 0.12;
+    factors.push("comparison_seeking");
+  }
+  
+  if (/how (much|long|do i|can i)/i.test(lowerMsg)) {
+    score += 0.05;
+    factors.push("process_inquiry");
+  }
+
+  // Negative signals
   if (/just looking|not ready|later|maybe later|no thanks|not interested|stop|unsubscribe/i.test(lowerMsg)) {
     score -= 0.25;
+    factors.push("disinterest");
   }
-  if (context.productMentioned || context.serviceMentioned) score += 0.05;
-  if (context.customerName && (context.customerPhone || context.customerEmail)) score += 0.05;
-  if (messageAnalysis.hasUncertainty) score -= 0.08;
+  if (/maybe|not sure|don't know|unsure|thinking/i.test(lowerMsg)) {
+    score -= 0.1;
+    factors.push("hesitation");
+  }
 
-  return Number(clamp01(score).toFixed(3));
+  // Context boosters
+  if (context.productMentioned || context.serviceMentioned) {
+    score += 0.05;
+    factors.push("product_service_mentioned");
+  }
+  if (context.customerName && (context.customerPhone || context.customerEmail)) {
+    score += 0.05;
+    factors.push("contact_captured");
+  }
+  if (context.selectedProducts?.length > 0) {
+    score += 0.1;
+    factors.push("products_in_cart");
+  }
+  if (context.serviceId) {
+    score += 0.08;
+    factors.push("service_selected");
+  }
+  if (context.bookingConfirmed || context.orderConfirmed) {
+    score -= 0.15; // Already converted, no need for sales mode
+    factors.push("already_converted");
+  }
+  if (messageAnalysis.hasUncertainty) {
+    score -= 0.08;
+    factors.push("uncertainty");
+  }
+
+  // Conversation phase awareness
+  const phaseBoosts: Record<string, number> = {
+    booking: 0.1,
+    ordering: 0.1,
+    confirmation: -0.1,
+    closing: -0.1,
+  };
+  if (phaseBoosts[context.conversationPhase]) {
+    score += phaseBoosts[context.conversationPhase];
+    factors.push(`phase:${context.conversationPhase}`);
+  }
+
+  const clamped = clamp01(score);
+  return {
+    score: Number(clamped.toFixed(3)),
+    score1to10: Math.max(1, Math.min(10, Math.round(clamped * 10))),
+    factors,
+  };
 }
 
 function hasDisinterestSignal(message: string): boolean {
@@ -721,11 +795,11 @@ function hasActionableContext(context: ConversationContext): boolean {
 function resolveEffectiveMode(
   receptionist: any,
   slots: Record<string, any> | null | undefined,
-  intentScore: number,
+  intentScoreResult: { score: number; score1to10: number; factors: string[] },
   message?: string,
   context?: ConversationContext,
 ): SalesModeState {
-  const { enabled, threshold, hysteresis, minHoldTurns, exitConsecutiveTurns } = readSalesModeConfig(receptionist);
+  const { enabled, threshold, hysteresis, minHoldTurns, exitConsecutiveTurns, thresholdRaw } = readSalesModeConfig(receptionist);
   const configuredBaseMode: 'sales' | 'booking' | 'support' = receptionist.ai_mode === 'support'
     ? 'support'
     : (receptionist.ai_mode === 'sales' ? 'sales' : 'booking');
@@ -734,6 +808,10 @@ function resolveEffectiveMode(
     ? slots.effective_mode
     : configuredBaseMode;
   const previousInSales = slots?.sales_mode_active === true || previousEffectiveMode === 'sales';
+
+  const intentScore = intentScoreResult.score;
+  const intentScore1to10 = intentScoreResult.score1to10;
+  const factors = intentScoreResult.factors;
 
   let inSales = dynamicSalesEnabled && previousInSales;
   let holdUntilTurn = Number(slots?.sales_mode_hold_until_turn ?? 0);
@@ -776,12 +854,15 @@ function resolveEffectiveMode(
 
   return {
     score: intentScore,
+    score1to10: intentScore1to10,
+    factors,
     effectiveMode,
     inSales,
     holdUntilTurn,
     belowExitCount,
     turnCounter,
     threshold,
+    thresholdRaw,
     hysteresis,
     minHoldTurns,
     exitConsecutiveTurns,
@@ -2390,13 +2471,14 @@ if (!GEMINI_API_KEY) {
     //                                                                        
     // DYNAMIC SALES MODE: compute intent score each turn and resolve effective mode
     //                                                                        
-    const intentScore = computeIntentScore(message, messageAnalysis, conversationContext);
-    const salesModeState = resolveEffectiveMode(receptionist, conversationState.slots as Record<string, any>, intentScore, message, conversationContext);
+    const intentScoreResult = computeIntentScore(message, messageAnalysis, conversationContext);
+    const intentScore = intentScoreResult.score;
+    const salesModeState = resolveEffectiveMode(receptionist, conversationState.slots as Record<string, any>, intentScoreResult, message, conversationContext);
     const effectiveMode = salesModeState.effectiveMode;
     console.log(
-      `[Widget Chat] Effective Mode=${effectiveMode}, IntentScore=${intentScore}, ` +
+      `[Widget Chat] Effective Mode=${effectiveMode}, IntentScore=${intentScore} (${intentScoreResult.score1to10}/10), ` +
       `Threshold=${salesModeState.threshold}, HoldUntilTurn=${salesModeState.holdUntilTurn}, ` +
-      `BelowExitCount=${salesModeState.belowExitCount}`
+      `BelowExitCount=${salesModeState.belowExitCount}, Factors=${intentScoreResult.factors.join(',')}`
     );
 
     //                                                                        
@@ -2864,6 +2946,7 @@ return {
         } : { triggered: false },
         intent: messageAnalysis.detectedIntent,
         intent_score: intentScore,
+        intent_score_1to10: intentScoreResult.score1to10,
         effective_mode: effectiveMode,
         emotional_state: conversationContext.emotionalState,
         conversation_phase: conversationContext.conversationPhase
@@ -2909,6 +2992,7 @@ return {
           isUnanswered ? "unanswered" : null,
           isEscalation ? "escalation" : null,
           messageAnalysis.detectedIntent,
+          intentScoreResult.score1to10 >= 8 ? "high_intent" : null,
         ].filter(Boolean),
         flagged: isUnanswered || isEscalation,
       });
@@ -3389,11 +3473,14 @@ return {
       engineState: JSON.stringify(engineState),
       effective_mode: effectiveMode,
       intent_score: intentScore,
+      intent_score_1to10: intentScoreResult.score1to10,
+      intent_score_factors: intentScoreResult.factors.join(','),
       sales_mode_active: salesModeState.inSales,
       sales_mode_hold_until_turn: salesModeState.holdUntilTurn,
       sales_mode_below_exit_count: salesModeState.belowExitCount,
       sales_mode_turn_counter: salesModeState.turnCounter,
       sales_mode_threshold: salesModeState.threshold,
+      sales_mode_threshold_raw: salesModeState.thresholdRaw,
       sales_mode_hysteresis: salesModeState.hysteresis,
       sales_mode_min_hold_turns: salesModeState.minHoldTurns,
       sales_mode_exit_consecutive_turns: salesModeState.exitConsecutiveTurns,
@@ -3547,6 +3634,9 @@ return {
         businessName: receptionist.business_name,
         effectiveMode,
         intentScore,
+        intentScore1to10: intentScoreResult.score1to10,
+        intentScoreFactors: intentScoreResult.factors,
+        moneyModeThresholdRaw: salesModeState.thresholdRaw,
         qualityScore: qualityRubric.overall_score,
         bookingCreated: bookingResult ? true : false,
         bookingId: bookingResult?.id || null,

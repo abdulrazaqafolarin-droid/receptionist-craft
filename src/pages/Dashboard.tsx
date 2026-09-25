@@ -4,13 +4,14 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageCircle, Calendar, CalendarDays, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign, ShoppingBag, LayoutDashboard, Bot } from "lucide-react";
+import { MessageCircle, Calendar, CalendarDays, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign, ShoppingBag, LayoutDashboard, Bot, TrendingUp, TrendingDown, Users, Target, ChevronUp, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { RevenueEngine } from "@/components/RevenueEngine";
 import { DashboardCharts } from "@/components/DashboardCharts";
 import { SuccessSignalsCard } from "@/components/SuccessSignalsCard";
 import { OwnerChat } from "@/components/OwnerChat";
+import { ConversationalManagement } from "@/components/ConversationalManagement";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -23,6 +24,8 @@ export default function Dashboard() {
     orders: 0,
     activeReceptionists: 0,
   });
+  const [selectedReceptionistId, setSelectedReceptionistId] = useState<string | null>(null);
+  const [showOperatorDetail, setShowOperatorDetail] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -33,6 +36,12 @@ export default function Dashboard() {
       navigate("/onboarding-wizard");
     }
   }, [dataLoaded, receptionists, user, navigate]);
+
+  useEffect(() => {
+    if (receptionists.length > 0 && !selectedReceptionistId) {
+      setSelectedReceptionistId(receptionists[0].id);
+    }
+  }, [receptionists, selectedReceptionistId]);
 
   const loadData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -159,6 +168,105 @@ export default function Dashboard() {
                 <Button onClick={() => navigate('/money-mode')} className="bg-amber-500 text-white hover:bg-amber-600">
                   Open Money Mode
                 </Button>
+              </CardContent>
+            </Card>
+          </section>
+        )}
+
+        {/* AI Operator Centerpiece */}
+        {receptionists.length > 0 && selectedReceptionistId && (
+          <section className="mb-8 animate-fade-in" aria-label="Your AI Operator">
+            <Card className="border-2 border-primary/30 bg-gradient-to-br from-primary/5 via-card to-card liquid-glass overflow-hidden">
+              <CardHeader className="pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary to-purple flex items-center justify-center shadow-lg">
+                      <Bot className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-primary" />
+                        Your AI Operator
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        {receptionists.find(r => r.id === selectedReceptionistId)?.business_name || "Active"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant={receptionists.find(r => r.id === selectedReceptionistId)?.active ? "default" : "secondary"} 
+                      className={receptionists.find(r => r.id === selectedReceptionistId)?.active ? "bg-success" : ""}
+                    >
+                      {receptionists.find(r => r.id === selectedReceptionistId)?.active ? "Live" : "Paused"}
+                    </Badge>
+                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                      Mode: {receptionists.find(r => r.id === selectedReceptionistId)?.ai_mode || 'booking'}
+                    </Badge>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setShowOperatorDetail(!showOperatorDetail)}
+                      className="gap-1"
+                    >
+                      {showOperatorDetail ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      {showOperatorDetail ? "Hide Details" : "Manage Operator"}
+                    </Button>
+                    <Button 
+                      onClick={() => navigate('/money-mode')} 
+                      size="sm"
+                      className="bg-amber-500 text-white hover:bg-amber-600"
+                    >
+                      <DollarSign className="h-4 w-4 mr-1" />
+                      Money Mode
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              
+              {/* Executive Summary Card */}
+              <CardContent className="pb-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                  <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                    <div className="flex items-center gap-2 mb-1">
+                      <TrendingUp className="h-4 w-4 text-green-600" />
+                      <span className="text-xs font-medium text-green-800">Revenue This Week</span>
+                    </div>
+                    <div className="text-2xl font-bold text-green-700">$0</div>
+                    <div className="text-xs text-green-600">vs last week</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Target className="h-4 w-4 text-amber-600" />
+                      <span className="text-xs font-medium text-amber-800">Missed Opportunities</span>
+                    </div>
+                    <div className="text-2xl font-bold text-amber-700">0</div>
+                    <div className="text-xs text-amber-600">Ghosted quotes</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                    <div className="flex items-center gap-2 mb-1">
+                      <MessageCircle className="h-4 w-4 text-blue-600" />
+                      <span className="text-xs font-medium text-blue-800">AI Conversion</span>
+                    </div>
+                    <div className="text-2xl font-bold text-blue-700">0%</div>
+                    <div className="text-xs text-blue-600">Chat to booking</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Users className="h-4 w-4 text-purple-600" />
+                      <span className="text-xs font-medium text-purple-800">Team Utilization</span>
+                    </div>
+                    <div className="text-2xl font-bold text-purple-700">0%</div>
+                    <div className="text-xs text-purple-600">Staff capacity</div>
+                  </div>
+                </div>
+
+                {/* Conversational Management - Expanded */}
+                {showOperatorDetail && (
+                  <div className="border-t border-border/50 pt-4 animate-slide-in">
+                    <ConversationalManagement receptionistId={selectedReceptionistId} />
+                  </div>
+                )}
               </CardContent>
             </Card>
           </section>

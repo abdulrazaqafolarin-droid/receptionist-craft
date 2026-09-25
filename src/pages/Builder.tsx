@@ -716,7 +716,7 @@ capabilities: receptionist.capabilities,
 
         const { error: updateError } = await supabase
           .from('receptionists')
-          .update(updates as any)
+          .update(updates as Record<string, unknown>)
           .eq('id', receptionistId);
 
         if (!updateError) {

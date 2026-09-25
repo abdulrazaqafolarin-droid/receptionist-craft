@@ -139,7 +139,7 @@ export default function Settings() {
       }
 
       toast.success("Profile updated successfully");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error saving profile:", error);
       toast.error(error.message || "Failed to save profile");
     } finally {
@@ -163,7 +163,7 @@ export default function Settings() {
       toast.success("Password updated successfully");
       setPasswordDialogOpen(false);
       setPasswordForm({ newPassword: "", confirmPassword: "" });
-    } catch (error: any) {
+    } catch (error) {
       toast.error(error.message || "Failed to update password");
     } finally {
       setChangingPassword(false);

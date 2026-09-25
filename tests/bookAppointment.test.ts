@@ -57,13 +57,9 @@ async function bookAppointment(request: BookAppointmentRequest): Promise<BookApp
   }
 }
 
-// Mock the global fetch
-const fetchMock = vi.hoisted(() => vi.fn());
-globalThis.fetch = fetchMock;
-
 describe("bookAppointment", () => {
   beforeEach(() => {
-    fetchMock.mockReset();
+    globalThis.fetch = vi.fn();
   });
 
   const validRequest = {
@@ -88,7 +84,7 @@ describe("bookAppointment", () => {
     },
   };
 
-  it("successfully books an appointment", async () => {
+it("successfully books an appointment", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ success: true, appointment: { id: "apt-001", start_time: "2026-08-15T10:00:00Z", end_time: "2026-08-15T11:00:00Z", service: "Dental Cleaning", customer_name: "John Doe" } }),
@@ -105,7 +101,7 @@ describe("bookAppointment", () => {
       idempotencyKey: "idem-key-123",
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(globalThis.fetch).toHaveBeenCalledWith(
       "https://esvrhnlwquunsdduvbnr.supabase.co/functions/v1/book-appointment",
       expect.objectContaining({
         method: "POST",
@@ -149,7 +145,7 @@ describe("bookAppointment", () => {
   });
 
   it("handles conflict - slot no longer available", async () => {
-    fetchMock.mockResolvedValue({
+    globalThis.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({
         success: false,
@@ -171,7 +167,7 @@ describe("bookAppointment", () => {
   });
 
   it("handles validation error - missing required fields", async () => {
-    fetchMock.mockResolvedValue({
+    globalThis.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({
         success: false,

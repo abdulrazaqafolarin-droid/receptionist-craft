@@ -48,6 +48,7 @@ import MoneyModePage from "./pages/MoneyMode";
 import ConversationalOnboarding from "./pages/ConversationalOnboarding";
 import ConversationalManagementPage from "./pages/ConversationalManagementPage";
 import TestConversations from "./pages/TestConversations";
+import MEODashboard from "./pages/MEODashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -192,6 +193,7 @@ const App = () => {
                               <Route path="/escalations" element={<Escalations />} />
                               <Route path="/billing" element={<Billing />} />
                               <Route path="/money-mode" element={<MoneyModePage />} />
+                              <Route path="/meo-dashboard" element={<MEODashboard />} />
                               <Route path="/conversational-onboarding" element={<ConversationalOnboarding />} />
                               <Route path="/operator-management" element={<ConversationalManagementPage />} />
                               <Route path="/test/:id" element={<TestConversations />} />

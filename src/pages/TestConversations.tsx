@@ -66,7 +66,7 @@ export default function TestConversations() {
           order_created: data.order_created,
         },
       ]);
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: "Test failed",
         description: err.message || "Could not reach the AI",
@@ -94,7 +94,7 @@ export default function TestConversations() {
         title: "Test data cleaned up",
         description: `${data.deleted || 0} test artifacts removed`,
       });
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: "Cleanup failed",
         description: err.message,

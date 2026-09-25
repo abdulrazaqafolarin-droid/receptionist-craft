@@ -15,7 +15,7 @@ interface NotificationLog {
   body: string | null;
   severity: string;
   category: string | null;
-  metadata: any;
+  metadata: Record<string, unknown>;
   created_at: string;
   receptionist_id: string | null;
   read: boolean;
@@ -39,7 +39,7 @@ export default function RealtimeLogs() {
       if (error) throw error;
       setItems((data || []) as NotificationLog[]);
       toast.success("Logs refreshed");
-    } catch (error: any) {
+    } catch (error) {
       toast.error("Failed to load logs");
       console.error(error);
     } finally {

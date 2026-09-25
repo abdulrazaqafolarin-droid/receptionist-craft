@@ -49,7 +49,7 @@ export default function Widget({ receptionistId }: Props) {
       try {
         setLoading(true);
         const { data, error } = await supabase
-          .from("widget_receptionists" as any)
+          .from("widget_receptionists")
           .select("id, name, business_name, greeting_message, timezone, tone")
           .eq("id", receptionistId)
           .maybeSingle<WidgetReceptionistRow>();

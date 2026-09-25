@@ -220,7 +220,7 @@ export default function Notifications() {
           </Button>
         </div>
 
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as any)} className="mb-6">
+        <Tabs value={filter} onValueChange={(v) => setFilter(v)} className="mb-6">
           <TabsList>
             <TabsTrigger value="all">All ({notifications.length})</TabsTrigger>
             <TabsTrigger value="unread">

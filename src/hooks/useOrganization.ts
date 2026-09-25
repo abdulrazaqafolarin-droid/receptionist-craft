@@ -124,12 +124,12 @@ export function useOrganization() {
     const dbUpdates = { ...updates };
     if (dbUpdates.metadata !== undefined) {
       // Convert OrganizationMetadata to Json for database
-      (dbUpdates as any).metadata = dbUpdates.metadata;
+      (dbUpdates as Record<string, unknown>).metadata = dbUpdates.metadata;
     }
     // Cast to unknown first to avoid RejectExcessProperties
     const { error } = await supabase
       .from("organizations")
-      .update(dbUpdates as any)
+      .update(dbUpdates as Record<string, unknown>)
       .eq("id", id);
 
     if (error) {

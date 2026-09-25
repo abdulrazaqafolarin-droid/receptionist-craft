@@ -41,6 +41,15 @@ interface OrderItem {
   unit_price: number | null;
 }
 
+type ReceptionistData = {
+  id: string;
+  name: string | null;
+  business_name: string | null;
+  greeting_message: string | null;
+  timezone: string | null;
+  tone: string | null;
+};
+
 interface Order {
   id: string;
   receptionist_id: string;
@@ -55,7 +64,7 @@ interface Order {
   items?: OrderItem[];
 }
 
-const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
+const statusConfig: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
   pending: { label: "Pending", color: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20", icon: Clock },
   confirmed: { label: "Confirmed", color: "bg-blue-500/10 text-blue-600 border-blue-500/20", icon: Check },
   processing: { label: "Processing", color: "bg-purple-500/10 text-purple-600 border-purple-500/20", icon: Package },
@@ -65,7 +74,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
 
 export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [receptionists, setReceptionists] = useState<any[]>([]);
+  const [receptionists, setReceptionists] = useState<ReceptionistData[]>([]);
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -154,7 +163,7 @@ export default function Orders() {
 
       toast({ title: "Success", description: `Order ${newStatus}` });
       loadOrders();
-    } catch (err: any) {
+    } catch (err) {
       console.error("updateOrderStatus error", err);
       toast({ title: "Error", description: err.message || "Failed to update order", variant: "destructive" });
     } finally {

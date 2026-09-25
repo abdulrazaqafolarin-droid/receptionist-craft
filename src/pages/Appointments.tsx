@@ -17,6 +17,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
 
+type ReceptionistData = {
+  id: string;
+  name: string | null;
+  business_name: string | null;
+  greeting_message: string | null;
+  timezone: string | null;
+  tone: string | null;
+};
+
 interface Order {
   id: string;
   receptionist_id: string;
@@ -26,7 +35,7 @@ interface Order {
   status: string;
   total_amount?: number | null;
   notes?: string | null;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   items?: OrderItem[];
@@ -45,7 +54,7 @@ export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [receptionists, setReceptionists] = useState<any[]>([]);
+  const [receptionists, setReceptionists] = useState<ReceptionistData[]>([]);
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);

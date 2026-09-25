@@ -23,6 +23,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+type ReceptionistData = {
+  id: string;
+  name: string | null;
+  business_name: string | null;
+  greeting_message: string | null;
+  timezone: string | null;
+  tone: string | null;
+};
+
 interface ServiceOrProduct {
   id: string;
   name: string;
@@ -40,7 +49,7 @@ interface ServiceOrProduct {
 
 export default function Services() {
   const [items, setItems] = useState<ServiceOrProduct[]>([]);
-  const [receptionists, setReceptionists] = useState<any[]>([]);
+  const [receptionists, setReceptionists] = useState<ReceptionistData[]>([]);
   const [selectedReceptionist, setSelectedReceptionist] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -163,7 +172,7 @@ export default function Services() {
         stock_quantity: null,
       });
       loadItems();
-    } catch (err: any) {
+    } catch (err) {
       console.error("createItem error", err);
       toast({ title: "Error", description: err.message || "Failed to create item", variant: "destructive" });
     } finally {
@@ -190,7 +199,7 @@ export default function Services() {
       setEditingItem(null);
       setEditForm({});
       loadItems();
-    } catch (err: any) {
+    } catch (err) {
       console.error("updateItem error", err);
       toast({ title: "Error", description: err.message || "Failed to update item", variant: "destructive" });
     }
@@ -204,7 +213,7 @@ export default function Services() {
 
       toast({ title: "Success", description: `${item.duration_minutes > 0 ? 'Service' : 'Product'} deleted` });
       loadItems();
-    } catch (err: any) {
+    } catch (err) {
       console.error("deleteItem error", err);
       toast({ title: "Error", description: err.message || "Failed to delete item", variant: "destructive" });
     } finally {
@@ -224,7 +233,7 @@ export default function Services() {
 
       toast({ title: "Success", description: `Item ${!currentActive ? "activated" : "deactivated"}` });
       loadItems();
-    } catch (err: any) {
+    } catch (err) {
       console.error("toggleItemActive error", err);
       toast({ title: "Error", description: err.message || "Failed to update item", variant: "destructive" });
     }

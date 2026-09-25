@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Sparkles, ArrowLeft, Send, Loader2 } from "lucide-react";
+import { Sparkles, ArrowLeft, Send, Loader2, Mic, MicOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { recordSignal } from "@/lib/successSignals";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { PlanReview } from "@/components/PlanReview";
+import VoiceInputButton from "@/components/widget/VoiceInputButton";
 
 interface PlanSection {
   id: string;
@@ -43,6 +44,13 @@ export default function ConversationalOnboarding() {
     versionId: string;
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  const handleVoiceTranscript = (text: string) => {
+    setDescription((prev) => (prev ? `${prev} ${text}` : text));
+    setVoiceError(null);
+  };
 
   async function handleDescribe() {
     if (!description.trim()) return;
@@ -207,7 +215,7 @@ export default function ConversationalOnboarding() {
       <FloatingBackground variant="minimal" />
       <div className="relative z-10 max-w-3xl mx-auto p-6">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-8">
+        <div className="flex items-center gap-3 mb-8 animate-fade-in">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -226,7 +234,7 @@ export default function ConversationalOnboarding() {
 
         {/* Step: Describe */}
         {step === "describe" && (
-          <Card>
+          <Card className="glass-card hover-lift stagger-1">
             <CardContent className="p-6 space-y-4">
               <div>
                 <h2 className="font-medium mb-2">Tell me about your business</h2>
@@ -241,11 +249,24 @@ export default function ConversationalOnboarding() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                 />
+                <div className="flex items-center gap-2 pt-2">
+                  <VoiceInputButton
+                    onTranscript={handleVoiceTranscript}
+                    disabled={loading}
+                    className=""
+                  />
+                  {voiceError && (
+                    <span className="text-xs text-destructive">{voiceError}</span>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    Or type your description above
+                  </span>
+                </div>
               </div>
               <Button
                 onClick={handleDescribe}
                 disabled={!description.trim() || loading}
-                className="w-full"
+                className="w-full pressable"
                 size="lg"
               >
                 {loading ? (
@@ -266,20 +287,22 @@ export default function ConversationalOnboarding() {
 
         {/* Step: Review Plan */}
         {step === "review" && planData && (
-          <PlanReview
-            planText={planData.planText}
-            sections={planData.sections}
-            reasoningNotes={planData.reasoningNotes}
-            onApprove={handleApprove}
-            onEdit={handleEdit}
-            loading={loading}
-            mode="onboarding"
-          />
+          <div className="animate-fade-in">
+            <PlanReview
+              planText={planData.planText}
+              sections={planData.sections}
+              reasoningNotes={planData.reasoningNotes}
+              onApprove={handleApprove}
+              onEdit={handleEdit}
+              loading={loading}
+              mode="onboarding"
+            />
+          </div>
         )}
 
         {/* Step: Building */}
         {step === "building" && (
-          <Card>
+          <Card className="glass-card animate-scale-in">
             <CardContent className="flex flex-col items-center justify-center py-16">
               <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
               <h2 className="text-lg font-medium mb-2">Building your AI Operator</h2>
@@ -292,9 +315,9 @@ export default function ConversationalOnboarding() {
 
         {/* Step: Done */}
         {step === "done" && (
-          <Card>
+          <Card className="glass-card animate-scale-in">
             <CardContent className="flex flex-col items-center justify-center py-16">
-              <div className="h-16 w-16 rounded-full bg-green-500/10 flex items-center justify-center mb-4">
+              <div className="h-16 w-16 rounded-full bg-green-500/10 flex items-center justify-center mb-4 animate-bounce-subtle">
                 <Sparkles className="h-8 w-8 text-green-600" />
               </div>
               <h2 className="text-lg font-medium mb-2">Your AI Operator is ready!</h2>

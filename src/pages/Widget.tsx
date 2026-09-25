@@ -22,7 +22,49 @@ type Message = {
   timestamp: Date;
   showQuickReplies?: boolean;
 
+}
+type ReceptionistData = {
+  id: string;
+  name: string | null;
+  business_name: string | null;
+  greeting_message: string | null;
+  timezone: string | null;
+  tone: string | null;
+  business_model: 'services' | 'products' | 'both' | null;
+  business_info: {
+    widget_customization?: {
+      primaryColor?: string;
+      secondaryColor?: string;
+      logoUrl?: string;
+    };
+  } | null;
 };
+
+type ServiceItem = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number | null;
+  duration_minutes: number | null;
+  is_product: boolean | null;
+  active: boolean;
+  receptionist_id: string;
+};
+
+type BookingState = {
+  serviceId: string | null;
+  serviceName: string | null;
+  date: Date | null;
+  timeSlot: { start: string; end: string; display: string } | null;
+};
+
+const defaultBookingState: BookingState = {
+  serviceId: null,
+  serviceName: null,
+  date: null,
+  timeSlot: null,
+};
+;
 
 export default function Widget() {
   const [searchParams] = useSearchParams();
@@ -32,11 +74,11 @@ export default function Widget() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [receptionist, setReceptionist] = useState<any>(null);
+  const [receptionist, setReceptionist] = useState<ReceptionistData | null>(null);
   const [sessionId, setSessionId] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [services, setServices] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [services, setServices] = useState<ServiceItem[]>([]);
+  const [products, setProducts] = useState<ServiceItem[]>([]);
   const [businessModel, setBusinessModel] = useState<'services' | 'products' | 'both'>('services');
   // Presentation-only booking state: tracks what the visitor has picked so the
   // UI can resume visually after a page close. It NO LONGER executes anything —
@@ -45,7 +87,7 @@ export default function Widget() {
     serviceId: null as string | null,
     serviceName: null as string | null,
     date: null as Date | null,
-    timeSlot: null as any,
+    timeSlot: null,
   };
   // Persist booking state to localStorage so mid-booking flows survive page close
   const BOOKING_STATE_KEY = `widget_booking_state_${receptionistId}`;
@@ -81,7 +123,7 @@ export default function Widget() {
   const [greetingStored, setGreetingStored] = useState(false);
   const [hasExistingSession, setHasExistingSession] = useState(false);
   const [showSessionOverlay, setShowSessionOverlay] = useState(false);
-  const [existingMessages, setExistingMessages] = useState<any[]>([]);
+  const [existingMessages, setExistingMessages] = useState<ServiceItem[]>([]);
   const [sessionCheckComplete, setSessionCheckComplete] = useState(false);
   const [voiceChatOpen, setVoiceChatOpen] = useState(false);
   const [activeUISignal, setActiveUISignal] = useState<UISignal | null>(null);
@@ -354,7 +396,7 @@ export default function Widget() {
 
   async function loadReceptionist() {
     if (!receptionistId) return;
-    let data: any = null;
+    let data: ReceptionistData | null = null;
     
     const rpcResult = await supabase.rpc("get_public_receptionist", { p_receptionist_id: receptionistId });
     if (rpcResult.data && rpcResult.data.length > 0) data = rpcResult.data[0];
@@ -367,7 +409,7 @@ export default function Widget() {
     setReceptionist(data);
     setBusinessModel(data.business_model || 'services');
     
-    const businessInfo = data.business_info as any;
+    const businessInfo = data.business_info;
     if (businessInfo?.widget_customization) {
       const c = businessInfo.widget_customization;
       setWidgetColors({ primaryColor: c.primaryColor || "#8B5CF6", secondaryColor: c.secondaryColor || "#A78BFA", logoUrl: c.logoUrl || "" });
@@ -400,7 +442,7 @@ export default function Widget() {
     const { data: rpcData, error: rpcError } = await supabase
       .rpc("get_services_for_receptionist", { p_receptionist_id: receptionistId });
     
-    let items = rpcData as any[] | null;
+    let items: ServiceItem[] | null = rpcData as ServiceItem[] | null;
     
     if (rpcError || !items) {
       const { data, error } = await supabase
@@ -412,8 +454,8 @@ export default function Widget() {
     }
 
     if (items) {
-      const serviceItems = items.filter((item: any) => item.duration_minutes > 0);
-      const productItems = items.filter((item: any) => item.duration_minutes === 0 || item.is_product === true);
+      const serviceItems = items.filter((item) => item.duration_minutes > 0);
+      const productItems = items.filter((item) => item.duration_minutes === 0 || item.is_product === true);
       setServices(serviceItems);
       setProducts(productItems);
     }
@@ -501,7 +543,7 @@ export default function Widget() {
       }
 
       setMessages(prev => [...prev, botMessage]);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Chat error:", err);
       toast({ title: "Error", description: err.message || "Failed to send message", variant: "destructive" });
     } finally {
@@ -570,7 +612,7 @@ export default function Widget() {
     }
   }
 
-  async function handleTimeSlotSelect(slot: any) {
+  async function handleTimeSlotSelect(slot: { startTime?: string; start?: string; end: string; display: string; score?: number; reason?: string }) {
     const startTime = slot.startTime || slot.start;
     setBookingState(prev => ({ 
       ...prev, 
@@ -617,7 +659,7 @@ export default function Widget() {
       }
     } else if (value === "contact") {
       emitUISignal({ intent: "support", activeComponent: null, reason: "no_ui_needed" });
-      const contactInfo = receptionist?.business_info as any;
+      const contactInfo = receptionist?.business_info;
       let contactMessage = "Here's how you can reach us:\n\n";
       
       if (contactInfo?.phone || receptionist?.phone) contactMessage += `📞 Phone: ${contactInfo?.phone || receptionist?.phone}\n`;

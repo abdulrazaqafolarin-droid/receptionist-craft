@@ -19,8 +19,6 @@ export function ChatSessionOverlay({
   businessName = "our team",
   disabled
 }: ChatSessionOverlayProps) {
-  if (!hasExistingSession) return null;
-
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape" && onDismiss) onDismiss();
   }, [onDismiss]);
@@ -29,6 +27,8 @@ export function ChatSessionOverlay({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
+
+  if (!hasExistingSession) return null;
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center">
