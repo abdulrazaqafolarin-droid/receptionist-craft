@@ -28,7 +28,7 @@ export default function OnboardingWizard() {
   const progressPercentage = (currentStep / STEPS.length) * 100;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/20 p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="container mx-auto max-w-4xl py-6 sm:py-8">
         {/* Header */}
         <div className="text-center mb-8">
@@ -36,7 +36,7 @@ export default function OnboardingWizard() {
             <Sparkles className="h-4 w-4" />
             Setup Wizard
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
+          <h1 className="type-page text-foreground">
             Create Your AI Receptionist
           </h1>
           <p className="text-muted-foreground mt-2">Follow these steps to get started</p>
@@ -51,7 +51,7 @@ export default function OnboardingWizard() {
                   className={cn(
                     "flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-xl border-2 transition-all duration-300 font-semibold text-sm",
                     currentStep > step.number
-                      ? "bg-gradient-to-br from-primary to-primary-glow border-primary text-primary-foreground shadow-md"
+                      ? "bg-primary border-primary text-primary-foreground shadow-contact"
                       : currentStep === step.number
                       ? "bg-primary/10 border-primary text-primary"
                       : "border-border bg-card text-muted-foreground"
@@ -63,7 +63,7 @@ export default function OnboardingWizard() {
                   <div
                     className={cn(
                       "flex-1 h-1 mx-2 rounded-full transition-all duration-300",
-                      currentStep > step.number ? "bg-gradient-to-r from-primary to-primary-glow" : "bg-border"
+                      currentStep > step.number ? "bg-primary" : "bg-border"
                     )}
                   />
                 )}

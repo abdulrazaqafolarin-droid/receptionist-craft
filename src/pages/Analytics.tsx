@@ -317,12 +317,12 @@ const StatCard = ({ title, value, subtitle, icon: Icon, color }: StatCardProps) 
           <div className="space-y-8">
             {/* Revenue Hero Banner */}
             {analytics.revenue_metrics && analytics.revenue_metrics.total_revenue > 0 && (
-              <Card className="border-2 border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10 overflow-hidden">
+              <Card className="glass-1 border-amber-500/30 overflow-hidden">
                 <CardContent className="p-6">
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
-                      <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg">
-                        <DollarSign className="h-7 w-7 text-white" />
+                      <div className="h-14 w-14 rounded-2xl bg-warning/15 flex items-center justify-center">
+                        <DollarSign className="h-7 w-7 text-warning" />
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">AI-Generated Revenue</p>

@@ -91,7 +91,7 @@ export default function ConfirmAppointment() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -99,7 +99,7 @@ export default function ConfirmAppointment() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background p-4">
+      <div className="flex items-center justify-center min-h-screen bg-background p-4">
         <Card className="max-w-md">
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -117,7 +117,7 @@ export default function ConfirmAppointment() {
 
   if (success) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background p-4">
+      <div className="flex items-center justify-center min-h-screen bg-background p-4">
         <Card className="max-w-md">
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -143,7 +143,7 @@ export default function ConfirmAppointment() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background p-4">
+    <div className="flex items-center justify-center min-h-screen bg-background p-4">
       <Card className="max-w-md">
         <CardHeader>
           <div className="flex items-center gap-2">

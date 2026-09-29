@@ -625,7 +625,7 @@ export function OwnerChat() {
       <div className="flex items-center justify-between p-4 border-b">
         {isOpen && (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-purple flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>

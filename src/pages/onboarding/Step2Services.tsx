@@ -152,7 +152,7 @@ export default function Step2Services() {
   };
 
   return (
-    <Card className="liquid-glass">
+    <Card className="glass-1">
       <CardHeader className="px-4 sm:px-6">
         <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
           <Briefcase className="h-5 w-5" />

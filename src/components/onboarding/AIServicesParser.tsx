@@ -158,7 +158,7 @@ export function AIServicesParser({ businessType, onAddItems, disabled }: AIServi
   const itemsNeedingPriceDecision = parsedItems.filter(i => !i.priceSpecified && i.addPriceChoice === null).length;
 
   return (
-    <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+    <Card className="glass-1">
       <CardHeader className="pb-3 px-4">
         <CardTitle className="flex items-center gap-2 text-base">
           <Briefcase className="h-4 w-4 text-primary" />

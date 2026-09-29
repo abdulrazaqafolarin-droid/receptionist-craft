@@ -42,7 +42,7 @@ export default function Step6Install() {
   };
 
   return (
-    <Card className="liquid-glass">
+    <Card className="glass-1">
       <CardHeader>
         <div className="flex items-center gap-2">
           <Rocket className="h-5 w-5 text-primary" />

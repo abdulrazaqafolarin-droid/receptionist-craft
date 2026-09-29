@@ -99,11 +99,8 @@ export default {
         md: "var(--shadow-md)",
         lg: "var(--shadow-lg)",
         xl: "var(--shadow-xl)",
-        glow: "var(--shadow-glow)",
-        neon: "var(--shadow-neon)",
         card: "var(--shadow-card)",
         elevated: "var(--shadow-elevated)",
-        premium: "0 20px 40px -12px hsl(217 91% 60% / 0.15)",
       },
       keyframes: {
         "accordion-down": {
@@ -146,61 +143,13 @@ export default {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
         },
-        float: {
-          "0%, 100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-10px)" },
-        },
         "pulse-soft": {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.7" },
         },
         "bounce-subtle": {
           "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-5px)" },
-        },
-        "glow-pulse": {
-          "0%, 100%": { boxShadow: "0 0 20px hsl(var(--primary) / 0.3)" },
-          "50%": { boxShadow: "0 0 40px hsl(var(--primary) / 0.5)" },
-        },
-        "neon-pulse": {
-          "0%, 100%": { boxShadow: "0 0 20px hsl(217 91% 60% / 0.3)" },
-          "50%": { boxShadow: "0 0 40px hsl(217 91% 60% / 0.6), 0 0 60px hsl(199 89% 48% / 0.3)" },
-        },
-        "float-slow-1": {
-          "0%, 100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-8px)" },
-        },
-        "float-slow-2": {
-          "0%, 100%": { transform: "translateY(0px) translateX(0px)" },
-          "50%": { transform: "translateY(-6px) translateX(3px)" },
-        },
-        "float-slow-3": {
-          "0%, 100%": { transform: "translateY(0px) translateX(0px)" },
-          "50%": { transform: "translateY(-10px) translateX(-2px)" },
-        },
-        "float-slow-4": {
-          "0%, 100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-7px)" },
-        },
-        "benefit-enter": {
-          "0%": { opacity: "0", transform: "translateY(12px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
-        "hero-fade-up": {
-          "0%": { opacity: "0", transform: "translateY(20px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
-        "float-ambient-1": {
-          "0%, 100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-25px)" },
-        },
-        "float-ambient-2": {
-          "0%, 100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-35px)" },
-        },
-        "float-card": {
-          "0%, 100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-10px)" },
+          "50%": { transform: "translateY(-3px)" },
         },
       },
       animation: {
@@ -214,26 +163,12 @@ export default {
         "slide-in-right": "slide-in-right 0.4s ease-out forwards",
         "slide-in-left": "slide-in-left 0.4s ease-out forwards",
         shimmer: "shimmer 2s ease-in-out infinite",
-        float: "float 3s ease-in-out infinite",
-        "pulse-soft": "pulse-soft 2s ease-in-out infinite",
-        "bounce-subtle": "bounce-subtle 2s ease-in-out infinite",
-        "glow-pulse": "glow-pulse 2s ease-in-out infinite",
-        "neon-pulse": "neon-pulse 2s ease-in-out infinite",
-        "float-slow-1": "float-slow-1 7s ease-in-out infinite",
-        "float-slow-2": "float-slow-2 8s ease-in-out infinite",
-        "float-slow-3": "float-slow-3 9s ease-in-out infinite",
-        "float-slow-4": "float-slow-4 6s ease-in-out infinite",
-        "benefit-enter": "benefit-enter 0.5s ease-out forwards",
-        "hero-fade-up": "hero-fade-up 0.8s ease-out forwards",
-        "float-ambient-1": "float-ambient-1 10s ease-in-out infinite",
-        "float-ambient-2": "float-ambient-2 14s ease-in-out infinite",
-        "float-card": "float-card 8s ease-in-out infinite",
+        "pulse-soft": "pulse-soft 2.4s ease-in-out infinite",
+        "bounce-subtle": "bounce-subtle 0.5s cubic-bezier(0.23, 1, 0.32, 1)",
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic": "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
-        "gradient-primary": "linear-gradient(135deg, hsl(217 91% 60%), hsl(199 89% 48%))",
-        "gradient-secondary": "linear-gradient(135deg, hsl(199 89% 48%), hsl(210 100% 70%))",
       },
     },
   },

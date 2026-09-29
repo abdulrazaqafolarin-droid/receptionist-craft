@@ -149,7 +149,7 @@ export function AIProductsParser({ businessType, onAddItems, disabled }: AIProdu
   const itemsNeedingPriceDecision = parsedItems.filter(i => !i.priceSpecified && i.addPriceChoice === null).length;
 
   return (
-    <Card className="border-secondary/30 bg-gradient-to-br from-secondary/5 to-transparent">
+    <Card className="glass-1">
       <CardHeader className="pb-3 px-4">
         <CardTitle className="flex items-center gap-2 text-base">
           <ShoppingBag className="h-4 w-4 text-secondary-foreground" />

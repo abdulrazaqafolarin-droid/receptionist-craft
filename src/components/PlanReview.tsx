@@ -68,7 +68,7 @@ export function PlanReview({
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+        <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
           <Sparkles className="h-5 w-5 text-primary-foreground" />
         </div>
         <div>

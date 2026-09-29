@@ -450,8 +450,8 @@ export function RevenueEngine({ receptionistIds, receptionistNames = {}, scopeLa
   const fmtCurrency = (amount: number, cur: string) => formatCurrency(amount, cur);
 
   return (
-    <Card className="border-2 border-border/50 shadow-lg overflow-hidden">
-      <CardHeader className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-b border-border/50">
+    <Card className="glass-1 overflow-hidden">
+      <CardHeader className="border-b border-border/50">
         <CardTitle className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
             <DollarSign className="h-5 w-5 text-amber-600" />

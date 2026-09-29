@@ -87,7 +87,7 @@ export default function MoneyModePage() {
   );
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-background via-background to-accent/20">
+    <div className="relative min-h-screen bg-background">
       <FloatingBackground variant="minimal" />
       <main className="relative z-10 container mx-auto px-4 py-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -112,7 +112,7 @@ export default function MoneyModePage() {
             <CardContent className="py-12 text-center text-muted-foreground">Loading Money Mode workspace...</CardContent>
           </Card>
         ) : receptionists.length === 0 ? (
-          <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card">
+          <Card className="glass-1">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" /> Create a receptionist first

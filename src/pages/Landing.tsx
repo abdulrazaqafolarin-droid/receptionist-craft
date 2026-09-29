@@ -55,21 +55,15 @@ const HeroBenefitCard = ({
       bg-white/60 backdrop-blur-lg border border-primary/10
       shadow-sm hover:shadow-md
       flex items-center gap-3
-      opacity-0 animate-hero-fade-up
+      animate-enter
       transition-all duration-300 ease-out
       hover:-translate-y-0.5 hover:bg-white/80 hover:border-primary/20
-      cursor-default liquid-glass
+      cursor-default glass-1
     "
-    style={{ 
+    style={{
       animationDelay: `${0.3 + index * 0.12}s`,
-      animationFillMode: 'forwards',
     }}
   >
-    {/* Continuous floating animation wrapper */}
-    <div 
-      className="absolute inset-0 rounded-xl animate-float-card pointer-events-none"
-      style={{ animationDelay: floatDelay }}
-    />
     <div className="relative flex-shrink-0 w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
       <Icon className="w-4 h-4 text-primary" />
     </div>
@@ -131,10 +125,10 @@ export default function Landing() {
       <Navbar user={null} />
       
       {/* Hero Section - Premium SaaS Design matching reference */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 via-background to-background" aria-labelledby="hero-title">
-        {/* Ambient floating glows */}
-        <div className="absolute -top-32 right-0 w-72 sm:w-96 h-72 sm:h-96 bg-primary/20 rounded-full blur-3xl animate-float-ambient-1" aria-hidden="true" />
-        <div className="absolute top-1/2 -left-40 w-64 sm:w-80 h-64 sm:h-80 bg-primary/15 rounded-full blur-3xl animate-float-ambient-2" aria-hidden="true" />
+      <section className="relative overflow-hidden bg-background" aria-labelledby="hero-title">
+        {/* Static atmospheric light — stays behind the interface, never animates */}
+        <div className="absolute -top-32 right-0 w-72 sm:w-96 h-72 sm:h-96 bg-primary/[0.07] rounded-full blur-3xl" aria-hidden="true" />
+        <div className="absolute top-1/2 -left-40 w-64 sm:w-80 h-64 sm:h-80 bg-muted-foreground/[0.06] rounded-full blur-3xl" aria-hidden="true" />
         
         <div className="container mx-auto px-4 pt-8 sm:pt-12 lg:pt-16 pb-8 sm:pb-12 lg:pb-16">
           <div className="relative max-w-6xl mx-auto">
@@ -144,7 +138,7 @@ export default function Landing() {
               
               {/* Badge - top left */}
               <div 
-                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full bg-white/70 backdrop-blur-md border border-primary/20 text-primary text-xs sm:text-sm font-medium shadow-sm opacity-0 animate-hero-fade-up mb-4 sm:mb-6"
+                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full bg-white/70 backdrop-blur-md border border-primary/20 text-primary text-xs sm:text-sm font-medium shadow-sm animate-enter mb-4 sm:mb-6"
                 style={{ animationDelay: '0s', animationFillMode: 'forwards' }}
               >
                 <img src={rutexLogo} alt="" className="h-4 w-4 rounded object-cover" aria-hidden="true" />
@@ -154,7 +148,7 @@ export default function Landing() {
               {/* Headline */}
               <h1 
                 id="hero-title" 
-                className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-extrabold tracking-tight text-foreground opacity-0 animate-hero-fade-up mb-4 sm:mb-6"
+                className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-extrabold tracking-tight text-foreground animate-enter mb-4 sm:mb-6"
                 style={{ animationDelay: '0.1s', animationFillMode: 'forwards' }}
               >
                 Create your AI receptionist in{" "}
@@ -172,7 +166,7 @@ export default function Landing() {
                   <div className="md:col-span-3 lg:col-span-1 space-y-5">
                     {/* Description */}
                     <p 
-                      className="text-base lg:text-lg text-muted-foreground max-w-md leading-relaxed opacity-0 animate-hero-fade-up"
+                      className="text-base lg:text-lg text-muted-foreground max-w-md leading-relaxed animate-enter"
                       style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}
                     >
                       No tech skills needed. Build, preview, and manage your AI receptionist that handles calls, books appointments, and captures leads — all in demo mode until you're ready.
@@ -234,7 +228,7 @@ export default function Landing() {
 
                   {/* Description */}
                   <p 
-                    className="text-sm text-muted-foreground leading-relaxed opacity-0 animate-hero-fade-up mb-4"
+                    className="text-sm text-muted-foreground leading-relaxed animate-enter mb-4"
                     style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}
                   >
                     No tech skills needed. Build, preview, and manage your AI receptionist that handles calls, books appointments, and captures leads — all in demo mode until you're ready.
@@ -272,12 +266,12 @@ export default function Landing() {
               
               {/* CTA Buttons */}
               <div 
-                className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 sm:pt-8 max-w-xl opacity-0 animate-hero-fade-up"
+                className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 sm:pt-8 max-w-xl animate-enter"
                 style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}
               >
                 <Button 
                   size="lg" 
-                  className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-full shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all group liquid-glass"
+                  className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-full shadow-contact hover:-translate-y-0.5 transition-all group"
                   onClick={() => navigate("/auth")}
                 >
                   Start Free — Build My Receptionist
@@ -286,7 +280,7 @@ export default function Landing() {
                 <Button 
                   size="lg" 
                   variant="outline" 
-                  className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-full border-2 border-primary/20 bg-white/70 backdrop-blur hover:bg-white text-primary hover:text-primary transition-all liquid-glass"
+                  className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-4 h-auto rounded-full"
                   onClick={() => navigate("/help")}
                 >
                   Watch Demo
@@ -300,14 +294,14 @@ export default function Landing() {
       {/* Features Grid */}
       <section className="container mx-auto px-4 py-12 sm:py-16 lg:py-24" aria-labelledby="features-title">
         <div className="text-center mb-10 sm:mb-16">
-          <Badge className="mb-3 sm:mb-4 bg-secondary/10 text-secondary border-secondary/20">Features</Badge>
+          <Badge variant="secondary" className="mb-3 sm:mb-4">Features</Badge>
           <h2 id="features-title" className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">Everything you need to succeed</h2>
           <p className="text-base sm:text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto">
             Built for small businesses who want professional customer service without the overhead
           </p>
         </div>
 
-        <Card className="mb-6 sm:mb-8 lg:mb-10 p-5 sm:p-6 lg:p-8 border-primary/20 bg-primary/5 liquid-glass">
+        <Card className="mb-6 sm:mb-8 lg:mb-10 p-5 sm:p-6 lg:p-8 glass-1">
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <Badge className="bg-primary text-primary-foreground">Spotlight</Badge>
             <span className="text-sm sm:text-base font-medium text-foreground">Highest-impact automations</span>
@@ -350,7 +344,7 @@ export default function Landing() {
           {features.map((feature, idx) => (
             <Card 
               key={idx} 
-              className="group p-5 sm:p-6 lg:p-8 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 border-2 border-transparent hover:border-primary/20 bg-card/50 backdrop-blur-sm focus-within:ring-2 focus-within:ring-ring liquid-glass"
+              className="group p-5 sm:p-6 lg:p-8 glass-1 card-hover focus-within:ring-2 focus-within:ring-ring"
               tabIndex={0}
             >
               <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-primary/15 transition-colors" aria-hidden="true">
@@ -365,10 +359,8 @@ export default function Landing() {
 
       {/* CTA Section */}
       <section className="container mx-auto px-4 py-12 sm:py-16 lg:py-24" aria-labelledby="cta-title">
-        <Card className="relative overflow-hidden p-6 sm:p-8 lg:p-16 text-center border-2 border-primary/10 liquid-glass">
-          {/* Background gradient */}
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" aria-hidden="true" />
-          
+        <Card className="relative overflow-hidden p-6 sm:p-8 lg:p-16 text-center glass-2">
+
           <div className="relative z-10">
             <Badge className="mb-4 sm:mb-6 bg-primary/10 text-primary border-primary/20">Get Started Today</Badge>
             <h2 id="cta-title" className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">Ready to transform your business?</h2>
@@ -377,7 +369,7 @@ export default function Landing() {
             </p>
             <Button 
               size="lg" 
-              className="text-base sm:text-lg px-6 sm:px-10 h-12 sm:h-14 shadow-lg shadow-primary/25 hover:shadow-xl transition-all group touch-target w-full sm:w-auto liquid-glass"
+              className="text-base sm:text-lg px-6 sm:px-10 h-12 sm:h-14 shadow-contact transition-all group touch-target w-full sm:w-auto"
               onClick={() => navigate("/auth")}
             >
               Get Started for Free

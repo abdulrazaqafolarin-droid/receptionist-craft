@@ -166,10 +166,10 @@ END:VCALENDAR`;
   const isPast = endDate < new Date();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-4 py-12">
+    <div className="min-h-screen bg-background p-4 py-12">
       <div className="container mx-auto max-w-2xl">
-        <Card className="shadow-xl">
-          <CardHeader className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground">
+        <Card className="glass-2">
+          <CardHeader className="bg-primary text-primary-foreground rounded-t-[16px]">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-2xl mb-2">

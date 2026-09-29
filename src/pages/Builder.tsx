@@ -760,10 +760,10 @@ capabilities: receptionist.capabilities,
         {/* Modern Header */}
         <header className="mb-8 animate-fade-in">
           <div className="flex items-center gap-3 mb-2">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg glow-sm">
+            <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-contact">
               <span className="text-lg font-bold text-primary-foreground">R</span>
             </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+            <h1 className="type-display text-foreground">
               Rutex FrontDesk Builder
             </h1>
           </div>
@@ -1009,7 +1009,7 @@ capabilities: receptionist.capabilities,
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-3 mt-6 pt-6 border-t border-border">
                 <button 
-                  className="px-5 py-2.5 bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-xl font-medium shadow-lg hover:shadow-glow hover:-translate-y-0.5 transition-all disabled:opacity-50" 
+                  className="px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-medium shadow-contact hover:-translate-y-0.5 transition-all disabled:opacity-50"
                   onClick={saveReceptionist} 
                   disabled={saving}
                 >
@@ -1113,7 +1113,7 @@ capabilities: receptionist.capabilities,
                 <div key={idx} className={`mb-4 max-w-[80%] animate-fade-in ${m.sender === "user" ? "ml-auto" : "mr-auto"}`}>
                   <div className={`inline-block px-4 py-3 rounded-2xl ${
                     m.sender === "user" 
-                      ? "bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-br-md" 
+                      ? "bg-primary text-primary-foreground rounded-br-md"
                       : "bg-card border border-border shadow-sm rounded-bl-md"
                   }`}>
                     <div className="text-sm whitespace-pre-wrap">{m.message}</div>
@@ -1154,7 +1154,7 @@ capabilities: receptionist.capabilities,
                         <div className="text-xs text-muted-foreground mt-1">Match: {(alt.score * 100).toFixed(0)}%</div>
                       )}
                       <button
-                        className="mt-3 w-full px-4 py-2.5 bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-lg hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-all"
+                        className="mt-3 w-full px-4 py-2.5 bg-primary text-primary-foreground rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-all"
                         onClick={() => handleBookAlternative(alt.start, alt.end)}
                         disabled={bookingLoading}
                       >
@@ -1182,7 +1182,7 @@ capabilities: receptionist.capabilities,
                 placeholder='Try: "Hi", "How much is a cleaning?"' 
               />
               <button 
-                className="px-6 py-3 bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-xl font-medium shadow-lg hover:shadow-glow hover:-translate-y-0.5 transition-all" 
+                className="px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium shadow-contact hover:-translate-y-0.5 transition-all"
                 onClick={handleSendMessage}
               >
                 Send

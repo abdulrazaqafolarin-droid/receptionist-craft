@@ -259,7 +259,7 @@ export default function Services() {
     const isEditing = editingItem === item.id;
 
     return (
-      <Card key={item.id} className="border-2 border-border/50 hover:border-primary/20 hover:shadow-lg transition-all liquid-glass">
+      <Card key={item.id} className="glass-1 card-hover">
         <CardContent className="p-6">
           {isEditing ? (
             <div className="space-y-4">
@@ -429,7 +429,7 @@ export default function Services() {
 
         {/* Receptionist Selector */}
         {receptionists.length > 0 && (
-          <Card className="mb-6 border-2 border-border/50 liquid-glass">
+          <Card className="mb-6 glass-1">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg">Select Receptionist</CardTitle>
               <CardDescription>Manage services and products for a specific receptionist</CardDescription>
@@ -462,7 +462,7 @@ export default function Services() {
         )}
 
         {!selectedReceptionist && (
-          <Card className="mb-6 border-2 border-border/50 liquid-glass">
+          <Card className="mb-6 glass-1">
             <CardContent className="py-16 text-center">
               <div className="h-20 w-20 rounded-3xl bg-muted/50 flex items-center justify-center mx-auto mb-6">
                 <Package className="h-10 w-10 text-muted-foreground" />
@@ -493,7 +493,7 @@ export default function Services() {
 
               <TabsContent value="services" className="space-y-6 mt-6">
                 {/* Create Service Form */}
-                <Card className="border-2 border-border/50 liquid-glass">
+                <Card className="glass-1">
                   <CardHeader>
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -564,7 +564,7 @@ export default function Services() {
                 {/* Services List */}
                 <div className="space-y-4">
                   {services.length === 0 ? (
-                    <Card className="border-2 border-border/50 liquid-glass">
+                    <Card className="glass-1">
                       <CardContent className="py-16 text-center">
                         <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
                           <Clock className="h-8 w-8 text-muted-foreground" />
@@ -580,7 +580,7 @@ export default function Services() {
 
               <TabsContent value="products" className="space-y-6 mt-6">
                 {/* Create Product Form */}
-                <Card className="border-2 border-border/50 liquid-glass">
+                <Card className="glass-1">
                   <CardHeader>
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -653,7 +653,7 @@ export default function Services() {
                 {/* Products List */}
                 <div className="space-y-4">
                   {products.length === 0 ? (
-                    <Card className="border-2 border-border/50 liquid-glass">
+                    <Card className="glass-1">
                       <CardContent className="py-16 text-center">
                         <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
                           <ShoppingBag className="h-8 w-8 text-muted-foreground" />
@@ -670,7 +670,7 @@ export default function Services() {
 
             {/* Delete Confirmation Dialog */}
             <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
-              <AlertDialogContent className="border-2 liquid-glass">
+              <AlertDialogContent className="glass-3">
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete {deleteConfirm?.duration_minutes ? 'Service' : 'Product'}?</AlertDialogTitle>
                   <AlertDialogDescription>

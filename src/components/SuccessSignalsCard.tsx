@@ -121,8 +121,8 @@ export function SuccessSignalsCard() {
     forkTotal > 0 ? `${forkConv} conversational / ${forkTotal - forkConv} form` : "No signups yet";
 
   return (
-    <Card className="border-2 border-border/50 shadow-lg overflow-hidden">
-      <CardHeader className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-b border-border/50">
+    <Card className="glass-1 overflow-hidden">
+      <CardHeader className="border-b border-border/50">
         <CardTitle className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
             <Gauge className="h-5 w-5 text-emerald-600" />

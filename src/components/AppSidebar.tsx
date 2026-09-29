@@ -124,7 +124,7 @@ export function AppSidebar() {
                 alt="Rutex Logo"
                 className="h-10 w-10 rounded-xl shadow-md object-cover"
               />
-              <span className="text-lg font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
+              <span className="text-lg font-bold text-foreground">
                 Rutex
               </span>
             </button>
@@ -158,7 +158,7 @@ export function AppSidebar() {
                               className={cn(
                                 "w-full rounded-lg transition-all duration-200 hover:bg-sidebar-accent group touch-target",
                                 isActive(item.url)
-                                  ? "bg-gradient-to-r from-primary/10 to-primary/5 text-primary font-medium border-l-2 border-primary"
+                                  ? "bg-primary/10 text-primary font-medium border-l-2 border-primary"
                                   : "text-sidebar-foreground hover:text-primary"
                               )}
                               aria-current={isActive(item.url) ? "page" : undefined}
@@ -190,7 +190,7 @@ export function AppSidebar() {
                           className={cn(
                             "w-full rounded-lg transition-all duration-200 hover:bg-sidebar-accent touch-target",
                             isActive(item.url)
-                              ? "bg-gradient-to-r from-primary/10 to-primary/5 text-primary font-medium border-l-2 border-primary"
+                              ? "bg-primary/10 text-primary font-medium border-l-2 border-primary"
                               : "text-sidebar-foreground hover:text-primary"
                           )}
                           aria-current={isActive(item.url) ? "page" : undefined}

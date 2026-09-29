@@ -282,7 +282,7 @@ export default function Availability() {
         </div>
 
         {/* Receptionist Selector */}
-        <Card className="mb-6 border-2 border-border/50 liquid-glass">
+        <Card className="mb-6 glass-1">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg">Select Receptionist</CardTitle>
             <CardDescription>Choose which receptionist to configure</CardDescription>
@@ -307,7 +307,7 @@ export default function Availability() {
           <>
             {/* Quick Setup */}
             {rules.length === 0 && (
-              <Card className="mb-6 border-2 border-primary/20 bg-primary/5 liquid-glass">
+              <Card className="mb-6 glass-1">
                 <CardHeader>
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -330,7 +330,7 @@ export default function Availability() {
             )}
 
             {/* Current Rules */}
-            <Card className="mb-6 border-2 border-border/50 liquid-glass">
+            <Card className="mb-6 glass-1">
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -358,7 +358,7 @@ export default function Availability() {
                     {rules.map((rule) => (
                       <div
                         key={rule.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-2 border-border/50 rounded-xl hover:border-primary/20 hover:bg-primary/5 transition-all liquid-glass"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border border-border/50 rounded-xl hover:border-primary/40 hover:bg-primary/5 transition-all glass-1"
                       >
                         <div className="flex flex-wrap items-center gap-3">
                           <Badge variant="outline" className="min-w-[100px] justify-center font-medium">
@@ -461,7 +461,7 @@ export default function Availability() {
                     {exceptions.map((exc) => (
                       <div
                         key={exc.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-2 border-border/50 rounded-xl hover:border-secondary/20 hover:bg-secondary/5 transition-all liquid-glass"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-2 border-border/50 rounded-xl hover:border-primary/40 hover:bg-muted transition-all glass-1"
                       >
                         <div>
                           <div className="font-medium text-sm">

@@ -203,14 +203,14 @@ export default function MEODashboard() {
   const formatCurrency = (amount: number) => fmtCurrency(amount, "USD");
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-background via-background to-accent/20">
+    <div className="relative min-h-screen bg-background">
       <FloatingBackground variant="minimal" />
       <main className="relative z-10 container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg">
-              <Brain className="h-7 w-7 text-white" />
+            <div className="h-14 w-14 rounded-2xl bg-warning/15 flex items-center justify-center">
+              <Brain className="h-7 w-7 text-warning" />
             </div>
             <div>
               <h1 className="text-3xl font-bold">MEO Analytics Dashboard</h1>
@@ -289,7 +289,7 @@ export default function MEODashboard() {
           <div className="space-y-6 animate-fade-in">
             {/* Hero Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <Card className="border-2 border-red-500/30 bg-gradient-to-br from-red-500/10 via-card to-card relative overflow-hidden">
+              <Card className="glass-1 border-red-500/30 relative overflow-hidden">
                 <CardContent className="p-4 relative">
                   <div className="absolute top-2 right-2 opacity-20">
                     <DollarSign className="h-12 w-12 text-red-500" />
@@ -305,7 +305,7 @@ export default function MEODashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="border-2 border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-card to-card relative overflow-hidden">
+              <Card className="glass-1 border-amber-500/30 relative overflow-hidden">
                 <CardContent className="p-4 relative">
                   <div className="absolute top-2 right-2 opacity-20">
                     <ArrowUpRight className="h-12 w-12 text-amber-500" />
@@ -321,7 +321,7 @@ export default function MEODashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="border-2 border-green-500/30 bg-gradient-to-br from-green-500/10 via-card to-card relative overflow-hidden">
+              <Card className="glass-1 border-green-500/30 relative overflow-hidden">
                 <CardContent className="p-4 relative">
                   <div className="absolute top-2 right-2 opacity-20">
                     <TrendingUp className="h-12 w-12 text-green-500" />
@@ -337,7 +337,7 @@ export default function MEODashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="border-2 border-orange-500/30 bg-gradient-to-br from-orange-500/10 via-card to-card relative overflow-hidden">
+              <Card className="glass-1 border-orange-500/30 relative overflow-hidden">
                 <CardContent className="p-4 relative">
                   <div className="absolute top-2 right-2 opacity-20">
                     <AlertTriangle className="h-12 w-12 text-orange-500" />
@@ -353,7 +353,7 @@ export default function MEODashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="border-2 border-blue-500/30 bg-gradient-to-br from-blue-500/10 via-card to-card relative overflow-hidden">
+              <Card className="glass-1 border-blue-500/30 relative overflow-hidden">
                 <CardContent className="p-4 relative">
                   <div className="absolute top-2 right-2 opacity-20">
                     <DollarSign className="h-12 w-12 text-blue-500" />

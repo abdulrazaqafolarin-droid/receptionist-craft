@@ -47,9 +47,9 @@ export function ServiceSelector({ services, onSelect, disabled, initialLimit = 1
           onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !disabled) { e.preventDefault(); onSelect(service.id, service.name); } }}
           style={{ animationDelay: `${idx * 75}ms` }}
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/0 to-primary/5 group-hover:from-primary/5 group-hover:via-primary/3 group-hover:to-primary/10 transition-all duration-300" />
+          <div className="absolute inset-0 group-hover:bg-primary/5 transition-colors duration-200" />
           <div className="relative flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
               <Briefcase className="h-5 w-5 text-primary" />
             </div>
             <div className="flex-1 min-w-0">

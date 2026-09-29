@@ -131,7 +131,7 @@ export default function Help() {
             {GETTING_STARTED_STEPS.map((step) => (
               <Card key={step.step} className="border-2 border-border/50 hover:border-primary/20 transition-all">
                 <CardContent className="flex items-start gap-4 p-5">
-                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-primary-foreground font-bold text-sm shadow-md flex-shrink-0">
+                  <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm shadow-contact flex-shrink-0">
                     {step.step}
                   </div>
                   <div className="flex-1 min-w-0">

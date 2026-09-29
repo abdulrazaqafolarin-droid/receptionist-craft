@@ -80,7 +80,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-background via-background to-accent/20">
+    <div className="relative min-h-screen bg-background">
       <FloatingBackground variant="default" />
       {/* Owner Chat Sidebar - Persistent on Dashboard */}
       <OwnerChat />
@@ -88,16 +88,16 @@ export default function Dashboard() {
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 sm:mb-10 animate-fade-in">
           <div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold mb-2 bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
+            <h1 className="type-display mb-2 text-foreground">
               Dashboard
             </h1>
             <p className="text-muted-foreground text-sm sm:text-base lg:text-lg">Your AI-powered appointment booking system</p>
             <p className="text-[10px] text-muted-foreground/80 mt-1">Build {import.meta.env.VITE_APP_BUILD_SHA || "unknown"}</p>
           </div>
-          <Button 
-            onClick={() => navigate("/onboarding-wizard")} 
-            size="lg" 
-            className="group bg-gradient-to-r from-primary to-primary-glow hover:shadow-elevated transition-all duration-300 touch-target w-full sm:w-auto"
+          <Button
+            onClick={() => navigate("/onboarding-wizard")}
+            size="lg"
+            className="group touch-target w-full sm:w-auto"
             aria-label="Create a new AI receptionist"
           >
             <Plus className="mr-2 h-5 w-5 group-hover:rotate-90 transition-transform" aria-hidden="true" /> 
@@ -107,15 +107,13 @@ export default function Dashboard() {
 
         {/* Getting Started Guide */}
         {receptionists.length === 0 && (
-          <section 
-            className="mb-8 sm:mb-10 border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card animate-scale-in overflow-hidden relative rounded-xl border p-6 sm:p-8 liquid-glass"
+          <section
+            className="mb-8 sm:mb-10 glass-1 animate-scale-in overflow-hidden relative rounded-xl p-6 sm:p-8"
             aria-labelledby="getting-started-title"
           >
-            <div className="absolute top-0 right-0 w-48 sm:w-64 h-48 sm:h-64 bg-gradient-to-br from-primary/10 to-transparent rounded-full blur-3xl" aria-hidden="true" />
-            <div className="absolute bottom-0 left-0 w-32 sm:w-48 h-32 sm:h-48 bg-gradient-to-tr from-secondary/10 to-transparent rounded-full blur-2xl" aria-hidden="true" />
             <div className="relative">
               <div className="flex items-center gap-3 mb-4">
-                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-elevated">
+                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-primary flex items-center justify-center shadow-contact">
                   <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-primary-foreground" aria-hidden="true" />
                 </div>
                 <div>
@@ -137,7 +135,7 @@ export default function Dashboard() {
                     style={{ animationDelay: `${idx * 100}ms` }}
                   >
                     <div className="flex items-center gap-2 sm:gap-3 mb-2">
-                      <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg bg-gradient-to-br from-primary to-primary-glow text-primary-foreground font-bold flex items-center justify-center text-xs sm:text-sm shadow-md" aria-hidden="true">
+                      <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg bg-primary text-primary-foreground font-bold flex items-center justify-center text-xs sm:text-sm shadow-contact" aria-hidden="true">
                         {step.num}
                       </div>
                       <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
@@ -154,7 +152,7 @@ export default function Dashboard() {
 
         {receptionists.length > 0 && (
           <section className="mb-6 animate-fade-in" aria-label="Revenue control center">
-            <Card className="border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-card to-card liquid-glass">
+            <Card className="glass-1">
               <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
                 <div>
                   <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
@@ -176,11 +174,11 @@ export default function Dashboard() {
         {/* AI Operator Centerpiece */}
         {receptionists.length > 0 && selectedReceptionistId && (
           <section className="mb-8 animate-fade-in" aria-label="Your AI Operator">
-            <Card className="border-2 border-primary/30 bg-gradient-to-br from-primary/5 via-card to-card liquid-glass overflow-hidden">
+            <Card className="glass-2 overflow-hidden">
               <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary to-purple flex items-center justify-center shadow-lg">
+                    <div className="h-12 w-12 rounded-2xl bg-primary flex items-center justify-center shadow-contact">
                       <Bot className="h-6 w-6 text-white" />
                     </div>
                     <div>
@@ -227,37 +225,37 @@ export default function Dashboard() {
               {/* Executive Summary Card */}
               <CardContent className="pb-4">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-                  <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                  <div className="p-3 rounded-xl finance-surface">
                     <div className="flex items-center gap-2 mb-1">
-                      <TrendingUp className="h-4 w-4 text-green-600" />
-                      <span className="text-xs font-medium text-green-800">Revenue This Week</span>
+                      <TrendingUp className="h-4 w-4 finance-positive" />
+                      <span className="text-xs font-medium visual-secondary">Revenue This Week</span>
                     </div>
-                    <div className="text-2xl font-bold text-green-700">$0</div>
-                    <div className="text-xs text-green-600">vs last week</div>
+                    <div className="text-2xl font-bold tnum visual-primary">$0</div>
+                    <div className="text-xs visual-tertiary">vs last week</div>
                   </div>
-                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                  <div className="p-3 rounded-xl finance-surface">
                     <div className="flex items-center gap-2 mb-1">
-                      <Target className="h-4 w-4 text-amber-600" />
-                      <span className="text-xs font-medium text-amber-800">Missed Opportunities</span>
+                      <Target className="h-4 w-4 text-warning" />
+                      <span className="text-xs font-medium visual-secondary">Missed Opportunities</span>
                     </div>
-                    <div className="text-2xl font-bold text-amber-700">0</div>
-                    <div className="text-xs text-amber-600">Ghosted quotes</div>
+                    <div className="text-2xl font-bold tnum visual-primary">0</div>
+                    <div className="text-xs visual-tertiary">Ghosted quotes</div>
                   </div>
-                  <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                  <div className="p-3 rounded-xl finance-surface">
                     <div className="flex items-center gap-2 mb-1">
-                      <MessageCircle className="h-4 w-4 text-blue-600" />
-                      <span className="text-xs font-medium text-blue-800">AI Conversion</span>
+                      <MessageCircle className="h-4 w-4 text-primary" />
+                      <span className="text-xs font-medium visual-secondary">AI Conversion</span>
                     </div>
-                    <div className="text-2xl font-bold text-blue-700">0%</div>
-                    <div className="text-xs text-blue-600">Chat to booking</div>
+                    <div className="text-2xl font-bold tnum visual-primary">0%</div>
+                    <div className="text-xs visual-tertiary">Chat to booking</div>
                   </div>
-                  <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                  <div className="p-3 rounded-xl finance-surface">
                     <div className="flex items-center gap-2 mb-1">
-                      <Users className="h-4 w-4 text-purple-600" />
-                      <span className="text-xs font-medium text-purple-800">Team Utilization</span>
+                      <Users className="h-4 w-4 visual-secondary" />
+                      <span className="text-xs font-medium visual-secondary">Team Utilization</span>
                     </div>
-                    <div className="text-2xl font-bold text-purple-700">0%</div>
-                    <div className="text-xs text-purple-600">Staff capacity</div>
+                    <div className="text-2xl font-bold tnum visual-primary">0%</div>
+                    <div className="text-xs visual-tertiary">Staff capacity</div>
                   </div>
                 </div>
 
@@ -275,21 +273,20 @@ export default function Dashboard() {
         {/* Stats Grid */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-8 sm:mb-10" aria-label="Statistics overview">
           {[
-            { title: "Total Conversations", value: stats.conversations, icon: MessageCircle, desc: "All time", color: "from-primary to-primary-glow" },
-            { title: "Appointments Booked", value: stats.appointments, icon: Calendar, desc: "All time", color: "from-success to-emerald-400" },
-            { title: "Orders", value: stats.orders, icon: ShoppingBag, desc: "All time", color: "from-violet-500 to-purple-400" },
-            { title: "Active Receptionists", value: stats.activeReceptionists, icon: Zap, desc: "Ready to serve", color: "from-warning to-amber-400" },
+            { title: "Total Conversations", value: stats.conversations, icon: MessageCircle, desc: "All time" },
+            { title: "Appointments Booked", value: stats.appointments, icon: Calendar, desc: "All time" },
+            { title: "Orders", value: stats.orders, icon: ShoppingBag, desc: "All time" },
+            { title: "Active Receptionists", value: stats.activeReceptionists, icon: Zap, desc: "Ready to serve" },
           ].map((stat, idx) => (
-            <Card 
-              key={stat.title} 
-              className="group hover:shadow-elevated transition-all duration-300 hover:-translate-y-1 animate-fade-in overflow-hidden relative liquid-glass"
-              style={{ animationDelay: `${idx * 100}ms` }}
+            <Card
+              key={stat.title}
+              className="group card-hover animate-fade-in overflow-hidden relative"
+              style={{ animationDelay: `${idx * 80}ms` }}
             >
-              <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-0 group-hover:opacity-5 transition-opacity`} aria-hidden="true" />
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 sm:pb-3">
                 <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
-                <div className={`h-9 w-9 sm:h-11 sm:w-11 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-md`} aria-hidden="true">
-                  <stat.icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                <div className="h-9 w-9 sm:h-11 sm:w-11 rounded-xl bg-primary/10 flex items-center justify-center" aria-hidden="true">
+                  <stat.icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
               </CardHeader>
               <CardContent>
@@ -330,9 +327,9 @@ export default function Dashboard() {
                   </div>
                   <h3 className="text-base sm:text-lg font-semibold mb-2">No receptionists yet</h3>
                   <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6">Create your first AI receptionist to get started</p>
-                  <Button 
-                    onClick={() => navigate("/onboarding-wizard")} 
-                    className="bg-gradient-to-r from-primary to-primary-glow touch-target"
+                  <Button
+                    onClick={() => navigate("/onboarding-wizard")}
+                    className="touch-target"
                   >
                     <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Create Your First Receptionist
                   </Button>
@@ -341,13 +338,13 @@ export default function Dashboard() {
                 <ul className="space-y-3" role="list">
                   {receptionists.map((receptionist) => (
                     <li key={receptionist.id}>
-                      <Card 
-                        className="hover:shadow-md hover:border-primary/20 transition-all duration-300 group liquid-glass"
+                      <Card
+                        className="card-hover group"
                       >
                         <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 sm:p-6 gap-4">
                           <div className="flex items-center gap-3 sm:gap-4">
-                            <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow flex-shrink-0" aria-hidden="true">
-                              <Phone className="h-5 w-5 sm:h-6 sm:w-6 text-primary-foreground" />
+                            <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                              <Phone className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                             </div>
                             <div className="min-w-0">
                               <h3 className="font-semibold text-base sm:text-lg truncate">{receptionist.name}</h3>
@@ -399,7 +396,7 @@ export default function Dashboard() {
             ].map((item) => (
               <Card 
                 key={item.path}
-                className="cursor-pointer hover:shadow-elevated hover:-translate-y-1 transition-all duration-300 group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 liquid-glass"
+                className="cursor-pointer card-hover group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
                 onClick={() => navigate(item.path)}
                 role="link"
                 tabIndex={0}

@@ -220,7 +220,7 @@ export default function ConversationalOnboarding() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
+            <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-contact">
               <Sparkles className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>

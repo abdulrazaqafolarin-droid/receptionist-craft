@@ -134,7 +134,7 @@ export default function StaffPage() {
                 <Plus className="h-4 w-4 mr-1" /> Add Staff
               </Button>
             </DialogTrigger>
-          <DialogContent className="liquid-glass">
+          <DialogContent className="glass-3">
             <DialogHeader>
               <DialogTitle>Add Staff Member</DialogTitle>
             </DialogHeader>
@@ -173,7 +173,7 @@ export default function StaffPage() {
           <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
         </div>
       ) : noReceptionist ? (
-        <Card className="border-2 border-dashed liquid-glass">
+        <Card className="border-dashed glass-1">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Users className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">Create your AI operator first</h3>
@@ -186,7 +186,7 @@ export default function StaffPage() {
           </CardContent>
         </Card>
       ) : staff.length === 0 ? (
-        <Card className="liquid-glass">
+        <Card className="glass-1">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Users className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-muted-foreground mb-4">No staff members yet</p>
@@ -199,7 +199,7 @@ export default function StaffPage() {
       ) : (
         <div className="space-y-3">
           {staff.map((member) => (
-            <Card key={member.id} className="liquid-glass">
+            <Card key={member.id} className="glass-1">
               <CardContent className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">

@@ -743,7 +743,7 @@ export default function Widget() {
 
   if (!receptionistId) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background p-4">
+      <div className="flex items-center justify-center min-h-screen bg-background p-4">
         <Card className="p-8 sm:p-12 max-w-md text-center shadow-2xl animate-in fade-in-0 zoom-in-95 duration-300">
           <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
             <MessageCircle className="h-10 w-10 text-primary" />
@@ -767,7 +767,7 @@ export default function Widget() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-2 sm:p-4">
+    <div className="flex items-center justify-center min-h-screen bg-background p-2 sm:p-4">
       {/* Voice Chat Overlay */}
       <VoiceChatOverlay
         open={voiceChatOpen}
@@ -840,7 +840,7 @@ export default function Widget() {
           showAvatar
           showTimestamp
           autoFocus
-          listClassName="p-4 sm:p-6 bg-gradient-to-b from-muted/20 to-background scroll-smooth"
+          listClassName="p-4 sm:p-6 bg-background scroll-smooth"
           sendIcon={<Send className="h-5 w-5" />}
           accentGradient={`linear-gradient(135deg, ${widgetColors.primaryColor}, ${widgetColors.secondaryColor})`}
           renderQuickReplies={(msg) =>

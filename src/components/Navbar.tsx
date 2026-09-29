@@ -146,7 +146,7 @@ export const Navbar = ({ user }: NavbarProps) => {
               alt="Rutex Logo" 
               className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl shadow-md group-hover:shadow-elevated transition-all duration-300 object-cover"
             />
-            <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
+            <span className="text-lg sm:text-xl font-bold text-foreground">
               Rutex FrontDesk
             </span>
           </button>
@@ -232,7 +232,7 @@ export const Navbar = ({ user }: NavbarProps) => {
                     aria-label="User menu"
                   >
                     <Avatar className="h-10 w-10 border-2 border-primary/20">
-                      <AvatarFallback className="bg-gradient-to-br from-primary to-primary-glow text-primary-foreground font-semibold">
+                      <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
                         {user.email?.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
@@ -241,7 +241,7 @@ export const Navbar = ({ user }: NavbarProps) => {
                 <DropdownMenuContent align="end" className="w-56 shadow-elevated">
                   <div className="flex items-center gap-3 p-3">
                     <Avatar className="h-10 w-10">
-                      <AvatarFallback className="bg-gradient-to-br from-primary to-primary-glow text-primary-foreground">
+                      <AvatarFallback className="bg-primary text-primary-foreground">
                         {user.email?.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
@@ -291,7 +291,7 @@ export const Navbar = ({ user }: NavbarProps) => {
               </Button>
               <Button 
                 onClick={() => navigate("/auth")} 
-                className="bg-gradient-to-r from-primary to-primary-glow hover:shadow-elevated transition-all touch-target"
+                className="touch-target"
               >
                 <span className="sm:hidden">Sign In</span>
                 <span className="hidden sm:inline">Start Free</span>

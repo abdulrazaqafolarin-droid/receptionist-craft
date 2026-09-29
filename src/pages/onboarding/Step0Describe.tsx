@@ -39,7 +39,7 @@ export default function Step0Describe() {
   }
 
   return (
-    <Card className="p-6 sm:p-8 liquid-glass">
+    <Card className="p-6 sm:p-8 glass-1">
       <div className="flex items-center gap-3 mb-2">
         <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
           <Wand2 className="h-5 w-5 text-primary" />
@@ -91,7 +91,7 @@ export default function Step0Describe() {
         <Button
           onClick={handleGenerate}
           disabled={!description.trim() || loading}
-          className="flex-1 h-12 text-base bg-gradient-to-r from-primary to-primary-glow"
+          className="flex-1 h-12 text-base"
         >
           {loading ? (
             <>

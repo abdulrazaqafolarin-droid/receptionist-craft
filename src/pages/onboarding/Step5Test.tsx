@@ -28,7 +28,7 @@ export default function Step5Test() {
   const widgetUrl = `${window.location.origin}/widget?rid=${receptionistId}`;
 
   return (
-    <Card className="liquid-glass">
+    <Card className="glass-1">
       <CardHeader>
         <div className="flex items-center gap-2">
           <MessageSquare className="h-5 w-5 text-primary" />
@@ -42,8 +42,8 @@ export default function Step5Test() {
         {/* Receptionist Summary */}
         <div className="p-4 border rounded-lg bg-muted/50">
           <div className="flex items-start gap-3 mb-4">
-            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-primary/50 flex items-center justify-center flex-shrink-0">
-              <Sparkles className="h-6 w-6 text-primary-foreground" />
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Sparkles className="h-6 w-6 text-primary" />
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-lg">{receptionist.name}</h3>

@@ -134,7 +134,7 @@ export default function Auth() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8 animate-fade-in">
           <div className="inline-flex items-center justify-center mb-6">
-            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-lg shadow-primary/30 overflow-hidden">
+            <div className="h-16 w-16 rounded-2xl bg-primary flex items-center justify-center shadow-contact overflow-hidden">
               <img src={rutexLogo} alt="Rutex Frontdesk" className="h-full w-full object-cover" />
             </div>
           </div>
@@ -145,23 +145,23 @@ export default function Auth() {
         <Card className="border-2 border-primary/10 shadow-2xl shadow-primary/5 animate-scale-in backdrop-blur-sm bg-card/95">
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2 m-1 mb-0">
-              <TabsTrigger value="signin" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground liquid-glass">
+              <TabsTrigger value="signin" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 Sign In
               </TabsTrigger>
-              <TabsTrigger value="signup" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground liquid-glass">
+              <TabsTrigger value="signup" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 Sign Up
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="signin">
               <form onSubmit={handleSignIn}>
-                <CardHeader className="pb-4 liquid-glass">
+                <CardHeader className="pb-4">
                   <CardTitle className="text-xl">Sign in to your account</CardTitle>
                   <CardDescription>
                     Enter your credentials to access your dashboard
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-5 liquid-glass">
+                <CardContent className="space-y-5">
                   <div className="space-y-2">
                     <Label htmlFor="signin-email" className="text-sm font-medium">Email</Label>
                     <div className="relative">
@@ -172,7 +172,7 @@ export default function Auth() {
                         placeholder="you@example.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="pl-10 h-12 liquid-glass"
+                        className="pl-10 h-12"
                         required
                       />
                     </div>
@@ -199,7 +199,7 @@ export default function Auth() {
                       </button>
                     </div>
                   </div>
-                  <Button type="submit" className="w-full h-12 text-base font-medium group liquid-glass" disabled={isLoading}>
+                  <Button type="submit" className="w-full h-12 text-base font-medium group" disabled={isLoading}>
                     {isLoading ? "Signing in..." : (
                       <>
                         Sign In
@@ -213,13 +213,13 @@ export default function Auth() {
 
             <TabsContent value="signup">
               <form onSubmit={handleSignUp}>
-                <CardHeader className="pb-4 liquid-glass">
+                <CardHeader className="pb-4">
                   <CardTitle className="text-xl">Create an account</CardTitle>
                   <CardDescription>
                     Get started with your AI receptionist in minutes
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-5 liquid-glass">
+                <CardContent className="space-y-5">
                   <div className="space-y-2">
                     <Label htmlFor="signup-name" className="text-sm font-medium">Full Name</Label>
                     <div className="relative">
@@ -230,7 +230,7 @@ export default function Auth() {
                         placeholder="John Doe"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="pl-10 h-12 liquid-glass"
+                        className="pl-10 h-12"
                         required
                       />
                     </div>
@@ -245,7 +245,7 @@ export default function Auth() {
                         placeholder="you@example.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="pl-10 h-12 liquid-glass"
+                        className="pl-10 h-12"
                         required
                       />
                     </div>
@@ -273,7 +273,7 @@ export default function Auth() {
                       </button>
                     </div>
                   </div>
-                  <Button type="submit" className="w-full h-12 text-base font-medium group liquid-glass" disabled={isLoading}>
+                  <Button type="submit" className="w-full h-12 text-base font-medium group" disabled={isLoading}>
                     {isLoading ? "Creating account..." : (
                       <>
                         Create Account

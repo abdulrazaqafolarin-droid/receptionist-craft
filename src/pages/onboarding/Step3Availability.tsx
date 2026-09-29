@@ -108,7 +108,7 @@ export default function Step3Availability() {
   };
 
   return (
-    <Card className="liquid-glass">
+    <Card className="glass-1">
       <CardHeader>
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-primary" />

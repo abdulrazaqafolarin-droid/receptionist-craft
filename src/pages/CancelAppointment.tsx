@@ -99,7 +99,7 @@ export default function CancelAppointment() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -107,7 +107,7 @@ export default function CancelAppointment() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background p-4">
+      <div className="flex items-center justify-center min-h-screen bg-background p-4">
         <Card className="max-w-md">
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -125,7 +125,7 @@ export default function CancelAppointment() {
 
   if (success) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background p-4">
+      <div className="flex items-center justify-center min-h-screen bg-background p-4">
         <Card className="max-w-md">
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -150,7 +150,7 @@ export default function CancelAppointment() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 to-background p-4">
+    <div className="flex items-center justify-center min-h-screen bg-background p-4">
       <Card className="max-w-md">
         <CardHeader>
           <div className="flex items-center gap-2">
