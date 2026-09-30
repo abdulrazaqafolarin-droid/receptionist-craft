@@ -12,6 +12,8 @@ import { DashboardCharts } from "@/components/DashboardCharts";
 import { SuccessSignalsCard } from "@/components/SuccessSignalsCard";
 import { OwnerChat } from "@/components/OwnerChat";
 import { ConversationalManagement } from "@/components/ConversationalManagement";
+import { NumberTicker } from "@/components/ui/number-ticker";
+import { SpotlightCard } from "@/components/SpotlightCard";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -84,7 +86,7 @@ export default function Dashboard() {
       <FloatingBackground variant="default" />
       {/* Owner Chat Sidebar - Persistent on Dashboard */}
       <OwnerChat />
-      <main id="main-content" className="relative z-10 container mx-auto px-4 py-6 sm:py-8 lg:py-12 lg:pr-96">
+      <main id="main-content" className="relative z-10 container mx-auto px-4 py-6 sm:py-8 lg:py-12">
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 sm:mb-10 animate-fade-in">
           <div>
@@ -174,7 +176,7 @@ export default function Dashboard() {
         {/* AI Operator Centerpiece */}
         {receptionists.length > 0 && selectedReceptionistId && (
           <section className="mb-8 animate-fade-in" aria-label="Your AI Operator">
-            <Card className="glass-2 overflow-hidden">
+            <SpotlightCard className="glass-2 overflow-hidden rounded-[16px] border">
               <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -261,12 +263,12 @@ export default function Dashboard() {
 
                 {/* Conversational Management - Expanded */}
                 {showOperatorDetail && (
-                  <div className="border-t border-border/50 pt-4 animate-slide-in">
+                  <div className="border-t border-border/50 pt-4 animate-enter">
                     <ConversationalManagement receptionistId={selectedReceptionistId} />
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </SpotlightCard>
           </section>
         )}
 
@@ -290,7 +292,9 @@ export default function Dashboard() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1" aria-label={`${stat.value} ${stat.title.toLowerCase()}`}>{stat.value}</div>
+                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1" aria-label={`${stat.value} ${stat.title.toLowerCase()}`}>
+                  <NumberTicker value={stat.value} />
+                </div>
                 <p className="text-xs sm:text-sm text-muted-foreground">{stat.desc}</p>
               </CardContent>
             </Card>

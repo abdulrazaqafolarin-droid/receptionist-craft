@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { User, LogOut, Settings, LayoutDashboard, HelpCircle, Bell } from "lucide-react";
+import { User, LogOut, Settings, LayoutDashboard, HelpCircle, Bell, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -153,6 +153,29 @@ export const Navbar = ({ user }: NavbarProps) => {
 
           {user ? (
             <div className="flex items-center gap-2">
+              {/* Command palette trigger */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden sm:inline-flex items-center gap-2 text-muted-foreground hover:text-foreground touch-target"
+                onClick={() => window.dispatchEvent(new CustomEvent("rutex:open-palette"))}
+                aria-label="Open command palette"
+              >
+                <Search className="h-4 w-4" aria-hidden="true" />
+                <span className="text-sm">Search</span>
+                <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                  ⌘K
+                </kbd>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="sm:hidden touch-target"
+                onClick={() => window.dispatchEvent(new CustomEvent("rutex:open-palette"))}
+                aria-label="Open command palette"
+              >
+                <Search className="h-5 w-5" aria-hidden="true" />
+              </Button>
               {/* Notifications Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

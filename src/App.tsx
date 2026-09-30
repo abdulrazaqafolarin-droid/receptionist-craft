@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { Navbar } from "@/components/Navbar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
+import { CommandPalette } from "@/components/CommandPalette";
 
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
@@ -202,6 +203,7 @@ const App = () => {
                               <Route path="*" element={<NotFound />} />
                             </Routes>
                           </main>
+                          <CommandPalette />
                         </div>
                       </div>
                     </SidebarProvider>

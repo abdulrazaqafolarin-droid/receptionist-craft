@@ -24,9 +24,8 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  ChevronLeft,
-  ChevronRight,
   Sparkles,
+  Lightbulb,
   Zap,
   AlertTriangle,
   TrendingUp,
@@ -124,25 +123,25 @@ interface InsightCard {
 }
 
 const INSIGHT_ICONS = {
-  revenue_leak: "💸",
-  capacity_waste: "📅",
-  channel_decay: "📱",
-  growth_pattern: "📈",
-  risk: "⚠️",
-  opportunity: "💡",
+  revenue_leak: TrendingDown,
+  capacity_waste: Clock,
+  channel_decay: MessageSquare,
+  growth_pattern: TrendingUp,
+  risk: AlertTriangle,
+  opportunity: Lightbulb,
 };
 
 const INSIGHT_COLORS = {
-  revenue_leak: "border-red-200 bg-red-50 text-red-900",
-  capacity_waste: "border-amber-200 bg-amber-50 text-amber-900",
-  channel_decay: "border-orange-200 bg-orange-50 text-orange-900",
-  growth_pattern: "border-green-200 bg-green-50 text-green-900",
-  risk: "border-red-200 bg-red-50 text-red-900",
-  opportunity: "border-blue-200 bg-blue-50 text-blue-900",
+  revenue_leak: "border-destructive/30 bg-destructive/10",
+  capacity_waste: "border-warning/30 bg-warning/10",
+  channel_decay: "border-warning/30 bg-warning/10",
+  growth_pattern: "border-success/30 bg-success/10",
+  risk: "border-destructive/30 bg-destructive/10",
+  opportunity: "border-primary/30 bg-primary/10",
 };
 
 export function OwnerChat() {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<OwnerChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -163,6 +162,29 @@ export function OwnerChat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Escape closes the sheet; focus the input when it opens
+  useEffect(() => {
+    if (!isOpen) return;
+    inputRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen]);
+
+  // "Ask FrontDesk AI" from the command palette: open, prefill, send
+  useEffect(() => {
+    const onAsk = (e: Event) => {
+      const message = (e as CustomEvent<{ message?: string }>).detail?.message;
+      if (!message) return;
+      setIsOpen(true);
+      setInput(message);
+    };
+    window.addEventListener("rutex:ask-ai", onAsk);
+    return () => window.removeEventListener("rutex:ask-ai", onAsk);
+  }, []);
 
   // Load initial insights (mock for now)
   useEffect(() => {
@@ -524,7 +546,7 @@ export function OwnerChat() {
 
     if (msg.message_type === "clarification" && msg.clarifications) {
       return (
-        <div className="flex gap-3 animate-slide-in">
+        <div className="flex gap-3 animate-enter">
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
             <Sparkles className="w-4 h-4 text-primary" />
           </div>
@@ -545,7 +567,7 @@ export function OwnerChat() {
 
     if (msg.message_type === "proposal" && msg.proposal) {
       return (
-        <div className="flex gap-3 animate-slide-in">
+        <div className="flex gap-3 animate-enter">
           <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
             <Check className="w-4 h-4 text-green-600" />
           </div>
@@ -588,11 +610,11 @@ export function OwnerChat() {
 
     if (msg.message_type === "confirmation") {
       return (
-        <div className="flex gap-3 animate-slide-in">
-          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-            <Check className="w-4 h-4 text-green-600" />
+        <div className="flex gap-3 animate-enter">
+          <div className="w-8 h-8 rounded-full bg-success/15 flex items-center justify-center flex-shrink-0">
+            <Check className="w-4 h-4 text-success" />
           </div>
-          <div className="flex-1 p-3 rounded-lg bg-green-50 border border-green-200 text-green-900 text-sm">
+          <div className="flex-1 p-3 rounded-lg bg-success/10 border border-success/30 text-foreground text-sm">
             {msg.content}
           </div>
         </div>
@@ -605,7 +627,7 @@ export function OwnerChat() {
     }
 
     return (
-      <div className={cn("flex gap-3 animate-slide-in", isOwner && "flex-row-reverse")}>
+      <div className={cn("flex gap-3 animate-enter", isOwner && "flex-row-reverse")}>
         <div className={cn("w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", isOwner ? "bg-primary/10" : "bg-muted")}>
           {isOwner ? <MessageSquare className="w-4 h-4 text-primary" /> : <Sparkles className="w-4 h-4 text-muted-foreground" />}
         </div>
@@ -619,29 +641,46 @@ export function OwnerChat() {
 
   const visibleInsights = insights.filter((i) => !dismissedInsights.has(i.id));
 
+  if (!isOpen) {
+    return (
+      <button
+        onClick={() => setIsOpen(true)}
+        aria-label="Open FrontDesk AI, your operations partner"
+        className="pressable fixed bottom-6 right-6 z-floating flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-elevated"
+      >
+        <Sparkles className="h-6 w-6" aria-hidden="true" />
+        {visibleInsights.length > 0 && (
+          <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[11px] font-semibold text-white">
+            {visibleInsights.length > 9 ? "9+" : visibleInsights.length}
+          </span>
+        )}
+      </button>
+    );
+  }
+
   return (
-    <div className={cn("flex flex-col h-full bg-card border-l", isOpen ? "w-96" : "w-14")}>
+    <div className="fixed inset-0 z-modal" role="dialog" aria-modal="true" aria-label="FrontDesk AI, your operations partner">
+      <div className="absolute inset-0 bg-black/30" onClick={() => setIsOpen(false)} aria-hidden="true" />
+      <div className="glass-2 absolute right-0 top-0 flex h-dvh w-full flex-col border-l animate-panel sm:w-96">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
-        {isOpen && (
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="font-semibold">FrontDesk AI</h3>
-              <p className="text-xs text-muted-foreground">Your Operations Partner</p>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-primary-foreground" />
           </div>
-        )}
+          <div>
+            <h3 className="font-semibold">FrontDesk AI</h3>
+            <p className="text-xs text-muted-foreground">Your Operations Partner</p>
+          </div>
+        </div>
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => setIsOpen(false)}
           className="text-muted-foreground hover:text-foreground"
-          aria-label={isOpen ? "Collapse" : "Expand"}
+          aria-label="Close FrontDesk AI"
         >
-          {isOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+          <X className="w-5 h-5" />
         </Button>
       </div>
 
@@ -659,7 +698,10 @@ export function OwnerChat() {
               <Card key={insight.id} className={cn(INSIGHT_COLORS[insight.type], "shadow-sm")}>
                 <CardContent className="p-3">
                   <div className="flex items-start gap-2">
-                    <span className="text-lg">{INSIGHT_ICONS[insight.type]}</span>
+                    {(() => {
+                      const InsightIcon = INSIGHT_ICONS[insight.type];
+                      return <InsightIcon className="h-5 w-5 text-primary" aria-hidden="true" />;
+                    })()}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">{insight.title}</p>
                       <p className="text-xs text-muted-foreground/80 mt-0.5">{insight.description}</p>
@@ -713,7 +755,7 @@ export function OwnerChat() {
       {isOpen && (
         <div className="p-3 border-t space-y-2">
           {pendingClarifications && (
-            <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900">
+            <div className="p-2 bg-warning/10 border border-warning/30 rounded-lg text-sm text-foreground">
               <AlertTriangle className="w-3 h-3 inline mr-1" />
               Answer the questions above to continue
             </div>
@@ -741,11 +783,11 @@ export function OwnerChat() {
                 size="icon"
                 onClick={handleVoiceToggle}
                 disabled={isProcessing}
-                className={cn("relative", isRecording && "text-red-500 animate-pulse")}
+                className={cn("relative", isRecording && "text-destructive status-pulse")}
                 aria-label={isRecording ? "Stop recording" : "Start voice input"}
               >
                 {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                {isRecording && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />}
+                {isRecording && <span className="absolute -top-1 -right-1 w-2 h-2 bg-destructive rounded-full" />}
               </Button>
               <Button
                 variant={isProcessing ? "default" : "default"}
@@ -786,7 +828,7 @@ export function OwnerChat() {
         </div>
       )}
 
-      {/* Collapsed state - just the toggle button is visible */}
+      </div>
     </div>
   );
 }
