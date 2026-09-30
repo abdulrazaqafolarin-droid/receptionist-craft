@@ -204,6 +204,7 @@ const App = () => {
                             </Routes>
                           </main>
                           <CommandPalette />
+                          <CommandPalette />
                         </div>
                       </div>
                     </SidebarProvider>

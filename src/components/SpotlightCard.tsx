@@ -1,12 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-/**
- * RUTEX SPOTLIGHT CARD — Aceternity spotlight pattern, implemented natively.
- * A single soft light follows the pointer across one signature surface,
- * drawing attention without competing with content. Disabled on touch
- * devices and under prefers-reduced-motion (static surface instead).
- */
 interface SpotlightCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
 }

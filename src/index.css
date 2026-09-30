@@ -486,6 +486,27 @@
     .spotlight-surface::before { display: none; }
   }
 
+  /* ——— Spotlight: one signature light following the pointer ——— */
+  .spotlight-surface { position: relative; }
+  .spotlight-surface::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--motion-normal) var(--spring-standard);
+    background: radial-gradient(
+      480px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+      hsl(var(--primary) / 0.08),
+      transparent 65%
+    );
+  }
+  .spotlight-surface.spotlight-active::before { opacity: 1; }
+  @media (hover: none), (prefers-reduced-motion: reduce) {
+    .spotlight-surface::before { display: none; }
+  }
+
   /* Responsive container */
   .container-responsive {
     @apply w-full mx-auto px-4 sm:px-6 lg:px-8;

@@ -6,9 +6,6 @@ import {
   CalendarDays,
   Calendar,
   ShoppingBag,
-  ConciergeBell,
-  Clock,
-  Users,
   BarChart3,
   CreditCard,
   Settings,
@@ -18,6 +15,9 @@ import {
   Plus,
   Sparkles,
   Search,
+  Users,
+  Clock,
+  ConciergeBell,
 } from "lucide-react";
 import {
   Command,
@@ -30,13 +30,6 @@ import {
 } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
-/**
- * RUTEX COMMAND PALETTE — shadcn Command pattern, Rutex tokens.
- * Global business command interface (Ctrl/Cmd+K): navigation, actions,
- * and "Ask FrontDesk AI" business queries. Rendered as a Glass-3 surface.
- * Opened via the "rutex:open-palette" window event (dispatched by the
- * keyboard-shortcuts hook and the Navbar search trigger).
- */
 export const RUTEX_OPEN_PALETTE_EVENT = "rutex:open-palette";
 export const RUTEX_ASK_AI_EVENT = "rutex:ask-ai";
 

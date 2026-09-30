@@ -1,12 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-/**
- * RUTEX NUMBER TICKER — Magic UI number-ticker pattern, implemented natively.
- * Counts up/down to a target value when scrolled into view.
- * No new dependencies: requestAnimationFrame + IntersectionObserver.
- * Honors prefers-reduced-motion (jumps straight to the value).
- */
 interface NumberTickerProps {
   value: number;
   startValue?: number;
