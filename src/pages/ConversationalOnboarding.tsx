@@ -1,60 +1,202 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Sparkles, ArrowLeft, Send, Loader2, Mic, MicOff } from "lucide-react";
+import { ArrowLeft, Bot, Check, Loader2, Send, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { recordSignal } from "@/lib/successSignals";
+import { nextInterviewTurn } from "@/lib/conversationalInterview";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { toast } from "sonner";
 import { FloatingBackground } from "@/components/FloatingBackground";
-import { PlanReview } from "@/components/PlanReview";
 import VoiceInputButton from "@/components/widget/VoiceInputButton";
+import { ChatMessage, type AgentVisualState } from "@/components/onboarding/ChatMessage";
+import { BuildProgress, type BuildStep } from "@/components/onboarding/BuildProgress";
+import { OperatorPreview, type PreviewFaq, type PreviewService } from "@/components/onboarding/OperatorPreview";
 
-interface PlanSection {
+interface Message {
   id: string;
-  title: string;
+  role: "user" | "assistant";
   content: string;
-  confidence: "high" | "medium" | "low";
-  owner_action?: string;
+  at: Date;
 }
 
-type Step = "describe" | "review" | "building" | "done";
+type Phase = "chat" | "planning" | "preview" | "building" | "done";
+
+interface PlanData {
+  planText: string;
+  config: Record<string, unknown>;
+  versionId: string;
+  receptionistId: string;
+}
+
+let msgSeq = 0;
+function nextId() {
+  msgSeq += 1;
+  return `m-${Date.now()}-${msgSeq}`;
+}
+
+function transcriptOf(messages: Message[]): string {
+  return messages.map((m) => `${m.role === "user" ? "Owner" : "Assistant"}: ${m.content}`).join("\n");
+}
+
+function ownerTexts(messages: Message[]): string[] {
+  return messages.filter((m) => m.role === "user").map((m) => m.content);
+}
+
+/** Deterministic starter answers derived from the plan config — marked Suggested until approved. */
+function deriveFaqs(config: Record<string, unknown>, summary: string): PreviewFaq[] {
+  const business = (config.business || {}) as Record<string, unknown>;
+  const hours = Array.isArray(config.hours) ? (config.hours as Array<Record<string, unknown>>) : [];
+  const policies = (config.policies || {}) as Record<string, unknown>;
+  const contact = (config.contact || {}) as Record<string, unknown>;
+  const capabilities = (config.capabilities || {}) as Record<string, boolean>;
+  const displayName = typeof business.display_name === "string" ? business.display_name : "us";
+  const faqs: PreviewFaq[] = [];
+
+  if (hours.length > 0) {
+    faqs.push({
+      question: "What are your opening hours?",
+      answer: `We are open ${hours
+        .map((h) => `day ${h.day_of_week} ${h.start_time}–${h.end_time}`)
+        .join(", ")} (${typeof config.timezone === "string" ? config.timezone : "local time"}).`,
+    });
+  }
+  if (capabilities.books_appointments) {
+    faqs.push({
+      question: "How do I book an appointment?",
+      answer: `Just tell us what you need and when — ${displayName} confirms your slot right in the chat.`,
+    });
+  }
+  if (typeof policies.cancellation_notice_hours === "number") {
+    faqs.push({
+      question: "What is your cancellation policy?",
+      answer: `Please give us at least ${policies.cancellation_notice_hours} hours notice to cancel or reschedule.`,
+    });
+  }
+  if (typeof contact.phone === "string" && contact.phone) {
+    faqs.push({
+      question: "How do I reach you directly?",
+      answer: `You can reach us on ${contact.phone}${typeof contact.address === "string" && contact.address ? `, or visit us at ${contact.address}` : ""}.`,
+    });
+  }
+  if (summary) {
+    faqs.push({ question: `What does ${displayName} offer?`, answer: summary.slice(0, 400) });
+  }
+  return faqs.slice(0, 5);
+}
+
+const DONE_STEPS: BuildStep[] = [];
 
 export default function ConversationalOnboarding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const businessName = searchParams.get("businessName") || "";
   const businessType = searchParams.get("businessType") || "";
-  const [step, setStep] = useState<Step>("describe");
-  const [description, setDescription] = useState(() => {
-    if (businessName && businessType) {
-      return `I run ${businessName}, ${businessType}. Please set up my AI operator for it.`;
-    }
-    if (businessName) {
-      return `I run ${businessName}. Please set up my AI operator for it.`;
-    }
-    return "";
-  });
-  const [planData, setPlanData] = useState<{
-    planText: string;
-    sections: PlanSection[];
-    reasoningNotes: string;
-    config: Record<string, unknown>;
-    versionId: string;
-  } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [voiceError, setVoiceError] = useState<string | null>(null);
 
-  const handleVoiceTranscript = (text: string) => {
-    setDescription((prev) => (prev ? `${prev} ${text}` : text));
-    setVoiceError(null);
-  };
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [agentState, setAgentState] = useState<AgentVisualState>("idle");
+  const [phase, setPhase] = useState<Phase>("chat");
+  const [ready, setReady] = useState(false);
+  const [ctaDismissed, setCtaDismissed] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [planData, setPlanData] = useState<PlanData | null>(null);
+  const [services, setServices] = useState<PreviewService[]>([]);
+  const [faqs, setFaqs] = useState<PreviewFaq[]>([]);
+  const [buildSteps, setBuildSteps] = useState<BuildStep[]>(DONE_STEPS);
+  const [mobileTab, setMobileTab] = useState<"chat" | "build">("chat");
+  const [approving, setApproving] = useState(false);
 
-  async function handleDescribe() {
-    if (!description.trim()) return;
-    setLoading(true);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const receptionistIdRef = useRef<string | null>(null);
+  const greetedRef = useRef(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const ownerCount = useMemo(() => messages.filter((m) => m.role === "user").length, [messages]);
+  const showSplit = phase === "preview" || phase === "building" || phase === "done";
+
+  // Greet once — never re-greet (platform rule).
+  useEffect(() => {
+    if (greetedRef.current) return;
+    greetedRef.current = true;
+    const greeting = businessType
+      ? `Welcome${businessName ? ` to ${businessName}` : ""}! I help set up AI operators for businesses like yours. In your own words — what do you offer, and how do customers book or buy from you today?`
+      : "Welcome! Tell me about your business in your own words — what you offer, and how customers book or buy from you today.";
+    setMessages([{ id: nextId(), role: "assistant", content: greeting, at: new Date() }]);
+    setAgentState("watching");
+  }, [businessName, businessType]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, sending, phase]);
+
+  const appendAssistant = useCallback((content: string) => {
+    setMessages((prev) => [...prev, { id: nextId(), role: "assistant", content, at: new Date() }]);
+  }, []);
+
+  async function handleSend() {
+    const text = input.trim();
+    if (!text || sending || phase === "planning" || phase === "building") return;
+    setInput("");
+    setCtaDismissed(false);
+    const userMsg: Message = { id: nextId(), role: "user", content: text, at: new Date() };
+    const next = [...messages, userMsg];
+    setMessages(next);
+    setSending(true);
+    setAgentState("thinking");
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.functions.invoke("configurator-chat", {
+        body: {
+          messages: next.slice(-12).map((m) => ({ role: m.role, content: m.content })),
+          businessName,
+          businessType,
+          conversationId: user?.id,
+        },
+      });
+
+      if (!error && (data as { ok?: boolean } | null)?.ok) {
+        const d = data as { assistant_message: string; ready: boolean; summary: string };
+        appendAssistant(d.assistant_message);
+        if (d.summary) setSummary(d.summary);
+        if (d.ready === true) setReady(true);
+      } else {
+        throw new Error((data as { error?: string } | null)?.error || error?.message || "interview_unavailable");
+      }
+    } catch {
+      // Offline-safe fallback: the chat never dead-ends even if the gateway is down.
+      const turn = nextInterviewTurn(ownerTexts(next), businessName, businessType);
+      appendAssistant(turn.assistant_message);
+      setSummary(turn.summary);
+      if (turn.ready) setReady(true);
+    } finally {
+      setSending(false);
+      setAgentState(ready ? "waiting" : "watching");
+    }
+  }
+
+  function markSteps(updater: (s: BuildStep[]) => BuildStep[]) {
+    setBuildSteps((prev) => updater(prev));
+  }
+
+  function setStepStatus(id: string, status: BuildStep["status"], evidence?: string) {
+    markSteps((prev) => prev.map((s) => (s.id === id ? { ...s, status, evidence: evidence ?? s.evidence } : s)));
+  }
+
+  async function handlePlan() {
+    if (phase === "planning" || phase === "building" || messages.length === 0) return;
+    setPhase("planning");
+    setAgentState("thinking");
+    setBuildSteps([
+      { id: "understand", label: "Understanding your description", status: "active" },
+      { id: "design", label: "Designing your operator", status: "pending" },
+      { id: "structure", label: "Structuring services, hours, and answers", status: "pending" },
+    ]);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -64,268 +206,431 @@ export default function ConversationalOnboarding() {
         return;
       }
 
-      // Create a receptionist first so we have an ID
-      const { data: rec, error: recErr } = await supabase
-        .from("receptionists")
-        .insert({
-          user_id: user.id,
-          name: "Setting up...",
-          business_name: "Setting up...",
-          business_type: "General Business",
-          tone: "friendly",
-        })
-        .select("id")
-        .single();
+      // One placeholder receptionist per run — created at plan time, not per message.
+      if (!receptionistIdRef.current) {
+        const { data: rec, error: recErr } = await supabase
+          .from("receptionists")
+          .insert({
+            user_id: user.id,
+            name: "Setting up...",
+            business_name: businessName || "Setting up...",
+            business_type: businessType || "General Business",
+            tone: "friendly",
+          })
+          .select("id")
+          .single();
+        if (recErr || !rec) throw new Error("Failed to create receptionist");
+        receptionistIdRef.current = (rec as { id: string }).id;
+      }
+      const recId = receptionistIdRef.current;
 
-      if (recErr || !rec) {
-        throw new Error("Failed to create receptionist");
+      const description = [
+        businessName ? `Business name: ${businessName}.` : "",
+        businessType ? `Business type: ${businessType}.` : "",
+        summary ? `Interview summary: ${summary}.` : "",
+        "Full discussion:",
+        transcriptOf(messages),
+      ].filter(Boolean).join("\n");
+
+      setStepStatus("understand", "done", `You shared ${ownerCount} message${ownerCount === 1 ? "" : "s"} → Discussion captured → Ready to design`);
+      setStepStatus("design", "active");
+
+      const { data, error } = await supabase.functions.invoke("propose-operator-plan", {
+        body: { description, receptionist_id: recId, user_id: user.id },
+      });
+      if (error) throw error;
+      const d = data as { ok?: boolean; error?: string; plan?: { full_text?: string }; config?: Record<string, unknown>; version_id?: string };
+      if (!d?.ok) throw new Error(d?.error || "Failed to generate plan");
+
+      const config = (d.config || {}) as Record<string, unknown>;
+      setStepStatus("design", "done", `Plan drafted → You review before anything goes live`);
+      setStepStatus("structure", "active");
+
+      // Candidate services pulled from the discussion (Suggested — removable before approval).
+      let candidates: PreviewService[] = [];
+      try {
+        const parsed = await supabase.functions.invoke("parse-services", {
+          body: { text: transcriptOf(messages).slice(0, 4000), businessType: businessType || undefined },
+        });
+        const items = ((parsed.data as { items?: unknown[] } | null)?.items || []) as Array<Record<string, unknown>>;
+        candidates = items.slice(0, 12).map((it) => ({
+          name: typeof it.name === "string" ? it.name : "Untitled item",
+          type: it.type === "product" ? "product" : "service",
+          duration_minutes: typeof it.duration_minutes === "number" ? it.duration_minutes : 0,
+          price: typeof it.price === "number" ? it.price : null,
+          description: typeof it.description === "string" ? it.description : "",
+        }));
+      } catch {
+        candidates = [];
       }
 
-      // Call the propose-operator-plan function
-      const { data, error } = await supabase.functions.invoke("propose-operator-plan", {
-        body: {
-          description: description.trim(),
-          receptionist_id: rec.id,
-          user_id: user.id,
-        },
-      });
-
-      if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || "Failed to generate plan");
-
+      setServices(candidates);
+      setFaqs(deriveFaqs(config, summary));
       setPlanData({
-        planText: data.plan.full_text,
-        sections: data.plan.sections,
-        reasoningNotes: data.reasoning_notes,
-        config: data.config,
-        versionId: data.version_id,
+        planText: d.plan?.full_text || "",
+        config,
+        versionId: d.version_id || "",
+        receptionistId: recId,
       });
-      setStep("review");
+      setStepStatus("structure", "done", `${candidates.length} item${candidates.length === 1 ? "" : "s"} found → Hours mapped → Answers prepared`);
+      setPhase("preview");
+      setMobileTab("build");
+      setAgentState("approval");
+      appendAssistant("Your operator plan is ready on the right. Review it — remove anything that doesn't belong — then approve to make it live.");
     } catch (err) {
-      console.error("Onboarding error:", err);
-      const message = err instanceof Error ? err.message : "Failed to generate plan";
-      toast.error(message);
-    } finally {
-      setLoading(false);
+      console.error("Plan error:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to generate plan");
+      setPhase("chat");
+      setAgentState("error");
     }
   }
 
   async function handleApprove(feedback?: string) {
-    setLoading(true);
-    setStep("building");
+    if (!planData || approving) return;
+    setApproving(true);
+    setPhase("building");
+    setAgentState("acting");
+    const config = planData.config;
+    const hours = Array.isArray(config.hours) ? (config.hours as Array<Record<string, unknown>>) : [];
+    const timezone = typeof config.timezone === "string" && config.timezone ? config.timezone : "Africa/Lagos";
+
+    setBuildSteps([
+      { id: "apply", label: "Applying your approved plan", status: "active" },
+      { id: "services", label: `Saving ${services.length} service${services.length === 1 ? "" : "s"}`, status: "pending" },
+      { id: "hours", label: "Setting opening hours", status: "pending" },
+      { id: "answers", label: "Preparing customer answers", status: "pending" },
+      { id: "brain", label: "Writing operator instructions", status: "pending" },
+      { id: "live", label: "Making your operator live", status: "pending" },
+    ]);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) throw new Error("Please log in first");
+      const recId = planData.receptionistId;
 
-      // Get the receptionist we created
-      const { data: recs } = await supabase
-        .from("receptionists")
-        .select("id")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (!recs || recs.length === 0) throw new Error("No receptionist found");
-      const recId = recs[0].id;
-
-      // Approve the plan
-      const { data, error } = await supabase.functions.invoke("approve-operator-plan", {
+      const { data: approveData, error: approveErr } = await supabase.functions.invoke("approve-operator-plan", {
         body: {
-          version_id: planData?.versionId,
+          version_id: planData.versionId,
           receptionist_id: recId,
           user_id: user.id,
-          config: planData?.config,
-          plan_text: planData?.planText,
+          config,
+          plan_text: planData.planText,
           owner_feedback: feedback,
         },
       });
+      if (approveErr) throw approveErr;
+      if (!(approveData as { ok?: boolean })?.ok) throw new Error((approveData as { error?: string })?.error || "Failed to apply plan");
+      setStepStatus("apply", "done", "Plan approved → Business profile live → Details still to come");
 
-      if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || "Failed to apply plan");
+      // Services (same shape as the step-by-step wizard — no invented columns).
+      if (services.length > 0) {
+        const toInsert = services.map((s) => ({
+          receptionist_id: recId,
+          user_id: user.id,
+          name: s.name,
+          duration_minutes: s.type === "service" ? s.duration_minutes : 0,
+          description: s.description || null,
+          price: s.price,
+          active: true,
+        }));
+        const { error } = await supabase.from("services").insert(toInsert);
+        if (error) throw error;
+        const hasServices = services.some((s) => s.type === "service");
+        const hasProducts = services.some((s) => s.type === "product");
+        await supabase
+          .from("receptionists")
+          .update({ business_model: hasServices && hasProducts ? "both" : hasProducts ? "products" : "services" })
+          .eq("id", recId);
+      }
+      setStepStatus("services", "done", `${services.length} item${services.length === 1 ? "" : "s"} saved → Bookable in chat`);
 
-      // Mark onboarding as completed
-      await supabase
-        .from("profiles")
-        .update({ onboarding_completed: true })
-        .eq("id", user.id);
+      // Hours + timezone propagation (wizard Step 3 pattern).
+      if (hours.length > 0) {
+        const rules = hours
+          .filter((h) => typeof h.day_of_week === "number")
+          .map((h) => ({
+            receptionist_id: recId,
+            day_of_week: h.day_of_week as number,
+            start_time: typeof h.start_time === "string" ? h.start_time : "09:00",
+            end_time: typeof h.end_time === "string" ? h.end_time : "17:00",
+            timezone,
+          }));
+        if (rules.length > 0) {
+          const { error } = await supabase.from("availability_rules").insert(rules);
+          if (error) throw error;
+        }
+        await supabase.from("receptionists").update({ timezone }).eq("id", recId);
+        await supabase.from("profiles").update({ timezone }).eq("id", user.id);
+      }
+      setStepStatus("hours", "done", `${hours.length} day${hours.length === 1 ? "" : "s"} set → Correct slots in ${timezone}`);
 
+      // Answers (wizard Step 4 pattern — min 3).
+      const faqRows = faqs.slice(0, 5).map((f, i) => ({
+        receptionist_id: recId,
+        question: f.question,
+        answer: f.answer,
+        priority: i,
+      }));
+      if (faqRows.length >= 3) {
+        const { error } = await supabase.from("receptionist_faqs").insert(faqRows);
+        if (error) throw error;
+      }
+      setStepStatus("answers", "done", `${faqRows.length} answers saved → Customers get instant replies`);
+
+      // Operator instructions: system prompt + knowledge base (Gemini-direct helpers).
+      const { data: rec } = await supabase.from("receptionists").select("*").eq("id", recId).maybeSingle();
+      if (rec) {
+        try {
+          const sp = await supabase.functions.invoke("generate-system-prompt", { body: { receptionistData: rec } });
+          const promptText = (sp.data as { system_prompt?: string } | null)?.system_prompt;
+          if (promptText) await supabase.from("receptionists").update({ system_prompt: promptText }).eq("id", recId);
+        } catch (e) {
+          console.warn("System prompt generation failed (non-fatal):", e);
+        }
+        try {
+          const kb = await supabase.functions.invoke("generate-knowledge-base", { body: { receptionistData: rec } });
+          const kbText = (kb.data as { knowledge_base?: string } | null)?.knowledge_base;
+          if (kbText) await supabase.from("receptionists").update({ knowledge_base: kbText }).eq("id", recId);
+        } catch (e) {
+          console.warn("Knowledge base generation failed (non-fatal):", e);
+        }
+      }
+      setStepStatus("brain", "done", "Instructions written → Consistent tone and memory");
+
+      await supabase.from("profiles").update({ onboarding_completed: true }).eq("id", user.id);
       recordSignal("configured_operator", { path: "conversational", receptionist_id: recId });
-
-      setStep("done");
-      toast.success("Your AI Operator is ready!");
-
-      setTimeout(() => navigate(`/builder/${recId}`), 2000);
+      setStepStatus("live", "done", "Operator live → Opening your builder");
+      setPhase("done");
+      setAgentState("completed");
+      toast.success("Your AI operator is live!");
+      setTimeout(() => navigate(`/builder/${recId}`), 1800);
     } catch (err) {
       console.error("Approval error:", err);
-      const message = err instanceof Error ? err.message : "Failed to apply plan";
-      toast.error(message);
-      setStep("review");
+      toast.error(err instanceof Error ? err.message : "Failed to apply plan");
+      setPhase("preview");
+      setAgentState("approval");
     } finally {
-      setLoading(false);
+      setApproving(false);
     }
   }
 
-  async function handleEdit(feedback: string) {
-    // Re-submit with the feedback as an adjustment
-    setLoading(true);
+  async function handleAdjust(feedback: string) {
+    if (!planData || !feedback) return;
+    setSending(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      const { data: recs } = await supabase
-        .from("receptionists")
-        .select("id")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (!recs || recs.length === 0) return;
-
-      // Call request-change with the adjustment
       const { data, error } = await supabase.functions.invoke("request-change", {
         body: {
-          change_request: `Based on the original description: "${description.trim()}", the owner wants this adjustment: "${feedback}". Please regenerate the plan with this change.`,
-          receptionist_id: recs[0].id,
+          change_request: `Original discussion summary: "${summary}". The owner wants this adjustment: "${feedback}". Regenerate the plan with this change.`,
+          receptionist_id: planData.receptionistId,
           user_id: user.id,
         },
       });
-
       if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || "Failed to update plan");
-
-      setPlanData({
-        planText: data.plan.full_text,
-        sections: data.plan.sections,
-        reasoningNotes: data.reasoning_notes,
-        config: data.config,
-        versionId: data.version_id,
-      });
+      const d = data as { ok?: boolean; error?: string; config?: Record<string, unknown>; plan?: { full_text?: string }; version_id?: string };
+      if (!d?.ok) throw new Error(d?.error || "Failed to update plan");
+      const config = (d.config || planData.config) as Record<string, unknown>;
+      setPlanData({ ...planData, config, planText: d.plan?.full_text || planData.planText, versionId: d.version_id || planData.versionId });
+      setFaqs(deriveFaqs(config, summary));
+      appendAssistant("Plan updated with your change. Review the right side again when ready.");
       toast.success("Plan updated with your feedback");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update plan";
-      toast.error(message);
+      toast.error(err instanceof Error ? err.message : "Failed to update plan");
     } finally {
-      setLoading(false);
+      setSending(false);
     }
   }
+
+  const phaseLabel = phase === "chat" ? 1 : phase === "planning" || phase === "preview" ? 2 : 3;
+
+  const chatPanel = (
+    <div className="glass-1 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl">
+      <ScrollArea className="min-h-0 flex-1 px-4 py-4 sm:px-5" aria-live="polite">
+        <div className="space-y-4">
+          {messages.map((m) => (
+            <ChatMessage
+              key={m.id}
+              role={m.role}
+              content={m.content}
+              timestamp={m.at}
+              agentState={m.role === "assistant" ? agentState : undefined}
+            />
+          ))}
+          {sending && <ChatMessage role="assistant" content="" typing agentState="thinking" />}
+          {phase === "planning" && (
+            <div className="animate-enter motion-reduce:animate-none">
+              <BuildProgress steps={buildSteps} title="Understanding your business" />
+            </div>
+          )}
+          {ready && phase === "chat" && !ctaDismissed && (
+            <div className="animate-enter rounded-2xl border border-primary/25 bg-primary/5 p-4 motion-reduce:animate-none" role="group" aria-label="Ready to plan">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+                I have enough to design your operator
+              </p>
+              <p className="type-caption mt-1">
+                You shared {ownerCount} message{ownerCount === 1 ? "" : "s"} → I design the plan → you review before anything goes live.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <Button size="sm" className="flex-1 pressable" onClick={handlePlan}>
+                  Plan my operator
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setCtaDismissed(true)}>
+                  Keep chatting
+                </Button>
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} aria-hidden="true" />
+        </div>
+      </ScrollArea>
+
+      {phase === "chat" && (
+        <div className="shrink-0 border-t border-border/60 bg-card/60 p-3 sm:p-4">
+          <div className="flex items-end gap-2">
+            <VoiceInputButton
+              onTranscript={(t) => setInput((prev) => (prev ? `${prev} ${t}` : t))}
+              disabled={sending}
+            />
+            <Textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              rows={2}
+              placeholder="Describe your business… (Enter to send)"
+              className="min-h-[56px] resize-none"
+              aria-label="Message the setup assistant"
+            />
+            <Button
+              size="icon"
+              className="h-11 w-11 shrink-0 pressable"
+              disabled={!input.trim() || sending}
+              onClick={handleSend}
+              aria-label="Send message"
+            >
+              {sending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
+          <p className="type-metadata mt-2 text-center">The mic dictates into the box — review before sending.</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const previewPanel = planData && (
+    <div className="glass-2 min-h-0 flex-1 overflow-hidden rounded-2xl p-3 sm:p-4">
+      <div className="h-full min-h-0 overflow-y-auto">
+        {phase === "building" || phase === "done" ? (
+          <div className="space-y-4">
+            <BuildProgress steps={buildSteps} title={phase === "done" ? "Your operator is live" : "Building your AI operator"} />
+            {phase === "done" && (
+              <div className="animate-scale-in rounded-2xl border border-border bg-card p-6 text-center motion-reduce:animate-none">
+                <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                  <Check className="h-6 w-6 text-primary" aria-hidden="true" />
+                </span>
+                <p className="type-section">Your AI operator is live</p>
+                <p className="type-caption mt-1">Opening your builder for a test run…</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <OperatorPreview
+            businessName={businessName}
+            businessType={businessType}
+            config={planData.config}
+            services={services}
+            faqs={faqs}
+            approving={approving}
+            onRemoveService={(i) => setServices((prev) => prev.filter((_, x) => x !== i))}
+            onApprove={handleApprove}
+            onAdjust={handleAdjust}
+          />
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="relative min-h-screen bg-background">
       <FloatingBackground variant="minimal" />
-      <div className="relative z-10 max-w-3xl mx-auto p-6">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-8 animate-fade-in">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 p-4 sm:p-6">
+        {/* Header — what matters, what you can do, what is happening */}
+        <header className="flex flex-wrap items-center gap-3 animate-fade-in motion-reduce:animate-none">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Go back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-contact">
-              <Sparkles className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Build Your AI Operator</h1>
-              <p className="text-sm text-muted-foreground">
-                Describe your business — I'll build the plan
-              </p>
-            </div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-contact" aria-hidden="true">
+            <Bot className="h-5 w-5 text-primary-foreground" />
           </div>
-        </div>
-
-        {/* Step: Describe */}
-        {step === "describe" && (
-          <Card className="glass-card hover-lift stagger-1">
-            <CardContent className="p-6 space-y-4">
-              <div>
-                <h2 className="font-medium mb-2">Tell me about your business</h2>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Describe what your business does, how customers typically interact with you,
-                  what matters to you (cancellation policies, deposit requirements, busiest days,
-                  etc.). The more detail you give, the better I can tailor your operator.
-                </p>
-                <Textarea
-                  placeholder={`For example: "I run a dental clinic in Lagos. We do checkups, cleanings, and cosmetic work. Patients usually want to know prices before booking. We need a 20% deposit because no-shows are expensive. We're closed Sundays. If someone sounds frustrated, I want to know immediately so I can call them back myself."`}
-                  className="resize-none min-h-[200px]"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-                <div className="flex items-center gap-2 pt-2">
-                  <VoiceInputButton
-                    onTranscript={handleVoiceTranscript}
-                    disabled={loading}
-                    className=""
-                  />
-                  {voiceError && (
-                    <span className="text-xs text-destructive">{voiceError}</span>
-                  )}
-                  <span className="text-xs text-muted-foreground">
-                    Or type your description above
-                  </span>
-                </div>
-              </div>
-              <Button
-                onClick={handleDescribe}
-                disabled={!description.trim() || loading}
-                className="w-full pressable"
-                size="lg"
+          <div className="min-w-0 flex-1">
+            <h1 className="type-page truncate">Build your AI operator</h1>
+            <p className="type-caption">Talk it through — watch the operator take shape beside the chat.</p>
+          </div>
+          <ol className="flex items-center gap-1.5" aria-label={`Setup progress: step ${phaseLabel} of 3`}>
+            {["Chat", "Plan", "Live"].map((label, i) => (
+              <li
+                key={label}
+                aria-current={phaseLabel === i + 1 ? "step" : undefined}
+                className={
+                  phaseLabel > i + 1
+                    ? "flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+                    : phaseLabel === i + 1
+                      ? "flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
+                      : "flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
+                }
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Building your plan...
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Build My AI Operator
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+                {phaseLabel > i + 1 && <Check className="h-3 w-3" aria-hidden="true" />}
+                {label}
+              </li>
+            ))}
+          </ol>
+        </header>
 
-        {/* Step: Review Plan */}
-        {step === "review" && planData && (
-          <div className="animate-fade-in">
-            <PlanReview
-              planText={planData.planText}
-              sections={planData.sections}
-              reasoningNotes={planData.reasoningNotes}
-              onApprove={handleApprove}
-              onEdit={handleEdit}
-              loading={loading}
-              mode="onboarding"
-            />
-          </div>
-        )}
+        {/* Body — single chat until the plan exists, then a smooth split */}
+        {!showSplit ? (
+          <main className="flex min-h-0 flex-1 flex-col" aria-label="Setup conversation">
+            {chatPanel}
+          </main>
+        ) : (
+          <>
+            {/* Mobile: stacked tabs (thumb-friendly, progressive disclosure) */}
+            <div className="flex min-h-0 flex-1 flex-col lg:hidden">
+              <Tabs value={mobileTab} onValueChange={(v) => setMobileTab(v as "chat" | "build")} className="flex min-h-0 flex-1 flex-col">
+                <TabsList className="grid w-full shrink-0 grid-cols-2" aria-label="Setup views">
+                  <TabsTrigger value="chat">Conversation</TabsTrigger>
+                  <TabsTrigger value="build">Operator build</TabsTrigger>
+                </TabsList>
+                <TabsContent value="chat" className="mt-3 flex min-h-0 flex-1 flex-col">
+                  {chatPanel}
+                </TabsContent>
+                <TabsContent value="build" className="mt-3 flex min-h-0 flex-1 flex-col">
+                  {previewPanel}
+                </TabsContent>
+              </Tabs>
+            </div>
 
-        {/* Step: Building */}
-        {step === "building" && (
-          <Card className="glass-card animate-scale-in">
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-              <h2 className="text-lg font-medium mb-2">Building your AI Operator</h2>
-              <p className="text-sm text-muted-foreground text-center max-w-md">
-                Applying your approved plan. This takes just a moment...
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Step: Done */}
-        {step === "done" && (
-          <Card className="glass-card animate-scale-in">
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <div className="h-16 w-16 rounded-full bg-green-500/10 flex items-center justify-center mb-4 animate-bounce-subtle">
-                <Sparkles className="h-8 w-8 text-green-600" />
-              </div>
-              <h2 className="text-lg font-medium mb-2">Your AI Operator is ready!</h2>
-              <p className="text-sm text-muted-foreground text-center max-w-md mb-4">
-                Redirecting you to the Builder where you can test and fine-tune your operator.
-              </p>
-            </CardContent>
-          </Card>
+            {/* Desktop: resizable split — chat left, built structure right */}
+            <main className="hidden min-h-0 flex-1 lg:block" aria-label="Setup conversation and operator build">
+              <ResizablePanelGroup direction="horizontal" className="min-h-[560px] gap-3">
+                <ResizablePanel defaultSize={44} minSize={32} className="flex min-h-0 flex-col">
+                  {chatPanel}
+                </ResizablePanel>
+                <ResizableHandle withHandle aria-label="Resize conversation and preview" />
+                <ResizablePanel defaultSize={56} minSize={36} className="flex min-h-0 flex-col">
+                  <div key="preview-enter" className="flex min-h-0 flex-1 flex-col animate-panel motion-reduce:animate-none">
+                    {previewPanel}
+                  </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            </main>
+          </>
         )}
       </div>
     </div>

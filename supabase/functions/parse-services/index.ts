@@ -50,7 +50,11 @@ serve(async (req) => {
   }
 
   try {
-    const { text, businessType } = await req.json();
+    const { text, businessType, filterType } = await req.json() as {
+      text: string;
+      businessType?: string;
+      filterType?: "service" | "product";
+    };
 
     if (!text || text.trim().length === 0) {
       return new Response(
@@ -77,6 +81,8 @@ For each item, extract:
 IMPORTANT: If a price is NOT explicitly written in the text, set price to null. Do NOT guess or estimate prices.
 
 ${businessType ? `The business type is: ${businessType}.` : ""}
+${filterType === "service" ? "Only extract SERVICES. Ignore products entirely." : ""}
+${filterType === "product" ? "Only extract PRODUCTS. Ignore services entirely." : ""}
 
 Return ONLY valid JSON in this exact format:
 {
@@ -96,7 +102,12 @@ ${text}`;
 
     const parsed = await callGeminiJSON(prompt);
 
-    const items = (parsed.items || []).map((item: any) => ({
+    const rawItems = (parsed.items || []) as any[];
+    const scoped = filterType === "service" || filterType === "product"
+      ? rawItems.filter((i) => i.type === filterType)
+      : rawItems;
+
+    const items = scoped.map((item: any) => ({
       name: item.name?.trim() || "Unknown Item",
       type: item.type === "product" ? "product" : "service",
       duration_minutes: item.type === "service" ? (item.duration_minutes || 0) : 0,
