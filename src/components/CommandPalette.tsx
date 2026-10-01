@@ -87,7 +87,7 @@ export function CommandPalette() {
   ];
 
   const actionItems: PaletteEntry[] = [
-    { label: "Create Receptionist", hint: "Guided setup", icon: Plus, run: () => go("/onboarding-wizard") },
+    { label: "New AI operator", hint: "Chat or guided form", icon: Plus, run: () => go("/onboarding?returning=1") },
     { label: "Manage Services", hint: "Add or edit offerings", icon: ConciergeBell, run: () => go("/services") },
     { label: "Set Business Hours", hint: "Booking availability", icon: Clock, run: () => go("/availability") },
   ];

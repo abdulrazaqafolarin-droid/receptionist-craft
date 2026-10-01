@@ -122,7 +122,7 @@ export default function MoneyModePage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button onClick={() => navigate("/onboarding-wizard")}>Create Receptionist</Button>
+              <Button onClick={() => navigate("/onboarding?returning=1")}>Create Receptionist</Button>
             </CardContent>
           </Card>
         ) : (

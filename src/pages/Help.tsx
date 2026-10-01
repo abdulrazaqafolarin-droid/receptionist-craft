@@ -21,7 +21,7 @@ const GETTING_STARTED_STEPS = [
     step: 1,
     title: "Create Your AI Receptionist",
     description: "Set up your business name, tone, and greeting message. The AI will auto-generate a knowledge base from your details.",
-    action: "/onboarding-wizard",
+    action: "/onboarding?returning=1",
     actionLabel: "Start Setup",
     icon: Rocket,
   },

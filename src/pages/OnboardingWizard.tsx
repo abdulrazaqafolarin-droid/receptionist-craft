@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useOnboardingStore } from "@/store/onboarding";
 import { Progress } from "@/components/ui/progress";
 import { Check, Sparkles } from "lucide-react";
@@ -24,8 +24,21 @@ const STEPS = [
 
 export default function OnboardingWizard() {
   const navigate = useNavigate();
-  const { currentStep } = useOnboardingStore();
+  const [searchParams] = useSearchParams();
+  const { currentStep, setStep, reset } = useOnboardingStore();
   const progressPercentage = (currentStep / STEPS.length) * 100;
+
+  // A fresh start (first run from the choice screen) discards any abandoned
+  // mid-flow wizard state so a new operator never inherits old data.
+  // The flag is stripped immediately so a mid-flow refresh preserves progress.
+  useEffect(() => {
+    if (searchParams.get("fresh") === "1") {
+      reset();
+      setStep(0);
+      navigate("/onboarding-wizard", { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen bg-background p-4">

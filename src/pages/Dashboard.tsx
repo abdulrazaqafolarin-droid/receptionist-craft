@@ -35,7 +35,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (dataLoaded && receptionists.length === 0 && user) {
-      navigate("/onboarding-wizard");
+      navigate("/onboarding");
     }
   }, [dataLoaded, receptionists, user, navigate]);
 
@@ -97,7 +97,7 @@ export default function Dashboard() {
             <p className="text-[10px] text-muted-foreground/80 mt-1">Build {import.meta.env.VITE_APP_BUILD_SHA || "unknown"}</p>
           </div>
           <Button
-            onClick={() => navigate("/onboarding-wizard")}
+            onClick={() => navigate("/onboarding?returning=1")}
             size="lg"
             className="group touch-target w-full sm:w-auto"
             aria-label="Create a new AI receptionist"
@@ -332,7 +332,7 @@ export default function Dashboard() {
                   <h3 className="text-base sm:text-lg font-semibold mb-2">No receptionists yet</h3>
                   <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6">Create your first AI receptionist to get started</p>
                   <Button
-                    onClick={() => navigate("/onboarding-wizard")}
+                    onClick={() => navigate("/onboarding?returning=1")}
                     className="touch-target"
                   >
                     <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Create Your First Receptionist

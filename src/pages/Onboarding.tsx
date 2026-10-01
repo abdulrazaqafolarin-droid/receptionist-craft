@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,10 @@ import { Sparkles, ArrowRight, MessageSquareText, ListChecks, ArrowLeft } from "
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<"intro" | "fork">("intro");
+  const [params] = useSearchParams();
+  // Returning owners creating another operator skip the intro and land on the choice.
+  const returning = params.get("returning") === "1";
+  const [step, setStep] = useState<"intro" | "fork">(returning ? "fork" : "intro");
   const [saving, setSaving] = useState(false);
   const [details, setDetails] = useState({
     name: "",
@@ -62,7 +65,9 @@ export default function Onboarding() {
       path: "form",
       businessType: details.businessType.trim(),
     });
-    navigate(query ? `/onboarding-wizard?${query}` : "/onboarding-wizard");
+    // fresh=1 makes the wizard discard any abandoned mid-flow state so every
+    // operator — first or fifth — starts clean.
+    navigate(query ? `/onboarding-wizard?fresh=1&${query}` : "/onboarding-wizard?fresh=1");
   };
 
   return (
@@ -165,7 +170,7 @@ export default function Onboarding() {
                 </p>
               </button>
 
-              <Button variant="outline" onClick={() => setStep("intro")} className="w-full" size="lg">
+              <Button variant="outline" onClick={() => (returning ? navigate("/dashboard") : setStep("intro"))} className="w-full" size="lg">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back
               </Button>
             </CardContent>
