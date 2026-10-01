@@ -532,7 +532,18 @@ export default function ConversationalOnboarding() {
               {sending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
-          <p className="type-metadata mt-2 text-center">The mic dictates into the box — review before sending.</p>
+          <div className="mt-2 flex items-center justify-center gap-2">
+            <p className="type-metadata">The mic dictates into the box — review before sending.</p>
+            {ownerCount >= 3 && (ctaDismissed || !ready) && (
+              <button
+                type="button"
+                onClick={handlePlan}
+                className="type-metadata font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+              >
+                Plan my operator now
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
