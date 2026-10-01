@@ -110,6 +110,9 @@ export default function ConversationalOnboarding() {
   const [buildSteps, setBuildSteps] = useState<BuildStep[]>(DONE_STEPS);
   const [mobileTab, setMobileTab] = useState<"chat" | "build">("chat");
   const [approving, setApproving] = useState(false);
+  // True while the gateway interviewer answers; false when running on the
+  // built-in guided questions (gateway down). Shown honestly in the header.
+  const [smartMode, setSmartMode] = useState(true);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const receptionistIdRef = useRef<string | null>(null);
@@ -151,20 +154,30 @@ export default function ConversationalOnboarding() {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase.functions.invoke("configurator-chat", {
-        body: {
-          messages: next.slice(-12).map((m) => ({ role: m.role, content: m.content })),
-          businessName,
-          businessType,
-          conversationId: user?.id,
-        },
-      });
+      const payload = {
+        messages: next.slice(-12).map((m) => ({ role: m.role, content: m.content })),
+        businessName,
+        businessType,
+        conversationId: user?.id,
+      };
+      const ask = () => supabase.functions.invoke("configurator-chat", { body: payload });
+      type ChatOk = { assistant_message: string; ready: boolean; summary: string };
+      const good = (d: unknown): d is { ok: true } & ChatOk =>
+        !!d && (d as { ok?: boolean }).ok === true;
 
-      if (!error && (data as { ok?: boolean } | null)?.ok) {
-        const d = data as { assistant_message: string; ready: boolean; summary: string };
-        appendAssistant(d.assistant_message);
-        if (d.summary) setSummary(d.summary);
-        if (d.ready === true) setReady(true);
+      let { data, error } = await ask();
+      if (error || !good(data)) {
+        // One silent retry — the gateway flaps under load. Still failing after
+        // that means it is really down, so fall through to guided questions.
+        await new Promise((r) => setTimeout(r, 1500));
+        ({ data, error } = await ask());
+      }
+
+      if (!error && good(data)) {
+        appendAssistant(data.assistant_message);
+        if (data.summary) setSummary(data.summary);
+        if (data.ready === true) setReady(true);
+        setSmartMode(true);
       } else {
         throw new Error((data as { error?: string } | null)?.error || error?.message || "interview_unavailable");
       }
@@ -174,6 +187,7 @@ export default function ConversationalOnboarding() {
       appendAssistant(turn.assistant_message);
       setSummary(turn.summary);
       if (turn.ready) setReady(true);
+      setSmartMode(false);
     } finally {
       setSending(false);
       setAgentState(ready ? "waiting" : "watching");
@@ -571,7 +585,11 @@ export default function ConversationalOnboarding() {
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="type-page truncate">Build your AI operator</h1>
-            <p className="type-caption">Talk it through — watch the operator take shape beside the chat.</p>
+            <p className="type-caption">
+              {smartMode || messages.length <= 1
+                ? "Talk it through — watch the operator take shape beside the chat."
+                : "Guided mode — quick structured questions while smart replies reconnect. Nothing you share is lost."}
+            </p>
           </div>
           <ol className="flex items-center gap-1.5" aria-label={`Setup progress: step ${phaseLabel} of 3`}>
             {["Chat", "Plan", "Live"].map((label, i) => (
