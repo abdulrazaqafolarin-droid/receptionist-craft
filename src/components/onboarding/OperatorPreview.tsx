@@ -8,6 +8,7 @@ import {
   Clock,
   ListChecks,
   MessageSquareText,
+  Plug,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -37,6 +38,9 @@ interface OperatorPreviewProps {
   config: Record<string, unknown>;
   services: PreviewService[];
   faqs: PreviewFaq[];
+  willDo: string[];
+  wontDo: string[];
+  externalNeeds: string[];
   approving: boolean;
   onRemoveService: (index: number) => void;
   onApprove: (feedback?: string) => void;
@@ -73,6 +77,9 @@ export function OperatorPreview({
   config,
   services,
   faqs,
+  willDo,
+  wontDo,
+  externalNeeds,
   approving,
   onRemoveService,
   onApprove,
@@ -137,6 +144,46 @@ export function OperatorPreview({
           </blockquote>
         )}
       </div>
+
+      {/* Honest boundaries — what it will/won't do, what needs connecting */}
+      {(willDo.length > 0 || wontDo.length > 0 || externalNeeds.length > 0) && (
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="type-label mb-2">An honest picture before you approve</p>
+          {willDo.length > 0 && (
+            <ul className="space-y-1.5">
+              {willDo.map((w) => (
+                <li key={w} className="flex items-start gap-2 text-sm">
+                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 finance-positive" aria-hidden="true" />
+                  {w}
+                </li>
+              ))}
+            </ul>
+          )}
+          {wontDo.length > 0 && (
+            <ul className="mt-2 space-y-1.5">
+              {wontDo.map((w) => (
+                <li key={w} className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <span className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-border text-[10px]" aria-hidden="true">×</span>
+                  {w} — not on its own
+                </li>
+              ))}
+            </ul>
+          )}
+          {externalNeeds.length > 0 && (
+            <div className="mt-3 rounded-xl bg-amber-500/5 border border-amber-500/20 p-3">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-amber-800">
+                <Plug className="h-3.5 w-3.5" aria-hidden="true" />
+                Needs a connection later {approvalPill("suggested")}
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {externalNeeds.map((n) => (
+                  <Badge key={n} variant="outline">{n}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Structure */}
       <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col">

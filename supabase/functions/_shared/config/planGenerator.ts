@@ -124,6 +124,40 @@ export function generatePlanFromConfig(config: Record<string, unknown>): Generat
     confidence: "medium",
   });
 
+  // Section 9: Honest boundaries — what the operator will and won't do
+  const willDo = (config.will_do || []) as unknown[];
+  const wontDo = (config.wont_do || []) as unknown[];
+  const externalNeeds = (config.external_needs || []) as unknown[];
+  const willList = willDo.filter((x): x is string => typeof x === "string" && !!x.trim());
+  const wontList = wontDo.filter((x): x is string => typeof x === "string" && !!x.trim());
+  const needList = externalNeeds.filter((x): x is string => typeof x === "string" && !!x.trim());
+  if (willList.length > 0 || wontList.length > 0) {
+    const lines: string[] = [];
+    if (willList.length > 0) {
+      lines.push("**What it will handle:**\n" + willList.map((w) => `- ${w}`).join("\n"));
+    }
+    if (wontList.length > 0) {
+      lines.push("**What it will NOT do on its own:**\n" + wontList.map((w) => `- ${w}`).join("\n"));
+    }
+    sections.push({
+      id: "boundaries",
+      title: "What It Will (and Won't) Do",
+      content: lines.join("\n\n"),
+      confidence: "high",
+    });
+  }
+  if (needList.length > 0) {
+    sections.push({
+      id: "external-needs",
+      title: "Connections Needed Later",
+      content:
+        "These outside connections are not attached yet. Your operator is still useful without them — it prepares everything so that connecting later is a flip of a switch:\n" +
+        needList.map((n) => `- ${n}`).join("\n"),
+      confidence: "medium",
+      owner_action: "Do you have access to these accounts? Connecting them later unlocks the full automation.",
+    });
+  }
+
   // Build full text
   const full_text = sections
     .map((s) => {

@@ -57,6 +57,8 @@ CRITICAL RULES:
 - If the business description is ambiguous, make reasonable assumptions and note them.
 - Never invent business details not in the description (prices, hours, etc.) — leave those fields null.
 - knowledge_base: write 1-3 warm, conversational paragraphs (complete sentences, light bullet points where useful) that a customer-facing AI can use to answer questions about services, hours, policies, location, and typical FAQs. Never use field labels like "Business name:" — write it naturally.
+- BEYOND BOOKING: not every owner wants a customer receptionist. Some want a helper operator (social content ideas and captions, posting checklists and reminders, general Q&A). When the need is not bookings/orders: set workflows to null/false, set booking capabilities false, write knowledge_base toward the helper role (process, rhythm, platforms, voice), and ALWAYS fill operator_kind, will_do, wont_do, and external_needs below. Never configure a booking flow for a need that has no customers booking anything.
+- HONEST CONTRACT: will_do lists only outcomes the platform executes today (answers, ideas, drafts, checklists, reminders, bookings, orders, lead capture). wont_do lists what it will not do (auto-post to social accounts, access outside accounts, move money). external_needs lists each outside connector/API key required (e.g. "tiktok-auto-post") or an empty array. Never leave wont_do empty — there is always a boundary.
 - For the config, follow this EXACT schema:
 {
   "version": 1,
@@ -102,7 +104,11 @@ CRITICAL RULES:
     "whatsapp": boolean,
     "phone": boolean
   },
-  "knowledge_base": string
+  "knowledge_base": string,
+  "operator_kind": "receptionist" | "assistant" | "both",
+  "will_do": string[],
+  "wont_do": string[],
+  "external_needs": string[]
 }
 
 OUTPUT FORMAT (STRICT JSON, no markdown fences):
@@ -121,8 +127,9 @@ export async function generateOperatorPlan(
 "${businessDescription}"
 
 Analyze this business description carefully. Think about:
+- What does the owner actually want built — a customer receptionist, a helper operator (content, reminders, Q&A), or both?
 - What type of business is this? What industry?
-- Does it need appointments, product ordering, or both?
+- Does it need appointments, product ordering, or both (or neither)?
 - What's the typical customer interaction flow?
 - Are there compliance requirements (medical, legal)?
 - Does it need deposits? What cancellation policy makes sense?

@@ -85,7 +85,46 @@ function deriveFaqs(config: Record<string, unknown>, summary: string): PreviewFa
   if (summary) {
     faqs.push({ question: `What does ${displayName} offer?`, answer: summary.slice(0, 400) });
   }
+  // Helper-operator top-ups: when there are no booking slots to draw from,
+  // answer from the agreed scope so the operator still starts useful.
+  const willDo = Array.isArray(config.will_do)
+    ? (config.will_do as unknown[]).filter((x): x is string => typeof x === "string" && !!x.trim())
+    : [];
+  const wontDo = Array.isArray(config.wont_do)
+    ? (config.wont_do as unknown[]).filter((x): x is string => typeof x === "string" && !!x.trim())
+    : [];
+  if (faqs.length < 3 && willDo.length > 0) {
+    faqs.push({ question: "What can this operator help me with?", answer: willDo.join(" ") });
+  }
+  if (faqs.length < 3 && wontDo.length > 0) {
+    faqs.push({ question: "What can't it do yet?", answer: wontDo.join(" ") });
+  }
+  const genericTopUps: PreviewFaq[] = [
+    {
+      question: "How do I get the most out of it?",
+      answer: `Talk to ${displayName} in plain words, a little and often. The more it learns about your rhythm, the sharper its ideas and reminders get.`,
+    },
+    {
+      question: "What should I ask it first?",
+      answer: `Start with your goal for this week — ${displayName} breaks it into ideas, drafts, and reminders you can act on.`,
+    },
+    {
+      question: "Can it change as my needs change?",
+      answer: `Yes. Adjust anything anytime in the builder — tone, knowledge, and behavior stay in your control.`,
+    },
+  ];
+  for (const g of genericTopUps) {
+    if (faqs.length >= 3) break;
+    faqs.push(g);
+  }
   return faqs.slice(0, 5);
+}
+
+/** String lists the Configurator may attach (will_do / wont_do / external_needs). */
+export function configStrings(config: Record<string, unknown>, key: string): string[] {
+  const v = config[key];
+  if (!Array.isArray(v)) return [];
+  return v.filter((x): x is string => typeof x === "string" && !!x.trim());
 }
 
 const DONE_STEPS: BuildStep[] = [];
@@ -310,9 +349,9 @@ export default function ConversationalOnboarding() {
 
     setBuildSteps([
       { id: "apply", label: "Applying your approved plan", status: "active" },
-      { id: "services", label: `Saving ${services.length} service${services.length === 1 ? "" : "s"}`, status: "pending" },
+      { id: "services", label: services.length > 0 ? `Saving ${services.length} service${services.length === 1 ? "" : "s"}` : "Checking offerings", status: "pending" },
       { id: "hours", label: "Setting opening hours", status: "pending" },
-      { id: "answers", label: "Preparing customer answers", status: "pending" },
+      { id: "answers", label: "Preparing helpful answers", status: "pending" },
       { id: "brain", label: "Writing operator instructions", status: "pending" },
       { id: "live", label: "Making your operator live", status: "pending" },
     ]);
@@ -356,7 +395,9 @@ export default function ConversationalOnboarding() {
           .update({ business_model: hasServices && hasProducts ? "both" : hasProducts ? "products" : "services" })
           .eq("id", recId);
       }
-      setStepStatus("services", "done", `${services.length} item${services.length === 1 ? "" : "s"} saved → Bookable in chat`);
+      setStepStatus("services", "done", services.length > 0
+        ? `${services.length} item${services.length === 1 ? "" : "s"} saved → Bookable in chat`
+        : "No fixed offerings needed → Knowledge-first operator");
 
       // Hours + timezone propagation (wizard Step 3 pattern).
       if (hours.length > 0) {
@@ -376,7 +417,9 @@ export default function ConversationalOnboarding() {
         await supabase.from("receptionists").update({ timezone }).eq("id", recId);
         await supabase.from("profiles").update({ timezone }).eq("id", user.id);
       }
-      setStepStatus("hours", "done", `${hours.length} day${hours.length === 1 ? "" : "s"} set → Correct slots in ${timezone}`);
+      setStepStatus("hours", "done", hours.length > 0
+        ? `${hours.length} day${hours.length === 1 ? "" : "s"} set → Correct slots in ${timezone}`
+        : "No fixed hours needed → Always-on helper");
 
       // Answers (wizard Step 4 pattern — min 3).
       const faqRows = faqs.slice(0, 5).map((f, i) => ({
@@ -389,7 +432,7 @@ export default function ConversationalOnboarding() {
         const { error } = await supabase.from("receptionist_faqs").insert(faqRows);
         if (error) throw error;
       }
-      setStepStatus("answers", "done", `${faqRows.length} answers saved → Customers get instant replies`);
+      setStepStatus("answers", "done", `${faqRows.length} answers saved → Instant replies from day one`);
 
       // Operator instructions: system prompt + knowledge base (Gemini-direct helpers).
       const { data: rec } = await supabase.from("receptionists").select("*").eq("id", recId).maybeSingle();
@@ -572,6 +615,9 @@ export default function ConversationalOnboarding() {
             config={planData.config}
             services={services}
             faqs={faqs}
+            willDo={configStrings(planData.config, "will_do")}
+            wontDo={configStrings(planData.config, "wont_do")}
+            externalNeeds={configStrings(planData.config, "external_needs")}
             approving={approving}
             onRemoveService={(i) => setServices((prev) => prev.filter((_, x) => x !== i))}
             onApprove={handleApprove}
