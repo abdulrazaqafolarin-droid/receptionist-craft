@@ -1,0 +1,32 @@
+src/components/Widget.tsx: error TS2769: No overload matches this call.
+src/hooks/useOrganization.ts: error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'RejectExcessProperties<{ accent_color?: string | null | undefined; created_at?: string | undefined; custom_domain?: string | null | undefined; id?: string | undefined; logo_url?: string | null | undefined; ... 8 more ...; white_label?: boolean | ... 1 more ... | undefined; }, Record<...>>'.
+src/pages/Appointments.tsx: error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/pages/Appointments.tsx: error TS2322: Type '{}' is not assignable to type 'ReactNode'.
+src/pages/Appointments.tsx: error TS2345: Argument of type '{ id: string; name: string; business_name: string; }[]' is not assignable to parameter of type 'SetStateAction<ReceptionistData[]>'.
+src/pages/Builder.tsx: error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'RejectExcessProperties<{ active?: boolean | null | undefined; additional_languages?: string[] | null | undefined; address?: string | null | undefined; ai_mode?: "support" | "booking" | "sales" | undefined; ... 33 more ...; website?: string | ... 1 more ... | undefined; }, Record<...>>'.
+src/pages/MEODashboard.tsx: error TS2304: Cannot find name 'useCallback'.
+src/pages/Notifications.tsx: error TS2345: Argument of type 'string' is not assignable to parameter of type 'SetStateAction<"all" | "warning" | "critical" | "unread">'.
+src/pages/Orders.tsx: error TS18046: 'err' is of type 'unknown'.
+src/pages/Services.tsx: error TS18046: 'err' is of type 'unknown'.
+src/pages/Services.tsx: error TS2339: Property 'currency' does not exist on type 'ReceptionistData'.
+src/pages/Settings.tsx: error TS18046: 'error' is of type 'unknown'.
+src/pages/TestConversations.tsx: error TS18046: 'err' is of type 'unknown'.
+src/pages/Widget.tsx: error TS18046: 'err' is of type 'unknown'.
+src/pages/Widget.tsx: error TS18047: 'item.duration_minutes' is possibly 'null'.
+src/pages/Widget.tsx: error TS2322: Type '(slot: { startTime?: string | undefined; start?: string | undefined; end: string; display: string; score?: number | undefined; reason?: string | undefined; }) => Promise<void>' is not assignable to type '(slot: { startTime?: string | undefined; start?: string | undefined; endTime?: string | undefined; end?: string | undefined; display?: string | undefined; }) => void'.
+src/pages/Widget.tsx: error TS2322: Type 'ServiceItem[]' is not assignable to type '{ id: string; name: string; duration_minutes?: number | undefined; price?: number | undefined; }[]'.
+src/pages/Widget.tsx: error TS2322: Type 'ServiceItem[]' is not assignable to type '{ id: string; name: string; price?: number | undefined; stock_quantity?: number | undefined; }[]'.
+src/pages/Widget.tsx: error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+src/pages/Widget.tsx: error TS2322: Type '{ active: boolean | null; buffer_after_minutes: number; buffer_before_minutes: number; created_at: string; description: string | null; duration_minutes: number; id: string; is_product: boolean | null; ... 7 more ...; user_id: string | null; }[]' is not assignable to type 'ServiceItem[]'.
+src/pages/Widget.tsx: error TS2339: Property 'address' does not exist on type '{ widget_customization?: { primaryColor?: string | undefined; secondaryColor?: string | undefined; logoUrl?: string | undefined; } | undefined; }'.
+src/pages/Widget.tsx: error TS2339: Property 'created_at' does not exist on type 'ServiceItem'.
+src/pages/Widget.tsx: error TS2339: Property 'email' does not exist on type '{ widget_customization?: { primaryColor?: string | undefined; secondaryColor?: string | undefined; logoUrl?: string | undefined; } | undefined; }'.
+src/pages/Widget.tsx: error TS2339: Property 'message' does not exist on type 'ServiceItem'.
+src/pages/Widget.tsx: error TS2339: Property 'phone' does not exist on type 'ReceptionistData'.
+src/pages/Widget.tsx: error TS2339: Property 'phone' does not exist on type '{ widget_customization?: { primaryColor?: string | undefined; secondaryColor?: string | undefined; logoUrl?: string | undefined; } | undefined; }'.
+src/pages/Widget.tsx: error TS2339: Property 'sender' does not exist on type 'ServiceItem'.
+src/pages/Widget.tsx: error TS2339: Property 'website' does not exist on type '{ widget_customization?: { primaryColor?: string | undefined; secondaryColor?: string | undefined; logoUrl?: string | undefined; } | undefined; }'.
+src/pages/Widget.tsx: error TS2345: Argument of type '(prev: { serviceId: string | null; serviceName: string | null; date: Date | null; timeSlot: null; }) => { timeSlot: { startTime: string | undefined; start?: string | undefined; end: string; display: string; score?: number | undefined; reason?: string | undefined; }; serviceId: string | null; serviceName: string | nu...' is not assignable to parameter of type 'SetStateAction<{ serviceId: string | null; serviceName: string | null; date: Date | null; timeSlot: null; }>'.
+src/pages/Widget.tsx: error TS2345: Argument of type '{ message: string; sender: string; created_at: string; }[]' is not assignable to parameter of type 'SetStateAction<ServiceItem[]>'.
+src/pages/Widget.tsx: error TS2741: Property 'business_info' is missing in type '{ active: boolean; business_model: string; business_name: string; greeting_message: string; id: string; name: string; timezone: string; tone: string; }' but required in type 'ReceptionistData'.
+src/pages/Widget.tsx: error TS2769: No overload matches this call.

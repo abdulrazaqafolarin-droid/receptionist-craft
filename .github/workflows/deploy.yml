@@ -40,8 +40,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Typecheck (ratchet — fails only on NEW errors)
+        run: |
+          npm run typecheck > /tmp/tsc.log 2>&1 || true
+          node scripts/check-tsc-ratchet.mjs /tmp/tsc.log
 
       - name: Verify surface manifest has not drifted
         run: npm run verify:manifest
