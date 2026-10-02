@@ -16,6 +16,16 @@ function jsonRes(body: unknown, status = 200) {
   });
 }
 
+/** Serialize any thrown value (Error, PostgREST object, string) for diagnostics. */
+function errDetails(e: unknown, max = 300): string {
+  if (e instanceof Error) return `${e.name}: ${e.message}`.slice(0, max);
+  try {
+    return JSON.stringify(e).slice(0, max);
+  } catch {
+    return String(e).slice(0, max);
+  }
+}
+
 /**
  * propose-operator-plan — Vision Part One
  *
@@ -79,6 +89,6 @@ serve(async (req) => {
       };
       return jsonRes({ ok: false, error: map[e.kind] ?? "gateway_unreachable", details: String(e).slice(0, 200) }, 502);
     }
-    return jsonRes({ ok: false, error: "internal_error", details: String(e).slice(0, 300) }, 500);
+    return jsonRes({ ok: false, error: "internal_error", details: errDetails(e) }, 500);
   }
 });
