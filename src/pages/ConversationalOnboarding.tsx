@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Bot, Check, Loader2, Send, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { recordSignal } from "@/lib/successSignals";
-import { nextInterviewTurn } from "@/lib/conversationalInterview";
+import { isSubstantive, nextInterviewTurn } from "@/lib/conversationalInterview";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -149,6 +149,9 @@ export default function ConversationalOnboarding() {
   const [buildSteps, setBuildSteps] = useState<BuildStep[]>(DONE_STEPS);
   const [mobileTab, setMobileTab] = useState<"chat" | "build">("chat");
   const [approving, setApproving] = useState(false);
+  // True when a reply takes longer than ~8s — reassures instead of silence
+  // (the "Okay????" moment: long OpenCode turns with only typing dots).
+  const [thinkingLong, setThinkingLong] = useState(false);
   // True while the gateway interviewer answers; false when running on the
   // built-in guided questions (gateway down). Shown honestly in the header.
   const [smartMode, setSmartMode] = useState(true);
@@ -158,7 +161,12 @@ export default function ConversationalOnboarding() {
   const greetedRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const ownerCount = useMemo(() => messages.filter((m) => m.role === "user").length, [messages]);
+  // Readiness and counts use substantive messages only — greetings, stray
+  // taps, and "??" never inflate progress or trigger planning.
+  const substantiveCount = useMemo(
+    () => messages.filter((m) => m.role === "user" && isSubstantive(m.content)).length,
+    [messages],
+  );
   const showSplit = phase === "preview" || phase === "building" || phase === "done";
 
   // Greet once — never re-greet (platform rule).
@@ -175,6 +183,16 @@ export default function ConversationalOnboarding() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, sending, phase]);
+
+  // Long-thinking reassurance: after ~8s of waiting, say so plainly.
+  useEffect(() => {
+    if (!sending) {
+      setThinkingLong(false);
+      return;
+    }
+    const t = setTimeout(() => setThinkingLong(true), 8000);
+    return () => clearTimeout(t);
+  }, [sending]);
 
   const appendAssistant = useCallback((content: string) => {
     setMessages((prev) => [...prev, { id: nextId(), role: "assistant", content, at: new Date() }]);
@@ -285,7 +303,7 @@ export default function ConversationalOnboarding() {
         transcriptOf(messages),
       ].filter(Boolean).join("\n");
 
-      setStepStatus("understand", "done", `You shared ${ownerCount} message${ownerCount === 1 ? "" : "s"} → Discussion captured → Ready to design`);
+      setStepStatus("understand", "done", `You shared ${substantiveCount} message${substantiveCount === 1 ? "" : "s"} → Discussion captured → Ready to design`);
       setStepStatus("design", "active");
 
       const { data, error } = await supabase.functions.invoke("propose-operator-plan", {
@@ -334,7 +352,10 @@ export default function ConversationalOnboarding() {
       console.error("Plan error:", err);
       toast.error(err instanceof Error ? err.message : "Failed to generate plan");
       setPhase("chat");
+      // Attention is transient — flag it, then settle back to listening so the
+      // pill never gets stuck on "Needs attention" across the whole thread.
       setAgentState("error");
+      setTimeout(() => setAgentState("watching"), 4000);
     }
   }
 
@@ -515,6 +536,11 @@ export default function ConversationalOnboarding() {
             />
           ))}
           {sending && <ChatMessage role="assistant" content="" typing agentState="thinking" />}
+          {sending && thinkingLong && (
+            <p className="type-caption animate-enter px-11 motion-reduce:animate-none" role="status">
+              Still thinking — working through the details, nearly there…
+            </p>
+          )}
           {phase === "planning" && (
             <div className="animate-enter motion-reduce:animate-none">
               <BuildProgress steps={buildSteps} title="Understanding your business" />
@@ -527,7 +553,7 @@ export default function ConversationalOnboarding() {
                 I have enough to design your operator
               </p>
               <p className="type-caption mt-1">
-                You shared {ownerCount} message{ownerCount === 1 ? "" : "s"} → I design the plan → you review before anything goes live.
+                You shared {substantiveCount} message{substantiveCount === 1 ? "" : "s"} → I design the plan → you review before anything goes live.
               </p>
               <div className="mt-3 flex gap-2">
                 <Button size="sm" className="flex-1 pressable" onClick={handlePlan}>
@@ -577,7 +603,7 @@ export default function ConversationalOnboarding() {
           </div>
           <div className="mt-2 flex items-center justify-center gap-2">
             <p className="type-metadata">The mic dictates into the box — review before sending.</p>
-            {ownerCount >= 3 && (ctaDismissed || !ready) && (
+            {substantiveCount >= 3 && (ctaDismissed || !ready) && (
               <button
                 type="button"
                 onClick={handlePlan}

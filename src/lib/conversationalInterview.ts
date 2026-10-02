@@ -62,6 +62,36 @@ function detect(text: string, patterns: RegExp[]): boolean {
   return patterns.some((p) => p.test(text));
 }
 
+export type OwnerSignal = "greeting" | "confusion" | "junk" | "substantive";
+
+const GREETING_PATTERNS = [
+  /^(hi|hey|hello|yo|how far|good (morning|afternoon|evening|day)|greetings|sup)\b/i,
+];
+
+const CONFUSION_PATTERNS = [
+  /\?\?\s*$/, /^(huh|what|eh|sorry)\?*$/i, /don'?t understand/i, /don'?t get/i,
+  /what do you mean/i, /confus/i, /explain/i, /simpler/i, /break it down/i,
+  /i['’]m lost/i, /no idea what/i, /^\?+$/,
+];
+
+/**
+ * Classify one owner message. Junk (empty/punctuation-only) and greetings
+ * carry no business content; confusion needs a simpler rephrase, never a
+ * verbatim repeat of the question that confused them.
+ */
+export function classifyOwnerMessage(text: string): OwnerSignal {
+  const t = text.trim();
+  if (!t || t.replace(/[^\p{L}\p{N}]/gu, "").length < 2) return "junk";
+  if (CONFUSION_PATTERNS.some((p) => p.test(t))) return "confusion";
+  if (GREETING_PATTERNS.some((p) => p.test(t)) && t.length < 30) return "greeting";
+  return "substantive";
+}
+
+/** Messages that advance the interview (drives readiness + counts). */
+export function isSubstantive(text: string): boolean {
+  return classifyOwnerMessage(text) === "substantive";
+}
+
 function detectKind(transcript: string, businessTypeHint: string): "receptionist" | "assistant" | "both" {
   const t = `${businessTypeHint} ${transcript}`;
   const assistant = detect(t, ASSISTANT_HINTS);
@@ -112,42 +142,76 @@ function buildSummary(ownerMessages: string[], businessTypeHint: string, kind: I
     : `${scope}Owner described: ${joined || "nothing yet"}`.slice(0, 1000);
 }
 
-function receptionistQuestion(slots: InterviewSlots): string | null {
-  if (!slots.how_customers_transact) {
-    return "Got it. And how do customers transact with you today — bookings, orders, walk-ins, calls, or WhatsApp?";
-  }
-  if (!slots.hours) {
-    return "Helpful. What hours are you open, and are there busy days or days you close?";
-  }
-  if (!slots.prices) {
-    return "Noted. Do you have standard prices or a range I should know, and do you take deposits?";
-  }
-  if (!slots.policies) {
-    return "Almost there. Any policies that matter — cancellations, no-shows, refunds, or late arrivals?";
-  }
-  if (!slots.contact) {
-    return "Last one: what contact details should customers use, and what tone fits you best — warm and friendly, or professional?";
-  }
+type QuestionKey =
+  | "transact" | "hours" | "prices" | "policies" | "contact"
+  | "platform" | "rhythm" | "context" | "dropoff";
+
+const QUESTION_TEXT: Record<QuestionKey, { full: string; simple: string; example: string }> = {
+  transact: {
+    full: "Got it. And how do customers transact with you today — bookings, orders, walk-ins, calls, or WhatsApp?",
+    simple: "How do people buy from you today?",
+    example: `For example: "people walk in", "they WhatsApp me to book", or "they order on my website".`,
+  },
+  hours: {
+    full: "Helpful. What hours are you open, and are there busy days or days you close?",
+    simple: "When are you open?",
+    example: `For example: "Monday to Saturday, 9am to 6pm, closed Sundays".`,
+  },
+  prices: {
+    full: "Noted. Do you have standard prices or a range I should know, and do you take deposits?",
+    simple: "What do you charge?",
+    example: `For example: "haircuts 3k, beard trim 1500, no deposit".`,
+  },
+  policies: {
+    full: "Almost there. Any policies that matter — cancellations, no-shows, refunds, or late arrivals?",
+    simple: "Any rules customers should know?",
+    example: `For example: "cancel 24 hours ahead" or "no refunds on deposits". If none, just say "no rules".`,
+  },
+  contact: {
+    full: "Last one: what contact details should customers use, and what tone fits you best — warm and friendly, or professional?",
+    simple: "How should people reach you?",
+    example: `For example: "WhatsApp 0803..., warm and friendly".`,
+  },
+  platform: {
+    full: "Love it. Which platform is this for — TikTok, Instagram, somewhere else — and who are you trying to reach?",
+    simple: "Where will the posts go, and who should see them?",
+    example: `For example: "TikTok, young women who buy skincare".`,
+  },
+  rhythm: {
+    full: "Got it. How often do you want to post — daily, a few times a week — and what does a good post look like for you?",
+    simple: "How often do you want to post?",
+    example: `For example: "daily" or "three times a week".`,
+  },
+  context: {
+    full: "Helpful. Tell me a little about the business behind the posts so the ideas actually fit you.",
+    simple: "What does your business do, in one line?",
+    example: `For example: "I sell handmade soaps in Lagos".`,
+  },
+  dropoff: {
+    full: "Last one: where should reminders and drafts go — WhatsApp, and what tone should everything carry?",
+    simple: "Where should I send your drafts and reminders?",
+    example: `For example: "WhatsApp, friendly tone".`,
+  },
+};
+
+function receptionistKey(slots: InterviewSlots): QuestionKey | null {
+  if (!slots.how_customers_transact) return "transact";
+  if (!slots.hours) return "hours";
+  if (!slots.prices) return "prices";
+  if (!slots.policies) return "policies";
+  if (!slots.contact) return "contact";
   return null;
 }
 
-function assistantQuestion(slots: InterviewSlots, ownerMessages: string[]): string | null {
+function assistantKey(slots: InterviewSlots, ownerMessages: string[]): QuestionKey | null {
   const t = ownerMessages.join(" ").toLowerCase();
   const hasRhythm = /daily|weekly|every ?day|twice|often|schedule|calendar|timetable/.test(t);
   const hasPlatform = /tiktok|instagram|youtube|facebook|whatsapp/.test(t);
-  const hasContext = ownerMessages.length >= 2 && t.length > 40;
-  if (!hasPlatform) {
-    return "Love it. Which platform is this for — TikTok, Instagram, somewhere else — and who are you trying to reach?";
-  }
-  if (!hasRhythm) {
-    return "Got it. How often do you want to post — daily, a few times a week — and what does a good post look like for you?";
-  }
-  if (!hasContext) {
-    return "Helpful. Tell me a little about the business behind the posts so the ideas actually fit you.";
-  }
-  if (!slots.contact) {
-    return "Last one: where should reminders and drafts go — WhatsApp, and what tone should everything carry?";
-  }
+  const hasContext = ownerMessages.filter(isSubstantive).length >= 2 && t.length > 40;
+  if (!hasPlatform) return "platform";
+  if (!hasRhythm) return "rhythm";
+  if (!hasContext) return "context";
+  if (!slots.contact) return "dropoff";
   return null;
 }
 
@@ -162,49 +226,70 @@ export function nextInterviewTurn(
 ): InterviewTurn {
   const transcript = ownerMessages.join("\n");
   const count = ownerMessages.length;
+  const substantiveCount = ownerMessages.filter(isSubstantive).length;
+  const lastSignal = count === 0 ? null : classifyOwnerMessage(ownerMessages[ownerMessages.length - 1]);
   const kind = count === 0 && !businessTypeHint
     ? null
     : detectKind(transcript, businessTypeHint);
 
   const firstName = businessName ? ` for ${businessName}` : "";
+  const slots = extractSlots(transcript, businessTypeHint);
+  let key: QuestionKey | null = null;
   let assistant_message: string;
-  let next: string | null = null;
 
   if (count === 0) {
     assistant_message = businessTypeHint
       ? `Lovely — ${businessTypeHint}${firstName}. What should your AI operator do for you: look after customers (bookings, orders, questions), help with something like content or reminders, or both?`
       : `Welcome! What would you like your AI operator to do for you — look after customers, help with things like content and reminders, or both?`;
+  } else if (lastSignal === "junk") {
+    // A tap, a stray mark, an empty send — never pretend content arrived.
+    assistant_message = "I'm here — just tell me about your business in your own words, and we'll take it one small question at a time.";
   } else if (kind === "assistant") {
-    const slots = extractSlots(transcript, businessTypeHint);
-    next = assistantQuestion(slots, ownerMessages);
-    if (next) {
-      assistant_message = (count === 1 ? "Yes — I can set that up for you. " : "") + next +
-        (count === 1 ? " One honest note: I can draft ideas, captions, and checklists and remind you to post, but actually publishing needs a social connector that isn't attached yet." : "");
+    key = assistantKey(slots, ownerMessages);
+    if (key) {
+      const q = QUESTION_TEXT[key];
+      assistant_message = (substantiveCount <= 1 ? "Yes — I can set that up for you. " : "") + q.full +
+        " One honest note: I can draft ideas, captions, and checklists and remind you to post, but actually publishing needs a social connector that isn't attached yet.";
+      if (lastSignal === "confusion") {
+        assistant_message = `No worries — simpler version: ${q.simple} ${q.example}`;
+      } else if (lastSignal === "greeting") {
+        assistant_message = `Hello! Great to meet you. ${q.simple} ${q.example}`;
+      }
     } else {
       assistant_message = "That's everything I need. I'll put together your AI operator plan now — review it, and we'll make it live together.";
     }
   } else {
-    const slots = extractSlots(transcript, businessTypeHint);
     if (kind === "both" && !slots.how_customers_transact) {
       assistant_message = "Two jobs then — customers plus the extra help. Let's start with customers: how do they transact with you today — bookings, orders, walk-ins, or calls?";
+      if (lastSignal === "confusion") {
+        assistant_message = `No worries — simpler version: ${QUESTION_TEXT.transact.simple} ${QUESTION_TEXT.transact.example}`;
+      }
     } else {
-      next = receptionistQuestion(slots);
-      assistant_message = next || "That's everything I need. I'll put together your AI operator plan now — review it, and we'll make it live together.";
-    }
-    if (kind === "both" && next === null) {
-      assistant_message = "Customers are covered. I'll fold the extra help into the plan too — review it, and we'll make it live together.";
+      key = receptionistKey(slots);
+      if (key) {
+        const q = QUESTION_TEXT[key];
+        assistant_message = q.full;
+        if (lastSignal === "confusion") {
+          assistant_message = `No worries — simpler version: ${q.simple} ${q.example}`;
+        } else if (lastSignal === "greeting") {
+          assistant_message = `Hello! Great to meet you. ${q.simple} ${q.example}`;
+        }
+      } else {
+        assistant_message = kind === "both"
+          ? "Customers are covered. I'll fold the extra help into the plan too — review it, and we'll make it live together."
+          : "That's everything I need. I'll put together your AI operator plan now — review it, and we'll make it live together.";
+      }
     }
   }
 
-  const slots = extractSlots(transcript, businessTypeHint);
   const essentials = kind === "assistant"
-    ? slots.core_need && (slots.contact || [slots.prices, slots.hours].some(Boolean) || count >= 3)
+    ? slots.core_need && (slots.contact || [slots.prices, slots.hours].some(Boolean) || substantiveCount >= 3)
     : kind === "both"
-      ? slots.how_customers_transact && (slots.contact || slots.hours || count >= 4)
-      : slots.business_type && (slots.offers || count >= 2) && slots.how_customers_transact &&
-        ([slots.hours, slots.prices, slots.policies, slots.contact].filter(Boolean).length >= 1 || count >= 6);
+      ? slots.how_customers_transact && (slots.contact || slots.hours || substantiveCount >= 4)
+      : slots.business_type && (slots.offers || substantiveCount >= 2) && slots.how_customers_transact &&
+        ([slots.hours, slots.prices, slots.policies, slots.contact].filter(Boolean).length >= 1 || substantiveCount >= 6);
 
-  const ready = Boolean(essentials) && next === null;
+  const ready = Boolean(essentials) && key === null && lastSignal === "substantive";
 
   return {
     assistant_message,

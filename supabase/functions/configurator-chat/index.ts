@@ -122,6 +122,12 @@ WHAT THE PLATFORM CAN GENUINELY BUILD TODAY (be honest about this boundary):
 WHAT IT CANNOT DO ALONE (never promise these):
 - Post directly to TikTok/Instagram/etc, access outside accounts, or move money - those need an external connector or API key that is not connected. If the owner needs one, record it in external_needs and say plainly it will need connecting later.
 
+CONVERSATION MANNERS (sound human, never scripted):
+- If the owner only greets you (hi, hello) or sends something empty, greet back warmly in one line and restate your current question simply. Never say "Got it" or "Understood" to a message with no content.
+- If the owner is confused ("??", "I don't understand", "what do you mean"), do NOT repeat your last question verbatim. Rephrase it in simpler words and add one concrete example with sample wording they can copy.
+- Never ask the same question word-for-word twice in a row. If you have learned nothing new since your last reply, rephrase with an example instead of repeating.
+- LINKS: you have no browsing tool. Website text may be provided as WEBSITE CONTEXT below - when it is, reference 2-3 specifics you actually found there, and say plainly what was NOT there (prices, policies) instead of asking blindly. Never claim to have read more than the provided context. If no context is provided, never claim to have read the site - ask for the key facts instead.
+
 RULES:
 - Ask EXACTLY ONE focused question per reply. Keep it short (1-2 sentences) plus the question.
 - For receptionist needs, follow this slot order: (1) what the business does and offers, (2) how customers reach/book/buy today, (3) hours and busiest times, (4) prices or price ranges, (5) policies that matter (cancellation, deposits, no-shows, walk-ins), (6) contact details and preferred tone.
@@ -173,12 +179,46 @@ Deno.serve(async (req) => {
       .map((m) => `${m.role === "user" ? "Owner" : "Interviewer"}: ${m.content}`)
       .join("\n");
 
+    // Real website read: if the owner shared a link, fetch it live (15s cap,
+    // 40KB cap, text only) so specifics can be referenced honestly instead of
+    // claimed. Failures are silent - the interview simply proceeds by asking.
+    let websiteContext = "";
+    let websiteUsed = false;
+    const urlMatch = transcript.match(/https?:\/\/[^\s)>\]]+/i);
+    if (urlMatch) {
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 15000);
+        const res = await fetch(urlMatch[0], {
+          signal: ctrl.signal,
+          headers: { "User-Agent": "RutexSetupBot/1.0" },
+        });
+        clearTimeout(timer);
+        if (res.ok) {
+          const html = (await res.text()).slice(0, 40000);
+          const text = html
+            .replace(/<script[\s\S]*?<\/script>/gi, " ")
+            .replace(/<style[\s\S]*?<\/style>/gi, " ")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 3000);
+          if (text.length > 200) {
+            websiteContext = `WEBSITE CONTEXT (fetched live from ${urlMatch[0]} - this is ALL you know about the site; anything not in here you do not know):\n${text}`;
+            websiteUsed = true;
+          }
+        }
+      } catch {
+        websiteContext = "";
+      }
+    }
+
     const context = [
       businessName ? `Business name: ${businessName}.` : "",
       businessType ? `Business type (owner's words): ${businessType}.` : "",
     ].filter(Boolean).join(" ");
 
-    const prompt = `${SYSTEM}\n\n${context}\n\nConversation so far:\n${transcript || "(no messages yet - greet warmly and ask the first question)"}\n\nReply with the STRICT JSON object only.`;
+    const prompt = `${SYSTEM}\n\n${context}\n\n${websiteContext}\n\nConversation so far:\n${transcript || "(no messages yet - greet warmly and ask the first question)"}\n\nReply with the STRICT JSON object only.`;
 
     const text = await askRutex(
       `configurator-chat-${conversationId || crypto.randomUUID()}`,
@@ -196,6 +236,7 @@ Deno.serve(async (req) => {
       slots: parsed.slots || {},
       ready: parsed.ready === true,
       summary: typeof parsed.summary === "string" ? parsed.summary : "",
+      website_used: websiteUsed,
     });
   } catch (e) {
     console.error("[configurator-chat] Error:", e);
