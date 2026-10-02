@@ -32,15 +32,33 @@ async function callGateway(kind: "operator" | "change", prompt: string): Promise
   return r.text;
 }
 
-/** Parse the Configurator's strict-JSON reply, tolerating markdown fences. */
+/** Parse the Configurator's strict-JSON reply, tolerating fences and surrounding prose. */
 function parseConfiguratorJson(text: string): { config: Record<string, unknown>; reasoning_notes: string } {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) return JSON.parse(jsonMatch[1]);
-    throw new Error("Could not parse configurator response as JSON");
+  const candidates: string[] = [text];
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) candidates.push(fence[1]);
+  // Last resort: the outermost { ... } block (handles leading/trailing prose).
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start >= 0 && end > start) candidates.push(text.slice(start, end + 1));
+  let lastErr: unknown = null;
+  for (const c of candidates) {
+    try {
+      const parsed = JSON.parse(c) as { config?: Record<string, unknown>; reasoning_notes?: string };
+      if (parsed && typeof parsed.config === "object" && parsed.config) {
+        return {
+          config: parsed.config,
+          reasoning_notes: typeof parsed.reasoning_notes === "string" ? parsed.reasoning_notes : "",
+        };
+      }
+    } catch (e) {
+      lastErr = e;
+    }
   }
+  const preview = text.slice(0, 300).replace(/\s+/g, " ");
+  throw new Error(
+    `Could not parse configurator response as JSON (${String(lastErr)}. Preview: ${preview}`,
+  );
 }
 
 const SYSTEM_PROMPT = `You are the Configurator — an opencode agent for Rutex, an AI Business Operator platform for small businesses. You are accessed through the Rutex gateway. Your sibling is the Responder, the customer-facing agent also reached through the gateway.
@@ -125,11 +143,12 @@ SURFACE PLANNING (do this AFTER the config above):
 - Switch on only the modules whose "when" tags match this business; a module needing an unconnected connector stays listed under modules_on but its connector ALSO lands in connectors_needed.
 - Activate retention plays wherever their tags match.
 - ui_plan lives INSIDE the config object above (config.ui_plan), so approval writes it straight through.
+- SIZE DISCIPLINE (your reply must fit): every "why" is ONE short phrase, max 12 words. reasoning_notes max 5 sentences. No markdown, no fences, no commentary outside the JSON — the reply must BE the JSON object and nothing else.
 
 OUTPUT FORMAT (STRICT JSON, no markdown fences):
 {
   "config": { ... the OperationsConfig above, INCLUDING ui_plan ... },
-  "reasoning_notes": "Your detailed notes about WHY you chose each option, what you're confident about, and what you're uncertain about. Be honest about uncertainty."
+  "reasoning_notes": "Max 5 sentences: WHY you chose each option, confidence, uncertainty. Be honest about uncertainty."
 }
 
 ${buildManifestPrompt()}
