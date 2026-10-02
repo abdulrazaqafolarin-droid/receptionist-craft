@@ -17,6 +17,9 @@ import {
 } from "@/components/ui/sidebar";
 
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { useMemo } from "react";
+import { useActiveOperatorStore } from "@/store/activeOperator";
+import { isRouteVisible } from "@/lib/operatorSurface";
 
 const groups = [
   {
@@ -89,6 +92,18 @@ export function AppSidebar() {
   const isGroupActive = (items: Array<{ url: string }>) =>
     items.some((item) => item.url === currentPath);
 
+  // Operator surface: hide nav items the active operator's approved plan
+  // excluded. No surface (older operators) -> show everything. Empty
+  // groups disappear entirely so the nav stays clean.
+  const visiblePages = useActiveOperatorStore((s) => s.visiblePages);
+  const visibleGroups = useMemo(
+    () =>
+      groups
+        .map((g) => ({ ...g, items: g.items.filter((i) => isRouteVisible(i.url, visiblePages)) }))
+        .filter((g) => g.items.length > 0),
+    [visiblePages],
+  );
+
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     for (const g of groups) {
@@ -131,7 +146,7 @@ export function AppSidebar() {
           </div>
         )}
 
-        {groups.map((group) => {
+        {visibleGroups.map((group) => {
           const active = isGroupActive(group.items);
           const isOpen = openGroups[group.label] ?? false;
           const effectiveOpen = state === "collapsed" || isOpen || (active && group.items.some((i) => i.url === currentPath));

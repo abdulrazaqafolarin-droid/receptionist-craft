@@ -11,6 +11,8 @@
  * Business language only. No technical jargon.
  */
 
+import { uiPlanForProfile } from "./operatorSurface";
+
 export interface InterviewSlots {
   business_type: string | null;
   offers: string | null;
@@ -297,4 +299,128 @@ export function nextInterviewTurn(
     ready,
     summary: buildSummary(ownerMessages, businessTypeHint, kind),
   };
+}
+
+export interface LocalPlan {
+  config: Record<string, unknown>;
+  planText: string;
+}
+
+/**
+ * Offline draft plan — used ONLY when the gateway planner (propose-operator-plan)
+ * is unreachable. Conservative and honest: capabilities are set ONLY from what
+ * the owner actually said (keyword evidence), everything unproven stays off or
+ * empty, and the plan text says plainly it was drafted offline. Approval-first
+ * still applies — the owner reviews this exactly like an AI plan.
+ */
+export function buildLocalPlan(
+  ownerMessages: string[],
+  businessName: string,
+  businessTypeHint: string,
+): LocalPlan {
+  const transcript = ownerMessages.join("\n");
+  const t = `${businessTypeHint} ${transcript}`;
+  const kind = detectKind(transcript, businessTypeHint);
+
+  const booking = /book|appoint|reserv|schedul|consult|session|visit|patient|salon|clinic/i.test(t);
+  const ordering = /order|buy|sell|product|shop|store|deliver|menu|price|cost|₦|\$|pay/i.test(t);
+  const delivers = /deliver|dispatch|shipping/i.test(t);
+  const compliance = /clinic|hospital|medical|doctor|dental|legal|law|drug|pharmacy/i.test(t);
+  const staffed = /staff|team|employee|stylist|therapist|receptionist /i.test(t);
+  const social = /tiktok|instagram|facebook|social|content|caption|post/i.test(t);
+
+  const externalNeeds: string[] = [];
+  if (/tiktok/i.test(t) && /post|publish|upload|auto/i.test(t)) externalNeeds.push("tiktok-auto-post");
+  if (/instagram/i.test(t) && /post|publish|upload|auto/i.test(t)) externalNeeds.push("instagram-auto-post");
+  if (/whatsapp/i.test(t) && /auto|send|remind|notif/i.test(t)) externalNeeds.push("whatsapp-messaging");
+  if (/pay|checkout|deposit/i.test(t) && /online|card|transfer/i.test(t)) externalNeeds.push("paystack-payments");
+  if (/calendar/i.test(t) && /sync|google/i.test(t)) externalNeeds.push("google-calendar-sync");
+
+  const displayName = businessName || businessTypeHint || "Your business";
+  const willDo: string[] = [];
+  if (kind !== "assistant") {
+    if (booking) willDo.push("Book appointments from chat");
+    if (ordering) willDo.push("Take product orders from chat");
+    willDo.push("Answer customer questions from your FAQs", "Capture leads for follow-up");
+  } else {
+    willDo.push("Draft ideas, captions, and checklists", "Answer questions from your knowledge");
+    if (social) willDo.push("Prepare social content for your review");
+    willDo.push("Remind you of what needs doing");
+  }
+
+  const profile = {
+    kind,
+    booking,
+    ordering,
+    payments: ordering,
+    staffed,
+    connected: externalNeeds.length > 0,
+    content: kind !== "receptionist" || social,
+    customerFacing: kind !== "assistant",
+  };
+
+  // Local mirror of the manifest rules (page-level). The gateway plan
+  // carries the authoritative ui_plan; this keeps offline drafts reviewable.
+  const uiPlan = uiPlanForProfile(profile);
+
+  const config: Record<string, unknown> = {
+    version: 1,
+    business: {
+      display_name: displayName,
+      legal_name: null,
+      business_type: businessTypeHint || "General Business",
+      description: null,
+      greeting_message: `Hello! Welcome to ${displayName}. How can I help you today?`,
+      tone: "friendly",
+    },
+    contact: { phone: null, email: null, website: null, address: null },
+    timezone: "Africa/Lagos",
+    hours: [],
+    workflows: {
+      appointment_booking: booking ? { enabled: true, default_duration_minutes: 30 } : null,
+      product_ordering: ordering ? { enabled: true, delivery: delivers } : null,
+    },
+    capabilities: {
+      sells_products: ordering,
+      books_appointments: booking,
+      offers_services: booking,
+      delivers,
+      requires_compliance: compliance,
+      supports_emergency: false,
+      deposit_required: false,
+      deposit_percent: null,
+    },
+    policies: { cancellation_notice_hours: null, same_day_booking: false, walk_ins: false },
+    channels: { widget: true, whatsapp: false, phone: false },
+    knowledge_base: "",
+    operator_kind: kind,
+    will_do: willDo,
+    wont_do: ["Post to social accounts on its own", "Access outside accounts", "Move money"],
+    external_needs: externalNeeds,
+    ui_plan: {
+      show: uiPlan.show,
+      hide: uiPlan.hide,
+      modules_on: [],
+      connectors_needed: externalNeeds.map((n) => ({ key: n.split("-")[0], why: `Needed for: ${n}` })),
+      retention_on: [],
+      widget_pieces: {
+        booking,
+        ordering,
+        voice: true,
+        lead_capture: kind !== "assistant",
+      },
+    },
+  };
+
+  const planText =
+    "(Drafted offline — the AI planner was unreachable. I kept everything conservative: only what you actually said is switched on. Review carefully; you can regenerate the full AI plan anytime.)\n\n" +
+    `Business: ${displayName}\n` +
+    `Operator: ${kind === "assistant" ? "helper (content, reminders, Q&A)" : kind === "both" ? "customers + helper" : "customer receptionist"}\n` +
+    (booking ? "Bookings: on (you mentioned booking)\n" : "") +
+    (ordering ? "Ordering: on (you mentioned ordering)\n" : "") +
+    (externalNeeds.length > 0 ? `Connections needed later: ${externalNeeds.join(", ")}\n` : "") +
+    `Dashboard pages included: ${uiPlan.show.map((s) => s.key).join(", ") || "essentials only"}\n` +
+    (uiPlan.hide.length > 0 ? `Hidden for simplicity: ${uiPlan.hide.map((s) => s.key).join(", ")}\n` : "");
+
+  return { config, planText };
 }

@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit --project tsconfig.app.json",
+    "verify:manifest": "node scripts/verify-surface-manifest.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

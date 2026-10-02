@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Bot, Check, Loader2, Send, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { recordSignal } from "@/lib/successSignals";
-import { isSubstantive, nextInterviewTurn } from "@/lib/conversationalInterview";
+import { buildLocalPlan, isSubstantive, nextInterviewTurn } from "@/lib/conversationalInterview";
+import { surfaceProfileFromConfig, uiPlanForProfile, widgetPiecesFromConfig } from "@/lib/operatorSurface";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -314,6 +315,21 @@ export default function ConversationalOnboarding() {
       if (!d?.ok) throw new Error(d?.error || "Failed to generate plan");
 
       const config = (d.config || {}) as Record<string, unknown>;
+      // Surface fallback: if the planner predates ui_plan (not yet deployed),
+      // derive the dashboard surface locally from the config so the preview
+      // Dashboard tab and approval still work. Never overrides a real ui_plan.
+      if (!config.ui_plan || typeof config.ui_plan !== "object") {
+        const profile = surfaceProfileFromConfig(config);
+        const local = uiPlanForProfile(profile);
+        config.ui_plan = {
+          show: local.show,
+          hide: local.hide,
+          modules_on: [],
+          connectors_needed: [],
+          retention_on: [],
+          widget_pieces: widgetPiecesFromConfig(config),
+        };
+      }
       setStepStatus("design", "done", `Plan drafted → You review before anything goes live`);
       setStepStatus("structure", "active");
 
@@ -350,12 +366,31 @@ export default function ConversationalOnboarding() {
       appendAssistant("Your operator plan is ready on the right. Review it — remove anything that doesn't belong — then approve to make it live.");
     } catch (err) {
       console.error("Plan error:", err);
-      toast.error(err instanceof Error ? err.message : "Failed to generate plan");
-      setPhase("chat");
-      // Attention is transient — flag it, then settle back to listening so the
-      // pill never gets stuck on "Needs attention" across the whole thread.
-      setAgentState("error");
-      setTimeout(() => setAgentState("watching"), 4000);
+      // Gateway planner unreachable: fall back to an honest offline draft
+      // instead of dead-ending. It is conservative, clearly labelled, and
+      // goes through the same approval review as an AI plan.
+      try {
+        const local = buildLocalPlan(ownerTexts(messages), businessName, businessType);
+        setServices([]);
+        setFaqs(deriveFaqs(local.config, summary));
+        // recId is only set when the placeholder receptionist was created;
+        // without it there is nothing to approve onto, so rethrow.
+        if (!receptionistIdRef.current) throw err;
+        setPlanData({ planText: local.planText, config: local.config, versionId: "", receptionistId: receptionistIdRef.current });
+        setStepStatus("design", "done", "AI planner unreachable → Offline draft prepared");
+        setStepStatus("structure", "done", "Review carefully → Approve only what is right");
+        setPhase("preview");
+        setMobileTab("build");
+        setAgentState("approval");
+        appendAssistant("The AI planner is unreachable right now, so I prepared a careful offline draft on the right. It only switches on what you actually mentioned. Review it — approve only what is right, and we can regenerate the full plan anytime.");
+      } catch {
+        toast.error(err instanceof Error ? err.message : "Failed to generate plan");
+        setPhase("chat");
+        // Attention is transient — flag it, then settle back to listening so the
+        // pill never gets stuck on "Needs attention" across the whole thread.
+        setAgentState("error");
+        setTimeout(() => setAgentState("watching"), 4000);
+      }
     }
   }
 

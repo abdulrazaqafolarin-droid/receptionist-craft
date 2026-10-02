@@ -2456,6 +2456,25 @@ if (!GEMINI_API_KEY) {
     // CAPABILITY-BASED ARCHITECTURE: RESOLVE CAPABILITIES & VALIDATE INTENT
     //                                                                        
     const capabilities = resolveCapabilities(receptionist, services || []);
+    // Operator surface override (Stage 3): the approved ui_surface.widget
+    // gates what the responder may OFFER IN WORDS, matching the widget
+    // pieces the customer actually sees. No surface -> no override.
+    try {
+      const surfaceWidget = (capabilities as unknown as Record<string, unknown>)?.ui_surface as
+        { widget?: { booking?: boolean; ordering?: boolean; lead_capture?: boolean } } | undefined;
+      const widgetPieces = surfaceWidget?.widget;
+      if (widgetPieces && typeof widgetPieces === "object") {
+        if (widgetPieces.booking === false) {
+          (capabilities as Record<string, unknown>).books_appointments = false;
+          (capabilities as Record<string, unknown>).offers_services = false;
+        }
+        if (widgetPieces.ordering === false) {
+          (capabilities as Record<string, unknown>).sells_products = false;
+          (capabilities as Record<string, unknown>).delivers = false;
+        }
+        console.log(`[Surface] widget override applied: booking=${String(widgetPieces.booking)} ordering=${String(widgetPieces.ordering)} lead=${String(widgetPieces.lead_capture)}`);
+      }
+    } catch { /* surface override is best-effort; capabilities stand as resolved */ }
     const primaryGoal = resolvePrimaryGoal(receptionist);
     
     // Classify universal intent and validate against capabilities

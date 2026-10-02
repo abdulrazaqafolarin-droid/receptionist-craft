@@ -11,6 +11,7 @@ import { Navbar } from "@/components/Navbar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import { CommandPalette } from "@/components/CommandPalette";
+import { SurfaceGate } from "@/components/SurfaceGate";
 
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
@@ -174,27 +175,27 @@ const App = () => {
                               <Route path="/builder" element={<Builder />} />
                               <Route path="/builder/:id" element={<Builder />} />
                               <Route path="/conversations" element={<Conversations />} />
-                              <Route path="/appointments" element={<Appointments />} />
-                              <Route path="/services" element={<Services />} />
-                              <Route path="/orders" element={<Orders />} />
-                              <Route path="/availability" element={<Availability />} />
-                              <Route path="/calendar" element={<CalendarView />} />
-                              <Route path="/faqs" element={<FAQManagement />} />
-                              <Route path="/analytics" element={<Analytics />} />
-                              <Route path="/quality-review" element={<QualityReview />} />
-                              <Route path="/kb-rewrite" element={<KBRewrite />} />
+                              <Route path="/appointments" element={<SurfaceGate><Appointments /></SurfaceGate>} />
+                              <Route path="/services" element={<SurfaceGate><Services /></SurfaceGate>} />
+                              <Route path="/orders" element={<SurfaceGate><Orders /></SurfaceGate>} />
+                              <Route path="/availability" element={<SurfaceGate><Availability /></SurfaceGate>} />
+                              <Route path="/calendar" element={<SurfaceGate><CalendarView /></SurfaceGate>} />
+                              <Route path="/faqs" element={<SurfaceGate><FAQManagement /></SurfaceGate>} />
+                              <Route path="/analytics" element={<SurfaceGate><Analytics /></SurfaceGate>} />
+                              <Route path="/quality-review" element={<SurfaceGate><QualityReview /></SurfaceGate>} />
+                              <Route path="/kb-rewrite" element={<SurfaceGate><KBRewrite /></SurfaceGate>} />
                               <Route path="/diagnostics" element={<Diagnostics />} />
                               <Route path="/notifications" element={<Notifications />} />
                               <Route path="/realtime-logs" element={<RealtimeLogs />} />
                               <Route path="/organization" element={<OrganizationPage />} />
-                              <Route path="/channels" element={<Channels />} />
-                              <Route path="/connections" element={<Connections />} />
-                              <Route path="/customers" element={<Customers />} />
-                              <Route path="/staff" element={<StaffPage />} />
-                              <Route path="/escalations" element={<Escalations />} />
+                              <Route path="/channels" element={<SurfaceGate><Channels /></SurfaceGate>} />
+                              <Route path="/connections" element={<SurfaceGate><Connections /></SurfaceGate>} />
+                              <Route path="/customers" element={<SurfaceGate><Customers /></SurfaceGate>} />
+                              <Route path="/staff" element={<SurfaceGate><StaffPage /></SurfaceGate>} />
+                              <Route path="/escalations" element={<SurfaceGate><Escalations /></SurfaceGate>} />
                               <Route path="/billing" element={<Billing />} />
-                              <Route path="/money-mode" element={<MoneyModePage />} />
-                              <Route path="/meo-dashboard" element={<MEODashboard />} />
+                              <Route path="/money-mode" element={<SurfaceGate><MoneyModePage /></SurfaceGate>} />
+                              <Route path="/meo-dashboard" element={<SurfaceGate><MEODashboard /></SurfaceGate>} />
                               <Route path="/conversational-onboarding" element={<ConversationalOnboarding />} />
                               <Route path="/operator-management" element={<ConversationalManagementPage />} />
                               <Route path="/test/:id" element={<TestConversations />} />

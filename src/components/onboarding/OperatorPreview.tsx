@@ -6,6 +6,7 @@ import {
   Check,
   CircleAlert,
   Clock,
+  LayoutDashboard,
   ListChecks,
   MessageSquareText,
   Plug,
@@ -121,6 +122,26 @@ export function OperatorPreview({
     }
   }
 
+  // Dashboard surface the plan proposes (Stage 3 ui_plan). Missing plan ->
+  // tab hidden: older plans without a surface show everything by default.
+  const uiPlan = (config.ui_plan || {}) as {
+    show?: Array<{ key?: unknown; why?: unknown }>;
+    hide?: Array<{ key?: unknown; why?: unknown }>;
+    modules_on?: Array<{ key?: unknown; why?: unknown }>;
+    connectors_needed?: Array<{ key?: unknown; why?: unknown }>;
+    retention_on?: Array<{ key?: unknown; why?: unknown }>;
+  };
+  const planItems = (list: Array<{ key?: unknown; why?: unknown }> | undefined) =>
+    (list || [])
+      .filter((x) => typeof x?.key === "string" && x.key)
+      .map((x) => ({ key: x.key as string, why: typeof x.why === "string" ? x.why : "" }));
+  const surfaceShow = planItems(uiPlan.show);
+  const surfaceHide = planItems(uiPlan.hide);
+  const surfaceModules = planItems(uiPlan.modules_on);
+  const surfaceConnectors = planItems(uiPlan.connectors_needed);
+  const surfaceRetention = planItems(uiPlan.retention_on);
+  const hasSurface = surfaceShow.length > 0 || surfaceHide.length > 0;
+
   return (
     <div className="flex h-full flex-col gap-4" aria-label="Your AI operator preview">
       {/* Header — identity + decision state */}
@@ -187,7 +208,7 @@ export function OperatorPreview({
 
       {/* Structure */}
       <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col">
-        <TabsList className="grid w-full shrink-0 grid-cols-4" aria-label="Operator structure">
+        <TabsList className={hasSurface ? "grid w-full shrink-0 grid-cols-5" : "grid w-full shrink-0 grid-cols-4"} aria-label="Operator structure">
           <TabsTrigger value="overview" className="gap-1.5">
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
             <span className="hidden sm:inline">Overview</span>
@@ -207,6 +228,13 @@ export function OperatorPreview({
             <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
             Answers
           </TabsTrigger>
+          {hasSurface && (
+            <TabsTrigger value="dashboard" className="gap-1.5">
+              <LayoutDashboard className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Dashboard</span>
+              <span className="sm:hidden">Pages</span>
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="overview" className="mt-3 space-y-3 overflow-y-auto">
@@ -334,6 +362,72 @@ export function OperatorPreview({
             Full answering instructions are written when you approve — tailored to your tone and policies.
           </p>
         </TabsContent>
+
+        {hasSurface && (
+          <TabsContent value="dashboard" className="mt-3 space-y-3 overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <p className="type-caption">The exact pages your dashboard will show after approval.</p>
+              {approvalPill("suggested")}
+            </div>
+            {surfaceShow.length > 0 && (
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="type-label mb-2">Included pages</p>
+                <ul className="space-y-1.5">
+                  {surfaceShow.map((p) => (
+                    <li key={p.key} className="flex items-start gap-2 text-sm">
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 finance-positive" aria-hidden="true" />
+                      <span><span className="font-medium">{p.key}</span>{p.why ? <span className="text-muted-foreground"> — {p.why}</span> : null}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {surfaceHide.length > 0 && (
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="type-label mb-2">Hidden to keep things simple</p>
+                <ul className="space-y-1.5">
+                  {surfaceHide.map((p) => (
+                    <li key={p.key} className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <span className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-border text-[10px]" aria-hidden="true">×</span>
+                      <span><span className="font-medium">{p.key}</span>{p.why ? ` — ${p.why}` : null}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="type-caption mt-2">Ask in the chat to bring any of these back before approving.</p>
+              </div>
+            )}
+            {surfaceModules.length > 0 && (
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="type-label mb-2">Working behind the scenes</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {surfaceModules.map((m) => (
+                    <Badge key={m.key} variant="secondary" title={m.why}>{m.key}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {surfaceRetention.length > 0 && (
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="type-label mb-2">Keeping customers coming back</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {surfaceRetention.map((r) => (
+                    <Badge key={r.key} variant="secondary" title={r.why}>{r.key}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {surfaceConnectors.length > 0 && (
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="type-label mb-2">Worth connecting later</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {surfaceConnectors.map((c) => (
+                    <Badge key={c.key} variant="outline" title={c.why}>{c.key}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Decision — approval-first, human in control */}

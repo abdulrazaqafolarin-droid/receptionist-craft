@@ -73,6 +73,7 @@
       "dependencies": [
         "npm:@eslint/js@^9.32.0",
         "npm:@hookform/resolvers@^3.10.0",
+        "npm:@playwright/test@^1.63.0",
         "npm:@radix-ui/react-accordion@^1.2.11",
         "npm:@radix-ui/react-alert-dialog@^1.1.14",
         "npm:@radix-ui/react-aspect-ratio@^1.1.7",
@@ -120,6 +121,7 @@
         "npm:input-otp@^1.4.2",
         "npm:lovable-tagger@^1.1.11",
         "npm:lucide-react@0.462",
+        "npm:msw@^2.15.0",
         "npm:next-themes@0.3",
         "npm:postcss@^8.5.6",
         "npm:react-day-picker@^8.10.1",
@@ -136,7 +138,9 @@
         "npm:typescript-eslint@^8.38.0",
         "npm:typescript@^5.8.3",
         "npm:vaul@~0.9.9",
+        "npm:vite-tsconfig-paths@^6.1.1",
         "npm:vite@^5.4.19",
+        "npm:vitest@^1.6.0",
         "npm:zod@^4.1.13",
         "npm:zustand@^5.0.8"
       ]

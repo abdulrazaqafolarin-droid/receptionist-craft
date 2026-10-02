@@ -14,11 +14,17 @@ import { OwnerChat } from "@/components/OwnerChat";
 import { ConversationalManagement } from "@/components/ConversationalManagement";
 import { NumberTicker } from "@/components/ui/number-ticker";
 import { SpotlightCard } from "@/components/SpotlightCard";
+import { useActiveOperatorStore } from "@/store/activeOperator";
+import { visiblePagesFromCapabilities } from "@/lib/operatorSurface";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
-  const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string; active: boolean; mock_mode?: boolean; ai_mode?: string }>>([]);
+  const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string; active: boolean; mock_mode?: boolean; ai_mode?: string; capabilities?: unknown }>>([]);
+  // Active operator is global (sidebar + route gates follow it). Dashboard
+  // owns selection: picking here switches the whole dashboard surface.
+  const selectedReceptionistId = useActiveOperatorStore((s) => s.receptionistId);
+  const setActive = useActiveOperatorStore((s) => s.setActive);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [stats, setStats] = useState({
     conversations: 0,
@@ -26,7 +32,6 @@ export default function Dashboard() {
     orders: 0,
     activeReceptionists: 0,
   });
-  const [selectedReceptionistId, setSelectedReceptionistId] = useState<string | null>(null);
   const [showOperatorDetail, setShowOperatorDetail] = useState(false);
 
   useEffect(() => {
@@ -41,9 +46,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (receptionists.length > 0 && !selectedReceptionistId) {
-      setSelectedReceptionistId(receptionists[0].id);
+      const first = receptionists[0];
+      setActive(first.id, first.business_name || first.name, visiblePagesFromCapabilities(first.capabilities));
+    } else if (receptionists.length > 0 && selectedReceptionistId) {
+      // Refresh the surface in case approval updated it since selection.
+      const current = receptionists.find((r) => r.id === selectedReceptionistId);
+      if (current) setActive(current.id, current.business_name || current.name, visiblePagesFromCapabilities(current.capabilities));
     }
-  }, [receptionists, selectedReceptionistId]);
+  }, [receptionists, selectedReceptionistId, setActive]);
 
   const loadData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -59,7 +69,7 @@ export default function Dashboard() {
       .select("*")
       .eq("user_id", user.id);
 
-    setReceptionists((recs || []) as Array<{ id: string; name: string; business_name: string; active: boolean; mock_mode?: boolean; ai_mode?: string }>);
+    setReceptionists((recs || []) as Array<{ id: string; name: string; business_name: string; active: boolean; mock_mode?: boolean; ai_mode?: string; capabilities?: unknown }>);
 
     if (recs && recs.length > 0) {
       const receptionistIds = recs.map(r => r.id);

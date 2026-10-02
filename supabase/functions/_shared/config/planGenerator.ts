@@ -158,6 +158,55 @@ export function generatePlanFromConfig(config: Record<string, unknown>): Generat
     });
   }
 
+  // Section 10: Operator dashboard surface (pages, modules, connectors, retention)
+  const uiPlan = (config.ui_plan || {}) as {
+    show?: Array<{ key?: string; why?: string }>;
+    hide?: Array<{ key?: string; why?: string }>;
+    modules_on?: Array<{ key?: string; why?: string }>;
+    connectors_needed?: Array<{ key?: string; why?: string }>;
+    retention_on?: Array<{ key?: string; why?: string }>;
+    widget_pieces?: { booking?: boolean; ordering?: boolean; voice?: boolean; lead_capture?: boolean };
+  };
+  const showList = (uiPlan.show || []).filter((x) => typeof x?.key === "string");
+  const hideList = (uiPlan.hide || []).filter((x) => typeof x?.key === "string");
+  if (showList.length > 0 || hideList.length > 0) {
+    const lines: string[] = [];
+    if (showList.length > 0) {
+      lines.push("**Your dashboard will include:**\n" + showList.map((p) => `- ${p.key}${p.why ? ` — ${p.why}` : ""}`).join("\n"));
+    }
+    if (hideList.length > 0) {
+      lines.push("**Hidden to keep things simple (ask anytime to bring one back):**\n" + hideList.map((p) => `- ${p.key}${p.why ? ` — ${p.why}` : ""}`).join("\n"));
+    }
+    const modList = (uiPlan.modules_on || []).filter((x) => typeof x?.key === "string");
+    if (modList.length > 0) {
+      lines.push("**Working for you behind the scenes:**\n" + modList.map((m) => `- ${m.key}${m.why ? ` — ${m.why}` : ""}`).join("\n"));
+    }
+    const connList = (uiPlan.connectors_needed || []).filter((x) => typeof x?.key === "string");
+    if (connList.length > 0) {
+      lines.push("**Worth connecting later:**\n" + connList.map((c) => `- ${c.key}${c.why ? ` — ${c.why}` : ""}`).join("\n"));
+    }
+    const retList = (uiPlan.retention_on || []).filter((x) => typeof x?.key === "string");
+    if (retList.length > 0) {
+      lines.push("**Keeping customers coming back:**\n" + retList.map((r) => `- ${r.key}${r.why ? ` — ${r.why}` : ""}`).join("\n"));
+    }
+    const wp = uiPlan.widget_pieces;
+    if (wp && typeof wp === "object") {
+      const chatBits: string[] = ["a clean chat that answers questions"];
+      if (wp.booking === true) chatBits.push("booking pickers (service, date, time)");
+      if (wp.ordering === true) chatBits.push("product picker and ordering");
+      if (wp.lead_capture === true) chatBits.push("lead capture before handoff");
+      if (wp.voice === true) chatBits.push("voice input");
+      lines.push("**What your customers will see:**\n" + chatBits.map((b) => `- ${b}`).join("\n"));
+    }
+    sections.push({
+      id: "dashboard-surface",
+      title: "Your Dashboard",
+      content: lines.join("\n\n"),
+      confidence: "high",
+      owner_action: "This is the exact set of pages your dashboard will show. Want anything added back or removed?",
+    });
+  }
+
   // Build full text
   const full_text = sections
     .map((s) => {

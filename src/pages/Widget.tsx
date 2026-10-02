@@ -23,6 +23,27 @@ type Message = {
   showQuickReplies?: boolean;
 
 }
+type WidgetPieces = {
+  booking: boolean;
+  ordering: boolean;
+  voice: boolean;
+  lead_capture: boolean;
+};
+
+const ALL_PIECES_ON: WidgetPieces = { booking: true, ordering: true, voice: true, lead_capture: true };
+
+function coercePieces(v: unknown): WidgetPieces {
+  if (!v || typeof v !== "object") return ALL_PIECES_ON;
+  const o = v as Record<string, unknown>;
+  const b = (x: unknown, fallback: boolean) => typeof x === "boolean" ? x : fallback;
+  return {
+    booking: b(o.booking, true),
+    ordering: b(o.ordering, true),
+    voice: b(o.voice, true),
+    lead_capture: b(o.lead_capture, true),
+  };
+}
+
 type ReceptionistData = {
   id: string;
   name: string | null;
@@ -31,6 +52,7 @@ type ReceptionistData = {
   timezone: string | null;
   tone: string | null;
   business_model: 'services' | 'products' | 'both' | null;
+  widget_surface?: WidgetPieces | null;
   business_info: {
     widget_customization?: {
       primaryColor?: string;
@@ -80,6 +102,9 @@ export default function Widget() {
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [products, setProducts] = useState<ServiceItem[]>([]);
   const [businessModel, setBusinessModel] = useState<'services' | 'products' | 'both'>('services');
+  // Approved widget surface (Stage 3): which flow pieces this operator's
+  // visitors get. Absent (older operators) -> everything on.
+  const [widgetPieces, setWidgetPieces] = useState<WidgetPieces>({ booking: true, ordering: true, voice: true, lead_capture: true });
   // Presentation-only booking state: tracks what the visitor has picked so the
   // UI can resume visually after a page close. It NO LONGER executes anything —
   // all bookings/orders run server-side through widget-chat (Phase 0.3).
@@ -127,6 +152,26 @@ export default function Widget() {
   const [sessionCheckComplete, setSessionCheckComplete] = useState(false);
   const [voiceChatOpen, setVoiceChatOpen] = useState(false);
   const [activeUISignal, setActiveUISignal] = useState<UISignal | null>(null);
+
+  // Suppress engine UI signals for flows this operator was not approved for.
+  // The chat text still arrives; only the interactive picker is withheld, so
+  // a helper operator never shows booking pickers it cannot fulfil.
+  const BOOKING_COMPONENTS = ["service_selector", "date_picker", "time_picker", "booking_confirmation"];
+  const ORDERING_COMPONENTS = ["product_selector", "order_summary"];
+  function surfaceFilteredSignal(signal: UISignal | null): UISignal | null {
+    if (!signal) return null;
+    const comp = signal.activeComponent;
+    const flow = signal.flow?.activeFlow;
+    if (flow === "booking" || (comp && BOOKING_COMPONENTS.includes(comp))) {
+      return widgetPieces.booking ? signal : null;
+    }
+    if (flow === "ordering" || (comp && ORDERING_COMPONENTS.includes(comp))) {
+      return widgetPieces.ordering ? signal : null;
+    }
+    if (comp === "lead_form") return widgetPieces.lead_capture ? signal : null;
+    if (comp === "switch_confirmation") return widgetPieces.booking && widgetPieces.ordering ? signal : null;
+    return signal;
+  }
   
   // Abuse protection: honeypot field and form load timing
   const [honeypotValue, setHoneypotValue] = useState("");
@@ -408,7 +453,7 @@ export default function Widget() {
 
     setReceptionist(data);
     setBusinessModel(data.business_model || 'services');
-    
+    setWidgetPieces(coercePieces(data.widget_surface));
     const businessInfo = data.business_info;
     if (businessInfo?.widget_customization) {
       const c = businessInfo.widget_customization;
@@ -849,9 +894,9 @@ export default function Widget() {
                 <div className="max-w-[80%]">
                   <QuickReplyButtons
                     buttons={[
-                      ...(businessModel === 'services' || businessModel === 'both' ? [{ label: "📅 Book Appointment", value: "book_appointment" }] : []),
-                      ...(businessModel === 'services' || businessModel === 'both' ? [{ label: "💼 View Services", value: "view_services" }] : []),
-                      ...(businessModel === 'products' || businessModel === 'both' ? [{ label: "🛍️ View Products", value: "view_products" }] : []),
+                      ...((businessModel === 'services' || businessModel === 'both') && widgetPieces.booking ? [{ label: "📅 Book Appointment", value: "book_appointment" }] : []),
+                      ...((businessModel === 'services' || businessModel === 'both') && widgetPieces.booking ? [{ label: "💼 View Services", value: "view_services" }] : []),
+                      ...((businessModel === 'products' || businessModel === 'both') && widgetPieces.ordering ? [{ label: "🛍️ View Products", value: "view_products" }] : []),
                       { label: "📞 Contact", value: "contact" },
                     ]}
                     onSelect={handleQuickReply}
@@ -902,13 +947,15 @@ export default function Widget() {
             />
           }
           inputAfter={
-            <VoiceInputButton
-              onTranscript={(text) => {
-                setInput(text);
-                sendMessage(text);
-              }}
-              disabled={loading}
-            />
+            widgetPieces.voice ? (
+              <VoiceInputButton
+                onTranscript={(text) => {
+                  setInput(text);
+                  sendMessage(text);
+                }}
+                disabled={loading}
+              />
+            ) : null
           }
           footerAfter={
             <div className="flex items-center justify-between mt-3 px-1">
@@ -928,9 +975,9 @@ export default function Widget() {
               </p>
             </div>
           }
-          betweenPanel={
-            <UISignalRenderer
-              signal={activeUISignal}
+            betweenPanel={
+              <UISignalRenderer
+                signal={surfaceFilteredSignal(activeUISignal)}
               services={services}
               products={products}
               loading={loading}

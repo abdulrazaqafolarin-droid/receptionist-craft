@@ -16,6 +16,7 @@
 
 import { generatePlanFromConfig, type GeneratedPlan } from "./planGenerator.ts";
 import { buildManifestPrompt } from "./manifest.ts";
+import { buildSurfacePrompt } from "./surfaceManifest.ts";
 import type { ReasoningHistoryEntry } from "./versioning.ts";
 import { askRutex } from "../rutexMcp.ts";
 
@@ -108,16 +109,32 @@ CRITICAL RULES:
   "operator_kind": "receptionist" | "assistant" | "both",
   "will_do": string[],
   "wont_do": string[],
-  "external_needs": string[]
+  "external_needs": string[],
+  "ui_plan": {
+    "show": [ { "key": string, "why": string } ],
+    "hide": [ { "key": string, "why": string } ],
+    "modules_on": [ { "key": string, "why": string } ],
+    "connectors_needed": [ { "key": string, "why": string } ],
+    "retention_on": [ { "key": string, "why": string } ],
+    "widget_pieces": { "booking": boolean, "ordering": boolean, "voice": boolean, "lead_capture": boolean }
+  }
 }
+
+SURFACE PLANNING (do this AFTER the config above):
+- Decide the operator's dashboard surface from the SURFACE MANIFEST below: every operator-scope page is either shown or hidden, each with a one-line why. Account-scope pages are never listed (always on). Never invent a page key — use ONLY keys from the manifest.
+- Switch on only the modules whose "when" tags match this business; a module needing an unconnected connector stays listed under modules_on but its connector ALSO lands in connectors_needed.
+- Activate retention plays wherever their tags match.
+- ui_plan lives INSIDE the config object above (config.ui_plan), so approval writes it straight through.
 
 OUTPUT FORMAT (STRICT JSON, no markdown fences):
 {
-  "config": { ... the OperationsConfig above ... },
+  "config": { ... the OperationsConfig above, INCLUDING ui_plan ... },
   "reasoning_notes": "Your detailed notes about WHY you chose each option, what you're confident about, and what you're uncertain about. Be honest about uncertainty."
 }
 
-${buildManifestPrompt()}`;
+${buildManifestPrompt()}
+
+${buildSurfacePrompt()}`;
 
 export async function generateOperatorPlan(
   businessDescription: string,
@@ -212,11 +229,15 @@ RULES:
 
 OUTPUT FORMAT (STRICT JSON, no markdown fences):
 {
-  "config": { ... the updated OperationsConfig — same shape as onboarding, INCLUDING "knowledge_base": string ... },
+  "config": { ... the updated OperationsConfig — same shape as onboarding, INCLUDING "knowledge_base": string and "ui_plan" ... },
   "reasoning_notes": "What changed, why, and what you're uncertain about"
 }
 
-${buildManifestPrompt()}`;
+If the change affects what the operator does (new capability, removed offering, new connector need), update config.ui_plan to match — show/hide the affected pages, switch modules, refresh connectors_needed and retention_on. Otherwise carry the existing ui_plan through untouched.
+
+${buildManifestPrompt()}
+
+${buildSurfacePrompt()}`;
 
   const userPrompt = `CURRENT CONFIGURATION:
 ${JSON.stringify(currentConfig, null, 2)}
