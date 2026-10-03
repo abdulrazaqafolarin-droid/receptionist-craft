@@ -39,8 +39,23 @@ const pageCount = (manifest.match(/route:\s*"\//g) || []).length;
 const connCount = (manifest.match(/category:\s*"/g) || []).length;
 console.log(`surface manifest: ${pageCount} owner pages, ${connCount} connectors, sidebar nav: ${navUrls.length}, app routes: ${routePaths.length}`);
 
+// 4. Flow steps in flows.ts must be real engine FlowStep values.
+const flowSrc = read("supabase/functions/_shared/config/flows.ts");
+const engineTypes = read("supabase/functions/_shared/flow/types.ts");
+const specSteps = [...flowSrc.matchAll(/step:\s*"([^"]+)"/g)].map((m) => m[1]);
+const engineSteps = [...engineTypes.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+for (const s of new Set(specSteps)) {
+  if (!engineSteps.includes(s)) fail(`flows.ts step "${s}" is not a real FlowStep in _shared/flow/types.ts`);
+}
+
+// 5. Sections map honesty: report verified coverage (fails only if it drops).
+const sectionsSrc = read("supabase/functions/_shared/config/sectionsMap.ts");
+const verifiedCount = (sectionsSrc.match(/verified:\s*true/g) || []).length;
+const totalCount = (sectionsSrc.match(/key:\s*"/g) || []).length;
+console.log(`sections map: ${verifiedCount}/${totalCount} pages verified against source`);
+
 if (failed) {
-  console.error("Surface manifest drift detected — update surfaceManifest.ts.");
+  console.error("Surface manifest drift detected — update the spec files.");
   process.exit(1);
 }
 console.log("Surface manifest matches the app. OK.");

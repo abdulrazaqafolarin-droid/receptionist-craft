@@ -17,6 +17,7 @@
 import { generatePlanFromConfig, type GeneratedPlan } from "./planGenerator.ts";
 import { buildManifestPrompt } from "./manifest.ts";
 import { buildSurfacePrompt } from "./surfaceManifest.ts";
+import { buildSpecPrompt } from "./platformSpec.ts";
 import type { ReasoningHistoryEntry } from "./versioning.ts";
 import { askRutex, uploadContextFile } from "../rutexMcp.ts";
 
@@ -31,7 +32,7 @@ import { askRutex, uploadContextFile } from "../rutexMcp.ts";
 const MANIFEST_BUNDLE_NAME = "rutex-platform-manifest.txt";
 
 function buildInventoryBundle(): string {
-  return `${buildManifestPrompt()}\n\n${buildSurfacePrompt()}`;
+  return `${buildManifestPrompt()}\n\n${buildSurfacePrompt()}\n\n${buildSpecPrompt()}`;
 }
 
 async function uploadInventory(): Promise<string[] | null> {
@@ -202,7 +203,7 @@ OUTPUT FORMAT (STRICT JSON, no markdown fences):
  * stays short and OpenCode stops timing out.
  */
 const FILE_REF_NOTE = `
-The full platform inventory (operational capabilities, reusable components, backend pieces, owner pages, connector catalog, growth modules, operations machinery, composition rules) is in your uploaded reference file — read the sections you need with the read tool BEFORE deciding. Its GUIDING RULE and COMPOSITION RULES bind you exactly as if pasted here. Never invent a capability, component, page, connector, or module key — use ONLY keys from the reference file.`;
+The full platform inventory (capabilities, components, backend, owner pages, connectors, modules, operations, flows, actions, data entities, states, permissions, runtime laws, page internals) is in your uploaded reference file — read the sections you need with the read tool BEFORE deciding. Its GUIDING RULE, COMPOSITION RULES, ACTION RULES, DATA RULES, STATE RULES, PERMISSION RULES, and LOGIC RULES bind you exactly as if pasted here. Never invent a capability, component, page, connector, module, flow step, action, or entity key — use ONLY keys from the reference file.`;
 
 /** Full inline prompt (fallback when the gateway predates /mcp-files). */
 const SYSTEM_PROMPT = `${SYSTEM_BASE}
