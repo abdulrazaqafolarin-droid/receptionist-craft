@@ -18,7 +18,31 @@ import { generatePlanFromConfig, type GeneratedPlan } from "./planGenerator.ts";
 import { buildManifestPrompt } from "./manifest.ts";
 import { buildSurfacePrompt } from "./surfaceManifest.ts";
 import type { ReasoningHistoryEntry } from "./versioning.ts";
-import { askRutex } from "../rutexMcp.ts";
+import { askRutex, uploadContextFile } from "../rutexMcp.ts";
+
+/**
+ * File-drop flow (timeout fix): the full platform inventory is uploaded to
+ * the gateway ONCE per planning call as a reference file, and the agent
+ * prompt stays short — it reads the sections it needs with its read tool.
+ * Fixed name: same content overwrites, so inventory updates propagate.
+ * If the gateway predates /mcp-files (404), fall back to the full inline
+ * prompt so planning keeps working against older gateways.
+ */
+const MANIFEST_BUNDLE_NAME = "rutex-platform-manifest.txt";
+
+function buildInventoryBundle(): string {
+  return `${buildManifestPrompt()}\n\n${buildSurfacePrompt()}`;
+}
+
+async function uploadInventory(): Promise<string[] | null> {
+  try {
+    const receipt = await uploadContextFile(MANIFEST_BUNDLE_NAME, buildInventoryBundle());
+    if (!receipt.ok) return null;
+    return [receipt.name];
+  } catch {
+    return null;
+  }
+}
 
 interface ConfiguratorResult {
   plan: GeneratedPlan;
@@ -27,9 +51,30 @@ interface ConfiguratorResult {
 }
 
 /** Route a Configurator prompt through the Rutex gateway (single identity). */
-async function callGateway(kind: "operator" | "change", prompt: string): Promise<string> {
-  const r = await askRutex(`configurator-${kind}-${crypto.randomUUID()}`, prompt);
+async function callGateway(
+  kind: "operator" | "change",
+  prompt: string,
+  contextFiles?: string[],
+): Promise<string> {
+  const r = await askRutex(`configurator-${kind}-${crypto.randomUUID()}`, prompt, { contextFiles });
   return r.text;
+}
+
+/**
+ * Prefer the short file-drop prompt; fall back to the full inline prompt
+ * when the inventory upload fails (gateway predates /mcp-files).
+ */
+async function callGatewaySmart(
+  kind: "operator" | "change",
+  fullSystem: string,
+  shortSystem: string,
+  userPrompt: string,
+): Promise<string> {
+  const files = await uploadInventory();
+  if (files) {
+    return callGateway(kind, `${shortSystem}\n\n${userPrompt}`, files);
+  }
+  return callGateway(kind, `${fullSystem}\n\n${userPrompt}`);
 }
 
 /** Parse the Configurator's strict-JSON reply, tolerating fences and surrounding prose. */
@@ -61,7 +106,7 @@ function parseConfiguratorJson(text: string): { config: Record<string, unknown>;
   );
 }
 
-const SYSTEM_PROMPT = `You are the Configurator — an opencode agent for Rutex, an AI Business Operator platform for small businesses. You are accessed through the Rutex gateway. Your sibling is the Responder, the customer-facing agent also reached through the gateway.
+const SYSTEM_BASE = `You are the Configurator — an opencode agent for Rutex, an AI Business Operator platform for small businesses. You are accessed through the Rutex gateway. Your sibling is the Responder, the customer-facing agent also reached through the gateway.
 
 You act as an expert business operations consultant: reason with care about each specific business, recommend the configuration that genuinely serves it, and flag uncertainty honestly.
 
@@ -149,11 +194,24 @@ OUTPUT FORMAT (STRICT JSON, no markdown fences):
 {
   "config": { ... the OperationsConfig above, INCLUDING ui_plan ... },
   "reasoning_notes": "Max 5 sentences: WHY you chose each option, confidence, uncertainty. Be honest about uncertainty."
-}
+}`;
 
-${buildManifestPrompt()}
+/**
+ * Reference-file note appended INSTEAD of the full inventory when the
+ * file-drop upload succeeded. The agent reads what it needs; the prompt
+ * stays short and OpenCode stops timing out.
+ */
+const FILE_REF_NOTE = `
+The full platform inventory (operational capabilities, reusable components, backend pieces, owner pages, connector catalog, growth modules, operations machinery, composition rules) is in your uploaded reference file — read the sections you need with the read tool BEFORE deciding. Its GUIDING RULE and COMPOSITION RULES bind you exactly as if pasted here. Never invent a capability, component, page, connector, or module key — use ONLY keys from the reference file.`;
 
-${buildSurfacePrompt()}`;
+/** Full inline prompt (fallback when the gateway predates /mcp-files). */
+const SYSTEM_PROMPT = `${SYSTEM_BASE}
+
+${buildInventoryBundle()}`;
+
+/** Short prompt: inventory arrives as a reference file the agent reads. */
+const SYSTEM_PROMPT_SHORT = `${SYSTEM_BASE}
+${FILE_REF_NOTE}`;
 
 export async function generateOperatorPlan(
   businessDescription: string,
@@ -173,10 +231,7 @@ Analyze this business description carefully. Think about:
 
 Then produce the OperationsConfig and your reasoning notes.`;
 
-  const text = await callGateway(
-    "operator",
-    `${SYSTEM_PROMPT}\n\n${userPrompt}`,
-  );
+  const text = await callGatewaySmart("operator", SYSTEM_PROMPT, SYSTEM_PROMPT_SHORT, userPrompt);
 
   const parsed = parseConfiguratorJson(text);
 
@@ -227,7 +282,7 @@ export async function generateChangePlan(
   ownerChangeRequest: string,
   reasoningHistory: ReasoningHistoryEntry[] = [],
 ): Promise<ConfiguratorResult> {
-  const systemPrompt = `You are the Configurator — an opencode agent for Rutex (accessed through the Rutex gateway; your sibling is the Responder agent for customers). You act as an expert business operations consultant: recommend changes that genuinely serve this business and flag uncertainty honestly. The business owner wants to change their AI operator's configuration.
+  const changeBase = `You are the Configurator — an opencode agent for Rutex (accessed through the Rutex gateway; your sibling is the Responder agent for customers). You act as an expert business operations consultant: recommend changes that genuinely serve this business and flag uncertainty honestly. The business owner wants to change their AI operator's configuration.
 
 You will receive:
 1. The current configuration
@@ -252,11 +307,13 @@ OUTPUT FORMAT (STRICT JSON, no markdown fences):
   "reasoning_notes": "What changed, why, and what you're uncertain about"
 }
 
-If the change affects what the operator does (new capability, removed offering, new connector need), update config.ui_plan to match — show/hide the affected pages, switch modules, refresh connectors_needed and retention_on. Otherwise carry the existing ui_plan through untouched.
+If the change affects what the operator does (new capability, removed offering, new connector need), update config.ui_plan to match — show/hide the affected pages, switch modules, refresh connectors_needed and retention_on. Otherwise carry the existing ui_plan through untouched.`;
 
-${buildManifestPrompt()}
+  const changeFull = `${changeBase}
 
-${buildSurfacePrompt()}`;
+${buildInventoryBundle()}`;
+  const changeShort = `${changeBase}
+${FILE_REF_NOTE}`;
 
   const userPrompt = `CURRENT CONFIGURATION:
 ${JSON.stringify(currentConfig, null, 2)}
@@ -267,10 +324,7 @@ OWNER'S CHANGE REQUEST:
 ${buildReasoningHistoryPrompt(reasoningHistory)}
 Apply this change to the configuration. Only modify what's necessary.`;
 
-  const text = await callGateway(
-    "change",
-    `${systemPrompt}\n\n${userPrompt}`,
-  );
+  const text = await callGatewaySmart("change", changeFull, changeShort, userPrompt);
 
   const parsed = parseConfiguratorJson(text);
 

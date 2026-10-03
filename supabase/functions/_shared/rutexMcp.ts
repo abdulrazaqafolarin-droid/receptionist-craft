@@ -92,11 +92,64 @@ export interface AskResultText {
   tokens?: { input: number; output: number; reasoning: number };
 }
 
+export interface ContextFileReceipt {
+  ok: boolean;
+  name: string;
+  bytes: number;
+  cached: boolean;
+  sha256: string;
+}
+
+/**
+ * File-drop upload (timeout fix): POST a big reference text to the gateway
+ * once via /mcp-files, then pass only its NAME in askRutex contextFiles.
+ * The agent reads the sections it needs with its read tool instead of
+ * receiving the whole text inside every prompt. Same bearer key as /mcp.
+ */
+export async function uploadContextFile(name: string, content: string, timeoutMs = 30000): Promise<ContextFileReceipt> {
+  const { url, key } = requireConfig();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${url}/mcp-files`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({ name, content }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new RutexMcpError(`context file upload http_${res.status}`, "protocol");
+    const data = (await res.json()) as Record<string, unknown>;
+    return {
+      ok: data.ok === true,
+      name: typeof data.name === "string" ? data.name : name,
+      bytes: typeof data.bytes === "number" ? data.bytes : 0,
+      cached: data.cached === true,
+      sha256: typeof data.sha256 === "string" ? data.sha256 : "",
+    };
+  } catch (e) {
+    if (e instanceof RutexMcpError) throw e;
+    throw new RutexMcpError(
+      ctrl.signal.aborted ? `context file upload timed out after ${timeoutMs}ms` : `context file upload failed: ${String(e)}`,
+      ctrl.signal.aborted ? "timeout" : "unreachable",
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** High-level: ask the Rutex AI with per-conversation memory. */
-export async function askRutex(conversationId: string, prompt: string, opts?: { newSession?: boolean }): Promise<AskResultText> {
+export async function askRutex(conversationId: string, prompt: string, opts?: { newSession?: boolean; contextFiles?: string[] }): Promise<AskResultText> {
   const result = await rpc<{ content?: Array<{ type: string; text?: string }>; isError?: boolean }>("tools/call", {
     name: "rutex_ask",
-    arguments: { conversationId, prompt, ...(opts?.newSession ? { newSession: true } : {}) },
+    arguments: {
+      conversationId,
+      prompt,
+      ...(opts?.newSession ? { newSession: true } : {}),
+      ...(opts?.contextFiles && opts.contextFiles.length > 0 ? { contextFiles: opts.contextFiles } : {}),
+    },
   });
   if (result.isError) throw new RutexMcpError(firstText(result) || "ask failed", "tool_error");
   const raw = firstText(result);
