@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateChangePlan } from "../_shared/config/enhancedConfigurator.ts";
 import { getLatestVersion, getReasoningHistory, saveConfigVersion, type ReasoningHistoryEntry } from "../_shared/config/versioning.ts";
+import { researchNeeds } from "../_shared/config/solutionResearch.ts";
 import { RutexMcpError } from "../_shared/rutexMcp.ts";
 
 const corsHeaders = {
@@ -90,6 +91,17 @@ serve(async (req) => {
       change_request.trim(),
       reasoningHistory,
     );
+
+    // Stage 4: research each external need (open-source first). Non-fatal.
+    try {
+      const needs = (result.config.external_needs || []) as unknown[];
+      const names = needs.filter((n): n is string => typeof n === "string" && !!n.trim());
+      if (names.length > 0) {
+        result.config.external_solutions = await researchNeeds(names);
+      }
+    } catch (researchErr) {
+      console.warn("[request-change] Solution research failed (non-fatal):", researchErr);
+    }
 
     // Save as a draft version
     const newVersion = await saveConfigVersion(supabase, {

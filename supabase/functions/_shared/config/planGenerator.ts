@@ -147,12 +147,31 @@ export function generatePlanFromConfig(config: Record<string, unknown>): Generat
     });
   }
   if (needList.length > 0) {
+    const solutions = (config.external_solutions || []) as Array<{
+      need?: unknown; note?: unknown;
+      candidates?: Array<{ name?: unknown; url?: unknown; stars?: unknown; license?: unknown; open_source?: unknown; description?: unknown }>;
+    }>;
+    const lines: string[] = [];
+    for (const n of needList) {
+      lines.push(`- ${n}`);
+      const s = solutions.find((x) => x?.need === n);
+      if (!s) continue;
+      const cands = (s.candidates || []).filter((c) => typeof c?.name === "string" && typeof c?.url === "string");
+      if (cands.length > 0) {
+        lines.push(`  Best free options (open-source first):`);
+        for (const c of cands.slice(0, 3)) {
+          const oss = c.open_source === true ? "free/open-source" : `license: ${String(c.license || "unknown")}`;
+          lines.push(`  - ${String(c.name)} (${c.stars ?? 0} stars, ${oss}): ${String(c.url)}`);
+        }
+      }
+      if (typeof s.note === "string" && s.note) lines.push(`  ${s.note}`);
+    }
     sections.push({
       id: "external-needs",
       title: "Connections Needed Later",
       content:
-        "These outside connections are not attached yet. Your operator is still useful without them — it prepares everything so that connecting later is a flip of a switch:\n" +
-        needList.map((n) => `- ${n}`).join("\n"),
+        "These outside connections are not attached yet. Your operator is still useful without them — it prepares everything so that connecting later is a flip of a switch. Free open-source options are listed first — start there before paying for anything:\n" +
+        lines.join("\n"),
       confidence: "medium",
       owner_action: "Do you have access to these accounts? Connecting them later unlocks the full automation.",
     });

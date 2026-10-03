@@ -116,6 +116,26 @@ serve(async (req) => {
       const bool = (v: unknown, fallback: boolean) => typeof v === "boolean" ? v : fallback;
       const bookingOn = workflows.appointment_booking?.enabled === true;
       const orderingOn = workflows.product_ordering?.enabled === true;
+      // Persist researched solutions (informational — the Connections page
+      // reads these so the owner sees free options first). Lightly validated.
+      const rawSolutions = (config.external_solutions || []) as unknown[];
+      const solutions = rawSolutions
+        .filter((s): s is Record<string, unknown> => !!s && typeof s === "object" && typeof (s as Record<string, unknown>).need === "string")
+        .slice(0, 5)
+        .map((s) => ({
+          need: s.need as string,
+          note: typeof s.note === "string" ? (s.note as string).slice(0, 200) : "",
+          candidates: (Array.isArray(s.candidates) ? s.candidates : [])
+            .filter((c): c is Record<string, unknown> => !!c && typeof c === "object" && typeof (c as Record<string, unknown>).name === "string" && typeof (c as Record<string, unknown>).url === "string")
+            .slice(0, 3)
+            .map((c) => ({
+              name: c.name as string,
+              url: c.url as string,
+              stars: typeof c.stars === "number" ? c.stars : 0,
+              license: typeof c.license === "string" ? c.license : "unknown",
+              open_source: c.open_source === true,
+            })),
+        }));
       capabilities.ui_surface = {
         visible_pages: shownKeys,
         widget: {
@@ -124,6 +144,7 @@ serve(async (req) => {
           voice: bool(wp.voice, true),
           lead_capture: bool(wp.lead_capture, bookingOn || orderingOn),
         },
+        solutions,
         version: 1,
         approved_at: new Date().toISOString(),
       };

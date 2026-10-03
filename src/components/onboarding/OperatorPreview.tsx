@@ -33,6 +33,20 @@ export interface PreviewFaq {
   answer: string;
 }
 
+export interface PreviewSolutionCandidate {
+  name: string;
+  url: string;
+  stars: number;
+  license: string;
+  open_source: boolean;
+}
+
+export interface PreviewSolution {
+  need: string;
+  note: string;
+  candidates: PreviewSolutionCandidate[];
+}
+
 interface OperatorPreviewProps {
   businessName: string;
   businessType: string;
@@ -42,6 +56,7 @@ interface OperatorPreviewProps {
   willDo: string[];
   wontDo: string[];
   externalNeeds: string[];
+  externalSolutions: PreviewSolution[];
   approving: boolean;
   onRemoveService: (index: number) => void;
   onApprove: (feedback?: string) => void;
@@ -81,6 +96,7 @@ export function OperatorPreview({
   willDo,
   wontDo,
   externalNeeds,
+  externalSolutions,
   approving,
   onRemoveService,
   onApprove,
@@ -201,6 +217,38 @@ export function OperatorPreview({
                   <Badge key={n} variant="outline">{n}</Badge>
                 ))}
               </div>
+              {externalSolutions.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {externalSolutions.map((s) => (
+                    <div key={s.need}>
+                      <p className="type-caption">
+                        Free options for <span className="font-medium">{s.need}</span> — open-source first:
+                      </p>
+                      {s.candidates.length > 0 ? (
+                        <ul className="mt-1 space-y-1">
+                          {s.candidates.map((c) => (
+                            <li key={c.url} className="text-sm">
+                              <a
+                                href={c.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-primary underline underline-offset-2"
+                              >
+                                {c.name}
+                              </a>{" "}
+                              <span className="type-metadata">
+                                {c.stars.toLocaleString()} stars · {c.open_source ? "free/open-source" : c.license}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="type-caption mt-0.5">{s.note || "No public option found yet."}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

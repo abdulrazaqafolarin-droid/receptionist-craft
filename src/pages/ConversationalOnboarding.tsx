@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { recordSignal } from "@/lib/successSignals";
 import { buildLocalPlan, isSubstantive, nextInterviewTurn } from "@/lib/conversationalInterview";
 import { surfaceProfileFromConfig, uiPlanForProfile, widgetPiecesFromConfig } from "@/lib/operatorSurface";
+import type { PreviewSolution } from "@/components/onboarding/OperatorPreview";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -126,6 +127,28 @@ export function configStrings(config: Record<string, unknown>, key: string): str
   const v = config[key];
   if (!Array.isArray(v)) return [];
   return v.filter((x): x is string => typeof x === "string" && !!x.trim());
+}
+
+/** Researched external solutions (Stage 4) attached to the config. */
+export function configSolutions(config: Record<string, unknown>): PreviewSolution[] {
+  const v = config.external_solutions;
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((s): s is Record<string, unknown> => !!s && typeof s === "object" && typeof (s as Record<string, unknown>).need === "string")
+    .map((s) => ({
+      need: s.need as string,
+      note: typeof s.note === "string" ? s.note : "",
+      candidates: (Array.isArray(s.candidates) ? s.candidates : [])
+        .filter((c): c is Record<string, unknown> => !!c && typeof c === "object" && typeof (c as Record<string, unknown>).name === "string" && typeof (c as Record<string, unknown>).url === "string")
+        .slice(0, 3)
+        .map((c) => ({
+          name: c.name as string,
+          url: c.url as string,
+          stars: typeof c.stars === "number" ? c.stars : 0,
+          license: typeof c.license === "string" ? c.license : "unknown",
+          open_source: c.open_source === true,
+        })),
+    }));
 }
 
 const DONE_STEPS: BuildStep[] = [];
@@ -679,6 +702,7 @@ export default function ConversationalOnboarding() {
             willDo={configStrings(planData.config, "will_do")}
             wontDo={configStrings(planData.config, "wont_do")}
             externalNeeds={configStrings(planData.config, "external_needs")}
+            externalSolutions={configSolutions(planData.config)}
             approving={approving}
             onRemoveService={(i) => setServices((prev) => prev.filter((_, x) => x !== i))}
             onApprove={handleApprove}

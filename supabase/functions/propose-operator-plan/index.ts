@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOperatorPlan } from "../_shared/config/enhancedConfigurator.ts";
 import { saveConfigVersion } from "../_shared/config/versioning.ts";
+import { researchNeeds } from "../_shared/config/solutionResearch.ts";
 import { RutexMcpError } from "../_shared/rutexMcp.ts";
 
 const corsHeaders = {
@@ -52,6 +53,18 @@ serve(async (req) => {
 
     // Generate the plan and config from the business description
     const result = await generateOperatorPlan(description.trim());
+
+    // Stage 4: research each external need (open-source first). Failures
+    // degrade to empty candidates — research never blocks planning.
+    try {
+      const needs = (result.config.external_needs || []) as unknown[];
+      const names = needs.filter((n): n is string => typeof n === "string" && !!n.trim());
+      if (names.length > 0) {
+        result.config.external_solutions = await researchNeeds(names);
+      }
+    } catch (researchErr) {
+      console.warn("[propose-operator-plan] Solution research failed (non-fatal):", researchErr);
+    }
 
     // Save as a draft config version (not yet approved)
     const supabase = createClient(
