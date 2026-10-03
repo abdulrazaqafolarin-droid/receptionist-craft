@@ -38,6 +38,44 @@ const OSS_LICENSES = new Set([
   "unlicense", "cc0-1.0", "artistic-2.0", "epl-2.0",
 ]);
 
+/**
+ * Vetted starting points for the needs businesses actually ask for.
+ * These ALWAYS come first — official docs/SDKs and battle-tested
+ * community projects — so the owner never sees only search noise.
+ */
+const CURATED: Record<string, SolutionCandidate[]> = {
+  "tiktok-auto-post": [
+    { name: "TikTok Developers (official)", url: "https://developers.tiktok.com", description: "Official TikTok API docs — Content Posting API for direct publishing.", stars: 0, license: "docs", open_source: false, updated: "official", setup: "moderate" },
+    { name: "tiktok-api (unofficial python)", url: "https://github.com/davidteather/TikTok-Api", description: "Popular unofficial TikTok API for Python (research/automation).", stars: 3000, license: "MIT", open_source: true, updated: "community", setup: "moderate" },
+  ],
+  "instagram-auto-post": [
+    { name: "Meta Graph API (official)", url: "https://developers.facebook.com/docs/instagram-platform", description: "Official Instagram publishing via Meta's API.", stars: 0, license: "docs", open_source: false, updated: "official", setup: "moderate" },
+    { name: "instagrapi", url: "https://github.com/subzeroid/instagrapi", description: "Popular unofficial Instagram API client for Python.", stars: 8000, license: "MIT", open_source: true, updated: "community", setup: "moderate" },
+  ],
+  "whatsapp-messaging": [
+    { name: "WhiskeySockets/Baileys", url: "https://github.com/WhiskeySockets/Baileys", description: "The standard open-source WhatsApp Web API library.", stars: 10000, license: "MIT", open_source: true, updated: "community", setup: "involved" },
+    { name: "WhatsApp Business API (official)", url: "https://developers.facebook.com/docs/whatsapp", description: "Official WhatsApp Business Platform.", stars: 0, license: "docs", open_source: false, updated: "official", setup: "moderate" },
+  ],
+  "paystack-payments": [
+    { name: "Paystack docs (official)", url: "https://paystack.com/docs", description: "Official Paystack API docs and SDKs.", stars: 0, license: "docs", open_source: false, updated: "official", setup: "easy" },
+    { name: "paystackhq/paystack-node", url: "https://github.com/paystackhq/paystack-node", description: "Official Paystack Node.js SDK.", stars: 200, license: "MIT", open_source: true, updated: "community", setup: "easy" },
+  ],
+  "stripe-payments": [
+    { name: "Stripe docs (official)", url: "https://docs.stripe.com", description: "Official Stripe API docs and SDKs.", stars: 0, license: "docs", open_source: false, updated: "official", setup: "easy" },
+  ],
+  "google-calendar-sync": [
+    { name: "Google Calendar API (official)", url: "https://developers.google.com/calendar", description: "Official Google Calendar API.", stars: 0, license: "docs", open_source: false, updated: "official", setup: "moderate" },
+  ],
+};
+
+/** Scam/malware signals — a repo matching these is NEVER recommended. */
+const DENY = [/bypass/i, /crack/i, /\bhack\b/i, /hacking/i, /stealer/i, /phish/i, /carding/i, /free.?followers/i, /free.?likes/i, /token.?grab/i, /rat\b/i, /keylog/i];
+
+function isDenied(name: string, description: string): boolean {
+  const hay = `${name} ${description}`;
+  return DENY.some((p) => p.test(hay));
+}
+
 /** Map a connector need to GitHub search terms. Unknown needs fall back to keywords. */
 function searchTerms(need: string): string {
   const n = need.toLowerCase();
@@ -72,8 +110,13 @@ export async function researchNeed(need: string): Promise<ResearchedSolution> {
     candidates: [],
     note: "No public option found yet — ask in the chat and we will look together.",
   };
+  // Vetted starting points always lead; live search fills behind them.
+  const curated = (CURATED[need.toLowerCase()] || []).slice();
   try {
-    const q = encodeURIComponent(`${searchTerms(need)} in:name,description`);
+    // stars floor kills 1-star spam; NOT-terms keep scam repos out of results.
+    const q = encodeURIComponent(
+      `${searchTerms(need)} in:name,description stars:>20 NOT:bypass NOT:crack NOT:hack NOT:stealer NOT:phishing`,
+    );
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 15000);
     let res: Response;
@@ -85,7 +128,10 @@ export async function researchNeed(need: string): Promise<ResearchedSolution> {
     } finally {
       clearTimeout(timer);
     }
-    if (!res.ok) return empty;
+    if (!res.ok) {
+      if (curated.length > 0) return { need, candidates: curated.slice(0, 3), note: "Vetted starting points below — live search was unavailable." };
+      return empty;
+    }
     const data = (await res.json()) as {
       items?: Array<{
         full_name?: string; html_url?: string; description?: string | null;
@@ -95,6 +141,7 @@ export async function researchNeed(need: string): Promise<ResearchedSolution> {
     const items = Array.isArray(data.items) ? data.items : [];
     const candidates: SolutionCandidate[] = items
       .filter((r) => typeof r.full_name === "string" && typeof r.html_url === "string")
+      .filter((r) => !isDenied(r.full_name as string, r.description || ""))
       .map((r) => {
         const spdx = r.license?.spdx_id || "unknown";
         const oss = OSS_LICENSES.has(spdx.toLowerCase());
@@ -115,7 +162,16 @@ export async function researchNeed(need: string): Promise<ResearchedSolution> {
       if (rank(a) !== rank(b)) return rank(a) - rank(b);
       return b.stars - a.stars;
     });
-    const top = candidates.slice(0, 3);
+    // Merge: vetted entries lead, live results follow, deduped by URL.
+    const seen = new Set(curated.map((c) => c.url));
+    const merged = [...curated];
+    for (const c of candidates) {
+      if (merged.length >= 4) break;
+      if (seen.has(c.url)) continue;
+      seen.add(c.url);
+      merged.push(c);
+    }
+    const top = merged.slice(0, 3);
     const ossCount = top.filter((c) => c.open_source).length;
     return {
       need,
@@ -128,6 +184,9 @@ export async function researchNeed(need: string): Promise<ResearchedSolution> {
             : "No clearly open-source option surfaced — review licenses before committing.",
     };
   } catch {
+    if (curated.length > 0) {
+      return { need, candidates: curated.slice(0, 3), note: "Vetted starting points below — live search was unavailable." };
+    }
     return empty;
   }
 }
