@@ -48,6 +48,7 @@ import Escalations from "./pages/Escalations";
 import Billing from "./pages/Billing";
 import MoneyModePage from "./pages/MoneyMode";
 import ConversationalOnboarding from "./pages/ConversationalOnboarding";
+import OAuthCallback from "./pages/OAuthCallback";
 import ConversationalManagementPage from "./pages/ConversationalManagementPage";
 import TestConversations from "./pages/TestConversations";
 import MEODashboard from "./pages/MEODashboard";
@@ -197,6 +198,7 @@ const App = () => {
                               <Route path="/money-mode" element={<SurfaceGate><MoneyModePage /></SurfaceGate>} />
                               <Route path="/meo-dashboard" element={<SurfaceGate><MEODashboard /></SurfaceGate>} />
                               <Route path="/conversational-onboarding" element={<ConversationalOnboarding />} />
+                              <Route path="/oauth/callback" element={<OAuthCallback />} />
                               <Route path="/operator-management" element={<ConversationalManagementPage />} />
                               <Route path="/test/:id" element={<TestConversations />} />
                               <Route path="/settings" element={<Settings />} />

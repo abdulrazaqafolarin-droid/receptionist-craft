@@ -44,7 +44,7 @@ serve(async (req) => {
       if (res.status === 401) return jsonRes({ ok: false, error: "invalid_key" }, 200);
       if (!res.ok) return jsonRes({ ok: false, error: `stripe_http_${res.status}` }, 200);
       const bal = (await res.json()) as { livemode?: boolean };
-      return jsonRes({ ok: true, detail: bal.livemode === true ? "live" : "test" });
+      return jsonRes({ ok: true, status: "connected", detail: bal.livemode === true ? "live" : "test" });
     }
 
     // Paystack — secret key authenticates a balance read.
@@ -56,7 +56,7 @@ serve(async (req) => {
       });
       if (res.status === 401) return jsonRes({ ok: false, error: "invalid_key" }, 200);
       if (!res.ok) return jsonRes({ ok: false, error: `paystack_http_${res.status}` }, 200);
-      return jsonRes({ ok: true, detail: "verified" });
+      return jsonRes({ ok: true, status: "connected", detail: "verified" });
     }
 
     // Twilio — Account SID + Auth Token via basic auth on the account itself.
@@ -70,7 +70,7 @@ serve(async (req) => {
       if (res.status === 401) return jsonRes({ ok: false, error: "invalid_credentials" }, 200);
       if (!res.ok) return jsonRes({ ok: false, error: `twilio_http_${res.status}` }, 200);
       const acct = (await res.json()) as { friendly_name?: string };
-      return jsonRes({ ok: true, detail: acct.friendly_name || "verified" });
+      return jsonRes({ ok: true, status: "connected", detail: acct.friendly_name || "verified" });
     }
 
     // Custom SMTP — no safe server-side test without sending real mail.
@@ -79,7 +79,7 @@ serve(async (req) => {
       const host = str(creds.host);
       const user = str(creds.username);
       if (!host || !user) return jsonRes({ ok: false, error: "need_host_and_username" }, 400);
-      return jsonRes({ ok: true, detail: "saved — send a test email from your app to confirm" });
+      return jsonRes({ ok: true, status: "configured", detail: "saved — send a test email from your app to confirm" });
     }
 
     // Google Maps — API key validated against geocoding (cheap, no side effects).
@@ -92,7 +92,27 @@ serve(async (req) => {
       if (!res.ok) return jsonRes({ ok: false, error: `google_http_${res.status}` }, 200);
       const data = (await res.json()) as { status?: string; error_message?: string };
       if (data.status === "REQUEST_DENIED") return jsonRes({ ok: false, error: "invalid_key", detail: data.error_message || "" }, 200);
-      return jsonRes({ ok: true, detail: "verified" });
+      return jsonRes({ ok: true, status: "connected", detail: "verified" });
+    }
+
+    // Yelp Fusion — a keyless-shape request returns 400 (key accepted) vs
+    // 401 (bad key). No side effects either way.
+    if (key === "yelp") {
+      const yk = str(creds.api_key);
+      if (!yk) return jsonRes({ ok: false, error: "missing_key" }, 400);
+      const res = await fetch("https://api.yelp.com/v3/businesses/search", {
+        headers: { Authorization: `Bearer ${yk}` },
+      });
+      if (res.status === 401 || res.status === 403) return jsonRes({ ok: false, error: "invalid_key" }, 200);
+      return jsonRes({ ok: true, status: "connected", detail: "verified" });
+    }
+
+    // Trustpilot — per-business-unit auth cannot be probed safely without a
+    // business context. Saved as configured; first real use confirms it.
+    if (key === "trustpilot") {
+      const tk = str(creds.api_key);
+      if (!tk) return jsonRes({ ok: false, error: "missing_key" }, 400);
+      return jsonRes({ ok: true, status: "configured", detail: "saved — first review check confirms it" });
     }
 
     return jsonRes({ ok: false, error: "unsupported_connector", detail: `${key} verifies via OAuth, not keys` }, 400);

@@ -58,6 +58,8 @@ const FIELDS: Record<string, Field[]> = {
     { name: "password", label: "Password", placeholder: "••••", secret: true },
   ],
   google_maps: [{ name: "api_key", label: "API key", placeholder: "AIza…", secret: true, hint: "Google Cloud Console → Credentials, with Maps JavaScript + Geocoding enabled." }],
+  yelp: [{ name: "api_key", label: "API key", placeholder: "Yelp Fusion key", secret: true, hint: "Yelp Developers → Manage App → API Key." }],
+  trustpilot: [{ name: "api_key", label: "API key", placeholder: "Trustpilot key", secret: true, hint: "Saved as configured — the first review check confirms it." }],
 };
 
 const OAUTH_CONSOLE: Record<string, { name: string; url: string }> = {
@@ -72,6 +74,8 @@ const OAUTH_CONSOLE: Record<string, { name: string; url: string }> = {
 export function ConnectorConnectDialog({ definition, userId, onClose, onSaved }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [savedKey, setSavedKey] = useState<string | null>(null);
   const open = definition !== null;
   if (!open || !definition) return <Dialog open={false} onOpenChange={onClose}><DialogContent /></Dialog>;
   const def = definition;
@@ -102,9 +106,12 @@ export function ConnectorConnectDialog({ definition, userId, onClose, onSaved }:
           body: { connector_key: def.connector_key, credentials },
         });
         if (error) throw error;
-        const d = (data || {}) as { ok?: boolean; error?: string; detail?: string };
+        const d = (data || {}) as { ok?: boolean; error?: string; detail?: string; status?: string };
         if (d.ok) {
-          status = "connected";
+          // Trust the server's verdict: verified-truthful keys connect,
+          // untestable ones stay honestly configured.
+          status = d.status === "connected" ? "connected" : "configured";
+          if (status === "configured") lastError = d.detail || null;
         } else {
           status = "error";
           lastError = d.detail || d.error || "verification failed";
@@ -132,15 +139,38 @@ export function ConnectorConnectDialog({ definition, userId, onClose, onSaved }:
       } else if (status === "error") {
         toast.error(`${def.display_name}: ${lastError || "verification failed"} — saved so you can retry.`);
       } else {
-        toast.success(`${def.display_name} saved. Complete the provider steps to activate.`);
+        toast.success(`${def.display_name} saved${lastError ? ` (${lastError})` : ""}. Complete the provider steps to activate.`);
       }
+      if (isOauth) setSavedKey(def.connector_key);
       onSaved();
-      onClose();
+      if (!isOauth) onClose();
     } catch (e) {
       console.error("Connector save failed", e);
       toast.error(e instanceof Error ? e.message : "Failed to save connector");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleProviderConnect() {
+    if (connecting || !savedKey) return;
+    setConnecting(true);
+    try {
+      const redirectUri = `${window.location.origin}/oauth/callback`;
+      const { data, error } = await supabase.functions.invoke("oauth-start", {
+        body: { connector_key: savedKey, redirect_uri: redirectUri },
+      });
+      if (error) throw error;
+      const d = (data || {}) as { ok?: boolean; error?: string; detail?: string; authorize_url?: string };
+      if (!d.ok || !d.authorize_url) {
+        throw new Error(d.detail || d.error || "Could not start provider sign-in");
+      }
+      // Full redirect: the provider returns to /oauth/callback afterwards.
+      window.location.href = d.authorize_url;
+    } catch (e) {
+      console.error("Provider sign-in failed", e);
+      toast.error(e instanceof Error ? e.message : "Provider sign-in failed");
+      setConnecting(false);
     }
   }
 
@@ -206,14 +236,22 @@ export function ConnectorConnectDialog({ definition, userId, onClose, onSaved }:
           </div>
         ))}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isOauth ? "Save credentials" : "Verify & connect"}
-          </Button>
+        <DialogFooter className="flex-col gap-2 sm:flex-col">
+          {isOauth && savedKey && (
+            <Button onClick={handleProviderConnect} disabled={connecting} className="w-full">
+              {connecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Continue to {def.display_name} sign-in
+            </Button>
+          )}
+          <div className="flex w-full gap-2">
+            <Button variant="outline" onClick={onClose} disabled={saving} className="flex-1">
+              {isOauth && savedKey ? "Done" : "Cancel"}
+            </Button>
+            <Button onClick={handleSave} disabled={saving} className="flex-1">
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isOauth ? "Save credentials" : "Verify & connect"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
