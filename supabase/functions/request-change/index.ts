@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateChangePlan } from "../_shared/config/enhancedConfigurator.ts";
 import { getLatestVersion, getReasoningHistory, saveConfigVersion, type ReasoningHistoryEntry } from "../_shared/config/versioning.ts";
 import { researchNeeds } from "../_shared/config/solutionResearch.ts";
+import { TraceCollector } from "../_shared/config/trace.ts";
 import { RutexMcpError } from "../_shared/rutexMcp.ts";
 
 const corsHeaders = {
@@ -41,6 +42,8 @@ function errDetails(e: unknown, max = 300): string {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // Collector lives outside try so the trace survives failure.
+  const trace = new TraceCollector();
   try {
     const body = await req.json().catch(() => ({}));
     const { change_request, receptionist_id, user_id } = body;
@@ -90,6 +93,7 @@ serve(async (req) => {
       latestVersion.config_json,
       change_request.trim(),
       reasoningHistory,
+      trace,
     );
 
     // Stage 4: research each external need (open-source first). Non-fatal.
@@ -97,13 +101,25 @@ serve(async (req) => {
       const needs = (result.config.external_needs || []) as unknown[];
       const names = needs.filter((n): n is string => typeof n === "string" && !!n.trim());
       if (names.length > 0) {
-        result.config.external_solutions = await researchNeeds(names);
+        trace.start("research-needs");
+        const solutions = await researchNeeds(names);
+        const found = solutions.reduce((a, s) => a + s.candidates.length, 0);
+        const oss = solutions.reduce((a, s) => a + s.candidates.filter((c) => c.open_source).length, 0);
+        trace.end("research-needs", `Researched ${names.length} connector need${names.length === 1 ? "" : "s"}`, [
+          `repos:${found} found`,
+          `${oss} open-source`,
+        ]);
+        result.config.external_solutions = solutions;
+      } else {
+        trace.skip("research-needs", "No external needs to research");
       }
     } catch (researchErr) {
+      trace.fail("research-needs", "Solution research failed", researchErr instanceof Error ? researchErr.message : String(researchErr));
       console.warn("[request-change] Solution research failed (non-fatal):", researchErr);
     }
 
     // Save as a draft version
+    trace.start("save-draft");
     const newVersion = await saveConfigVersion(supabase, {
       receptionist_id,
       config_json: result.config,
@@ -112,6 +128,7 @@ serve(async (req) => {
       owner_input: change_request.trim(),
       reasoning_notes: result.reasoning_notes || undefined,
     });
+    trace.end("save-draft", "Draft saved for review (nothing live)", [`version:${newVersion.version_number}`]);
 
     return jsonRes({
       ok: true,
@@ -121,9 +138,13 @@ serve(async (req) => {
       version_id: newVersion.id,
       version_number: newVersion.version_number,
       previous_version: latestVersion.version_number,
+      trace: trace.steps(),
+      trace_summary: trace.summary(),
     });
   } catch (e) {
     console.error("[request-change] Error:", e);
+    const traceOut = trace.steps();
+    const traceSummary = trace.summary();
     if (e instanceof RutexMcpError) {
       const map: Record<string, string> = {
         not_configured: "gateway_not_configured",
@@ -133,8 +154,8 @@ serve(async (req) => {
         tool_error: "gateway_empty_response",
         protocol: "gateway_protocol_error",
       };
-      return jsonRes({ ok: false, error: map[e.kind] ?? "gateway_unreachable", details: String(e).slice(0, 200) }, 502);
+      return jsonRes({ ok: false, error: map[e.kind] ?? "gateway_unreachable", details: String(e).slice(0, 200), trace: traceOut, trace_summary: traceSummary }, 502);
     }
-    return jsonRes({ ok: false, error: "internal_error", details: errDetails(e) }, 500);
+    return jsonRes({ ok: false, error: "internal_error", details: errDetails(e), trace: traceOut, trace_summary: traceSummary }, 500);
   }
 });

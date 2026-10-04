@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { knownPageKeys } from "../_shared/config/surfaceManifest.ts";
 import { saveConfigVersion } from "../_shared/config/versioning.ts";
+import { TraceCollector } from "../_shared/config/trace.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +27,8 @@ function jsonRes(body: unknown, status = 200) {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // Collector lives outside try so the trace survives failure.
+  const trace = new TraceCollector();
   try {
     const body = await req.json().catch(() => ({}));
     let { version_id, receptionist_id, user_id, config, plan_text, owner_feedback } = body;
@@ -81,6 +84,12 @@ serve(async (req) => {
     const business = (config.business || {}) as Record<string, string>;
     const capabilities = (config.capabilities || {}) as Record<string, unknown>;
     const channels = (config.channels || {}) as Record<string, boolean>;
+    void channels;
+
+    // Validate + persist the approved dashboard surface (approval-first:
+    // the surface only lands here because the owner approved the plan).
+    // Unknown page keys are rejected — the AI may only use manifest keys.
+    trace.start("validate-surface");
 
     // Validate + persist the approved dashboard surface (approval-first:
     // the surface only lands here because the owner approved the plan).
@@ -106,8 +115,13 @@ serve(async (req) => {
       .map((i) => i?.key)
       .filter((k): k is string => typeof k === "string" && !known.has(k));
     if (unknownKeys.length > 0) {
-      return jsonRes({ ok: false, error: "unknown_surface_keys", keys: [...new Set(unknownKeys)] }, 400);
+      trace.fail("validate-surface", "Unknown dashboard pages rejected", [...new Set(unknownKeys)].join(", "));
+      return jsonRes({ ok: false, error: "unknown_surface_keys", keys: [...new Set(unknownKeys)], trace: trace.steps(), trace_summary: trace.summary() }, 400);
     }
+    trace.end("validate-surface", "Dashboard surface validated against manifest", [
+      `${shownKeys.length} pages shown`,
+      `${hiddenKeys.length} hidden`,
+    ]);
     if (shownKeys.length > 0 || hiddenKeys.length > 0) {
       // Customer-facing widget pieces: strict booleans only, derived from the
       // approved ui_plan when present, else from the approved workflows.
@@ -170,8 +184,12 @@ serve(async (req) => {
 
     if (updateErr) {
       console.error("[approve-operator-plan] Update error:", updateErr);
-      return jsonRes({ ok: false, error: "apply_failed" }, 500);
+      trace.fail("apply-config", "Live operator update failed", "database rejected the update");
+      return jsonRes({ ok: false, error: "apply_failed", trace: trace.steps(), trace_summary: trace.summary() }, 500);
     }
+    trace.end("apply-config", "Plan applied to the live operator", [
+      shownKeys.length > 0 || hiddenKeys.length > 0 ? "dashboard surface written" : "no surface change",
+    ]);
 
     // F1: operators with booking get their reminder cron scheduled
     // automatically (setup-reminder-cron was previously never invoked, so
@@ -180,6 +198,7 @@ serve(async (req) => {
     try {
       const workflows = (config.workflows || {}) as Record<string, { enabled?: boolean }>;
       if (workflows.appointment_booking?.enabled === true) {
+        trace.start("schedule-cron");
         const baseUrl = Deno.env.get("SUPABASE_URL") || "";
         const svcKey = Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
         if (baseUrl && svcKey) {
@@ -189,9 +208,15 @@ serve(async (req) => {
             body: "{}",
           });
           console.log("[approve-operator-plan] Reminder cron setup:", cronRes.status);
+          trace.end("schedule-cron", "Reminder schedule armed", [`setup:${cronRes.status}`]);
+        } else {
+          trace.skip("schedule-cron", "Reminder schedule skipped", ["no runtime URL available"]);
         }
+      } else {
+        trace.skip("schedule-cron", "No booking workflow — no reminders needed");
       }
     } catch (cronErr) {
+      trace.fail("schedule-cron", "Reminder schedule failed (approval unaffected)", String(cronErr).slice(0, 150));
       console.warn("[approve-operator-plan] Reminder cron setup failed (non-fatal):", String(cronErr).slice(0, 150));
     }
 
@@ -231,9 +256,11 @@ serve(async (req) => {
     return jsonRes({
       ok: true,
       message: "Plan approved and configuration applied",
+      trace: trace.steps(),
+      trace_summary: trace.summary(),
     });
   } catch (e) {
     console.error("[approve-operator-plan] Error:", e);
-    return jsonRes({ ok: false, error: "internal_error" }, 500);
+    return jsonRes({ ok: false, error: "internal_error", trace: trace.steps(), trace_summary: trace.summary() }, 500);
   }
 });

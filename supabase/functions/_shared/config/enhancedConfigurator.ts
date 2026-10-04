@@ -19,7 +19,8 @@ import { buildManifestPrompt } from "./manifest.ts";
 import { buildSurfacePrompt } from "./surfaceManifest.ts";
 import { buildSpecPrompt } from "./platformSpec.ts";
 import type { ReasoningHistoryEntry } from "./versioning.ts";
-import { askRutex, uploadContextFile } from "../rutexMcp.ts";
+import { askRutex, uploadContextFile, type AskResultText } from "../rutexMcp.ts";
+import { TraceCollector } from "./trace.ts";
 
 /**
  * File-drop flow (timeout fix): the full platform inventory is uploaded to
@@ -35,12 +36,22 @@ function buildInventoryBundle(): string {
   return `${buildManifestPrompt()}\n\n${buildSurfacePrompt()}\n\n${buildSpecPrompt()}`;
 }
 
-async function uploadInventory(): Promise<string[] | null> {
+async function uploadInventory(trace?: TraceCollector): Promise<string[] | null> {
   try {
+    trace?.start("upload-manifest");
     const receipt = await uploadContextFile(MANIFEST_BUNDLE_NAME, buildInventoryBundle());
-    if (!receipt.ok) return null;
+    if (!receipt.ok) {
+      trace?.fail("upload-manifest", "Reference file upload rejected", "gateway refused the file");
+      return null;
+    }
+    trace?.end("upload-manifest", receipt.cached ? "Reference file already on gateway (cached)" : "Reference file uploaded", [
+      `file:${receipt.name}`,
+      `${Math.round(receipt.bytes / 1024)}KB`,
+      receipt.cached ? "cached" : "fresh upload",
+    ]);
     return [receipt.name];
   } catch {
+    trace?.fail("upload-manifest", "Reference file upload failed", "gateway predates file-drop — using full prompt");
     return null;
   }
 }
@@ -56,9 +67,14 @@ async function callGateway(
   kind: "operator" | "change",
   prompt: string,
   contextFiles?: string[],
-): Promise<string> {
+  trace?: TraceCollector,
+): Promise<AskResultText> {
   const r = await askRutex(`configurator-${kind}-${crypto.randomUUID()}`, prompt, { contextFiles });
-  return r.text;
+  trace?.end("gateway-ask", "AI planned the operator", [
+    `model:${r.model || "unknown"}`,
+    r.tokens ? `${r.tokens.input + r.tokens.output} tokens` : "tokens unreported",
+  ]);
+  return r;
 }
 
 /**
@@ -70,12 +86,22 @@ async function callGatewaySmart(
   fullSystem: string,
   shortSystem: string,
   userPrompt: string,
+  trace?: TraceCollector,
 ): Promise<string> {
-  const files = await uploadInventory();
-  if (files) {
-    return callGateway(kind, `${shortSystem}\n\n${userPrompt}`, files);
+  const files = await uploadInventory(trace);
+  trace?.start("gateway-ask");
+  try {
+    if (files) {
+      const r = await callGateway(kind, `${shortSystem}\n\n${userPrompt}`, files, trace);
+      return r.text;
+    }
+    // Upload already recorded its own failure step; proceed inline.
+    const r = await callGateway(kind, `${fullSystem}\n\n${userPrompt}`, undefined, trace);
+    return r.text;
+  } catch (e) {
+    trace?.fail("gateway-ask", "AI planning failed", e instanceof Error ? e.message : String(e));
+    throw e;
   }
-  return callGateway(kind, `${fullSystem}\n\n${userPrompt}`);
 }
 
 /** Parse the Configurator's strict-JSON reply, tolerating fences and surrounding prose. */
@@ -216,6 +242,7 @@ ${FILE_REF_NOTE}`;
 
 export async function generateOperatorPlan(
   businessDescription: string,
+  trace?: TraceCollector,
 ): Promise<ConfiguratorResult> {
   const userPrompt = `Business description from the owner:
 
@@ -232,7 +259,7 @@ Analyze this business description carefully. Think about:
 
 Then produce the OperationsConfig and your reasoning notes.`;
 
-  const text = await callGatewaySmart("operator", SYSTEM_PROMPT, SYSTEM_PROMPT_SHORT, userPrompt);
+  const text = await callGatewaySmart("operator", SYSTEM_PROMPT, SYSTEM_PROMPT_SHORT, userPrompt, trace);
 
   const parsed = parseConfiguratorJson(text);
 
@@ -282,6 +309,7 @@ export async function generateChangePlan(
   currentConfig: Record<string, unknown>,
   ownerChangeRequest: string,
   reasoningHistory: ReasoningHistoryEntry[] = [],
+  trace?: TraceCollector,
 ): Promise<ConfiguratorResult> {
   const changeBase = `You are the Configurator — an opencode agent for Rutex (accessed through the Rutex gateway; your sibling is the Responder agent for customers). You act as an expert business operations consultant: recommend changes that genuinely serve this business and flag uncertainty honestly. The business owner wants to change their AI operator's configuration.
 
@@ -325,7 +353,7 @@ OWNER'S CHANGE REQUEST:
 ${buildReasoningHistoryPrompt(reasoningHistory)}
 Apply this change to the configuration. Only modify what's necessary.`;
 
-  const text = await callGatewaySmart("change", changeFull, changeShort, userPrompt);
+  const text = await callGatewaySmart("change", changeFull, changeShort, userPrompt, trace);
 
   const parsed = parseConfiguratorJson(text);
 
