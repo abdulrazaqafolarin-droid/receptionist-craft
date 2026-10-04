@@ -1,3 +1,8 @@
+/**
+ * SUPERSEDED by appointment-reminder-runner (24h + 1h windows, dedupe via
+ * appointment_logs, owner notify + customer email). Kept deployed but
+ * unwired — do not add new callers. Remove only via dashboard + migration.
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 

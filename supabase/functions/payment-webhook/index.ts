@@ -157,11 +157,19 @@ serve(async (req) => {
 
     // ── 5. Confirm linked entity ────────────────────────────────────
     if (event.type === "payment.completed") {
-      const { data: payment } = await supabase
+      const { data: paymentRow } = await supabase
         .from("payments")
-        .select("appointment_id, order_id, receptionist_id, amount, currency")
+        .select("appointment_id, order_id, receptionist_id, amount, currency, provider_meta")
         .eq("id", event.payment_id)
         .maybeSingle();
+      const payment = paymentRow as unknown as {
+        appointment_id?: string | null;
+        order_id?: string | null;
+        receptionist_id?: string | null;
+        amount?: number | null;
+        currency?: string | null;
+        provider_meta?: Record<string, unknown> | null;
+      } | null;
 
       if (payment?.appointment_id) {
         // Confirm the appointment
@@ -183,6 +191,49 @@ serve(async (req) => {
           .eq("status", "pending"); // Only upgrade from pending → confirmed
 
         console.log(`[payment-webhook] Order ${payment.order_id} confirmed`);
+      }
+
+      // ── 5b. Activate SaaS subscription ─────────────────────────────
+      // create-subscription-checkout tags subscription payments in
+      // provider_meta (entity_type=subscription, plan_id, user_id). Until
+      // this ran, paid checkouts never activated the plan — the upgrade
+      // silently never happened.
+      {
+        const m = payment?.provider_meta || {};
+        if (m.entity_type === "subscription") {
+          const planId = typeof m.plan_id === "string" && ["pro", "enterprise"].includes(m.plan_id) ? m.plan_id : null;
+          const subUserId = typeof m.user_id === "string" ? m.user_id : null;
+        if (planId && subUserId) {
+          const now = new Date();
+          const periodEnd = new Date(now);
+          periodEnd.setMonth(periodEnd.getMonth() + 1);
+          const { data: existing } = await supabase
+            .from("subscriptions")
+            .select("id")
+            .eq("user_id", subUserId)
+            .maybeSingle();
+          if (existing) {
+            await supabase.from("subscriptions").update({
+              plan: planId,
+              status: "active",
+              current_period_start: now.toISOString(),
+              current_period_end: periodEnd.toISOString(),
+            }).eq("id", (existing as { id: string }).id);
+          } else {
+            await supabase.from("subscriptions").insert({
+              user_id: subUserId,
+              plan: planId,
+              status: "active",
+              current_period_start: now.toISOString(),
+              current_period_end: periodEnd.toISOString(),
+            });
+          }
+          await supabase.from("profiles").update({ plan: planId }).eq("id", subUserId);
+          console.log(`[payment-webhook] Subscription activated: ${planId} for ${subUserId}`);
+        } else {
+          console.warn("[payment-webhook] Subscription payment missing plan_id/user_id in meta");
+        }
+        }
       }
 
       // ── 6. Send receipt notification ───────────────────────────────

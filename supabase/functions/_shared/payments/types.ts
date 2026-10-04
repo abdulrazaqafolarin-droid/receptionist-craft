@@ -25,6 +25,9 @@ export interface CreateIntentParams {
   description?: string;
   /** Our metadata — provider echoes this back in webhooks */
   metadata: Record<string, string>;
+  /** Where the provider redirects after hosted checkout (Stripe) */
+  success_url?: string;
+  cancel_url?: string;
 }
 
 export interface PaymentIntentResult {

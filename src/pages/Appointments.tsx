@@ -249,6 +249,21 @@ export default function Appointments() {
     }
   }
 
+  async function handleSendReminder(apt: Appointment) {
+    try {
+      const { data, error } = await supabase.functions.invoke("send-reminder", {
+        body: { appointmentId: apt.id },
+      });
+      if (error) throw error;
+      if (!(data as { success?: boolean } | null)?.success) throw new Error("Reminder was not accepted");
+      toast.success(`Reminder sent for ${apt.customer_name || "appointment"}`);
+    } catch (e) {
+      console.error("Send reminder failed", e);
+      toast.error("Failed to send reminder");
+      throw e;
+    }
+  }
+
   async function updateOrderStatus(orderId: string, newStatus: string) {
     try {
       const { error } = await supabase
@@ -404,10 +419,11 @@ export default function Appointments() {
                 description="Try adjusting your search or filter criteria to see more results."
               />
             ) : (
-              <AppointmentCalendar 
-                appointments={filteredAppointments} 
+              <AppointmentCalendar
+                appointments={filteredAppointments}
                 onEdit={(apt) => setEditingAppointment(apt as unknown as AppointmentData)}
                 onRefresh={loadAppointments}
+                onRemind={handleSendReminder}
               />
             )}
           </TabsContent>

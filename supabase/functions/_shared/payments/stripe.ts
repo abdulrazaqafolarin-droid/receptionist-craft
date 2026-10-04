@@ -18,11 +18,18 @@ import type {
   ProviderConfig,
 } from "./types.ts";
 
+/** Stripe event envelope — typed so verify/map never falls back to unknown. */
+interface StripeWebhookEvent {
+  type: string;
+  data?: { object?: Record<string, unknown> };
+}
+
 export class StripeProvider implements PaymentProvider {
   readonly name = "stripe" as const;
 
   constructor(private config: ProviderConfig) {}
 
+  /** Stripe event object shape we actually read. */
   private get apiKey(): string {
     return this.config.secret_key;
   }
@@ -36,33 +43,30 @@ export class StripeProvider implements PaymentProvider {
     return "https://api.stripe.com/v1";
   }
 
+  /**
+   * Hosted Checkout Session (redirect, same UX as Paystack) — NOT raw
+   * PaymentIntents. The frontend has no Stripe.js integration, so intents
+   * requiring client-side confirmation can never complete; Checkout
+   * redirect works with zero client SDK.
+   */
   async createIntent(params: CreateIntentParams): Promise<PaymentIntentResult> {
     const body = new URLSearchParams();
-    body.append("amount", String(params.amount));
-    body.append("currency", params.currency.toLowerCase());
-    body.append("automatic_payment_methods[enabled]", "true");
-    body.append(
-      "metadata[payment_id]",
-      params.metadata.payment_id ?? "",
-    );
-    body.append(
-      "metadata[receptionist_id]",
-      params.metadata.receptionist_id ?? "",
-    );
+    body.append("mode", "payment");
+    body.append("line_items[0][price_data][currency]", params.currency.toLowerCase());
+    body.append("line_items[0][price_data][product_data][name]", (params.description || "Payment").slice(0, 500));
+    body.append("line_items[0][price_data][unit_amount]", String(params.amount));
+    body.append("line_items[0][quantity]", "1");
+    body.append("success_url", (params.success_url || "https://receptionist-craft.vercel.app/billing?checkout=success").slice(0, 2000));
+    body.append("cancel_url", (params.cancel_url || "https://receptionist-craft.vercel.app/billing?checkout=cancelled").slice(0, 2000));
     if (params.receipt_email) {
-      body.append("receipt_email", params.receipt_email);
+      body.append("customer_email", params.receipt_email);
     }
-    if (params.description) {
-      body.append("description", params.description.slice(0, 500));
-    }
-    // Pass through all metadata
+    // Pass through all metadata (echoed back in checkout.session.completed)
     for (const [k, v] of Object.entries(params.metadata)) {
-      if (k !== "payment_id" && k !== "receptionist_id") {
-        body.append(`metadata[${k}]`, String(v).slice(0, 500));
-      }
+      body.append(`metadata[${k}]`, String(v).slice(0, 500));
     }
 
-    const res = await fetch(`${this.apiBase()}/payment_intents`, {
+    const res = await fetch(`${this.apiBase()}/checkout/sessions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -76,11 +80,14 @@ export class StripeProvider implements PaymentProvider {
       throw new Error(`Stripe createIntent failed (${res.status}): ${err.slice(0, 300)}`);
     }
 
-    const pi = await res.json();
+    const session = await res.json();
+    if (!session.url) {
+      throw new Error("Stripe checkout session returned no redirect URL");
+    }
     return {
-      id: pi.id,
-      client_secret: pi.client_secret,
-      status: pi.status,
+      id: session.id,
+      authorization_url: session.url,
+      status: session.status,
     };
   }
 
@@ -105,6 +112,8 @@ export class StripeProvider implements PaymentProvider {
       "payment_intent.succeeded": "payment.completed",
       "payment_intent.payment_failed": "payment.failed",
       "charge.refunded": "payment.refunded",
+      "checkout.session.completed": "payment.completed",
+      "checkout.session.expired": "payment.failed",
     };
 
     const mappedType = typeMap[event.type];
@@ -117,12 +126,15 @@ export class StripeProvider implements PaymentProvider {
       throw new Error("Stripe event missing data.object");
     }
 
+    const meta = (pi.metadata || {}) as Record<string, string | undefined>;
+    const amount = typeof pi.amount_total === "number" ? pi.amount_total : typeof pi.amount === "number" ? pi.amount : 0;
+
     return {
       type: mappedType,
-      payment_id: pi.metadata?.payment_id ?? "",
-      provider_ref: pi.id,
-      amount: pi.amount ?? 0,
-      metadata: pi.metadata ?? {},
+      payment_id: meta.payment_id ?? "",
+      provider_ref: typeof pi.id === "string" ? pi.id : "",
+      amount,
+      metadata: meta,
     };
   }
 
@@ -140,7 +152,7 @@ export class StripeProvider implements PaymentProvider {
     payload: string,
     signatureHeader: string,
     secret: string,
-  ): Promise<Record<string, unknown>> {
+  ): Promise<StripeWebhookEvent> {
     const parts = signatureHeader.split(",");
     const sigMap: Record<string, string> = {};
     for (const part of parts) {

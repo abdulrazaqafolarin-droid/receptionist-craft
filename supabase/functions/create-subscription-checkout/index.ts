@@ -31,6 +31,8 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const { plan_id, user_id } = body;
+    const success_url = typeof body.success_url === "string" ? body.success_url.slice(0, 2000) : undefined;
+    const cancel_url = typeof body.cancel_url === "string" ? body.cancel_url.slice(0, 2000) : undefined;
 
     if (!plan_id || !user_id) {
       return jsonRes({ ok: false, error: "missing_plan_id_or_user_id" }, 400);
@@ -121,6 +123,8 @@ serve(async (req) => {
         receipt_email: email || undefined,
         description: plan.label,
         metadata,
+        ...(success_url ? { success_url } : {}),
+        ...(cancel_url ? { cancel_url } : {}),
       });
     } catch (e) {
       await supabase

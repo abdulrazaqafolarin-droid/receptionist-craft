@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { CreditCard, ArrowLeft, Check, Zap, Building2, Crown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -74,9 +74,34 @@ const PLANS = [
 
 export default function Billing() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState<string | null>(null);
+
+  // Return from hosted checkout (Stripe/Paystack): the provider webhook
+  // activates the plan, so re-read it and report honestly — never claim the
+  // upgrade succeeded before the webhook says so.
+  useEffect(() => {
+    const checkout = searchParams.get("checkout");
+    if (!checkout) return;
+    if (checkout === "success") {
+      toast.success("Payment received — activating your plan…");
+      const poll = setInterval(async () => {
+        await loadSubscription();
+        if (subscription && subscription.plan !== "free") {
+          clearInterval(poll);
+          toast.success(`You're on the ${subscription.plan} plan.`);
+        }
+      }, 3000);
+      setTimeout(() => clearInterval(poll), 60000);
+      return () => clearInterval(poll);
+    }
+    if (checkout === "cancelled") {
+      toast.info("Checkout cancelled — you have not been charged.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     loadSubscription();
@@ -106,20 +131,25 @@ export default function Billing() {
 
     try {
       const { data, error } = await supabase.functions.invoke("create-subscription-checkout", {
-        body: { plan_id: planId, user_id: user.id },
+        body: {
+          plan_id: planId,
+          user_id: user.id,
+          success_url: `${window.location.origin}/billing?checkout=success`,
+          cancel_url: `${window.location.origin}/billing?checkout=cancelled`,
+        },
       });
 
       if (error) throw error;
 
       if (data?.mode === "checkout" && data.authorization_url) {
-        // Paystack — redirect to hosted payment page
+        // Stripe Checkout + Paystack both redirect to a hosted page.
+        // The provider webhook is what actually activates the plan.
         window.location.href = data.authorization_url;
         return;
       }
 
-      if (data?.mode === "checkout" && data.client_secret) {
-        // Stripe — for now, fall back to manual upgrade
-        // TODO: Open Stripe Checkout modal with client_secret
+      if (data?.mode === "checkout" && !data.authorization_url) {
+        throw new Error("Checkout did not return a payment URL. Connect Stripe or Paystack on the Connections page.");
       }
 
       if (data?.mode === "manual") {

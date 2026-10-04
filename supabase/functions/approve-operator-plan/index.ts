@@ -173,6 +173,28 @@ serve(async (req) => {
       return jsonRes({ ok: false, error: "apply_failed" }, 500);
     }
 
+    // F1: operators with booking get their reminder cron scheduled
+    // automatically (setup-reminder-cron was previously never invoked, so
+    // reminders silently never ran). Non-fatal — approval must not fail
+    // because scheduling did.
+    try {
+      const workflows = (config.workflows || {}) as Record<string, { enabled?: boolean }>;
+      if (workflows.appointment_booking?.enabled === true) {
+        const baseUrl = Deno.env.get("SUPABASE_URL") || "";
+        const svcKey = Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+        if (baseUrl && svcKey) {
+          const cronRes = await fetch(`${baseUrl}/functions/v1/setup-reminder-cron`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${svcKey}`, "Content-Type": "application/json" },
+            body: "{}",
+          });
+          console.log("[approve-operator-plan] Reminder cron setup:", cronRes.status);
+        }
+      }
+    } catch (cronErr) {
+      console.warn("[approve-operator-plan] Reminder cron setup failed (non-fatal):", String(cronErr).slice(0, 150));
+    }
+
     // Save the plan artifact
     const { error: planErr } = await supabase.from("operator_plans").insert({
       receptionist_id,

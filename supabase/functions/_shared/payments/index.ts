@@ -27,18 +27,25 @@ export class PaymentProviderError extends Error {
 /**
  * Resolve a payment provider for a receptionist.
  * Looks up the integrations table for an active provider config.
+ *
+ * NOTE: supabase is typed as any on purpose. The edge functions build
+ * clients from several esm.sh pins whose generics never agree with each
+ * other; a precise type here rejects every real caller. Runtime shape is
+ * just from/select/eq/maybeSingle — verified by the checkout + webhook
+ * live paths, not by generics.
  */
 export async function resolveProvider(
-  supabase: ReturnType<typeof createClient>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
   receptionistId: string,
 ): Promise<{ provider: PaymentProvider; config: ProviderConfig }> {
   // Find active payment integrations for this user
   // First get the receptionist's user_id
-  const { data: receptionist } = await supabase
+  const { data: receptionist } = (await supabase
     .from("receptionists")
     .select("user_id")
     .eq("id", receptionistId)
-    .maybeSingle();
+    .maybeSingle()) as { data: { user_id: string | null } | null };
 
   if (!receptionist?.user_id) {
     throw new PaymentProviderError("Receptionist not found", "not_configured");
@@ -49,13 +56,13 @@ export async function resolveProvider(
   const providers: ProviderName[] = ["stripe", "paystack"];
 
   for (const providerName of providers) {
-    const { data: integration } = await supabase
+    const { data: integration } = (await supabase
       .from("integrations")
       .select("config_json")
       .eq("type", providerName)
       .eq("user_id", receptionist.user_id)
       .eq("enabled", true)
-      .maybeSingle();
+      .maybeSingle()) as { data: { config_json: unknown } | null };
 
     if (integration?.config_json) {
       const config = parseProviderConfig(integration.config_json);

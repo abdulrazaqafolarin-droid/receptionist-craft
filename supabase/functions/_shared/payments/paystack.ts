@@ -89,21 +89,26 @@ export class PaystackProvider implements PaymentProvider {
       throw new Error("Missing Paystack webhook signature or secret");
     }
 
-    // Paystack uses HMAC-SHA512
+    // Paystack signs the RAW request body with HMAC-SHA512 and sends the hex
+    // digest in x-paystack-signature. Correct WebCrypto usage is to COMPUTE
+    // the digest and compare it (crypto.subtle.verify needs the expected
+    // signature AND the data — passing only the body was silently verifying
+    // the payload against itself and rejecting every real payment).
+    const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       "raw",
-      new TextEncoder().encode(this.webhookSecret),
+      encoder.encode(this.webhookSecret),
       { name: "HMAC", hash: "SHA-512" },
       false,
-      ["verify"],
+      ["sign"],
     );
-    const mac = await crypto.subtle.verify(
-      "HMAC",
-      key,
-      new TextEncoder().encode(body),
-    );
+    const mac = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
+    const computed = Array.from(new Uint8Array(mac))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .toLowerCase();
 
-    if (!mac) {
+    if (computed !== sigHeader.trim().toLowerCase()) {
       throw new Error("Paystack webhook signature mismatch");
     }
 

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format, isSameDay } from "date-fns";
 import type { Appointment } from "@/types/appointments";
-import { Phone, Mail, Clock, Calendar as CalendarIcon, Pencil, X, Loader2 } from "lucide-react";
+import { Phone, Mail, Clock, Calendar as CalendarIcon, Pencil, X, Loader2, Bell } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -23,11 +23,23 @@ interface AppointmentCalendarProps {
   appointments: Appointment[];
   onEdit?: (appointment: Appointment) => void;
   onRefresh?: () => void;
+  onRemind?: (appointment: Appointment) => void;
 }
 
-export function AppointmentCalendar({ appointments, onEdit, onRefresh }: AppointmentCalendarProps) {
+export function AppointmentCalendar({ appointments, onEdit, onRefresh, onRemind }: AppointmentCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [remindingId, setRemindingId] = useState<string | null>(null);
+
+  async function handleRemind(apt: Appointment) {
+    if (!onRemind || remindingId) return;
+    setRemindingId(apt.id);
+    try {
+      await onRemind(apt);
+    } finally {
+      setRemindingId(null);
+    }
+  }
   const [confirmCancel, setConfirmCancel] = useState<Appointment | null>(null);
 
   // Get appointments for selected date
@@ -132,6 +144,23 @@ export function AppointmentCalendar({ appointments, onEdit, onRefresh }: Appoint
                                   aria-label="Edit appointment"
                                 >
                                   <Pencil className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {onRemind && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => handleRemind(apt)}
+                                  disabled={remindingId === apt.id}
+                                  aria-label="Send reminder now"
+                                  title="Send reminder now"
+                                >
+                                  {remindingId === apt.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Bell className="h-4 w-4" />
+                                  )}
                                 </Button>
                               )}
                               <Button
