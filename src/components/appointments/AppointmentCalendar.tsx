@@ -32,10 +32,12 @@ export function AppointmentCalendar({ appointments, onEdit, onRefresh, onRemind 
   const [remindingId, setRemindingId] = useState<string | null>(null);
 
   async function handleRemind(apt: Appointment) {
-    if (!onRemind || remindingId) return;
+    if (!onRemind || remindingId || !apt.id) return;
     setRemindingId(apt.id);
     try {
       await onRemind(apt);
+    } catch {
+      // Page toast already reported the failure; spinner just stops.
     } finally {
       setRemindingId(null);
     }

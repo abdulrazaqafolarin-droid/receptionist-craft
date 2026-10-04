@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ConnectorConnectDialog } from "@/components/ConnectorConnectDialog";
 import { supabase } from "@/integrations/supabase/client";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -35,6 +36,8 @@ interface ConnectorDef {
   is_coming_soon: boolean;
   setup_url: string | null;
   help_url: string | null;
+  oauth_scopes: string[] | null;
+  oauth_provider: string | null;
   required_by_modules: string[];
 }
 
@@ -235,6 +238,7 @@ export function ConnectorRegistryPage({ userId }: ConnectorRegistryPageProps) {
   );
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+  const [connecting, setConnecting] = useState<ConnectorDef | null>(null);
 
   useEffect(() => {
     loadData();
@@ -260,8 +264,10 @@ export function ConnectorRegistryPage({ userId }: ConnectorRegistryPageProps) {
   }
 
   async function handleConnect(key: string) {
-    // For now, navigate to settings — real OAuth flows will be added per connector
-    console.log("Connect:", key);
+    const def = definitions.find((d) => d.connector_key === key);
+    if (!def) return;
+    if (def.is_coming_soon) return;
+    setConnecting(def);
   }
 
   async function handleDisconnect(key: string) {
@@ -355,6 +361,12 @@ export function ConnectorRegistryPage({ userId }: ConnectorRegistryPageProps) {
           ))}
         </div>
       )}
+      <ConnectorConnectDialog
+        definition={connecting}
+        userId={userId}
+        onClose={() => setConnecting(null)}
+        onSaved={loadData}
+      />
     </div>
   );
 }
