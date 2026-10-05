@@ -48,6 +48,20 @@ serve(async (req) => {
     (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
   );
 
+  // Reap stale runs: a worker killed mid-flight (150s wall, box death)
+  // leaves running rows no one finishes. Reset them to queued while
+  // attempts remain, so the next sweep retries honestly.
+  try {
+    await supabase
+      .from("plan_jobs")
+      .update({ status: "queued", started_at: null })
+      .eq("status", "running")
+      .lt("started_at", new Date(Date.now() - 15 * 60 * 1000).toISOString())
+      .lt("attempts", MAX_ATTEMPTS);
+  } catch {
+    // Reaper is best-effort; the claim below is the real path.
+  }
+
   // Atomic claim: update + subselect in one statement. A concurrent tick
   // blocks on the row lock, then re-evaluates status='queued' against the
   // winner's commit and matches zero rows. Exactly one worker wins.
@@ -86,7 +100,12 @@ serve(async (req) => {
     await supabase.from("plan_jobs").update({ ...patch, finished_at: new Date().toISOString() }).eq("id", (job as PlanJob).id);
   };
 
-  try {
+  // Background execution: respond to the sweeper IMMEDIATELY (Supabase
+  // kills response-less functions at the 150s wall), then keep working
+  // under EdgeRuntime.waitUntil. The job row — not the HTTP response —
+  // carries the outcome, and the reaper above recovers kills.
+  const runJob = async () => {
+    try {
     const j = job as PlanJob;
     let config: Record<string, unknown>;
     let planText = "";
@@ -152,7 +171,7 @@ serve(async (req) => {
       result_json: { config, plan_text: planText, reasoning, version_id: versionId, version_number: versionNumber },
       trace_json: trace.steps(),
     });
-    return jsonRes({ ok: true, claimed: true, job_id: j.id, version_id: versionId, trace_summary: trace.summary() });
+    console.log(`[plan-worker] Job ${j.id} done:`, trace.summary());
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[plan-worker] Job failed:", msg);
@@ -164,6 +183,17 @@ serve(async (req) => {
       trace_json: trace.steps(),
       ...(attempts >= MAX_ATTEMPTS ? {} : { started_at: null }),
     });
-    return jsonRes({ ok: false, error: "job_failed", details: msg.slice(0, 200) });
   }
+  };
+
+  const runtime = (globalThis as unknown as {
+    EdgeRuntime?: { waitUntil(p: Promise<unknown>): void };
+  }).EdgeRuntime;
+  if (runtime?.waitUntil) {
+    runtime.waitUntil(runJob());
+  } else {
+    // No background primitive (local dev): run inline and report.
+    await runJob();
+  }
+  return jsonRes({ ok: true, claimed: true, job_id: (job as PlanJob).id });
 });
