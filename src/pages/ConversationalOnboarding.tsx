@@ -140,6 +140,9 @@ export function configSolutions(config: Record<string, unknown>): PreviewSolutio
     .map((s) => ({
       need: s.need as string,
       note: typeof s.note === "string" ? s.note : "",
+      fulfillment: ["fetched", "evaluated", "integrated"].includes(s.fulfillment as string)
+        ? (s.fulfillment as string)
+        : "found",
       candidates: (Array.isArray(s.candidates) ? s.candidates : [])
         .filter((c): c is Record<string, unknown> => !!c && typeof c === "object" && typeof (c as Record<string, unknown>).name === "string" && typeof (c as Record<string, unknown>).url === "string")
         .slice(0, 3)

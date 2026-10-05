@@ -44,6 +44,7 @@ export interface PreviewSolutionCandidate {
 export interface PreviewSolution {
   need: string;
   note: string;
+  fulfillment: string;
   candidates: PreviewSolutionCandidate[];
 }
 
@@ -222,7 +223,10 @@ export function OperatorPreview({
                   {externalSolutions.map((s) => (
                     <div key={s.need}>
                       <p className="type-caption">
-                        Free options for <span className="font-medium">{s.need}</span> — open-source first:
+                        Free options for <span className="font-medium">{s.need}</span> — open-source first{" "}
+                        <Badge variant="outline" className="ml-1">
+                          {["fetched", "evaluated", "integrated"].includes(s.fulfillment) ? s.fulfillment : "found"}
+                        </Badge>
                       </p>
                       {s.candidates.length > 0 ? (
                         <ul className="mt-1 space-y-1">

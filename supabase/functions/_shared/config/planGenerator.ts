@@ -148,7 +148,7 @@ export function generatePlanFromConfig(config: Record<string, unknown>): Generat
   }
   if (needList.length > 0) {
     const solutions = (config.external_solutions || []) as Array<{
-      need?: unknown; note?: unknown;
+      need?: unknown; note?: unknown; fulfillment?: unknown;
       candidates?: Array<{ name?: unknown; url?: unknown; stars?: unknown; license?: unknown; open_source?: unknown; description?: unknown }>;
     }>;
     const lines: string[] = [];
@@ -156,9 +156,13 @@ export function generatePlanFromConfig(config: Record<string, unknown>): Generat
       lines.push(`- ${n}`);
       const s = solutions.find((x) => x?.need === n);
       if (!s) continue;
+      const stage = typeof s.fulfillment === "string" && ["fetched", "evaluated", "integrated"].includes(s.fulfillment)
+        ? s.fulfillment
+        : "found";
       const cands = (s.candidates || []).filter((c) => typeof c?.name === "string" && typeof c?.url === "string");
+      lines.push(`  Fulfillment status: ${stage}.`);
       if (cands.length > 0) {
-        lines.push(`  Best free options (open-source first):`);
+        lines.push(`  Best free options (open-source first) — status: ${stage}:`);
         for (const c of cands.slice(0, 3)) {
           const oss = c.open_source === true ? "free/open-source" : `license: ${String(c.license || "unknown")}`;
           lines.push(`  - ${String(c.name)} (${c.stars ?? 0} stars, ${oss}): ${String(c.url)}`);

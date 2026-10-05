@@ -30,6 +30,12 @@ export interface ResearchedSolution {
   need: string;
   candidates: SolutionCandidate[];
   note: string; // plain-language guidance for the owner
+  /**
+   * Fulfillment stage (the loop is lane-2 builder work; research only ever
+   * produces "found" — later stages advance it with evidence, never silently).
+   * found -> fetched -> evaluated -> integrated
+   */
+  fulfillment: "found" | "fetched" | "evaluated" | "integrated";
 }
 
 const OSS_LICENSES = new Set([
@@ -109,6 +115,7 @@ export async function researchNeed(need: string): Promise<ResearchedSolution> {
     need,
     candidates: [],
     note: "No public option found yet — ask in the chat and we will look together.",
+    fulfillment: "found",
   };
   // Vetted starting points always lead; live search fills behind them.
   const curated = (CURATED[need.toLowerCase()] || []).slice();
@@ -130,7 +137,7 @@ export async function researchNeed(need: string): Promise<ResearchedSolution> {
       clearTimeout(timer);
     }
     if (!res.ok) {
-      if (curated.length > 0) return { need, candidates: curated.slice(0, 3), note: "Vetted starting points below — live search was unavailable." };
+      if (curated.length > 0) return { need, candidates: curated.slice(0, 3), note: "Vetted starting points below — live search was unavailable.", fulfillment: "found" };
       return empty;
     }
     const data = (await res.json()) as {
@@ -177,6 +184,7 @@ export async function researchNeed(need: string): Promise<ResearchedSolution> {
     return {
       need,
       candidates: top,
+      fulfillment: "found",
       note:
         top.length === 0
           ? empty.note
@@ -186,7 +194,7 @@ export async function researchNeed(need: string): Promise<ResearchedSolution> {
     };
   } catch {
     if (curated.length > 0) {
-      return { need, candidates: curated.slice(0, 3), note: "Vetted starting points below — live search was unavailable." };
+      return { need, candidates: curated.slice(0, 3), note: "Vetted starting points below — live search was unavailable.", fulfillment: "found" };
     }
     return empty;
   }

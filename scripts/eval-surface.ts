@@ -195,5 +195,19 @@ check(
   !noNeedsPlan.sections.some((s) => s.id === "build-needs"),
 );
 
+// --- Fulfillment status: research emits found, plan renders stage ---
+const { researchNeed } = await import("../supabase/functions/_shared/config/solutionResearch.ts");
+const researched = await researchNeed("definitely-not-a-real-need-xyz");
+check("research: fulfillment starts at found", researched.fulfillment === "found");
+const solPlan = generatePlanFromConfig({
+  business: { display_name: "Test" },
+  external_needs: ["definitely-not-a-real-need-xyz"],
+  external_solutions: [{ need: "definitely-not-a-real-need-xyz", note: "", candidates: [], fulfillment: "fetched" }],
+});
+check(
+  "plan: solution stage rendered",
+  solPlan.full_text.includes("Fulfillment status: fetched"),
+);
+
 console.log(`\neval: ${pass} passed, ${fail} failed`);
 if (fail > 0) Deno.exit(1);
