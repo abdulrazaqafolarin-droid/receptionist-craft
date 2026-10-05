@@ -97,19 +97,27 @@ serve(async (req) => {
     );
 
     // Stage 4: research each external need (open-source first). Non-fatal.
+    // Hard 25s budget: the gateway ask ahead already spent most of the
+    // 150s edge allowance — research that overruns is skipped here and
+    // completed at approval time (approve has no AI call, so time to spare).
     try {
       const needs = (result.config.external_needs || []) as unknown[];
       const names = needs.filter((n): n is string => typeof n === "string" && !!n.trim());
       if (names.length > 0) {
         trace.start("research-needs");
-        const solutions = await researchNeeds(names);
-        const found = solutions.reduce((a, s) => a + s.candidates.length, 0);
-        const oss = solutions.reduce((a, s) => a + s.candidates.filter((c) => c.open_source).length, 0);
-        trace.end("research-needs", `Researched ${names.length} connector need${names.length === 1 ? "" : "s"}`, [
-          `repos:${found}`,
-          `${oss} open-source`,
-        ]);
-        result.config.external_solutions = solutions;
+        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 25000));
+        const raced = await Promise.race([researchNeeds(names), timeout]);
+        if (raced) {
+          const found = raced.reduce((a, s) => a + s.candidates.length, 0);
+          const oss = raced.reduce((a, s) => a + s.candidates.filter((c) => c.open_source).length, 0);
+          trace.end("research-needs", `Researched ${names.length} connector need${names.length === 1 ? "" : "s"}`, [
+            `repos:${found}`,
+            `${oss} open-source`,
+          ]);
+          result.config.external_solutions = raced;
+        } else {
+          trace.skip("research-needs", "Research budget spent — completes at approval", [`${names.length} needs deferred`]);
+        }
       } else {
         trace.skip("research-needs", "No external needs to research");
       }

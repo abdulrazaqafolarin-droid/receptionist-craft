@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { knownPageKeys } from "../_shared/config/surfaceManifest.ts";
 import { saveConfigVersion } from "../_shared/config/versioning.ts";
+import { researchNeeds } from "../_shared/config/solutionResearch.ts";
 import { TraceCollector } from "../_shared/config/trace.ts";
 
 const corsHeaders = {
@@ -134,7 +135,30 @@ serve(async (req) => {
       const orderingOn = workflows.product_ordering?.enabled === true;
       // Persist researched solutions (informational — the Connections page
       // reads these so the owner sees free options first). Lightly validated.
-      const rawSolutions = (config.external_solutions || []) as unknown[];
+      // If the draft arrived without solutions (request-change deferred them
+      // on a spent time budget), research here: approval makes no AI call,
+      // so the 150s budget is all ours.
+      let rawSolutions = (config.external_solutions || []) as unknown[];
+      if (rawSolutions.length === 0) {
+        const needs = (config.external_needs || []) as unknown[];
+        const names = needs.filter((n): n is string => typeof n === "string" && !!n.trim());
+        if (names.length > 0) {
+          try {
+            trace.start("research-needs");
+            const researched = await researchNeeds(names);
+            const found = researched.reduce((a, s) => a + s.candidates.length, 0);
+            trace.end("research-needs", `Researched ${names.length} connector need${names.length === 1 ? "" : "s"} at approval`, [
+              `repos:${found}`,
+            ]);
+            rawSolutions = researched as unknown[];
+            (config as Record<string, unknown>).external_solutions = rawSolutions;
+          } catch (researchErr) {
+            trace.fail("research-needs", "Approval-time research failed", researchErr instanceof Error ? researchErr.message : String(researchErr));
+          }
+        } else {
+          trace.skip("research-needs", "No external needs to research");
+        }
+      }
       const solutions = rawSolutions
         .filter((s): s is Record<string, unknown> => !!s && typeof s === "object" && typeof (s as Record<string, unknown>).need === "string")
         .slice(0, 5)
