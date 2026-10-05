@@ -249,7 +249,7 @@ export default function ConversationalOnboarding() {
   const [planData, setPlanData] = useState<PlanData | null>(null);
   // Playground trace: backend receipts for the current run (plan/adjust/
   // approval). Ephemeral — clears when a new run starts, never stored.
-  const [playTrace, setPlayTrace] = useState<PlayTrace | null>(null);
+  const [playTraces, setPlayTraces] = useState<PlayTrace[]>([]);
   const [services, setServices] = useState<PreviewService[]>([]);
   const [faqs, setFaqs] = useState<PreviewFaq[]>([]);
   const [buildSteps, setBuildSteps] = useState<BuildStep[]>(DONE_STEPS);
@@ -369,7 +369,7 @@ export default function ConversationalOnboarding() {
     if (phase === "planning" || phase === "building" || messages.length === 0) return;
     setPhase("planning");
     setAgentState("thinking");
-    setPlayTrace(null);
+    setPlayTraces([]);
     setBuildSteps([
       { id: "understand", label: "Understanding your description", status: "active" },
       { id: "design", label: "Designing your operator", status: "pending" },
@@ -426,7 +426,7 @@ export default function ConversationalOnboarding() {
       if (!d?.ok) throw new Error(d?.error || "Failed to generate plan");
 
       const config = (d.config || {}) as Record<string, unknown>;
-      setPlayTrace(parseTrace(d, "Plan"));
+      { const t = parseTrace(d, "Plan"); setPlayTraces(t ? [t] : []); }
       // Surface fallback: if the planner predates ui_plan (not yet deployed),
       // derive the dashboard surface locally from the config so the preview
       // Dashboard tab and approval still work. Never overrides a real ui_plan.
@@ -485,7 +485,7 @@ export default function ConversationalOnboarding() {
         const local = buildLocalPlan(ownerTexts(messages), businessName, businessType);
         setServices([]);
         setFaqs(deriveFaqs(local.config, summary));
-        setPlayTrace(offlineDraftTrace(substantiveCount));
+        setPlayTraces([offlineDraftTrace(substantiveCount)]);
         // recId is only set when the placeholder receptionist was created;
         // without it there is nothing to approve onto, so rethrow.
         if (!receptionistIdRef.current) throw err;
@@ -542,7 +542,7 @@ export default function ConversationalOnboarding() {
       });
       if (approveErr) throw approveErr;
       if (!(approveData as { ok?: boolean })?.ok) throw new Error((approveData as { error?: string })?.error || "Failed to apply plan");
-      setPlayTrace(parseTrace(approveData, "Approval"));
+      { const t = parseTrace(approveData, "Approval"); if (t) setPlayTraces((prev) => [...prev, t]); }
       setStepStatus("apply", "done", "Plan approved → Business profile live → Details still to come");
 
       // Services (same shape as the step-by-step wizard — no invented columns).
@@ -663,7 +663,7 @@ export default function ConversationalOnboarding() {
       if (!d?.ok) throw new Error(d?.error || "Failed to update plan");
       const config = (d.config || planData.config) as Record<string, unknown>;
       setPlanData({ ...planData, config, planText: d.plan?.full_text || planData.planText, versionId: d.version_id || planData.versionId });
-      setPlayTrace(parseTrace(d, "Adjustment"));
+      { const t = parseTrace(d, "Adjustment"); if (t) setPlayTraces((prev) => [...prev, t]); }
       setFaqs(deriveFaqs(config, summary));
       appendAssistant("Plan updated with your change. Review the right side again when ready.");
       toast.success("Plan updated with your feedback");
@@ -775,7 +775,7 @@ export default function ConversationalOnboarding() {
   const previewPanel = planData && (
     <div className="glass-2 min-h-0 flex-1 overflow-hidden rounded-2xl p-3 sm:p-4">
       <div className="h-full min-h-0 space-y-3 overflow-y-auto">
-        <BuildPlayground trace={playTrace} />
+        <BuildPlayground traces={playTraces} />
         {phase === "building" || phase === "done" ? (
           <div className="space-y-4">
             <BuildProgress steps={buildSteps} title={phase === "done" ? "Your operator is live" : "Building your AI operator"} />

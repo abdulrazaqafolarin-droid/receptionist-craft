@@ -19,6 +19,8 @@ export interface PlayTrace {
   steps: TraceStep[];
   /** The AI's own stated reasoning (model words, not verified truth). */
   reasoning: string;
+  /** When this run completed (client clock, display only). */
+  at: number;
 }
 
 /** Parse a trace from any edge-function response body. Null when absent. */
@@ -47,6 +49,7 @@ export function parseTrace(data: unknown, origin: PlayTrace["origin"]): PlayTrac
     summary: typeof d.trace_summary === "string" && d.trace_summary ? d.trace_summary : `${steps.length} steps`,
     steps,
     reasoning,
+    at: Date.now(),
   };
 }
 
@@ -57,6 +60,7 @@ export function offlineDraftTrace(substantiveCount: number): PlayTrace {
     summary: `2 steps · offline draft from ${substantiveCount} message${substantiveCount === 1 ? "" : "s"}`,
     reasoning:
       "No AI was involved in this draft — every switched-on capability traces to something you actually said, and everything unproven stayed off. A full AI plan can be regenerated anytime.",
+    at: Date.now(),
     steps: [
       {
         step: "interview",

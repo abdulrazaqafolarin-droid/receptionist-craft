@@ -172,6 +172,7 @@ check("parseTrace: rejects garbage", parseTrace({ nope: 1 }, "Plan") === null);
 check("parseTrace: rejects empty trace", parseTrace({ trace: [] }, "Plan") === null);
 const off = offlineDraftTrace(3);
 check("offlineDraftTrace: labelled honest", off.origin === "Plan (offline draft)" && off.steps.length === 2);
+check("trace: runs carry timestamps", typeof off.at === "number" && off.at > 0);
 
 // --- Build-needs section renders when the model reports gaps ---
 const needsPlan = generatePlanFromConfig({
