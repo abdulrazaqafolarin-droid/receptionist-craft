@@ -55,6 +55,31 @@ serve(async (req) => {
       return jsonRes({ ok: false, error: "missing_receptionist_id_or_user_id" }, 400);
     }
 
+    const supabaseEarly = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
+    );
+
+    // Async mode (fallback C): queue a background job and return in <1s.
+    // The caller polls plan_jobs for done/failed. Used when the caller
+    // expects the 150s ceiling to bite (or after a sync timeout).
+    if (body.async === true) {
+      const { data: job, error: jobErr } = await supabaseEarly
+        .from("plan_jobs")
+        .insert({
+          receptionist_id,
+          user_id,
+          kind: "operator",
+          input_json: { description: description.trim() },
+        })
+        .select("id")
+        .single();
+      if (jobErr || !job) {
+        return jsonRes({ ok: false, error: "job_queue_failed" }, 500);
+      }
+      return jsonRes({ ok: true, job_queued: true, job_id: (job as { id: string }).id });
+    }
+
     // Generate the plan and config from the business description
     const result = await generateOperatorPlan(description.trim(), trace);
 
@@ -82,10 +107,8 @@ serve(async (req) => {
     }
 
     // Save as a draft config version (not yet approved)
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
-    );
+    // (supabaseEarly created above for async mode — reuse it.)
+    const supabase = supabaseEarly;
 
     const version = await saveConfigVersion(supabase, {
       receptionist_id,

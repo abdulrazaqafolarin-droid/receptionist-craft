@@ -60,6 +60,24 @@ serve(async (req) => {
       (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
     );
 
+    // Async mode (fallback C): queue a background job and return in <1s.
+    if ((body as Record<string, unknown>).async === true) {
+      const { data: job, error: jobErr } = await supabase
+        .from("plan_jobs")
+        .insert({
+          receptionist_id,
+          user_id,
+          kind: "change",
+          input_json: { change_request: change_request.trim() },
+        })
+        .select("id")
+        .single();
+      if (jobErr || !job) {
+        return jsonRes({ ok: false, error: "job_queue_failed" }, 500);
+      }
+      return jsonRes({ ok: true, job_queued: true, job_id: (job as { id: string }).id });
+    }
+
     // Verify ownership
     const { data: rec } = await supabase
       .from("receptionists")

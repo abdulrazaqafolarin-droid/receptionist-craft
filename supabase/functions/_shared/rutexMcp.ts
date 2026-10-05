@@ -147,7 +147,11 @@ export async function uploadContextFile(name: string, content: string, timeoutMs
 }
 
 /** High-level: ask the Rutex AI with per-conversation memory. */
-export async function askRutex(conversationId: string, prompt: string, opts?: { newSession?: boolean; contextFiles?: string[] }): Promise<AskResultText> {
+export async function askRutex(
+  conversationId: string,
+  prompt: string,
+  opts?: { newSession?: boolean; contextFiles?: string[]; timeoutMs?: number },
+): Promise<AskResultText> {
   const result = await rpc<{ content?: Array<{ type: string; text?: string }>; isError?: boolean }>("tools/call", {
     name: "rutex_ask",
     arguments: {
@@ -156,7 +160,7 @@ export async function askRutex(conversationId: string, prompt: string, opts?: { 
       ...(opts?.newSession ? { newSession: true } : {}),
       ...(opts?.contextFiles && opts.contextFiles.length > 0 ? { contextFiles: opts.contextFiles } : {}),
     },
-  });
+  }, opts?.timeoutMs ?? 120_000);
   if (result.isError) throw new RutexMcpError(firstText(result) || "ask failed", "tool_error");
   const raw = firstText(result);
   try {

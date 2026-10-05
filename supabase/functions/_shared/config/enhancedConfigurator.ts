@@ -68,8 +68,9 @@ async function callGateway(
   prompt: string,
   contextFiles?: string[],
   trace?: TraceCollector,
+  timeoutMs?: number,
 ): Promise<AskResultText> {
-  const r = await askRutex(`configurator-${kind}-${crypto.randomUUID()}`, prompt, { contextFiles });
+  const r = await askRutex(`configurator-${kind}-${crypto.randomUUID()}`, prompt, { contextFiles, timeoutMs });
   trace?.end("gateway-ask", "AI planned the operator", [
     `model:${r.model || "unknown"}`,
     r.tokens ? `${r.tokens.input + r.tokens.output} tokens` : "tokens unreported",
@@ -87,16 +88,17 @@ async function callGatewaySmart(
   shortSystem: string,
   userPrompt: string,
   trace?: TraceCollector,
+  timeoutMs?: number,
 ): Promise<string> {
   const files = await uploadInventory(trace);
   trace?.start("gateway-ask");
   try {
     if (files) {
-      const r = await callGateway(kind, `${shortSystem}\n\n${userPrompt}`, files, trace);
+      const r = await callGateway(kind, `${shortSystem}\n\n${userPrompt}`, files, trace, timeoutMs);
       return r.text;
     }
     // Upload already recorded its own failure step; proceed inline.
-    const r = await callGateway(kind, `${fullSystem}\n\n${userPrompt}`, undefined, trace);
+    const r = await callGateway(kind, `${fullSystem}\n\n${userPrompt}`, undefined, trace, timeoutMs);
     return r.text;
   } catch (e) {
     trace?.fail("gateway-ask", "AI planning failed", e instanceof Error ? e.message : String(e));
@@ -245,6 +247,7 @@ ${FILE_REF_NOTE}`;
 export async function generateOperatorPlan(
   businessDescription: string,
   trace?: TraceCollector,
+  timeoutMs?: number,
 ): Promise<ConfiguratorResult> {
   const userPrompt = `Business description from the owner:
 
@@ -261,7 +264,7 @@ Analyze this business description carefully. Think about:
 
 Then produce the OperationsConfig and your reasoning notes.`;
 
-  const text = await callGatewaySmart("operator", SYSTEM_PROMPT, SYSTEM_PROMPT_SHORT, userPrompt, trace);
+  const text = await callGatewaySmart("operator", SYSTEM_PROMPT, SYSTEM_PROMPT_SHORT, userPrompt, trace, timeoutMs);
 
   const parsed = parseConfiguratorJson(text);
 
@@ -370,6 +373,7 @@ export async function generateChangePlan(
   ownerChangeRequest: string,
   reasoningHistory: ReasoningHistoryEntry[] = [],
   trace?: TraceCollector,
+  timeoutMs?: number,
 ): Promise<ConfiguratorResult> {
   const changeBase = `You are the Configurator — an opencode agent for Rutex (accessed through the Rutex gateway; your sibling is the Responder agent for customers). You act as an expert business operations consultant: recommend changes that genuinely serve this business and flag uncertainty honestly. The business owner wants to change their AI operator's configuration.
 
@@ -413,7 +417,7 @@ OWNER'S CHANGE REQUEST:
 ${buildReasoningHistoryPrompt(reasoningHistory)}
 Apply this change to the configuration. Only modify what's necessary.`;
 
-  const text = await callGatewaySmart("change", changeFull, changeShort, userPrompt, trace);
+  const text = await callGatewaySmart("change", changeFull, changeShort, userPrompt, trace, timeoutMs);
 
   const parsed = parseConfiguratorJson(text);
 

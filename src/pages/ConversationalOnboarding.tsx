@@ -155,6 +155,80 @@ export function configSolutions(config: Record<string, unknown>): PreviewSolutio
 
 const DONE_STEPS: BuildStep[] = [];
 
+/**
+ * Sync-first planning call with async fallback (fallback C).
+ *
+ * Tries the live call; when it falls over (timeout, gateway errors), queues
+ * a background job and polls plan_jobs until done/failed (~10 min cap).
+ * Validation errors pass straight through — only capacity failures reroute.
+ * Returns the response body shape in both paths ({ok, ...}).
+ */
+async function invokePlanFn(
+  fn: "propose-operator-plan" | "request-change",
+  body: Record<string, unknown>,
+  onBackground: () => void,
+): Promise<{ data: unknown; error: unknown }> {
+  let first: { data: unknown; error: unknown };
+  try {
+    first = await supabase.functions.invoke(fn, { body });
+  } catch (e) {
+    // Network/timeout throw — definitely a capacity failure, not validation.
+    first = { data: null, error: e };
+  }
+  const firstErr = ((first.data as { error?: string } | null)?.error || "") as string;
+  const ok = ((first.data as { ok?: boolean } | null)?.ok) === true;
+  if (ok) return { data: first.data, error: null };
+  // Only capacity failures reroute: gateway/timeout/internal/empty.
+  // Validation errors (missing_*, not_found, ...) pass straight through —
+  // even though supabase also sets an error object on 4xx responses.
+  const capacityCode =
+    firstErr === "" || firstErr.startsWith("gateway_") || firstErr === "internal_error";
+  const thrown = !!first.error && !first.data;
+  if (!capacityCode && !thrown) return { data: first.data, error: first.error };
+
+  // Background path: queue + poll the owner's own job row (RLS-scoped).
+  onBackground();
+  const queued = await supabase.functions.invoke(fn, { body: { ...body, async: true } });
+  const jobId = (queued.data as { job_id?: string } | null)?.job_id;
+  if (queued.error || !jobId) {
+    return { data: first.data, error: first.error };
+  }
+  const jobs = (supabase.from as unknown as (
+    t: string,
+  ) => {
+    select(c: string): {
+      eq(c: string, v: string): {
+        maybeSingle(): Promise<{ data: unknown }>;
+      };
+    };
+  })("plan_jobs");
+  const deadline = Date.now() + 10 * 60 * 1000;
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 6000));
+    const { data: row } = await jobs.select("status,result_json,error_text,trace_json").eq("id", jobId).maybeSingle();
+    const j = (row || {}) as {
+      status?: string;
+      result_json?: Record<string, unknown> | null;
+      error_text?: string | null;
+      trace_json?: unknown;
+    };
+    if (j.status === "done" && j.result_json) {
+      return {
+        data: { ok: true, ...j.result_json, trace: j.trace_json || [], trace_summary: "" },
+        error: null,
+      };
+    }
+    if (j.status === "failed") {
+      return {
+        data: { ok: false, error: j.error_text || "background planning failed", trace: j.trace_json || [] },
+        error: null,
+      };
+    }
+    if (Date.now() > deadline) break;
+  }
+  return { data: first.data, error: first.error };
+}
+
 export default function ConversationalOnboarding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -336,9 +410,14 @@ export default function ConversationalOnboarding() {
       setStepStatus("understand", "done", `You shared ${substantiveCount} message${substantiveCount === 1 ? "" : "s"} → Discussion captured → Ready to design`);
       setStepStatus("design", "active");
 
-      const { data, error } = await supabase.functions.invoke("propose-operator-plan", {
-        body: { description, receptionist_id: recId, user_id: user.id },
-      });
+      const { data, error } = await invokePlanFn(
+        "propose-operator-plan",
+        { description, receptionist_id: recId, user_id: user.id },
+        () => {
+          setStepStatus("design", "active", "Live call timed out → Continuing in background — I'll pick it up automatically");
+          appendAssistant("Taking longer than usual — I'm working on your plan in the background and will bring it here the moment it's ready. Nothing for you to do.");
+        },
+      );
       if (error) throw error;
       const d = data as { ok?: boolean; error?: string; plan?: { full_text?: string }; config?: Record<string, unknown>; version_id?: string };
       if (!d?.ok) throw new Error(d?.error || "Failed to generate plan");
@@ -565,13 +644,17 @@ export default function ConversationalOnboarding() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data, error } = await supabase.functions.invoke("request-change", {
-        body: {
+      const { data, error } = await invokePlanFn(
+        "request-change",
+        {
           change_request: `Original discussion summary: "${summary}". The owner wants this adjustment: "${feedback}". Regenerate the plan with this change.`,
           receptionist_id: planData.receptionistId,
           user_id: user.id,
         },
-      });
+        () => {
+          appendAssistant("This change needs a little longer — working in the background, I'll update the plan here automatically.");
+        },
+      );
       if (error) throw error;
       const d = data as { ok?: boolean; error?: string; config?: Record<string, unknown>; plan?: { full_text?: string }; version_id?: string };
       if (!d?.ok) throw new Error(d?.error || "Failed to update plan");
