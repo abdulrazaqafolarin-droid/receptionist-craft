@@ -114,11 +114,12 @@ export async function researchNeed(need: string): Promise<ResearchedSolution> {
   const curated = (CURATED[need.toLowerCase()] || []).slice();
   try {
     // stars floor kills 1-star spam; NOT-terms keep scam repos out of results.
+    // 10s cap: research runs inside the 150s edge budget after the AI call.
     const q = encodeURIComponent(
       `${searchTerms(need)} in:name,description stars:>20 NOT:bypass NOT:crack NOT:hack NOT:stealer NOT:phishing`,
     );
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const timer = setTimeout(() => ctrl.abort(), 10000);
     let res: Response;
     try {
       res = await fetch(`https://api.github.com/search/repositories?q=${q}&sort=stars&order=desc&per_page=8`, {
@@ -191,12 +192,25 @@ export async function researchNeed(need: string): Promise<ResearchedSolution> {
   }
 }
 
-/** Research several needs sequentially (respects GitHub's unauthenticated rate limit). */
+/** Research several needs with bounded concurrency (max 3 at once).
+ *
+ * Timeout discipline: Supabase kills idle edge calls at 150s, and the
+ * gateway ask ahead of research can take up to 120s. Sequential research
+ * (5 needs x 15s) blows the budget alone — parallel x3 at 10s each keeps
+ * the whole tail under ~15s. Max 3 needs researched per call; the rest
+ * keep their honest "look together" note from the empty path.
+ */
 export async function researchNeeds(needs: string[]): Promise<ResearchedSolution[]> {
-  const unique = [...new Set(needs.filter((n) => typeof n === "string" && n.trim()))].slice(0, 5);
-  const out: ResearchedSolution[] = [];
-  for (const need of unique) {
-    out.push(await researchNeed(need.trim()));
+  const unique = [...new Set(needs.filter((n) => typeof n === "string" && n.trim()))].slice(0, 3);
+  const out: (ResearchedSolution | null)[] = new Array(unique.length).fill(null);
+  const CONCURRENCY = 3;
+  let cursor = 0;
+  async function worker(): Promise<void> {
+    while (cursor < unique.length) {
+      const i = cursor++;
+      out[i] = await researchNeed(unique[i].trim());
+    }
   }
-  return out;
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, unique.length) }, () => worker()));
+  return out as ResearchedSolution[];
 }
