@@ -114,13 +114,15 @@ serve(async (req) => {
     const unknownKeys = [...(uiPlan.show || []), ...(uiPlan.hide || [])]
       .map((i) => i?.key)
       .filter((k): k is string => typeof k === "string" && !known.has(k));
-    if (unknownKeys.length > 0) {
-      trace.fail("validate-surface", "Unknown dashboard pages rejected", [...new Set(unknownKeys)].join(", "));
-      return jsonRes({ ok: false, error: "unknown_surface_keys", keys: [...new Set(unknownKeys)], trace: trace.steps(), trace_summary: trace.summary() }, 400);
-    }
+    // Unknown keys are IGNORED, never blocking: cleanKeys already excluded
+    // them from visible_pages, so they change nothing. A 400 here once
+    // blocked a good plan over a harmless extra hide entry — approval must
+    // fail only on real problems. The ignored keys are recorded in the trace.
+    const ignored = [...new Set(unknownKeys)];
     trace.end("validate-surface", "Dashboard surface validated against manifest", [
       `${shownKeys.length} pages shown`,
       `${hiddenKeys.length} hidden`,
+      ...(ignored.length > 0 ? [`ignored unknown: ${ignored.join(", ")}`] : []),
     ]);
     if (shownKeys.length > 0 || hiddenKeys.length > 0) {
       // Customer-facing widget pieces: strict booleans only, derived from the

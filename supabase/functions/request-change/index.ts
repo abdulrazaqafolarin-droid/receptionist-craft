@@ -106,7 +106,7 @@ serve(async (req) => {
         const found = solutions.reduce((a, s) => a + s.candidates.length, 0);
         const oss = solutions.reduce((a, s) => a + s.candidates.filter((c) => c.open_source).length, 0);
         trace.end("research-needs", `Researched ${names.length} connector need${names.length === 1 ? "" : "s"}`, [
-          `repos:${found} found`,
+          `repos:${found}`,
           `${oss} open-source`,
         ]);
         result.config.external_solutions = solutions;

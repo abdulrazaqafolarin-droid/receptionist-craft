@@ -70,13 +70,14 @@ export class TraceCollector {
     const files = this.done
       .flatMap((d) => d.facts)
       .filter((f) => f.startsWith("file:")).length;
-    const repos = this.done
+    const reposFound = this.done
       .flatMap((d) => d.facts)
       .filter((f) => f.startsWith("repos:"))
-      .map((f) => f.replace("repos:", "").trim());
+      .map((f) => f.replace("repos:", "").trim())
+      .find((s) => s.length > 0);
     const bits = [`${ok} step${ok === 1 ? "" : "s"}`, secs];
     if (files > 0) bits.push(`${files} file${files === 1 ? "" : "s"} read`);
-    if (repos.length > 0) bits.push(`${repos.join(", ")} repos found`);
+    if (reposFound !== undefined) bits.push(`${reposFound} repos found`);
     return bits.join(" · ");
   }
 }
