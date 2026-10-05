@@ -48,9 +48,12 @@ serve(async (req) => {
     (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
   );
 
-  // Reap stale runs: a worker killed mid-flight (150s wall, box death)
-  // leaves running rows no one finishes. Reset them to queued while
-  // attempts remain, so the next sweep retries honestly.
+  // Reap stale runs: a worker killed mid-flight (150s wall, box death,
+  // deploy restart) leaves running rows no one finishes. Reset them to
+  // queued while attempts remain, so the next sweep retries honestly.
+  // Rows at max attempts are rescued ONCE MORE only if young (created
+  // < 2h ago) — attempts reset to MAX-1 so the cap still bites on truly
+  // permanent failures instead of retrying forever.
   try {
     await supabase
       .from("plan_jobs")
@@ -58,6 +61,13 @@ serve(async (req) => {
       .eq("status", "running")
       .lt("started_at", new Date(Date.now() - 15 * 60 * 1000).toISOString())
       .lt("attempts", MAX_ATTEMPTS);
+    await supabase
+      .from("plan_jobs")
+      .update({ status: "queued", started_at: null, attempts: MAX_ATTEMPTS - 1 })
+      .eq("status", "running")
+      .gte("attempts", MAX_ATTEMPTS)
+      .lt("started_at", new Date(Date.now() - 15 * 60 * 1000).toISOString())
+      .gt("created_at", new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
   } catch {
     // Reaper is best-effort; the claim below is the real path.
   }
