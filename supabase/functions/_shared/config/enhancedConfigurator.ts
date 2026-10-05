@@ -200,6 +200,7 @@ CRITICAL RULES:
   "will_do": string[],
   "wont_do": string[],
   "external_needs": string[],
+  "build_needs": [ { "need": string, "why": string } ],
   "ui_plan": {
     "show": [ { "key": string, "why": string } ],
     "hide": [ { "key": string, "why": string } ],
@@ -216,6 +217,7 @@ SURFACE PLANNING (do this AFTER the config above):
 - Activate retention plays wherever their tags match.
 - ui_plan lives INSIDE the config object above (config.ui_plan), so approval writes it straight through.
 - SIZE DISCIPLINE (your reply must fit): every "why" is ONE short phrase, max 12 words. reasoning_notes max 5 sentences. No markdown, no fences, no commentary outside the JSON — the reply must BE the JSON object and nothing else.
+- BUILD NEEDS (never leave a gap silent): if mid-build you lacked power (a tool you couldn't use), information (a fact nowhere in your reference file), or a capability (no action covers it), list each in build_needs with a one-line why. This is how the platform learns what to add next — an unlisted gap is a lie by omission. Empty array when nothing was missing.
 
 OUTPUT FORMAT (STRICT JSON, no markdown fences):
 {

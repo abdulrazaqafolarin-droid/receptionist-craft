@@ -13,6 +13,7 @@
 import { composeSurface, composeWidgetSurface, type BusinessProfile } from "../supabase/functions/_shared/config/surfaceManifest.ts";
 import { TraceCollector } from "../supabase/functions/_shared/config/trace.ts";
 import { parseTrace, offlineDraftTrace } from "../src/lib/buildTrace.ts";
+import { generatePlanFromConfig } from "../supabase/functions/_shared/config/planGenerator.ts";
 
 let pass = 0;
 let fail = 0;
@@ -171,6 +172,28 @@ check("parseTrace: rejects garbage", parseTrace({ nope: 1 }, "Plan") === null);
 check("parseTrace: rejects empty trace", parseTrace({ trace: [] }, "Plan") === null);
 const off = offlineDraftTrace(3);
 check("offlineDraftTrace: labelled honest", off.origin === "Plan (offline draft)" && off.steps.length === 2);
+
+// --- Build-needs section renders when the model reports gaps ---
+const needsPlan = generatePlanFromConfig({
+  business: { display_name: "Test", business_type: "Salon" },
+  build_needs: [
+    { need: "TikTok posting limits", why: "Not in the reference file" },
+    { need: "", why: "blank entries dropped" },
+  ],
+});
+check(
+  "plan: build-needs section renders",
+  needsPlan.sections.some((s) => s.id === "build-needs" && s.content.includes("TikTok posting limits")),
+);
+check(
+  "plan: blank needs dropped",
+  !needsPlan.full_text.includes("blank entries dropped"),
+);
+const noNeedsPlan = generatePlanFromConfig({ business: { display_name: "Test" } });
+check(
+  "plan: no build-needs section when empty",
+  !noNeedsPlan.sections.some((s) => s.id === "build-needs"),
+);
 
 console.log(`\neval: ${pass} passed, ${fail} failed`);
 if (fail > 0) Deno.exit(1);

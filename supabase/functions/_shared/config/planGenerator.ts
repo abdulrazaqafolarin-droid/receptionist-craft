@@ -177,6 +177,24 @@ export function generatePlanFromConfig(config: Record<string, unknown>): Generat
     });
   }
 
+  // Build needs: what the AI lacked mid-build (power, information, capability).
+  // Shown so gaps become roadmap input instead of silent guesses.
+  const buildNeeds = (config.build_needs || []) as Array<{ need?: unknown; why?: unknown }>;
+  const needItems = buildNeeds
+    .filter((x) => typeof x?.need === "string" && (x.need as string).trim())
+    .slice(0, 5)
+    .map((x) => ({ need: x.need as string, why: typeof x.why === "string" ? x.why : "" }));
+  if (needItems.length > 0) {
+    sections.push({
+      id: "build-needs",
+      title: "To Build Even Better Next Time",
+      content:
+        "While planning, the AI ran into limits it wants you to know about — nothing was guessed over, and each of these is tracked for future upgrades:\n" +
+        needItems.map((n) => `- ${n.need}${n.why ? ` — ${n.why}` : ""}`).join("\n"),
+      confidence: "high",
+    });
+  }
+
   // Section 10: Operator dashboard surface (pages, modules, connectors, retention)
   const uiPlan = (config.ui_plan || {}) as {
     show?: Array<{ key?: string; why?: string }>;
