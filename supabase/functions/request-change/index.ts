@@ -140,6 +140,9 @@ serve(async (req) => {
       previous_version: latestVersion.version_number,
       trace: trace.steps(),
       trace_summary: trace.summary(),
+      // The AI's own stated reasoning, for the Playground's
+      // "what it was thinking" view. Labelled as model words, not truth.
+      reasoning: typeof result.reasoning_notes === "string" ? result.reasoning_notes.slice(0, 1500) : "",
     });
   } catch (e) {
     console.error("[request-change] Error:", e);

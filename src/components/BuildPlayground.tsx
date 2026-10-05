@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, FlaskConical } from "lucide-react";
+import { Brain, ChevronDown, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatMs, type PlayTrace } from "@/lib/buildTrace";
 
@@ -13,6 +13,7 @@ import { formatMs, type PlayTrace } from "@/lib/buildTrace";
  */
 export function BuildPlayground({ trace }: { trace: PlayTrace | null }) {
   const [open, setOpen] = useState(false);
+  const [showThinking, setShowThinking] = useState(false);
   if (!trace) return null;
 
   const dot = (status: string) =>
@@ -69,6 +70,34 @@ export function BuildPlayground({ trace }: { trace: PlayTrace | null }) {
           <p className="type-metadata pt-1">
             Reported by the backend as it ran — your review steps show above.
           </p>
+          {trace.reasoning && (
+            <div className="rounded-xl border border-border bg-muted/40">
+              <button
+                type="button"
+                onClick={() => setShowThinking((v) => !v)}
+                aria-expanded={showThinking}
+                aria-label={showThinking ? "Hide AI reasoning" : "Show what the AI was thinking"}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left pressable"
+              >
+                <Brain className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  What the AI was thinking
+                </span>
+                <ChevronDown
+                  className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", showThinking && "rotate-180")}
+                  aria-hidden="true"
+                />
+              </button>
+              {showThinking && (
+                <div className="border-t border-border px-3 py-2.5">
+                  <p className="text-sm leading-relaxed">{trace.reasoning}</p>
+                  <p className="type-metadata mt-1.5">
+                    The model's own words — its reasons, not verified truth. Judge the plan, not the prose.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </ol>
       )}
     </div>
