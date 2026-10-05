@@ -14,6 +14,7 @@ import { OwnerChat } from "@/components/OwnerChat";
 import { ConversationalManagement } from "@/components/ConversationalManagement";
 import { NumberTicker } from "@/components/ui/number-ticker";
 import { SpotlightCard } from "@/components/SpotlightCard";
+import { toast } from "sonner";
 import { useActiveOperatorStore } from "@/store/activeOperator";
 import { visiblePagesFromCapabilities } from "@/lib/operatorSurface";
 
@@ -385,6 +386,28 @@ export default function Dashboard() {
                             >
                               Edit
                             </Button>
+                            {selectedReceptionistId === receptionist.id ? (
+                              <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
+                                Active
+                              </Badge>
+                            ) : (
+                              <Button
+                                onClick={() => {
+                                  setActive(
+                                    receptionist.id,
+                                    receptionist.business_name || receptionist.name,
+                                    visiblePagesFromCapabilities(receptionist.capabilities),
+                                  );
+                                  toast.success(`${receptionist.business_name || receptionist.name} is now active — dashboard updated.`);
+                                }}
+                                size="sm"
+                                variant="outline"
+                                className="touch-target"
+                                aria-label={`Set ${receptionist.name} as active operator`}
+                              >
+                                Set active
+                              </Button>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
