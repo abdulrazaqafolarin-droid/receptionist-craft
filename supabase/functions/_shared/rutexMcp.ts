@@ -65,7 +65,13 @@ async function rpc<T = Record<string, unknown>>(
   }
 
   if (res.status === 401) throw new RutexMcpError("gateway rejected the bearer key", "auth");
-  if (!res.ok) throw new RutexMcpError(`gateway http_${res.status}`, "protocol");
+  // Include a body preview: ngrok tunnel error pages come back as non-JSON
+  // HTML with 4xx/5xx statuses, and without the preview a tunnel flap looks
+  // identical to a gateway route miss. This tells them apart instantly.
+  if (!res.ok) {
+    const preview = (await res.text()).slice(0, 120).replace(/\s+/g, " ");
+    throw new RutexMcpError(`gateway http_${res.status} :: ${preview}`, "protocol");
+  }
 
   // Response may be plain JSON or SSE-framed; normalize to text then parse.
   const raw = await res.text();
