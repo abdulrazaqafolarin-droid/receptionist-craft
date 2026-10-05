@@ -28,13 +28,31 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
   const [dailyData, setDailyData] = useState<DailyData[]>([]);
   const [funnel, setFunnel] = useState<FunnelStep[]>([]);
   const [loading, setLoading] = useState(true);
+  // Keyed on the joined ids: refetch only when the SET changes, never on
+  // parent re-renders (a fresh array identity + function identity used to
+  // refetch in a loop, visibly shaking the charts on every cycle).
+  const idsKey = receptionistIds.join(",");
+  const ids = receptionistIds;
 
   useEffect(() => {
-    if (receptionistIds.length > 0) loadChartData();
-  }, [receptionistIds, loadChartData]);
+    if (ids.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const data = await loadChartData(ids);
+      if (!cancelled && data) {
+        setDailyData(data.dailyData);
+        setFunnel(data.funnel);
+      }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
 
-  async function loadChartData() {
-    setLoading(true);
+  async function loadChartData(ids: string[]): Promise<{ dailyData: DailyData[]; funnel: FunnelStep[] } | null> {
     try {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -45,17 +63,17 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
         supabase
           .from("conversations")
           .select("created_at")
-          .in("receptionist_id", receptionistIds)
+          .in("receptionist_id", ids)
           .gte("created_at", since),
         supabase
           .from("appointments")
           .select("created_at, status")
-          .in("receptionist_id", receptionistIds)
+          .in("receptionist_id", ids)
           .gte("created_at", since),
         supabase
           .from("orders")
           .select("created_at, status")
-          .in("receptionist_id", receptionistIds)
+          .in("receptionist_id", ids)
           .gte("created_at", since),
       ]);
 
@@ -94,8 +112,6 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
           ...vals,
         }));
 
-      setDailyData(daily);
-
       // Conversion funnel
       const totalConversations = conversations.length;
       const totalAppointments = appointments.length;
@@ -103,16 +119,18 @@ export function DashboardCharts({ receptionistIds }: DashboardChartsProps) {
       const completedAppointments = appointments.filter((a) => a.status === "completed").length;
       const completedOrders = ordersData.filter((o) => o.status === "completed").length;
 
-      setFunnel([
-        { label: "Conversations", value: totalConversations, color: "hsl(var(--primary))" },
-        { label: "Bookings", value: totalAppointments, color: "hsl(var(--chart-2))" },
-        { label: "Orders", value: totalOrders, color: "hsl(var(--chart-4, 280 65% 60%))" },
-        { label: "Completed", value: completedAppointments + completedOrders, color: "hsl(var(--success))" },
-      ]);
+      return {
+        dailyData: daily,
+        funnel: [
+          { label: "Conversations", value: totalConversations, color: "hsl(var(--primary))" },
+          { label: "Bookings", value: totalAppointments, color: "hsl(var(--chart-2))" },
+          { label: "Orders", value: totalOrders, color: "hsl(var(--chart-4, 280 65% 60%))" },
+          { label: "Completed", value: completedAppointments + completedOrders, color: "hsl(var(--success))" },
+        ],
+      };
     } catch (err) {
       console.error("Chart data error:", err);
-    } finally {
-      setLoading(false);
+      return null;
     }
   }
 

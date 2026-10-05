@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -115,6 +116,10 @@ const App = () => {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
+          {/* Sonner host: every `toast()` call across the app renders here.
+              It was missing, so all sonner toasts (confirmations, errors)
+              silently never displayed. */}
+          <SonnerToaster position="top-center" richColors closeButton />
           <BrowserRouter>
             <KeyboardShortcutsProvider>
           {/* Public routes - accessible to everyone */}

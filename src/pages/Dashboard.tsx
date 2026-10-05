@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +26,9 @@ export default function Dashboard() {
   // owns selection: picking here switches the whole dashboard surface.
   const selectedReceptionistId = useActiveOperatorStore((s) => s.receptionistId);
   const setActive = useActiveOperatorStore((s) => s.setActive);
+  // Stable id list: a fresh array every render retriggers every chart
+  // fetch loop downstream (the dashboard "shaking"). Memoize on the rows.
+  const chartReceptionistIds = useMemo(() => receptionists.map((r) => r.id), [receptionists]);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [stats, setStats] = useState({
     conversations: 0,
@@ -320,7 +323,7 @@ export default function Dashboard() {
         {/* Charts Section */}
         {receptionists.length > 0 && (
           <section className="mb-8 sm:mb-10 animate-fade-in" aria-label="Activity charts">
-            <DashboardCharts receptionistIds={receptionists.map(r => r.id)} />
+            <DashboardCharts receptionistIds={chartReceptionistIds} />
           </section>
         )}
 
