@@ -274,11 +274,70 @@ Then produce the OperationsConfig and your reasoning notes.`;
 }
 
 /**
- * Render the Configurator's reasoning-history trail (Step 8 / §4.1b). This is
- * the memory of WHY each past setting was chosen — every prior owner request,
- * the plan produced, and the agent's own reasoning. The SAME Configurator reads
- * this back so continuity is preserved across the business's lifetime.
+ * Slim config for change prompts: the model needs structure, not prose.
+ * knowledge_base, solutions, and plan texts go along only as lengths —
+ * sending them whole is what pushes change calls past the gateway timeout.
  */
+function slimConfigForChange(config: Record<string, unknown>): Record<string, unknown> {
+  const uiPlan = (config.ui_plan || {}) as {
+    show?: Array<{ key?: unknown }>; hide?: Array<{ key?: unknown }>;
+    widget_pieces?: unknown; modules_on?: Array<{ key?: unknown }>;
+    connectors_needed?: Array<{ key?: unknown }>; retention_on?: Array<{ key?: unknown }>;
+  };
+  const keys = (l: Array<{ key?: unknown }> | undefined) =>
+    (l || []).map((x) => x?.key).filter((k): k is string => typeof k === "string");
+  const kb = typeof config.knowledge_base === "string" ? config.knowledge_base : "";
+  return {
+    operator_kind: config.operator_kind,
+    business_type: (config.business as Record<string, unknown> | undefined)?.business_type,
+    tone: (config.business as Record<string, unknown> | undefined)?.tone,
+    capabilities: config.capabilities,
+    workflows: config.workflows,
+    channels: config.channels,
+    policies: config.policies,
+    timezone: config.timezone,
+    hours_count: Array.isArray(config.hours) ? config.hours.length : 0,
+    knowledge_base_chars: kb.length,
+    will_do: config.will_do,
+    wont_do: config.wont_do,
+    external_needs: config.external_needs,
+    ui_plan: {
+      show: keys(uiPlan.show),
+      hide: keys(uiPlan.hide),
+      widget_pieces: uiPlan.widget_pieces,
+      modules_on: keys(uiPlan.modules_on),
+      connectors_needed: keys(uiPlan.connectors_needed),
+      retention_on: keys(uiPlan.retention_on),
+    },
+  };
+}
+ 
+/**
+ * Merge a change-plan result back onto the full current config.
+ *
+ * The model reasons over the SLIM config, so fields hidden from it
+ * (knowledge_base prose, hours detail, contact detail) can never be
+ * intentional changes — they always carry forward. Visible fields come
+ * from the model, falling back to current when omitted. Without this,
+ * slimming the prompt would silently wipe knowledge on every change.
+ */
+function mergeChangeConfig(
+  current: Record<string, unknown>,
+  parsed: Record<string, unknown>,
+): Record<string, unknown> {
+  const hidden = ["knowledge_base", "hours", "contact"];
+  const out: Record<string, unknown> = { ...parsed };
+  for (const k of hidden) {
+    if (!(k in parsed) || parsed[k] === null || parsed[k] === "" ||
+      (Array.isArray(parsed[k]) && (parsed[k] as unknown[]).length === 0)) {
+      out[k] = current[k];
+    }
+  }
+  for (const [k, v] of Object.entries(current)) {
+    if (!(k in out) || out[k] === undefined) out[k] = v;
+  }
+  return out;
+}
 function buildReasoningHistoryPrompt(history: ReasoningHistoryEntry[]): string {
   if (!history || history.length === 0) return "";
   // Only entries that actually carry a decision ('why') — skip empty stubs.
@@ -287,12 +346,11 @@ function buildReasoningHistoryPrompt(history: ReasoningHistoryEntry[]): string {
   );
   if (meaningful.length === 0) return "";
 
-  const lines = meaningful.map((h, i) => {
-    const who = h.owner_input ? `Owner requested: "${h.owner_input}"` : "";
-    const why = h.reasoning_notes ? `Your reasoning then: ${h.reasoning_notes}` : "";
-    const what = h.plan_text ? `Plan summary: ${h.plan_text.slice(0, 600)}` : "";
+  const lines = meaningful.slice(0, 3).map((h, i) => {
+    const who = h.owner_input ? `Owner requested: "${String(h.owner_input).slice(0, 300)}"` : "";
+    const why = h.reasoning_notes ? `Your reasoning then: ${String(h.reasoning_notes).slice(0, 300)}` : "";
     return `#${meaningful.length - i} (config version ${h.version_number}, source: ${h.change_source})
-${[who, why, what].filter(Boolean).join("\n")}`;
+${[who, why].filter(Boolean).join("\n")}`;
   }).join("\n\n");
 
   return `=== WHY THINGS ARE THE WAY THEY ARE (CONFIGURATOR'S PAST REASONING, newest first) ===
@@ -344,8 +402,8 @@ ${buildInventoryBundle()}`;
   const changeShort = `${changeBase}
 ${FILE_REF_NOTE}`;
 
-  const userPrompt = `CURRENT CONFIGURATION:
-${JSON.stringify(currentConfig, null, 2)}
+  const userPrompt = `CURRENT CONFIGURATION (slim — structure only, prose lives in the records):
+${JSON.stringify(slimConfigForChange(currentConfig), null, 2)}
 
 OWNER'S CHANGE REQUEST:
 "${ownerChangeRequest}"
@@ -357,11 +415,13 @@ Apply this change to the configuration. Only modify what's necessary.`;
 
   const parsed = parseConfiguratorJson(text);
 
-  const plan = generatePlanFromConfig(parsed.config);
+  // Merge back onto the full config (slim-prompt safety — see mergeChangeConfig).
+  const config = mergeChangeConfig(currentConfig, parsed.config);
+  const plan = generatePlanFromConfig(config);
 
   return {
     plan,
-    config: parsed.config,
+    config,
     reasoning_notes: parsed.reasoning_notes,
   };
 }
