@@ -75,7 +75,8 @@ serve(async (req) => {
   // Atomic claim: update + subselect in one statement. A concurrent tick
   // blocks on the row lock, then re-evaluates status='queued' against the
   // winner's commit and matches zero rows. Exactly one worker wins.
-  const { data: claimed, error: claimErr } = await supabase.rpc("claim_plan_job");
+  // Lane 'fast': takes 'any' jobs for the wall-clock-constrained path.
+  const { data: claimed, error: claimErr } = await supabase.rpc("claim_plan_job", { p_lane: "fast" });
   if (claimErr) {
     // No claim RPC? Fall back to a plain pick (single-worker setups).
     console.warn("[plan-worker] claim RPC missing, single pick:", claimErr.message);
@@ -89,6 +90,7 @@ serve(async (req) => {
       .from("plan_jobs")
       .select("id, receptionist_id, user_id, kind, input_json, attempts")
       .eq("status", "queued")
+      .in("lane", ["any", "fast"])
       .lt("attempts", MAX_ATTEMPTS)
       .order("created_at", { ascending: true })
       .limit(1);
@@ -96,7 +98,7 @@ serve(async (req) => {
     if (!first) return jsonRes({ ok: true, claimed: false });
     const { data: updated } = await supabase
       .from("plan_jobs")
-      .update({ status: "running", started_at: new Date().toISOString(), attempts: first.attempts + 1 })
+      .update({ status: "running", started_at: new Date().toISOString(), attempts: first.attempts + 1, lane: "fast" })
       .eq("id", first.id)
       .eq("status", "queued")
       .select("id, receptionist_id, user_id, kind, input_json, attempts");
@@ -187,11 +189,16 @@ serve(async (req) => {
     console.error("[plan-worker] Job failed:", msg);
     trace.fail("worker", "Background planning failed", msg);
     const attempts = ((job as PlanJob).attempts || 1) + 0;
+    // Escalation ladder: fast-lane failures with attempts left hand OFF
+    // to the long lane (no time wall) instead of retrying the same
+    // constrained path. Terminal only at max attempts.
+    const escalate = attempts < MAX_ATTEMPTS;
     await finish({
-      status: attempts >= MAX_ATTEMPTS ? "failed" : "queued",
+      status: escalate ? "queued" : "failed",
+      lane: escalate ? "long" : undefined,
       error_text: msg.slice(0, 500),
       trace_json: trace.steps(),
-      ...(attempts >= MAX_ATTEMPTS ? {} : { started_at: null }),
+      ...(escalate ? { started_at: null } : {}),
     });
   }
   };

@@ -50,14 +50,21 @@ export class StripeProvider implements PaymentProvider {
    * redirect works with zero client SDK.
    */
   async createIntent(params: CreateIntentParams): Promise<PaymentIntentResult> {
+    // Return URLs: caller-provided first, FRONTEND_URL env second, live
+    // domain last — never hardcoded per-environment beyond the fallback.
+    const appBase = (params.success_url && params.success_url.split("/billing")[0]) ||
+      Deno.env.get("FRONTEND_URL") ||
+      "https://receptionist-craft.vercel.app";
+    const successUrl = (params.success_url || `${appBase}/billing?checkout=success`).slice(0, 2000);
+    const cancelUrl = (params.cancel_url || `${appBase}/billing?checkout=cancelled`).slice(0, 2000);
     const body = new URLSearchParams();
     body.append("mode", "payment");
     body.append("line_items[0][price_data][currency]", params.currency.toLowerCase());
     body.append("line_items[0][price_data][product_data][name]", (params.description || "Payment").slice(0, 500));
     body.append("line_items[0][price_data][unit_amount]", String(params.amount));
     body.append("line_items[0][quantity]", "1");
-    body.append("success_url", (params.success_url || "https://receptionist-craft.vercel.app/billing?checkout=success").slice(0, 2000));
-    body.append("cancel_url", (params.cancel_url || "https://receptionist-craft.vercel.app/billing?checkout=cancelled").slice(0, 2000));
+    body.append("success_url", successUrl);
+    body.append("cancel_url", cancelUrl);
     if (params.receipt_email) {
       body.append("customer_email", params.receipt_email);
     }
