@@ -132,6 +132,34 @@ import type { BusinessCapabilities, PrimaryGoal, UniversalIntent } from "../_sha
 import { resolveCustomer, bumpVisitCount } from "../_shared/customers/resolveCustomer.ts";
 import { getCustomerHistory, formatHistoryForPrompt } from "../_shared/customers/getCustomerHistory.ts";
 import { findAvailableStaff } from "../_shared/staff/index.ts";
+import { askRutex } from "../_shared/rutexMcp.ts";
+
+/**
+ * Gateway responder fallback (responder agent via rutex_ask).
+ *
+ * When direct Gemini fails (key/quota/model), the SAME built prompt goes
+ * to the gateway responder instead of degrading to canned text. Session
+ * id is stable per widget thread, so gateway memory follows the visitor.
+ * Throws on empty or failed replies so the static fallback still catches
+ * total failure. Never throws gateway internals to the visitor.
+ */
+async function callGatewayResponder(
+  conversationMessages: Array<{ role: string; content: string }>,
+  sessionId: string,
+): Promise<{ choices: Array<{ message: { content: string } }> }> {
+  const flat = conversationMessages
+    .map((m) => {
+      const who = m.role === "system" ? "SYSTEM INSTRUCTIONS" : m.role === "assistant" ? "ASSISTANT" : "VISITOR";
+      return `${who}: ${m.content}`;
+    })
+    .join("\n\n");
+  const prompt = `${flat}\n\nReply as the receptionist, continuing this exact conversation. Answer ONLY with the reply text a visitor should see — no commentary, no JSON, no explanations.`;
+  const r = await askRutex(`widget-${sessionId}`, prompt, { timeoutMs: 60000 });
+  const text = (r.text || "").trim();
+  if (!text) throw new Error("gateway responder returned empty text");
+  console.log(`[Widget Chat] Gateway responder replied (model=${r.model || "unknown"})`);
+  return { choices: [{ message: { content: text } }] };
+}
 
 //                                                                            
 // CORS HEADERS
@@ -2676,7 +2704,8 @@ if (!GEMINI_API_KEY) {
     const aiData = await callAIWithCircuitBreaker(
       "gemini-2.5-flash-lite",
       async () => {
-        const aiRes = await fetch(
+        try {
+          const aiRes = await fetch(
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
   {
     method: "POST",
@@ -2714,11 +2743,23 @@ if (!aiRes.ok) {
   throw new Error(`Gemini request failed: ${aiRes.status} - ${errTxt.substring(0, 200)}`);
 }
 
-const geminiData = await aiRes.json();
-const geminiText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-return {
-  choices: [{ message: { content: geminiText } }]
-};
+    const geminiData = await aiRes.json();
+    const geminiText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    if (!geminiText.trim()) throw new Error("Gemini returned empty text");
+    return {
+      choices: [{ message: { content: geminiText } }]
+    };
+        } catch (geminiErr) {
+          // Direct model failed (key/quota/model) — same prompt goes to the
+          // gateway responder agent instead of canned text. Its failure
+          // propagates to the static fallback below, never to the visitor.
+          console.warn("[Widget Chat] Gemini failed, trying gateway responder:",
+            geminiErr instanceof Error ? geminiErr.message : String(geminiErr).slice(0, 150));
+          return await callGatewayResponder(
+            conversationMessages as Array<{ role: string; content: string }>,
+            sessionId || "unknown",
+          );
+        }
       },
       // Intent-aware fallback when Gemini is down (M4)
       { choices: [{ message: { content: buildFallbackResponse(
@@ -2727,7 +2768,7 @@ return {
         receptionist.business_name,
         receptionist.business_phone || receptionist.phone || '',
       ) } }] },
-      30000 // 30s timeout
+      75000 // 75s: Gemini fails fast (~2s); the gateway responder fallback may take up to 60s and is worth waiting for over canned text
     );
 
     let reply = aiData.choices?.[0]?.message?.content || "I'm sorry, I couldn't process that.";
