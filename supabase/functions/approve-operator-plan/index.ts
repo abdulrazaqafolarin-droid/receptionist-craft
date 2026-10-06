@@ -134,14 +134,17 @@ serve(async (req) => {
       `${hiddenKeys.length} hidden`,
       ...(ignored.length > 0 ? [`ignored unknown: ${ignored.join(", ")}`] : []),
     ]);
+    // Workflow flags drive widget pieces AND the catalog model — computed
+    // once here (function scope) so both the surface write and the row
+    // update below agree, with or without a ui_plan present.
+    const workflows = (config.workflows || {}) as Record<string, { enabled?: boolean }>;
+    const bookingOn = workflows.appointment_booking?.enabled === true;
+    const orderingOn = workflows.product_ordering?.enabled === true;
     if (shownKeys.length > 0 || hiddenKeys.length > 0) {
       // Customer-facing widget pieces: strict booleans only, derived from the
       // approved ui_plan when present, else from the approved workflows.
-      const workflows = (config.workflows || {}) as Record<string, { enabled?: boolean }>;
       const wp = (uiPlan.widget_pieces || {}) as Record<string, unknown>;
       const bool = (v: unknown, fallback: boolean) => typeof v === "boolean" ? v : fallback;
-      const bookingOn = workflows.appointment_booking?.enabled === true;
-      const orderingOn = workflows.product_ordering?.enabled === true;
       // Persist researched solutions (informational — the Connections page
       // reads these so the owner sees free options first). Lightly validated.
       // If the draft arrived without solutions (request-change deferred them
@@ -218,6 +221,11 @@ serve(async (req) => {
         tone: business.tone || undefined,
         capabilities: capabilities,
         knowledge_base: knowledgeBase,
+        // Derive the widget's catalog mode from capabilities (previously
+        // only the frontend set this, so API/draft approvals left widgets
+        // stuck on the wrong model — e.g. ordering operators showing no
+        // product replies at all).
+        business_model: bookingOn && orderingOn ? "both" : orderingOn ? "products" : "services",
         // Preserve existing fields that aren't in the config
       })
       .eq("id", receptionist_id);
