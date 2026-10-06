@@ -84,7 +84,13 @@ serve(async (req) => {
     }
 
     // Generate the plan and config from the business description
-    const result = await generateOperatorPlan(description.trim(), trace);
+    // (nofiles bypasses file-drop when the agent read step hangs).
+    const result = await generateOperatorPlan(
+      description.trim(),
+      trace,
+      undefined,
+      (body as Record<string, unknown>).nofiles === true,
+    );
 
     // Stage 4: research each external need (open-source first). Failures
     // degrade to empty candidates — research never blocks planning.
