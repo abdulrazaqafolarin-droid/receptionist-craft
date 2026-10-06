@@ -142,16 +142,27 @@ export function OperatorPreview({
   // Dashboard surface the plan proposes (Stage 3 ui_plan). Missing plan ->
   // tab hidden: older plans without a surface show everything by default.
   const uiPlan = (config.ui_plan || {}) as {
-    show?: Array<{ key?: unknown; why?: unknown }>;
-    hide?: Array<{ key?: unknown; why?: unknown }>;
-    modules_on?: Array<{ key?: unknown; why?: unknown }>;
-    connectors_needed?: Array<{ key?: unknown; why?: unknown }>;
-    retention_on?: Array<{ key?: unknown; why?: unknown }>;
+    show?: Array<unknown>;
+    hide?: Array<unknown>;
+    modules_on?: Array<unknown>;
+    connectors_needed?: Array<unknown>;
+    retention_on?: Array<unknown>;
   };
-  const planItems = (list: Array<{ key?: unknown; why?: unknown }> | undefined) =>
-    (list || [])
-      .filter((x) => typeof x?.key === "string" && x.key)
-      .map((x) => ({ key: x.key as string, why: typeof x.why === "string" ? x.why : "" }));
+  // Accept both shapes: {key, why} objects (spec) and bare strings
+  // (models compress under size discipline).
+  const planItems = (list: Array<unknown> | undefined) => {
+    const out: Array<{ key: string; why: string }> = [];
+    for (const x of list || []) {
+      if (typeof x === "string" && x) out.push({ key: x, why: "" });
+      else if (!!x && typeof x === "object") {
+        const r = x as Record<string, unknown>;
+        if (typeof r.key === "string" && r.key) {
+          out.push({ key: r.key, why: typeof r.why === "string" ? r.why : "" });
+        }
+      }
+    }
+    return out;
+  };
   const surfaceShow = planItems(uiPlan.show);
   const surfaceHide = planItems(uiPlan.hide);
   const surfaceModules = planItems(uiPlan.modules_on);

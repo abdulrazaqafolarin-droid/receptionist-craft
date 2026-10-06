@@ -101,20 +101,29 @@ serve(async (req) => {
       widget_pieces?: Record<string, unknown>;
     };
     const known = new Set(knownPageKeys());
-    const cleanKeys = (list: Array<{ key?: unknown }> | undefined): string[] => {
+    // Accept both shapes: {key, why} objects (spec) and bare strings
+    // (models compress under size discipline). Anything unlisted is ignored.
+    const asKey = (item: unknown): string | null => {
+      if (typeof item === "string") return item;
+      if (!!item && typeof item === "object") {
+        const k = (item as Record<string, unknown>).key;
+        return typeof k === "string" ? k : null;
+      }
+      return null;
+    };
+    const cleanKeys = (list: Array<unknown> | undefined): string[] => {
       const out: string[] = [];
       for (const item of list || []) {
-        if (typeof item?.key === "string" && known.has(item.key) && !out.includes(item.key)) {
-          out.push(item.key);
-        }
+        const k = asKey(item);
+        if (k && known.has(k) && !out.includes(k)) out.push(k);
       }
       return out;
     };
     const shownKeys = cleanKeys(uiPlan.show);
     const hiddenKeys = cleanKeys(uiPlan.hide);
     const unknownKeys = [...(uiPlan.show || []), ...(uiPlan.hide || [])]
-      .map((i) => i?.key)
-      .filter((k): k is string => typeof k === "string" && !known.has(k));
+      .map((i) => asKey(i))
+      .filter((k): k is string => !!k && !known.has(k));
     // Unknown keys are IGNORED, never blocking: cleanKeys already excluded
     // them from visible_pages, so they change nothing. A 400 here once
     // blocked a good plan over a harmless extra hide entry — approval must

@@ -210,5 +210,18 @@ check(
   solPlan.full_text.includes("Fulfillment status: fetched"),
 );
 
+// --- String-shape tolerance: models compress {key,why} to bare strings ---
+const strPlan = generatePlanFromConfig({
+  business: { display_name: "Test" },
+  ui_plan: {
+    show: ["faqs", "availability"],
+    hide: ["staff"],
+  } as unknown as Record<string, unknown>,
+});
+check(
+  "plan: string-shape lists render",
+  strPlan.full_text.includes("- faqs") && strPlan.full_text.includes("- staff"),
+);
+
 console.log(`\neval: ${pass} passed, ${fail} failed`);
 if (fail > 0) Deno.exit(1);

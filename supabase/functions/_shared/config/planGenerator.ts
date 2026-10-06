@@ -208,8 +208,29 @@ export function generatePlanFromConfig(config: Record<string, unknown>): Generat
     retention_on?: Array<{ key?: string; why?: string }>;
     widget_pieces?: { booking?: boolean; ordering?: boolean; voice?: boolean; lead_capture?: boolean };
   };
-  const showList = (uiPlan.show || []).filter((x) => typeof x?.key === "string");
-  const hideList = (uiPlan.hide || []).filter((x) => typeof x?.key === "string");
+  // Accept both shapes: {key, why} objects (spec) and bare strings
+  // (models compress under size discipline).
+  const asItem = (x: unknown): { key: string; why: string } | null => {
+    if (typeof x === "string" && x) return { key: x, why: "" };
+    if (!!x && typeof x === "object") {
+      const r = x as Record<string, unknown>;
+      if (typeof r.key === "string" && r.key) {
+        return { key: r.key, why: typeof r.why === "string" ? r.why : "" };
+      }
+    }
+    return null;
+  };
+  const asList = (l: unknown): Array<{ key: string; why: string }> => {
+    if (!Array.isArray(l)) return [];
+    const out: Array<{ key: string; why: string }> = [];
+    for (const x of l) {
+      const it = asItem(x);
+      if (it) out.push(it);
+    }
+    return out;
+  };
+  const showList = asList(uiPlan.show);
+  const hideList = asList(uiPlan.hide);
   if (showList.length > 0 || hideList.length > 0) {
     const lines: string[] = [];
     if (showList.length > 0) {
@@ -218,15 +239,15 @@ export function generatePlanFromConfig(config: Record<string, unknown>): Generat
     if (hideList.length > 0) {
       lines.push("**Hidden to keep things simple (ask anytime to bring one back):**\n" + hideList.map((p) => `- ${p.key}${p.why ? ` — ${p.why}` : ""}`).join("\n"));
     }
-    const modList = (uiPlan.modules_on || []).filter((x) => typeof x?.key === "string");
+    const modList = asList(uiPlan.modules_on);
     if (modList.length > 0) {
       lines.push("**Working for you behind the scenes:**\n" + modList.map((m) => `- ${m.key}${m.why ? ` — ${m.why}` : ""}`).join("\n"));
     }
-    const connList = (uiPlan.connectors_needed || []).filter((x) => typeof x?.key === "string");
+    const connList = asList(uiPlan.connectors_needed);
     if (connList.length > 0) {
       lines.push("**Worth connecting later:**\n" + connList.map((c) => `- ${c.key}${c.why ? ` — ${c.why}` : ""}`).join("\n"));
     }
-    const retList = (uiPlan.retention_on || []).filter((x) => typeof x?.key === "string");
+    const retList = asList(uiPlan.retention_on);
     if (retList.length > 0) {
       lines.push("**Keeping customers coming back:**\n" + retList.map((r) => `- ${r.key}${r.why ? ` — ${r.why}` : ""}`).join("\n"));
     }
