@@ -169,12 +169,17 @@ export function widgetPiecesFromConfig(config: Record<string, unknown>): WidgetP
 /** Build a SurfaceProfile from an OperationsConfig-shaped object. */
 export function surfaceProfileFromConfig(config: Record<string, unknown>): SurfaceProfile {
   const caps = (config.capabilities || {}) as Record<string, unknown>;
-  const workflows = (config.workflows || {}) as Record<string, Record<string, unknown>>;
+  const workflows = (config.workflows || {}) as Record<string, unknown>;
+  // Tolerant "on": models answer {enabled}, {steps}, or bare true.
+  const wfOn = (v: unknown): boolean => {
+    if (v === true) return true;
+    if (!v || typeof v !== "object") return false;
+    return (v as Record<string, unknown>).enabled !== false;
+  };
   const needs = config.external_needs;
   const kind = config.operator_kind === "assistant" ? "assistant" : config.operator_kind === "both" ? "both" : "receptionist";
-  const booking = caps.books_appointments === true || (workflows.appointment_booking as { enabled?: boolean } | undefined)?.enabled === true;
-  const ordering = caps.sells_products === true || caps.delivers === true ||
-    (workflows.product_ordering as { enabled?: boolean } | undefined)?.enabled === true;
+  const booking = caps.books_appointments === true || wfOn(workflows.appointment_booking);
+  const ordering = caps.sells_products === true || caps.delivers === true || wfOn(workflows.product_ordering);
   return {
     kind,
     booking,

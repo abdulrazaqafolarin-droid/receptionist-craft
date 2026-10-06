@@ -141,9 +141,16 @@ serve(async (req) => {
     // Workflow flags drive widget pieces AND the catalog model — computed
     // once here (function scope) so both the surface write and the row
     // update below agree, with or without a ui_plan present.
-    const workflows = (config.workflows || {}) as Record<string, { enabled?: boolean }>;
-    const bookingOn = workflows.appointment_booking?.enabled === true;
-    const orderingOn = workflows.product_ordering?.enabled === true;
+    // Tolerant "on" check: models answer in shapes ({enabled}, {steps},
+    // or bare true). Only explicit false/null/missing means off.
+    const workflows = (config.workflows || {}) as Record<string, unknown>;
+    const wfOn = (v: unknown): boolean => {
+      if (v === true) return true;
+      if (!v || typeof v !== "object") return false;
+      return (v as Record<string, unknown>).enabled !== false;
+    };
+    const bookingOn = wfOn(workflows.appointment_booking);
+    const orderingOn = wfOn(workflows.product_ordering);
     if (shownKeys.length > 0 || hiddenKeys.length > 0) {
       // Customer-facing widget pieces: strict booleans only, derived from the
       // approved ui_plan when present, else from the approved workflows.
