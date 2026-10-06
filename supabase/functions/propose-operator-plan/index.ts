@@ -92,6 +92,15 @@ serve(async (req) => {
       (body as Record<string, unknown>).nofiles === true,
     );
 
+    // Phase B: stamp the interview's deterministic problem-type onto the
+    // config (planner also reads it in the description). Survives the
+    // model round-trip even when the model does not echo it back, and
+    // mergeChangeConfig carries it forward onto later versions.
+    if (typeof (body as Record<string, unknown>).problem_type === "string") {
+      (result.config as Record<string, unknown>).problem_type =
+        (body as Record<string, unknown>).problem_type;
+    }
+
     // Stage 4: research each external need (open-source first). Failures
     // degrade to empty candidates — research never blocks planning.
     try {

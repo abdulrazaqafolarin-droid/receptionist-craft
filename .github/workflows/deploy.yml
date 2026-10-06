@@ -56,6 +56,9 @@ jobs:
       - name: Run derivation matrix test
         run: deno test supabase/functions/_shared/config/surfaceDerivation.test.ts
 
+      - name: Run interview golden test (problem-type routing)
+        run: deno test --no-check --unstable-sloppy-imports src/lib/conversationalInterview.test.ts
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:

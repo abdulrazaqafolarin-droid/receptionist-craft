@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Bot, Check, Loader2, Send, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { recordSignal } from "@/lib/successSignals";
-import { buildLocalPlan, isSubstantive, nextInterviewTurn } from "@/lib/conversationalInterview";
+import { buildLocalPlan, detectProblemType, isSubstantive, nextInterviewTurn } from "@/lib/conversationalInterview";
 import { surfaceProfileFromConfig, uiPlanForProfile, widgetPiecesFromConfig } from "@/lib/operatorSurface";
 import type { PreviewSolution } from "@/components/onboarding/OperatorPreview";
 import { BuildPlayground } from "@/components/BuildPlayground";
@@ -402,9 +402,15 @@ export default function ConversationalOnboarding() {
       }
       const recId = receptionistIdRef.current;
 
+      // Phase B: deterministic problem-type detection over the full
+      // transcript — covers both the gateway interview and the offline
+      // fallback. Stamped into the description (planner reads it) and the
+      // body (edge stamps it onto the config for derivation + Phase C).
+      const detectedType = detectProblemType(transcriptOf(messages), businessType);
       const description = [
         businessName ? `Business name: ${businessName}.` : "",
         businessType ? `Business type: ${businessType}.` : "",
+        detectedType ? `Interview detected problem type: ${detectedType}.` : "",
         summary ? `Interview summary: ${summary}.` : "",
         "Full discussion:",
         transcriptOf(messages),
@@ -415,7 +421,7 @@ export default function ConversationalOnboarding() {
 
       const { data, error } = await invokePlanFn(
         "propose-operator-plan",
-        { description, receptionist_id: recId, user_id: user.id },
+        { description, receptionist_id: recId, user_id: user.id, ...(detectedType ? { problem_type: detectedType } : {}) },
         () => {
           setStepStatus("design", "active", "Live call timed out → Continuing in background — I'll pick it up automatically");
           appendAssistant("Taking longer than usual — I'm working on your plan in the background and will bring it here the moment it's ready. Nothing for you to do.");

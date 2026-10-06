@@ -25,6 +25,14 @@ export interface InterviewSlots {
   operator_kind: "receptionist" | "assistant" | "both" | null;
   core_need: string | null;
   external_needs: string[];
+  /**
+   * Phase B: which DOMAIN the owner's problem lives in. Distinct from
+   * operator_kind (which shape the operator takes). Content helpers predate
+   * this axis and report null — their track is unchanged. Commerce folds
+   * into front-desk for now: the transact question already covers orders,
+   * and ordering capability is detected separately.
+   */
+  problem_type: "front-desk" | "internal-ops" | "hybrid" | null;
 }
 
 export interface InterviewTurn {
@@ -46,6 +54,7 @@ const EMPTY_SLOTS: InterviewSlots = {
   operator_kind: null,
   core_need: null,
   external_needs: [],
+  problem_type: null,
 };
 
 const ASSISTANT_HINTS = [
@@ -59,6 +68,42 @@ const BOOKING_HINTS = [
   /customer/i, /patient/i, /walk.?in/i, /shop/i, /store/i, /salon/i,
   /clinic/i, /restaurant/i,
 ];
+
+/**
+ * Phase B: inside-the-business problems. A pharmacy tracking expiry, a
+ * shop counting stock, a rota that never gets made — none of these mention
+ * bookings or content, and the old detector defaulted them to
+ * "receptionist" and asked about bookings. These hints route them to the
+ * ops question bank instead.
+ */
+const OPS_HINTS = [
+  /stock/i, /inventor/i, /expir/i, /reorder|re-order/i, /out of stock|runs? out/i,
+  /shift/i, /rota|roster/i, /staff|employee/i, /\bteam\b/i, /supplier/i,
+  /track/i, /\bcount(s|ing|ed)?\b/i, /payroll|salary|wage/i, /task/i,
+  /equipment|mainten/i, /record|ledger|bookkeep/i, /spoil|waste/i,
+  /pharmac|chemist/i, /reorder/i, /audit/i,
+];
+
+export type ProblemType = "front-desk" | "internal-ops" | "hybrid";
+
+/**
+ * Phase B opening move: which domain does this problem live in?
+ * Deterministic and re-computed every turn from the full transcript, so
+ * early misrouting self-corrects as the owner says more. Returns null
+ * when nothing has been said yet (or for the pre-existing content track,
+ * which keeps its own routing).
+ */
+export function detectProblemType(transcript: string, businessTypeHint: string): ProblemType | null {
+  const t = `${businessTypeHint} ${transcript}`;
+  if (t.trim().length === 0) return null;
+  const ops = detect(t, OPS_HINTS);
+  const booking = detect(t, BOOKING_HINTS);
+  const content = detect(t, ASSISTANT_HINTS);
+  if (ops && (booking || content)) return "hybrid";
+  if (ops) return "internal-ops";
+  if (booking) return "front-desk";
+  return null;
+}
 
 function detect(text: string, patterns: RegExp[]): boolean {
   return patterns.some((p) => p.test(text));
@@ -105,7 +150,18 @@ function detectKind(transcript: string, businessTypeHint: string): "receptionist
 
 function extractSlots(transcript: string, businessTypeHint: string): InterviewSlots {
   const t = transcript.toLowerCase();
-  const kind = ownerSaidEnough(transcript) || businessTypeHint ? detectKind(transcript, businessTypeHint) : null;
+  // Phase B: the problem domain can force the operator shape. Internal-ops
+  // problems are always helper-shaped (staff-facing, no customer chat);
+  // hybrid problems always need both shapes. Otherwise the old kind
+  // detector runs unchanged.
+  const problem_type = ownerSaidEnough(transcript) || businessTypeHint
+    ? detectProblemType(transcript, businessTypeHint)
+    : null;
+  const kind = problem_type === "internal-ops"
+    ? "assistant"
+    : problem_type === "hybrid"
+      ? "both"
+      : ownerSaidEnough(transcript) || businessTypeHint ? detectKind(transcript, businessTypeHint) : null;
   const external_needs: string[] = [];
   if (detect(t, [/tiktok/i]) && detect(t, [/post|publish|upload|auto/i])) {
     external_needs.push("tiktok-auto-post");
@@ -125,6 +181,7 @@ function extractSlots(transcript: string, businessTypeHint: string): InterviewSl
     operator_kind: kind,
     core_need: kind === "assistant" || kind === "both" ? transcript.slice(0, 300) : null,
     external_needs,
+    problem_type,
   };
 }
 
@@ -134,19 +191,24 @@ function ownerSaidEnough(transcript: string): boolean {
 
 function buildSummary(ownerMessages: string[], businessTypeHint: string, kind: InterviewSlots["operator_kind"]): string {
   const joined = ownerMessages.join(" ").slice(0, 900);
-  const scope = kind === "assistant"
+  const pt = detectProblemType(ownerMessages.join("\n"), businessTypeHint);
+  const scope = kind === "assistant" && pt === "internal-ops"
+    ? "Owner's problem is inside the business (stock, staff, tasks, records) — not customers. "
+    : kind === "assistant"
     ? "Owner wants a helper operator (not customer bookings). "
     : kind === "both"
       ? "Owner wants a receptionist plus another helper job. "
       : "";
+  const typeLine = pt ? `Problem type detected in interview: ${pt}. ` : "";
   return businessTypeHint
-    ? `${scope}${businessTypeHint}. Owner described: ${joined || "nothing yet"}`.slice(0, 1000)
-    : `${scope}Owner described: ${joined || "nothing yet"}`.slice(0, 1000);
+    ? `${scope}${typeLine}${businessTypeHint}. Owner described: ${joined || "nothing yet"}`.slice(0, 1000)
+    : `${scope}${typeLine}Owner described: ${joined || "nothing yet"}`.slice(0, 1000);
 }
 
 type QuestionKey =
   | "transact" | "hours" | "prices" | "policies" | "contact"
-  | "platform" | "rhythm" | "context" | "dropoff";
+  | "platform" | "rhythm" | "context" | "dropoff"
+  | "track" | "who" | "checkin";
 
 const QUESTION_TEXT: Record<QuestionKey, { full: string; simple: string; example: string }> = {
   transact: {
@@ -194,6 +256,24 @@ const QUESTION_TEXT: Record<QuestionKey, { full: string; simple: string; example
     simple: "Where should I send your drafts and reminders?",
     example: `For example: "WhatsApp, friendly tone".`,
   },
+  // Phase B ops bank: inside-the-business problems. Business language only —
+  // never "inventory management" or "SKUs". Never asked for customer-facing
+  // problems, never skipped for ops problems.
+  track: {
+    full: "Understood — this is about the inside of the business, not customers. What needs keeping track of — stock, expiry dates, cash, tasks, or something else?",
+    simple: "What should it keep track of for you?",
+    example: `For example: "drug stock and expiry dates" or "staff shifts and daily tasks".`,
+  },
+  who: {
+    full: "Got it. Who does the day-to-day work — just you, or staff who need reminding and checking on?",
+    simple: "Who does the work — you alone, or with staff?",
+    example: `For example: "just me" or "me plus two shop assistants".`,
+  },
+  checkin: {
+    full: "Clear. How often should it check in with you — daily counts, a weekly summary, or alerts only when something is wrong?",
+    simple: "How often should it update you?",
+    example: `For example: "daily" or "only when stock runs low".`,
+  },
 };
 
 function receptionistKey(slots: InterviewSlots): QuestionKey | null {
@@ -218,6 +298,23 @@ function assistantKey(slots: InterviewSlots, ownerMessages: string[]): QuestionK
 }
 
 /**
+ * Phase B ops routing: transcript-evidence per ops question. Same pattern
+ * as assistantKey — a question is skipped only when the owner already
+ * answered it in their own words, never by assumption.
+ */
+function opsKey(slots: InterviewSlots, ownerMessages: string[]): QuestionKey | null {
+  const t = ownerMessages.join(" ").toLowerCase();
+  const hasTrack = /stock|inventor|expir|reorder|cash|task|shift|record|suppl|equipment|count|audit|waste/i.test(t);
+  const hasWho = /staff|team|employee|alone|just me|myself|assistant|worker|myself/i.test(t);
+  const hasCheckin = /daily|weekly|alert|only when|every|summary|sunday|monday/i.test(t);
+  if (!hasTrack) return "track";
+  if (!hasWho) return "who";
+  if (!hasCheckin) return "checkin";
+  if (!slots.contact) return "dropoff";
+  return null;
+}
+
+/**
  * Given the owner's messages so far, produce the next interviewer turn.
  * Pure function — no network, no side effects.
  */
@@ -230,12 +327,14 @@ export function nextInterviewTurn(
   const count = ownerMessages.length;
   const substantiveCount = ownerMessages.filter(isSubstantive).length;
   const lastSignal = count === 0 ? null : classifyOwnerMessage(ownerMessages[ownerMessages.length - 1]);
-  const kind = count === 0 && !businessTypeHint
-    ? null
-    : detectKind(transcript, businessTypeHint);
 
   const firstName = businessName ? ` for ${businessName}` : "";
   const slots = extractSlots(transcript, businessTypeHint);
+  // Phase B: routing follows the slots' forced kind/problem_type — the
+  // interview can never ask booking questions to an ops problem, because
+  // the same detection that shapes the slots shapes the questions.
+  const kind = slots.operator_kind;
+  const pt = slots.problem_type;
   let key: QuestionKey | null = null;
   let assistant_message: string;
 
@@ -246,6 +345,22 @@ export function nextInterviewTurn(
   } else if (lastSignal === "junk") {
     // A tap, a stray mark, an empty send — never pretend content arrived.
     assistant_message = "I'm here — just tell me about your business in your own words, and we'll take it one small question at a time.";
+  } else if (kind === "assistant" && pt === "internal-ops") {
+    // Phase B ops track: inside-the-business problems get the ops bank —
+    // never bookings, never content questions.
+    key = opsKey(slots, ownerMessages);
+    if (key) {
+      const q = QUESTION_TEXT[key];
+      assistant_message = (substantiveCount <= 1 ? "Got it — an inside-the-business helper, I can set that up. " : "") + q.full +
+        " One honest note: it will keep the lists and chase the counts through reminders and summaries — it can't see your shelves or your supplier's system yet.";
+      if (lastSignal === "confusion") {
+        assistant_message = `No worries — simpler version: ${q.simple} ${q.example}`;
+      } else if (lastSignal === "greeting") {
+        assistant_message = `Hello! Great to meet you. ${q.simple} ${q.example}`;
+      }
+    } else {
+      assistant_message = "That's everything I need. I'll put together your AI operator plan now — review it, and we'll make it live together.";
+    }
   } else if (kind === "assistant") {
     key = assistantKey(slots, ownerMessages);
     if (key) {
@@ -268,6 +383,9 @@ export function nextInterviewTurn(
       }
     } else {
       key = receptionistKey(slots);
+      // Phase B hybrid: customers covered, now the inside-the-business
+      // half gets its own questions instead of being folded in silently.
+      if (!key && pt === "hybrid") key = opsKey(slots, ownerMessages);
       if (key) {
         const q = QUESTION_TEXT[key];
         assistant_message = q.full;
@@ -284,7 +402,9 @@ export function nextInterviewTurn(
     }
   }
 
-  const essentials = kind === "assistant"
+  const essentials = pt === "internal-ops"
+    ? slots.core_need && (slots.contact || substantiveCount >= 3)
+    : kind === "assistant"
     ? slots.core_need && (slots.contact || [slots.prices, slots.hours].some(Boolean) || substantiveCount >= 3)
     : kind === "both"
       ? slots.how_customers_transact && (slots.contact || slots.hours || substantiveCount >= 4)
@@ -320,7 +440,10 @@ export function buildLocalPlan(
 ): LocalPlan {
   const transcript = ownerMessages.join("\n");
   const t = `${businessTypeHint} ${transcript}`;
-  const kind = detectKind(transcript, businessTypeHint);
+  // Phase B: same domain forcing as the live interview — an offline draft
+  // for a stock problem must never promise bookings.
+  const pt = ownerSaidEnough(transcript) || businessTypeHint ? detectProblemType(transcript, businessTypeHint) : null;
+  const kind = pt === "internal-ops" ? "assistant" : pt === "hybrid" ? "both" : detectKind(transcript, businessTypeHint);
 
   const booking = /book|appoint|reserv|schedul|consult|session|visit|patient|salon|clinic/i.test(t);
   const ordering = /order|buy|sell|product|shop|store|deliver|menu|price|cost|₦|\$|pay/i.test(t);
@@ -338,7 +461,14 @@ export function buildLocalPlan(
 
   const displayName = businessName || businessTypeHint || "Your business";
   const willDo: string[] = [];
-  if (kind !== "assistant") {
+  if (pt === "internal-ops") {
+    willDo.push(
+      "Keep the lists you asked it to watch",
+      "Remind you and your staff of counts and checks",
+      "Summarise what needs attention",
+      "Answer questions from your knowledge",
+    );
+  } else if (kind !== "assistant") {
     if (booking) willDo.push("Book appointments from chat");
     if (ordering) willDo.push("Take product orders from chat");
     willDo.push("Answer customer questions from your FAQs", "Capture leads for follow-up");
@@ -394,6 +524,7 @@ export function buildLocalPlan(
     channels: { widget: true, whatsapp: false, phone: false },
     knowledge_base: "",
     operator_kind: kind,
+    problem_type: pt,
     will_do: willDo,
     wont_do: ["Post to social accounts on its own", "Access outside accounts", "Move money"],
     external_needs: externalNeeds,
@@ -415,7 +546,7 @@ export function buildLocalPlan(
   const planText =
     "(Drafted offline — the AI planner was unreachable. I kept everything conservative: only what you actually said is switched on. Review carefully; you can regenerate the full AI plan anytime.)\n\n" +
     `Business: ${displayName}\n` +
-    `Operator: ${kind === "assistant" ? "helper (content, reminders, Q&A)" : kind === "both" ? "customers + helper" : "customer receptionist"}\n` +
+    `Operator: ${pt === "internal-ops" ? "inside-the-business helper (no customer chat)" : kind === "assistant" ? "helper (content, reminders, Q&A)" : kind === "both" ? "customers + helper" : "customer receptionist"}\n` +
     (booking ? "Bookings: on (you mentioned booking)\n" : "") +
     (ordering ? "Ordering: on (you mentioned ordering)\n" : "") +
     (externalNeeds.length > 0 ? `Connections needed later: ${externalNeeds.join(", ")}\n` : "") +
