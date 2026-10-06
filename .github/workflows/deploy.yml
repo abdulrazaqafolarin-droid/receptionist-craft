@@ -48,6 +48,14 @@ jobs:
       - name: Verify surface manifest has not drifted
         run: npm run verify:manifest
 
+      - name: Derivation matrix test (model never guesses pages)
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run derivation matrix test
+        run: deno test supabase/functions/_shared/config/surfaceDerivation.test.ts
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:

@@ -15,6 +15,7 @@
  */
 
 import { generatePlanFromConfig, type GeneratedPlan } from "./planGenerator.ts";
+import { applyDerivedSurface } from "./surfaceDerivation.ts";
 import { buildManifestPrompt } from "./manifest.ts";
 import { buildSurfacePrompt } from "./surfaceManifest.ts";
 import { buildSpecPrompt } from "./platformSpec.ts";
@@ -283,6 +284,13 @@ Then produce the OperationsConfig and your reasoning notes.`;
 
   const parsed = parseConfiguratorJson(text);
 
+  // Deterministic split (Phase A): the model decides meaning
+  // (capabilities, workflows, kind); code decides surface. The model's
+  // ui_plan is advisory — derivation overwrites it BEFORE the
+  // plain-language plan is generated, so the text the owner reads
+  // always matches the surface that will actually be written.
+  applyDerivedSurface(parsed.config, trace);
+
   // Generate the plain-language plan from the config
   const plan = generatePlanFromConfig(parsed.config);
 
@@ -439,6 +447,13 @@ Apply this change to the configuration. Only modify what's necessary.`;
 
   // Merge back onto the full config (slim-prompt safety — see mergeChangeConfig).
   const config = mergeChangeConfig(currentConfig, parsed.config);
+
+  // Deterministic split (Phase A): derive AFTER the merge, so the
+  // surface is computed from the final capabilities — the model's
+  // updates where it made them, the current config's where it stayed
+  // silent. Deriving before the merge would shrink the surface on
+  // unrelated changes (model omits capabilities it did not touch).
+  applyDerivedSurface(config, trace);
   const plan = generatePlanFromConfig(config);
 
   return {
