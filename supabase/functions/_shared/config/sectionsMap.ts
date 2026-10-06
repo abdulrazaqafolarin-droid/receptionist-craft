@@ -22,24 +22,24 @@ export interface PageSections {
 }
 
 export const PAGE_SECTIONS: PageSections[] = [
-  { key: "dashboard", verified: false, tabs: [], notes: "Home: stats, charts, revenue engine, operator detail." },
-  { key: "analytics", verified: false, tabs: [], notes: "Conversation and funnel numbers." },
-  { key: "money-mode", verified: false, tabs: [], notes: "Sales acceleration controls and threshold." },
+  { key: "dashboard", verified: true, tabs: [], notes: "Home: stats, charts, revenue engine, operator cards with Set-active." },
+  { key: "analytics", verified: true, tabs: [], notes: "Conversation Trend + AI Quality Metrics charts." },
+  { key: "money-mode", verified: true, tabs: [], notes: "Revenue & Conversion Control Center: threshold + toggles." },
   { key: "meo-dashboard", verified: true, tabs: ["funnel", "heatmap", "insights", "intents"], notes: "Revenue-leak analytics across four views." },
   { key: "operator-management", verified: false, tabs: [], notes: "Conversational operator management." },
   { key: "services", verified: true, tabs: ["products", "services"], notes: "Catalog split across two tabs." },
-  { key: "availability", verified: false, tabs: [], notes: "Weekly rules plus exceptions." },
-  { key: "staff", verified: false, tabs: [], notes: "Team members and scheduling links." },
-  { key: "faqs", verified: false, tabs: [], notes: "Question-and-answer knowledge entries." },
-  { key: "conversations", verified: false, tabs: [], notes: "Visitor conversation threads." },
-  { key: "quality-review", verified: false, tabs: [], notes: "AI answer review queue." },
-  { key: "kb-rewrite", verified: false, tabs: [], notes: "Knowledge improvement suggestions." },
-  { key: "escalations", verified: false, tabs: [], notes: "Human-handoff queue." },
+  { key: "availability", verified: true, tabs: [], notes: "Business Hours & Availability rules editor." },
+  { key: "staff", verified: true, tabs: [], notes: "Staff list." },
+  { key: "faqs", verified: true, tabs: [], notes: "FAQ Management entries." },
+  { key: "conversations", verified: true, tabs: [], notes: "Conversation History threads." },
+  { key: "quality-review", verified: true, tabs: [], notes: "Quality Review queue." },
+  { key: "kb-rewrite", verified: true, tabs: [], notes: "Knowledge Base Optimization suggestions." },
+  { key: "escalations", verified: true, tabs: [], notes: "Handoff queue with resolve + owner response." },
   { key: "appointments", verified: true, tabs: ["appointments", "orders"], notes: "Fulfillment list split across two tabs." },
-  { key: "calendar", verified: false, tabs: [], notes: "Visual schedule." },
-  { key: "customers", verified: false, tabs: [], notes: "Visitor records." },
+  { key: "calendar", verified: true, tabs: [], notes: "Visual schedule calendar." },
+  { key: "customers", verified: true, tabs: [], notes: "Customer records list." },
   { key: "channels", verified: true, tabs: ["payments", "phone", "whatsapp"], notes: "Channel setup across three tabs." },
-  { key: "connections", verified: false, tabs: [], notes: "External connector catalog and status." },
+  { key: "connections", verified: true, tabs: [], notes: "Connector catalog + module toggles." },
 ];
 
 /** Share of the map verified against page source (drift script reports this). */
