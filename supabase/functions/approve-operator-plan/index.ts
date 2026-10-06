@@ -102,14 +102,18 @@ serve(async (req) => {
     };
     const known = new Set(knownPageKeys());
     // Accept both shapes: {key, why} objects (spec) and bare strings
-    // (models compress under size discipline). Anything unlisted is ignored.
+    // (models compress under size discipline). Also accept route paths
+    // ("/availability") by stripping to the page key — models reach for
+    // routes when thinking in URLs. Anything still unlisted is ignored.
     const asKey = (item: unknown): string | null => {
-      if (typeof item === "string") return item;
-      if (!!item && typeof item === "object") {
-        const k = (item as Record<string, unknown>).key;
-        return typeof k === "string" ? k : null;
-      }
-      return null;
+      const raw = typeof item === "string"
+        ? item
+        : !!item && typeof item === "object" && typeof (item as Record<string, unknown>).key === "string"
+          ? (item as Record<string, unknown>).key as string
+          : null;
+      if (!raw) return null;
+      const k = raw.startsWith("/") ? raw.slice(1) : raw;
+      return k || null;
     };
     const cleanKeys = (list: Array<unknown> | undefined): string[] => {
       const out: string[] = [];

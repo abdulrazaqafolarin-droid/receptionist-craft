@@ -223,5 +223,18 @@ check(
   strPlan.full_text.includes("- faqs") && strPlan.full_text.includes("- staff"),
 );
 
+// --- Route-shape tolerance: models answer in routes under compression ---
+const routePlan = generatePlanFromConfig({
+  business: { display_name: "Test" },
+  ui_plan: {
+    show: ["/analytics", { key: "/availability", why: "slots" }],
+    hide: [],
+  } as unknown as Record<string, unknown>,
+});
+check(
+  "plan: route shapes strip to keys",
+  routePlan.full_text.includes("- analytics") && routePlan.full_text.includes("- availability"),
+);
+
 console.log(`\neval: ${pass} passed, ${fail} failed`);
 if (fail > 0) Deno.exit(1);

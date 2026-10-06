@@ -211,14 +211,19 @@ export function generatePlanFromConfig(config: Record<string, unknown>): Generat
   // Accept both shapes: {key, why} objects (spec) and bare strings
   // (models compress under size discipline).
   const asItem = (x: unknown): { key: string; why: string } | null => {
-    if (typeof x === "string" && x) return { key: x, why: "" };
-    if (!!x && typeof x === "object") {
-      const r = x as Record<string, unknown>;
-      if (typeof r.key === "string" && r.key) {
-        return { key: r.key, why: typeof r.why === "string" ? r.why : "" };
-      }
-    }
-    return null;
+    const raw = typeof x === "string"
+      ? x
+      : !!x && typeof x === "object" && typeof (x as Record<string, unknown>).key === "string"
+        ? (x as Record<string, unknown>).key as string
+        : null;
+    if (!raw) return null;
+    // Models sometimes answer in routes ("/availability") — strip to keys.
+    const key = raw.startsWith("/") ? raw.slice(1) : raw;
+    if (!key) return null;
+    const why = !!x && typeof x === "object" && typeof (x as Record<string, unknown>).why === "string"
+      ? (x as Record<string, unknown>).why as string
+      : "";
+    return { key, why };
   };
   const asList = (l: unknown): Array<{ key: string; why: string }> => {
     if (!Array.isArray(l)) return [];

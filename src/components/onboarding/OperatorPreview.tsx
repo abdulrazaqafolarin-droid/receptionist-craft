@@ -148,18 +148,23 @@ export function OperatorPreview({
     connectors_needed?: Array<unknown>;
     retention_on?: Array<unknown>;
   };
-  // Accept both shapes: {key, why} objects (spec) and bare strings
-  // (models compress under size discipline).
+  // Accept objects, bare strings, and route paths (models compress and
+  // think in URLs under size discipline).
   const planItems = (list: Array<unknown> | undefined) => {
     const out: Array<{ key: string; why: string }> = [];
     for (const x of list || []) {
-      if (typeof x === "string" && x) out.push({ key: x, why: "" });
-      else if (!!x && typeof x === "object") {
-        const r = x as Record<string, unknown>;
-        if (typeof r.key === "string" && r.key) {
-          out.push({ key: r.key, why: typeof r.why === "string" ? r.why : "" });
-        }
-      }
+      const raw = typeof x === "string"
+        ? x
+        : !!x && typeof x === "object" && typeof (x as Record<string, unknown>).key === "string"
+          ? (x as Record<string, unknown>).key as string
+          : null;
+      if (!raw) continue;
+      const key = raw.startsWith("/") ? raw.slice(1) : raw;
+      if (!key) continue;
+      const why = !!x && typeof x === "object" && typeof (x as Record<string, unknown>).why === "string"
+        ? (x as Record<string, unknown>).why as string
+        : "";
+      out.push({ key, why });
     }
     return out;
   };
