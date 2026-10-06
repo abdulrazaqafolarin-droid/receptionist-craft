@@ -128,7 +128,7 @@ serve(async (req) => {
     if (j.kind === "operator") {
       const description = typeof j.input_json.description === "string" ? j.input_json.description : "";
       if (!description.trim()) throw new Error("empty_description");
-      const result = await generateOperatorPlan(description.trim(), trace, WORKER_ASK_TIMEOUT_MS);
+      const result = await generateOperatorPlan(description.trim(), trace, WORKER_ASK_TIMEOUT_MS, j.input_json.nofiles === true);
       config = result.config;
       planText = result.plan.full_text;
       reasoning = result.reasoning_notes;

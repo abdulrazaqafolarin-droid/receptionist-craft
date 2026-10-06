@@ -68,7 +68,11 @@ serve(async (req) => {
           receptionist_id,
           user_id,
           kind: "change",
-          input_json: { change_request: change_request.trim() },
+          input_json: {
+            change_request: change_request.trim(),
+            // Carried so the worker honors the same bypass.
+            ...((body as Record<string, unknown>).nofiles === true ? { nofiles: true } : {}),
+          },
         })
         .select("id")
         .single();

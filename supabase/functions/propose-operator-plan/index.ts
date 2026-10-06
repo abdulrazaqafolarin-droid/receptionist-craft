@@ -70,7 +70,10 @@ serve(async (req) => {
           receptionist_id,
           user_id,
           kind: "operator",
-          input_json: { description: description.trim() },
+          input_json: {
+            description: description.trim(),
+            ...((body as Record<string, unknown>).nofiles === true ? { nofiles: true } : {}),
+          },
         })
         .select("id")
         .single();
