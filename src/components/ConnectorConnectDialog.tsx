@@ -66,6 +66,8 @@ export function ConnectorConnectDialog({ definition, userId, onClose, onSaved }:
       })()
     : getCollectSchema(def.connector_key);
   if (!schema) return null;
+  // Narrowed once for closures below (TS can't narrow across callbacks).
+  const sch: CollectSchema = schema;
 
   async function persist(
     credentials: Record<string, string>,
@@ -94,8 +96,8 @@ export function ConnectorConnectDialog({ definition, userId, onClose, onSaved }:
     // first real use, and the status says so honestly.
     let status: ConnectorStatus = "configured";
     let lastError: string | null = null;
-    if (!isOauth && schema.verifyFn) {
-      const { data, error } = await supabase.functions.invoke(schema.verifyFn, {
+    if (!isOauth && sch.verifyFn) {
+      const { data, error } = await supabase.functions.invoke(sch.verifyFn, {
         body: { connector_key: def.connector_key, credentials: values },
       });
       if (error) throw error;
