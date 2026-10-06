@@ -89,7 +89,21 @@ async function callGatewaySmart(
   userPrompt: string,
   trace?: TraceCollector,
   timeoutMs?: number,
+  noFiles?: boolean,
 ): Promise<string> {
+  // noFiles escape hatch: skip file-drop entirely (diagnostics + fallback
+  // when the agent's read step hangs). Caller passes it explicitly.
+  if (noFiles) {
+    trace?.skip("upload-manifest", "File-drop bypassed by caller", ["inline prompt"]);
+    trace?.start("gateway-ask");
+    try {
+      const r = await callGateway(kind, `${fullSystem}\n\n${userPrompt}`, undefined, trace, timeoutMs);
+      return r.text;
+    } catch (e) {
+      trace?.fail("gateway-ask", "AI planning failed", e instanceof Error ? e.message : String(e));
+      throw e;
+    }
+  }
   const files = await uploadInventory(trace);
   trace?.start("gateway-ask");
   try {
@@ -248,6 +262,7 @@ export async function generateOperatorPlan(
   businessDescription: string,
   trace?: TraceCollector,
   timeoutMs?: number,
+  noFiles?: boolean,
 ): Promise<ConfiguratorResult> {
   const userPrompt = `Business description from the owner:
 
@@ -264,7 +279,7 @@ Analyze this business description carefully. Think about:
 
 Then produce the OperationsConfig and your reasoning notes.`;
 
-  const text = await callGatewaySmart("operator", SYSTEM_PROMPT, SYSTEM_PROMPT_SHORT, userPrompt, trace, timeoutMs);
+  const text = await callGatewaySmart("operator", SYSTEM_PROMPT, SYSTEM_PROMPT_SHORT, userPrompt, trace, timeoutMs, noFiles);
 
   const parsed = parseConfiguratorJson(text);
 
@@ -374,6 +389,7 @@ export async function generateChangePlan(
   reasoningHistory: ReasoningHistoryEntry[] = [],
   trace?: TraceCollector,
   timeoutMs?: number,
+  noFiles?: boolean,
 ): Promise<ConfiguratorResult> {
   const changeBase = `You are the Configurator — an opencode agent for Rutex (accessed through the Rutex gateway; your sibling is the Responder agent for customers). You act as an expert business operations consultant: recommend changes that genuinely serve this business and flag uncertainty honestly. The business owner wants to change their AI operator's configuration.
 
@@ -417,7 +433,7 @@ OWNER'S CHANGE REQUEST:
 ${buildReasoningHistoryPrompt(reasoningHistory)}
 Apply this change to the configuration. Only modify what's necessary.`;
 
-  const text = await callGatewaySmart("change", changeFull, changeShort, userPrompt, trace, timeoutMs);
+  const text = await callGatewaySmart("change", changeFull, changeShort, userPrompt, trace, timeoutMs, noFiles);
 
   const parsed = parseConfiguratorJson(text);
 

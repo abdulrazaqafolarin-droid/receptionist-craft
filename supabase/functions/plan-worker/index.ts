@@ -143,7 +143,7 @@ serve(async (req) => {
       } catch {
         history = [];
       }
-      const result = await generateChangePlan(latest.config_json, changeRequest.trim(), history, trace, WORKER_ASK_TIMEOUT_MS);
+      const result = await generateChangePlan(latest.config_json, changeRequest.trim(), history, trace, WORKER_ASK_TIMEOUT_MS, j.input_json.nofiles === true);
       config = result.config;
       planText = result.plan.full_text;
       reasoning = result.reasoning_notes;

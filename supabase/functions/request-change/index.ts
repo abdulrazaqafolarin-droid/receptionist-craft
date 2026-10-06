@@ -106,12 +106,15 @@ serve(async (req) => {
       reasoningHistory = [];
     }
 
-    // Generate the change plan
+    // Generate the change plan (nofiles escape hatch bypasses file-drop
+    // when the agent's read step hangs — diagnostics + fallback path).
     const result = await generateChangePlan(
       latestVersion.config_json,
       change_request.trim(),
       reasoningHistory,
       trace,
+      undefined,
+      (body as Record<string, unknown>).nofiles === true,
     );
 
     // Stage 4: research each external need (open-source first). Non-fatal.

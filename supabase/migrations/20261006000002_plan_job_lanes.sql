@@ -66,14 +66,14 @@ BEGIN
   END IF;
 
   RETURN QUERY
-  UPDATE public.plan_jobs
+  UPDATE public.plan_jobs AS pu
   SET status = 'running',
       started_at = now(),
-      attempts = attempts + 1,
-      lane = CASE WHEN lane = 'any' THEN p_lane ELSE lane END
-  WHERE plan_jobs.id = picked_id
-  RETURNING plan_jobs.id, plan_jobs.receptionist_id, plan_jobs.user_id,
-            plan_jobs.kind, plan_jobs.input_json, plan_jobs.attempts;
+      attempts = pu.attempts + 1,
+      lane = CASE WHEN pu.lane = 'any' THEN p_lane ELSE pu.lane END
+  WHERE pu.id = picked_id
+  RETURNING pu.id, pu.receptionist_id, pu.user_id,
+            pu.kind, pu.input_json, pu.attempts;
 END;
 $fn$;
 
