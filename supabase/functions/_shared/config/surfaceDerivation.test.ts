@@ -86,6 +86,7 @@ Deno.test("assistant content helper hides customer machinery", () => {
   for (const k of ["availability", "calendar", "appointments", "money-mode", "escalations", "channels", "customers", "services"]) {
     check(!show.includes(k), `pure helper hides ${k}`);
   }
+  check(!show.includes("console"), "customer helper has no console");
   check(show.includes("faqs"), "helper keeps faqs");
   check(show.includes("quality-review"), "helper keeps quality-review via content tag");
   check(show.includes("kb-rewrite"), "helper keeps kb-rewrite");
@@ -168,7 +169,7 @@ Deno.test("ops kind: internal surface, no customer leakage", () => {
     widget_pieces?: { booking?: boolean; ordering?: boolean; lead_capture?: boolean };
   };
   const mods = (ui.modules_on || []).map((m) => m.key);
-  for (const k of ["services", "staff", "faqs", "kb-rewrite"]) {
+  for (const k of ["services", "staff", "faqs", "kb-rewrite", "console"]) {
     check(show.includes(k), `ops operator shows ${k}`);
   }
   for (const k of ["availability", "calendar", "appointments", "escalations", "channels", "customers", "money-mode"]) {

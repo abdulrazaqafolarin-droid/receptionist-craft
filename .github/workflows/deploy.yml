@@ -59,6 +59,9 @@ jobs:
       - name: Run interview golden test (problem-type routing)
         run: deno test --no-check --unstable-sloppy-imports src/lib/conversationalInterview.test.ts
 
+      - name: Run console prompt test (staff bounds + snapshot contract)
+        run: deno test supabase/functions/_shared/config/consolePrompt.test.ts
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:

@@ -80,6 +80,7 @@ export const OWNER_PAGES: OwnerPageDef[] = [
   { key: "availability", route: "/availability", label: "Availability", group: "Your Operator", scope: "operator", requires: ["booking"], why: "Schedule source of truth; meaningless without appointment booking." },
   { key: "staff", route: "/staff", label: "Staff", group: "Your Operator", scope: "operator", requires: ["booking", "staffed", "internal"], why: "Staff scheduling for a booked team — and the roster for an internal operator." },
   { key: "faqs", route: "/faqs", label: "FAQs", group: "Your Operator", scope: "operator", requires: ["always"], why: "Every operator answers questions; FAQs always earn their place." },
+  { key: "console", route: "/console", label: "Operator Console", group: "Your Operator", scope: "operator", requires: ["internal"], why: "Staff talk to an internal operator here — its home page, replacing the customer widget." },
   // -- Conversations --
   { key: "conversations", route: "/conversations", label: "Conversations", group: "Conversations", scope: "account", requires: ["always"], why: "The operator's output lives here; always visible." },
   { key: "quality-review", route: "/quality-review", label: "Quality Review", group: "Conversations", scope: "operator", requires: ["customers", "content"], why: "Review AI answers; relevant whenever the operator talks to customers or drafts content." },

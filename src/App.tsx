@@ -45,6 +45,7 @@ import Channels from "./pages/Channels";
 import Connections from "./pages/Connections";
 import Customers from "./pages/Customers";
 import StaffPage from "./pages/Staff";
+import Console from "./pages/Console";
 import Escalations from "./pages/Escalations";
 import Billing from "./pages/Billing";
 import MoneyModePage from "./pages/MoneyMode";
@@ -198,6 +199,7 @@ const App = () => {
                               <Route path="/connections" element={<SurfaceGate><Connections /></SurfaceGate>} />
                               <Route path="/customers" element={<SurfaceGate><Customers /></SurfaceGate>} />
                               <Route path="/staff" element={<SurfaceGate><StaffPage /></SurfaceGate>} />
+                              <Route path="/console" element={<SurfaceGate><Console /></SurfaceGate>} />
                               <Route path="/escalations" element={<SurfaceGate><Escalations /></SurfaceGate>} />
                               <Route path="/billing" element={<Billing />} />
                               <Route path="/money-mode" element={<SurfaceGate><MoneyModePage /></SurfaceGate>} />
