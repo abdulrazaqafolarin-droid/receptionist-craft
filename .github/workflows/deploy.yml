@@ -65,6 +65,9 @@ jobs:
       - name: Run stock write-validation test (shelf truth gate)
         run: deno test supabase/functions/_shared/modules/stockTracker.test.ts
 
+      - name: Run snake engine test (planning-game rules)
+        run: deno test --no-check --unstable-sloppy-imports src/lib/snakeEngine.test.ts
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:

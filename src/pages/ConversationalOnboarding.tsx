@@ -32,6 +32,7 @@ import { FloatingBackground } from "@/components/FloatingBackground";
 import VoiceInputButton from "@/components/widget/VoiceInputButton";
 import { ChatMessage, type AgentVisualState } from "@/components/onboarding/ChatMessage";
 import { BuildProgress, type BuildStep } from "@/components/onboarding/BuildProgress";
+import { PlanningSnake } from "@/components/PlanningSnake";
 import { OperatorPreview, type PreviewFaq, type PreviewService } from "@/components/onboarding/OperatorPreview";
 
 interface Message {
@@ -458,6 +459,9 @@ export default function ConversationalOnboarding() {
     () => messages.filter((m) => m.role === "user" && isSubstantive(m.content)).length,
     [messages],
   );
+  // Real planning status for the waiting game: the currently active
+  // build step's own label. Never invented — falls back to "Working".
+  const activeStepLabel = buildSteps.find((s) => s.status === "active")?.label || "Working";
   const showSplit = phase === "preview" || phase === "building" || phase === "done";
 
   // Greet once — never re-greet (platform rule).
@@ -901,6 +905,9 @@ export default function ConversationalOnboarding() {
           {phase === "planning" && (
             <div className="animate-enter motion-reduce:animate-none">
               <BuildProgress steps={buildSteps} title="Understanding your business" />
+              <div className="mt-3">
+                <PlanningSnake statusText={activeStepLabel} />
+              </div>
             </div>
           )}
           {ready && phase === "chat" && !ctaDismissed && (
@@ -982,6 +989,9 @@ export default function ConversationalOnboarding() {
         {phase === "building" || phase === "done" ? (
           <div className="space-y-4">
             <BuildProgress steps={buildSteps} title={phase === "done" ? "Your operator is live" : "Building your AI operator"} />
+            {phase === "building" && (
+              <PlanningSnake statusText={activeStepLabel} />
+            )}
             {phase === "done" && (
               <div className="animate-scale-in rounded-2xl border border-border bg-card p-6 text-center motion-reduce:animate-none">
                 <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
