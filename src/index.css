@@ -325,6 +325,40 @@
   .glass-panel { background: var(--glass-1-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--glass-1-border); }
   .liquid-glass { @apply glass-1; border-radius: var(--radius-lg); }
 
+  /* Liquid-glass motion button (build-history toggle): glass base with a
+     slow travelling sheen. Motion-reduce safe via the global rule below. */
+  .liquid-glass-btn {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    background:
+      linear-gradient(135deg, hsl(var(--primary) / 0.16), hsl(var(--primary) / 0.05) 45%, hsl(200 90% 60% / 0.14));
+    backdrop-filter: blur(14px) saturate(1.4);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    border: 1px solid hsl(var(--primary) / 0.28);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.35),
+      0 4px 16px hsl(var(--primary) / 0.14);
+  }
+  .liquid-glass-btn::after {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    z-index: 1;
+    background: linear-gradient(115deg, transparent 42%, hsl(0 0% 100% / 0.5) 50%, transparent 58%);
+    animation: liquid-sheen 3.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .liquid-glass-btn > * {
+    position: relative;
+    z-index: 2;
+  }
+
+@keyframes liquid-sheen {
+  0% { transform: translateX(-55%); }
+  60%, 100% { transform: translateX(55%); }
+}
+
   /* ——— Finance surfaces: solid, precise, trustworthy ——— */
   .finance-surface {
     background: hsl(var(--finance-surface));

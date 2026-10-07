@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Bot, Check, Loader2, Send, Sparkles, Plus, History, X, Trash2, MessageSquare } from "lucide-react";
+import { ArrowLeft, Bot, Check, Loader2, Send, Sparkles, Plus, X, Trash2, MessageSquare } from "lucide-react";
+
+/**
+ * Build-history glyph: two horizontal lines (upper longer than lower)
+ * with a circle beneath both — reads as "past conversations" at a glance.
+ */
+function HistoryGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className={className} aria-hidden="true">
+      <line x1="4" y1="5.5" x2="20" y2="5.5" />
+      <line x1="4" y1="10.5" x2="14.5" y2="10.5" />
+      <circle cx="9" cy="17.5" r="3" />
+    </svg>
+  );
+}
 import { supabase } from "@/integrations/supabase/client";
 import { recordSignal } from "@/lib/successSignals";
 import { buildLocalPlan, detectProblemType, isSubstantive, nextInterviewTurn } from "@/lib/conversationalInterview";
@@ -300,6 +314,10 @@ export default function ConversationalOnboarding() {
   const [threads, setThreads] = useState<BuildThread[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [threadsOpen, setThreadsOpen] = useState(false);
+  // Edge-swipe drag: the drawer follows the finger, releasing past the
+  // threshold snaps it open. Touch only — desktop keeps the button.
+  const [dragX, setDragX] = useState<number | null>(null);
+  const swipeStartX = useRef<number | null>(null);
   const threadIdRef = useRef<string | null>(null);
 
   async function ensureThread(firstText: string): Promise<string | null> {
@@ -1036,7 +1054,30 @@ export default function ConversationalOnboarding() {
   );
 
   return (
-    <div className="relative min-h-screen bg-background">
+    <div
+      className="relative min-h-screen bg-background"
+      onTouchStart={(e) => {
+        if (!threadsOpen && e.touches.length === 1 && e.touches[0].clientX < 40) {
+          swipeStartX.current = e.touches[0].clientX;
+        }
+      }}
+      onTouchMove={(e) => {
+        if (swipeStartX.current === null || threadsOpen || e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - swipeStartX.current;
+        if (dx > 8) setDragX(dx);
+      }}
+      onTouchEnd={() => {
+        if (dragX !== null) {
+          if (dragX > 100) setThreadsOpen(true);
+          setDragX(null);
+        }
+        swipeStartX.current = null;
+      }}
+      onTouchCancel={() => {
+        setDragX(null);
+        swipeStartX.current = null;
+      }}
+    >
       <FloatingBackground variant="minimal" />
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-4 p-4 sm:p-6">
         {/* Header — what matters, what you can do, what is happening */}
@@ -1044,19 +1085,18 @@ export default function ConversationalOnboarding() {
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Go back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => setThreadsOpen((v) => !v)} aria-label="Build history" className="lg:hidden">
-            <History className="h-4 w-4" />
-          </Button>
+          <button
+            onClick={() => setThreadsOpen((v) => !v)}
+            aria-label="Build history"
+            className="liquid-glass-btn flex h-10 w-10 items-center justify-center rounded-xl text-primary transition-transform active:scale-95 lg:hidden"
+          >
+            <HistoryGlyph className="h-5 w-5" />
+          </button>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-contact" aria-hidden="true">
             <Bot className="h-5 w-5 text-primary-foreground" />
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="type-page truncate">Build your AI operator</h1>
-            <p className="type-caption">
-              {smartMode || messages.length <= 1
-                ? "Talk it through — watch the operator take shape beside the chat."
-                : "Guided mode — quick structured questions while smart replies reconnect. Nothing you share is lost."}
-            </p>
           </div>
           <ol className="flex items-center gap-1.5" aria-label={`Setup progress: step ${phaseLabel} of 3`}>
             {["Chat", "Plan", "Live"].map((label, i) => (
@@ -1088,11 +1128,21 @@ export default function ConversationalOnboarding() {
             </div>
             {threadList}
           </aside>
-          {/* Mobile: history drawer */}
-          {threadsOpen && (
+          {/* Mobile: history drawer — follows the finger while edge-swiping */}
+          {(threadsOpen || dragX !== null) && (
             <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-label="Build history">
-              <div className="absolute inset-0 bg-background/80" onClick={() => setThreadsOpen(false)} aria-hidden="true" />
-              <aside className="absolute inset-y-0 left-0 flex w-72 flex-col gap-2 bg-background p-4 shadow-xl">
+              <div
+                className="absolute inset-0 bg-background/80"
+                style={dragX !== null ? { opacity: Math.min(0.8, dragX / 300) } : undefined}
+                onClick={() => setThreadsOpen(false)}
+                aria-hidden="true"
+              />
+              <aside
+                className="absolute inset-y-0 left-0 flex w-72 flex-col gap-2 bg-background p-4 shadow-xl"
+                style={dragX !== null && !threadsOpen
+                  ? { transform: `translateX(${Math.min(0, dragX - 288)}px)` }
+                  : undefined}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <MessageSquare className="h-4 w-4" aria-hidden="true" /> Builds
