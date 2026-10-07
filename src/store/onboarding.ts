@@ -51,7 +51,7 @@ type OnboardingState = {
     name: string;
     business_name: string;
     business_type: string;
-    business_model: 'services' | 'products' | 'both';
+    business_model: 'services' | 'products' | 'both' | 'internal';
     phone: string;
     greeting_message: string;
     goal: string;
@@ -94,7 +94,7 @@ export function deriveReceptionistPatch(config: OperationsConfig) {
       name: config.business.display_name,
       business_name: config.business.display_name,
       business_type: config.business.business_type,
-      business_model: (booking && ordering ? 'both' : ordering ? 'products' : 'services') as 'services' | 'products' | 'both',
+      business_model: (booking && ordering ? 'both' : ordering ? 'products' : booking ? 'services' : 'internal') as 'services' | 'products' | 'both' | 'internal',
       phone: config.contact?.phone ?? '',
       greeting_message: config.business.greeting_message ?? '',
       goal: '',

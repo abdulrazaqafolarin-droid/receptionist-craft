@@ -166,6 +166,7 @@ CRITICAL RULES:
 - Never invent business details not in the description (prices, hours, etc.) — leave those fields null.
 - knowledge_base: write 1-3 warm, conversational paragraphs (complete sentences, light bullet points where useful) that a customer-facing AI can use to answer questions about services, hours, policies, location, and typical FAQs. Never use field labels like "Business name:" — write it naturally.
 - BEYOND BOOKING: not every owner wants a customer receptionist. Some want a helper operator (social content ideas and captions, posting checklists and reminders, general Q&A). When the need is not bookings/orders: set workflows to null/false, set booking capabilities false, write knowledge_base toward the helper role (process, rhythm, platforms, voice), and ALWAYS fill operator_kind, will_do, wont_do, and external_needs below. Never configure a booking flow for a need that has no customers booking anything.
+- INSIDE THE BUSINESS: some problems live inside the shop, not with customers — tracking stock and expiry, staff shifts and counts, daily tasks and records. For these set operator_kind to "ops": no customers tag in your reasoning, no booking/ordering workflows, no selling capabilities, knowledge_base written for the OWNER and STAFF (what gets tracked, who does what, when it reports). The ops modules (stockTracker, staffRoster, taskChaser) switch on from the internal tag — name them in modules_on when they fit, and say plainly what they cannot do yet (no supplier sync, no shelf vision).
 - HONEST CONTRACT: will_do lists only outcomes the platform executes today (answers, ideas, drafts, checklists, reminders, bookings, orders, lead capture). wont_do lists what it will not do (auto-post to social accounts, access outside accounts, move money). external_needs lists each outside connector/API key required (e.g. "tiktok-auto-post") or an empty array. Never leave wont_do empty — there is always a boundary.
 - For the config, follow this EXACT schema:
 {
@@ -213,7 +214,7 @@ CRITICAL RULES:
     "phone": boolean
   },
   "knowledge_base": string,
-  "operator_kind": "receptionist" | "assistant" | "both",
+  "operator_kind": "receptionist" | "assistant" | "both" | "ops",
   "will_do": string[],
   "wont_do": string[],
   "external_needs": string[],

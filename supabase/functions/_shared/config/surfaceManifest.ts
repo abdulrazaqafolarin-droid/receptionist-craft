@@ -7,7 +7,7 @@
  *
  *   1. OWNER PAGES      — all 41 app routes that make up the owner's dashboard
  * 2. CONNECTORS       — the 24-entry connector catalog (DB: connector_definitions)
- *   3. MODULES          — the 18 growth & operations modules in _shared/modules
+ *   3. MODULES          — the 21 growth & operations modules in _shared/modules
  *   4. OPERATIONS       — OperationsConfig workflows, reminder cron, notifications
  *   5. RETENTION        — the follow-up / win-back / recovery toolkit
  *
@@ -30,6 +30,7 @@ export type RelevanceTag =
   | "staffed" // more than one human on the team (staff scheduling matters)
   | "connected" // an external connector is needed (connections page matters)
   | "content" // content/social helper work (review, content, social modules matter)
+  | "internal" // inside-the-business ops work (stock, shifts, tasks — Phase C)
   | "always"; // relevant to every operator, no conditions
 
 export interface OwnerPageDef {
@@ -75,9 +76,9 @@ export const OWNER_PAGES: OwnerPageDef[] = [
   { key: "meo-dashboard", route: "/meo-dashboard", label: "MEO Dashboard", group: "Overview", scope: "operator", requires: ["booking", "ordering", "payments"], why: "Revenue-leak analytics; needs a money flow to measure." },
   // -- Your Operator --
   { key: "operator-management", route: "/operator-management", label: "Operator Management", group: "Your Operator", scope: "account", requires: ["always"], why: "Managing the operator itself is always relevant." },
-  { key: "services", route: "/services", label: "Products & Services", group: "Your Operator", scope: "operator", requires: ["booking", "ordering"], why: "The catalog behind bookings and orders; hide when there is nothing to sell or book." },
+  { key: "services", route: "/services", label: "Products & Services", group: "Your Operator", scope: "operator", requires: ["booking", "ordering", "internal"], why: "The catalog behind bookings and orders — and the stock book for internal operators." },
   { key: "availability", route: "/availability", label: "Availability", group: "Your Operator", scope: "operator", requires: ["booking"], why: "Schedule source of truth; meaningless without appointment booking." },
-  { key: "staff", route: "/staff", label: "Staff", group: "Your Operator", scope: "operator", requires: ["booking", "staffed"], why: "Staff-specific scheduling; hide for solo operators with no booking." },
+  { key: "staff", route: "/staff", label: "Staff", group: "Your Operator", scope: "operator", requires: ["booking", "staffed", "internal"], why: "Staff scheduling for a booked team — and the roster for an internal operator." },
   { key: "faqs", route: "/faqs", label: "FAQs", group: "Your Operator", scope: "operator", requires: ["always"], why: "Every operator answers questions; FAQs always earn their place." },
   // -- Conversations --
   { key: "conversations", route: "/conversations", label: "Conversations", group: "Conversations", scope: "account", requires: ["always"], why: "The operator's output lives here; always visible." },
@@ -130,7 +131,7 @@ export const CONNECTORS: ConnectorDef[] = [
   { key: "google_maps", name: "Google Maps", category: "calendar", auth: "api_key", unlocks: "Business location and service-area checks." },
 ];
 
-/** The 18 growth & operations modules in _shared/modules. */
+/** The 21 growth & operations modules in _shared/modules (18 + 3 Phase C ops modules). */
 export const MODULES: ModuleDef[] = [
   { key: "leadGenerator", label: "Lead Generator", does: "Extracts and scores leads from conversations.", needs: [], when: ["customers"], retention: false },
   { key: "contentGeneration", label: "Content Generator", does: "Drafts posts, captions, and content ideas.", needs: [], when: ["content"], retention: false },
@@ -150,6 +151,10 @@ export const MODULES: ModuleDef[] = [
   { key: "adCampaignManager", label: "Ad Campaign Manager", does: "Creates and manages ad campaigns.", needs: ["google_ads", "meta_ads"], when: ["ordering", "connected"], retention: false },
   { key: "calendarSync", label: "Calendar Sync", does: "Two-way sync with external calendars.", needs: ["google_calendar", "outlook_calendar"], when: ["booking", "connected"], retention: false },
   { key: "recruitmentAssistant", label: "Recruitment Assistant", does: "Posts jobs and screens candidates.", needs: [], when: ["staffed"], retention: false },
+  // -- Phase C: inside-the-business ops modules (internal-only, no connectors) --
+  { key: "stockTracker", label: "Stock Tracker", does: "Watches stock levels and expiry dates, suggests what to reorder.", needs: [], when: ["internal"], retention: false },
+  { key: "staffRoster", label: "Staff Roster", does: "Keeps weekly shifts per staff member, flags overlaps and uncovered days.", needs: [], when: ["internal"], retention: false },
+  { key: "taskChaser", label: "Task Chaser", does: "Keeps the task list, chases overdue items and due-today summaries.", needs: [], when: ["internal"], retention: false },
 ];
 
 /** Operations machinery: what keeps the business running day to day. */
@@ -170,7 +175,7 @@ export function retentionPlays(): ModuleDef[] {
 }
 
 export interface BusinessProfile {
-  operatorKind: "receptionist" | "assistant" | "both";
+  operatorKind: "receptionist" | "assistant" | "both" | "ops";
   tags: RelevanceTag[];
 }
 

@@ -50,6 +50,8 @@ Deno.test("pharmacy ops problem: internal-ops, never a booking question", () => 
     "whatsapp 08031234567",
   ]);
   check(convo.type === "internal-ops", `detects internal-ops (got ${convo.type})`);
+  const first = nextInterviewTurn(["i run a pharmacy and things are somehow anyhow inside"], "", "");
+  check(first.slots.operator_kind === "ops", "internal-ops forces the ops shape");
   for (const q of convo.asked) {
     check(!BOOKING_WORDS.test(q), `ops question stays in-domain: "${q.slice(0, 80)}"`);
   }

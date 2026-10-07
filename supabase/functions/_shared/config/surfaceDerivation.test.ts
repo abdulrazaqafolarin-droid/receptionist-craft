@@ -152,3 +152,33 @@ Deno.test("connected tag shows the connections page", () => {
   applyDerivedSurface(config);
   check(showKeys(config).includes("connections"), "external need earns the connections page");
 });
+
+Deno.test("ops kind: internal surface, no customer leakage", () => {
+  const config: Record<string, unknown> = {
+    operator_kind: "ops",
+    capabilities: {},
+    workflows: {},
+    external_needs: [],
+  };
+  const report = applyDerivedSurface(config);
+  const show = showKeys(config);
+  const ui = (config.ui_plan || {}) as {
+    modules_on?: Array<{ key?: string }>;
+    connectors_needed?: unknown[];
+    widget_pieces?: { booking?: boolean; ordering?: boolean; lead_capture?: boolean };
+  };
+  const mods = (ui.modules_on || []).map((m) => m.key);
+  for (const k of ["services", "staff", "faqs", "kb-rewrite"]) {
+    check(show.includes(k), `ops operator shows ${k}`);
+  }
+  for (const k of ["availability", "calendar", "appointments", "escalations", "channels", "customers", "money-mode"]) {
+    check(!show.includes(k), `ops operator hides ${k}`);
+  }
+  for (const m of ["stockTracker", "staffRoster", "taskChaser"]) {
+    check(mods.includes(m), `ops modules switch on ${m}`);
+  }
+  check((ui.connectors_needed || []).length === 0, "ops needs no connectors");
+  check(ui.widget_pieces?.booking !== true, "ops widget has no booking");
+  check(ui.widget_pieces?.lead_capture !== true, "ops widget has no lead form");
+  check(report.overridden.length === 0 || report.derived_show < 20, "ops surface stays tight");
+});

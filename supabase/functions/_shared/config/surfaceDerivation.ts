@@ -40,8 +40,14 @@ export function deriveTags(config: Record<string, unknown>): RelevanceTag[] {
   const booking = caps.books_appointments === true || wfOn(workflows.appointment_booking);
   const ordering =
     caps.sells_products === true || caps.delivers === true || wfOn(workflows.product_ordering);
-  const customerFacing = kind !== "assistant";
-  const content = kind !== "receptionist";
+  // Phase C: an ops operator is staff-facing by definition — it never earns
+  // the customers tag, so no customer page, channel, or widget piece can
+  // leak onto an inside-the-business operator no matter what the model wrote.
+  const customerFacing = kind !== "assistant" && kind !== "ops";
+  // Phase C: ops is staff-facing work, not content work — the content
+  // tag belongs to assistant/both only, so social modules and their
+  // connector demands can never leak onto an internal operator.
+  const content = kind === "assistant" || kind === "both";
 
   const tags: RelevanceTag[] = [];
   if (booking) tags.push("booking");
@@ -50,6 +56,7 @@ export function deriveTags(config: Record<string, unknown>): RelevanceTag[] {
   if (ordering || caps.deposit_required === true) tags.push("payments");
   if (Array.isArray(needs) && needs.length > 0) tags.push("connected");
   if (content) tags.push("content");
+  if (kind === "ops") tags.push("internal");
   // NOTE: "staffed" is never derived here — team size is not in the
   // config schema, so the staff page shows on booking alone (same as the
   // frontend's surfaceProfileFromConfig). Claiming staff knowledge we do
@@ -58,11 +65,11 @@ export function deriveTags(config: Record<string, unknown>): RelevanceTag[] {
   return tags;
 }
 
-export type OperatorKind = "receptionist" | "assistant" | "both";
+export type OperatorKind = "receptionist" | "assistant" | "both" | "ops";
 
 function deriveKind(config: Record<string, unknown>): OperatorKind {
   const k = config.operator_kind;
-  if (k === "assistant" || k === "both") return k;
+  if (k === "assistant" || k === "both" || k === "ops") return k;
   return "receptionist";
 }
 

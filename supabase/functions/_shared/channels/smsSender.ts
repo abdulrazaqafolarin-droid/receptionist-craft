@@ -106,11 +106,11 @@ export async function sendSms(
       message_sid: data.sid,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "SMS send failed";
+    const errText = err instanceof Error ? err.message : "SMS send failed";
     return {
       success: false,
       tier: 1,
-      error: message,
+      error: errText,
       draft: { to: message.to, body: message.body },
     };
   }

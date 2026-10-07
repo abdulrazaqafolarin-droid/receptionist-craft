@@ -77,7 +77,7 @@ export function isRouteVisible(route: string, visiblePages: string[] | null): bo
  */
 
 export interface SurfaceProfile {
-  kind: "receptionist" | "assistant" | "both";
+  kind: "receptionist" | "assistant" | "both" | "ops";
   booking: boolean;
   ordering: boolean;
   payments: boolean;
@@ -103,9 +103,9 @@ const PAGE_RULES: Array<{ key: string; needs: string[]; why: string }> = [
   { key: "analytics", needs: ["booking", "ordering", "customers"], why: "Shows conversation and funnel numbers." },
   { key: "money-mode", needs: ["booking", "ordering", "payments"], why: "Sales acceleration for something being sold or booked." },
   { key: "meo-dashboard", needs: ["booking", "ordering", "payments"], why: "Revenue-leak analytics needs a money flow to measure." },
-  { key: "services", needs: ["booking", "ordering"], why: "The catalog behind bookings and orders." },
+  { key: "services", needs: ["booking", "ordering", "internal"], why: "The catalog behind bookings and orders — and the stock book for internal operators." },
   { key: "availability", needs: ["booking"], why: "Schedule source of truth for appointment booking." },
-  { key: "staff", needs: ["booking", "staffed"], why: "Staff scheduling for a booked team." },
+  { key: "staff", needs: ["booking", "staffed", "internal"], why: "Staff scheduling for a booked team — and the roster for an internal operator." },
   { key: "faqs", needs: [], why: "Every operator answers questions." },
   { key: "quality-review", needs: ["customers", "content"], why: "Review AI answers to customers or drafted content." },
   { key: "kb-rewrite", needs: [], why: "Knowledge improvement helps every operator stay accurate." },
@@ -126,6 +126,7 @@ function profileTags(p: SurfaceProfile): string[] {
   if (p.connected) tags.push("connected");
   if (p.content) tags.push("content");
   if (p.customerFacing) tags.push("customers");
+  if (p.kind === "ops") tags.push("internal");
   return tags;
 }
 
@@ -177,7 +178,8 @@ export function surfaceProfileFromConfig(config: Record<string, unknown>): Surfa
     return (v as Record<string, unknown>).enabled !== false;
   };
   const needs = config.external_needs;
-  const kind = config.operator_kind === "assistant" ? "assistant" : config.operator_kind === "both" ? "both" : "receptionist";
+  const rawKind = config.operator_kind;
+  const kind = rawKind === "assistant" || rawKind === "both" || rawKind === "ops" ? rawKind : "receptionist";
   const booking = caps.books_appointments === true || wfOn(workflows.appointment_booking);
   const ordering = caps.sells_products === true || caps.delivers === true || wfOn(workflows.product_ordering);
   return {
@@ -187,7 +189,7 @@ export function surfaceProfileFromConfig(config: Record<string, unknown>): Surfa
     payments: ordering || caps.deposit_required === true,
     staffed: false, // unknown from config alone; staff page still shows on booking
     connected: Array.isArray(needs) && needs.length > 0,
-    content: kind !== "receptionist",
-    customerFacing: kind !== "assistant",
+    content: kind === "assistant" || kind === "both",
+    customerFacing: kind !== "assistant" && kind !== "ops",
   };
 }

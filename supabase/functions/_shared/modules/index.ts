@@ -63,3 +63,14 @@ export { syncToCalendar, importFromCalendar } from "./calendarSync.ts";
 
 export { postJob, screenCandidate } from "./recruitmentAssistant.ts";
 export type { JobPosting } from "./recruitmentAssistant.ts";
+
+// ── Ops: Inside-the-Business (Phase C, internal-only, no connectors) ──
+
+export { getStockAlerts, reorderSuggestions } from "./stockTracker.ts";
+export type { StockAlert, StockAlertKind } from "./stockTracker.ts";
+
+export { getRoster, saveShifts, findConflicts, uncoveredDays } from "./staffRoster.ts";
+export type { Shift, StaffMember, ShiftConflict } from "./staffRoster.ts";
+
+export { getTasks, addTask, completeTask, chaseList } from "./taskChaser.ts";
+export type { OpsTask, ChaseList } from "./taskChaser.ts";

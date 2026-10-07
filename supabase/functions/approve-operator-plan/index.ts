@@ -235,8 +235,9 @@ serve(async (req) => {
         // Derive the widget's catalog mode from capabilities (previously
         // only the frontend set this, so API/draft approvals left widgets
         // stuck on the wrong model — e.g. ordering operators showing no
-        // product replies at all).
-        business_model: bookingOn && orderingOn ? "both" : orderingOn ? "products" : "services",
+        // product replies at all). Phase C: an operator that books nothing
+        // and sells nothing is 'internal', never the 'services' default.
+        business_model: bookingOn && orderingOn ? "both" : orderingOn ? "products" : bookingOn ? "services" : "internal",
         // Preserve existing fields that aren't in the config
       })
       .eq("id", receptionist_id);

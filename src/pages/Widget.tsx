@@ -51,7 +51,7 @@ type ReceptionistData = {
   greeting_message: string | null;
   timezone: string | null;
   tone: string | null;
-  business_model: 'services' | 'products' | 'both' | null;
+  business_model: 'services' | 'products' | 'both' | 'internal' | null;
   widget_surface?: WidgetPieces | null;
   business_info: {
     widget_customization?: {
@@ -101,7 +101,7 @@ export default function Widget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [products, setProducts] = useState<ServiceItem[]>([]);
-  const [businessModel, setBusinessModel] = useState<'services' | 'products' | 'both'>('services');
+  const [businessModel, setBusinessModel] = useState<'services' | 'products' | 'both' | 'internal'>('services');
   // Approved widget surface (Stage 3): which flow pieces this operator's
   // visitors get. Absent (older operators) -> everything on.
   const [widgetPieces, setWidgetPieces] = useState<WidgetPieces>({ booking: true, ordering: true, voice: true, lead_capture: true });

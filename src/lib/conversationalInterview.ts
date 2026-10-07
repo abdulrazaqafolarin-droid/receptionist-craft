@@ -22,7 +22,7 @@ export interface InterviewSlots {
   policies: string | null;
   contact: string | null;
   tone_preference: string | null;
-  operator_kind: "receptionist" | "assistant" | "both" | null;
+  operator_kind: "receptionist" | "assistant" | "both" | "ops" | null;
   core_need: string | null;
   external_needs: string[];
   /**
@@ -151,14 +151,14 @@ function detectKind(transcript: string, businessTypeHint: string): "receptionist
 function extractSlots(transcript: string, businessTypeHint: string): InterviewSlots {
   const t = transcript.toLowerCase();
   // Phase B: the problem domain can force the operator shape. Internal-ops
-  // problems are always helper-shaped (staff-facing, no customer chat);
+  // problems are ops-shaped (Phase C: staff-facing, no customer chat);
   // hybrid problems always need both shapes. Otherwise the old kind
   // detector runs unchanged.
   const problem_type = ownerSaidEnough(transcript) || businessTypeHint
     ? detectProblemType(transcript, businessTypeHint)
     : null;
   const kind = problem_type === "internal-ops"
-    ? "assistant"
+    ? "ops"
     : problem_type === "hybrid"
       ? "both"
       : ownerSaidEnough(transcript) || businessTypeHint ? detectKind(transcript, businessTypeHint) : null;
@@ -179,7 +179,7 @@ function extractSlots(transcript: string, businessTypeHint: string): InterviewSl
     contact: detect(t, [/\d{7,}/, /@/, /whatsapp/, /phone/, /email/, /address|street|road|avenue|lagos|abuja/]) ? "mentioned" : null,
     tone_preference: detect(t, [/friendly|warm|casual/, /professional|formal/, /playful|fun/]) ? "mentioned" : null,
     operator_kind: kind,
-    core_need: kind === "assistant" || kind === "both" ? transcript.slice(0, 300) : null,
+    core_need: kind === "assistant" || kind === "both" || kind === "ops" ? transcript.slice(0, 300) : null,
     external_needs,
     problem_type,
   };
@@ -192,7 +192,7 @@ function ownerSaidEnough(transcript: string): boolean {
 function buildSummary(ownerMessages: string[], businessTypeHint: string, kind: InterviewSlots["operator_kind"]): string {
   const joined = ownerMessages.join(" ").slice(0, 900);
   const pt = detectProblemType(ownerMessages.join("\n"), businessTypeHint);
-  const scope = kind === "assistant" && pt === "internal-ops"
+  const scope = kind === "ops"
     ? "Owner's problem is inside the business (stock, staff, tasks, records) — not customers. "
     : kind === "assistant"
     ? "Owner wants a helper operator (not customer bookings). "
@@ -345,7 +345,7 @@ export function nextInterviewTurn(
   } else if (lastSignal === "junk") {
     // A tap, a stray mark, an empty send — never pretend content arrived.
     assistant_message = "I'm here — just tell me about your business in your own words, and we'll take it one small question at a time.";
-  } else if (kind === "assistant" && pt === "internal-ops") {
+  } else if (kind === "ops") {
     // Phase B ops track: inside-the-business problems get the ops bank —
     // never bookings, never content questions.
     key = opsKey(slots, ownerMessages);
@@ -443,7 +443,7 @@ export function buildLocalPlan(
   // Phase B: same domain forcing as the live interview — an offline draft
   // for a stock problem must never promise bookings.
   const pt = ownerSaidEnough(transcript) || businessTypeHint ? detectProblemType(transcript, businessTypeHint) : null;
-  const kind = pt === "internal-ops" ? "assistant" : pt === "hybrid" ? "both" : detectKind(transcript, businessTypeHint);
+  const kind: "receptionist" | "assistant" | "both" | "ops" = pt === "internal-ops" ? "ops" : pt === "hybrid" ? "both" : detectKind(transcript, businessTypeHint);
 
   const booking = /book|appoint|reserv|schedul|consult|session|visit|patient|salon|clinic/i.test(t);
   const ordering = /order|buy|sell|product|shop|store|deliver|menu|price|cost|₦|\$|pay/i.test(t);
@@ -485,8 +485,8 @@ export function buildLocalPlan(
     payments: ordering,
     staffed,
     connected: externalNeeds.length > 0,
-    content: kind !== "receptionist" || social,
-    customerFacing: kind !== "assistant",
+    content: kind === "assistant" || kind === "both" || social,
+    customerFacing: kind !== "assistant" && kind !== "ops",
   };
 
   // Local mirror of the manifest rules (page-level). The gateway plan

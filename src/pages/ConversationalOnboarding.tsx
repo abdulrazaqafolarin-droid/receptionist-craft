@@ -568,7 +568,7 @@ export default function ConversationalOnboarding() {
         const hasProducts = services.some((s) => s.type === "product");
         await supabase
           .from("receptionists")
-          .update({ business_model: hasServices && hasProducts ? "both" : hasProducts ? "products" : "services" })
+          .update({ business_model: hasServices && hasProducts ? "both" : hasProducts ? "products" : hasServices ? "services" : "internal" })
           .eq("id", recId);
       }
       setStepStatus("services", "done", services.length > 0
