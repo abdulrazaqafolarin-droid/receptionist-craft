@@ -4,6 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
+import { ConversationalManagement } from "@/components/ConversationalManagement";
 import { FAQManager } from "@/components/FAQManager";
 import { WidgetEmbedCode } from "@/components/WidgetEmbedCode";
 import { CustomerFieldsConfig, DEFAULT_CUSTOMER_FIELDS, type CustomerField } from "@/components/CustomerFieldsConfig";
@@ -110,6 +111,12 @@ export default function BuilderPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [previewMode, setPreviewMode] = useState(true);
+  // Right panel tabs: Test (isolated rehearsal), Improve (change the
+  // operator by chatting), Live (real production messages, read-only).
+  // Test and Live never mix — that isolation is deliberate.
+  const [rightTab, setRightTab] = useState<"test" | "improve" | "live">("test");
+  const [liveMessages, setLiveMessages] = useState<Array<{ id: string; sender: string; message: string; created_at: string; session_id: string | null }>>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,11 +128,42 @@ export default function BuilderPage() {
   const previewSessionIdRef = useRef<string>(crypto.randomUUID());
 
   // Auto-scroll when messages change
-  useEffect(() => {
-    if (messagesRef.current) {
+  useEffect(() => {    if (messagesRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Live tab: real production messages stream in read-only. Only runs
+  // while the tab is open — no background subscription cost otherwise.
+  useEffect(() => {
+    if (rightTab !== "live" || !receptionistId) return;
+    let cancelled = false;
+    setLiveLoading(true);
+    supabase.from("chat_messages")
+      .select("id,sender,message,created_at,session_id")
+      .eq("receptionist_id", receptionistId)
+      .order("created_at", { ascending: false })
+      .limit(30)
+      .then(({ data }) => {
+        if (!cancelled) {
+          setLiveMessages(((data || []) as Array<{ id: string; sender: string; message: string; created_at: string; session_id: string | null }>).reverse());
+          setLiveLoading(false);
+        }
+      });
+    const channel = supabase
+      .channel(`builder-live-${receptionistId}`)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "chat_messages", filter: `receptionist_id=eq.${receptionistId}` },
+        (payload) => {
+          const row = payload.new as { id: string; sender: string; message: string; created_at: string; session_id: string | null };
+          setLiveMessages((prev) => [...prev.slice(-49), row]);
+        })
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [rightTab, receptionistId]);
 
   // load user id from supabase auth (if any)
   useEffect(() => {
@@ -1091,8 +1129,21 @@ capabilities: receptionist.capabilities,
                 <div className="text-sm text-muted-foreground">{receptionist.business_name || "No business set yet"}</div>
               </div>
               <div className="flex items-center gap-2">
-                <button 
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${previewMode ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`} 
+                <div className="flex rounded-lg border border-border p-0.5" role="tablist" aria-label="Builder chat mode">
+                  {(["test", "improve", "live"] as const).map((t) => (
+                    <button
+                      key={t}
+                      role="tab"
+                      aria-selected={rightTab === t}
+                      onClick={() => setRightTab(t)}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${rightTab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {t === "test" ? "Test" : t === "improve" ? "Improve" : "Live"}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${previewMode ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}
                   onClick={() => setPreviewMode((p) => !p)}
                 >
                   {previewMode ? "Preview: ON" : "Preview: OFF"}
@@ -1101,6 +1152,43 @@ capabilities: receptionist.capabilities,
               </div>
             </div>
 
+            {rightTab === "improve" ? (
+              <div className="flex-1 overflow-auto" style={{ minHeight: 400 }}>
+                {receptionistId ? (
+                  <ConversationalManagement receptionistId={receptionistId} />
+                ) : (
+                  <div className="text-muted-foreground text-center py-12">
+                    <p>Save the operator first — then describe changes here and they go live on approval.</p>
+                  </div>
+                )}
+              </div>
+            ) : rightTab === "live" ? (
+              <div className="flex-1 overflow-auto bg-muted/30 rounded-xl p-4 mb-4" style={{ minHeight: 400 }}>
+                <div className="mb-3 flex items-center gap-2 text-xs font-medium">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
+                  LIVE — real customer conversations as they happen (read-only)
+                </div>
+                {liveLoading && <p className="text-sm text-muted-foreground">Loading recent conversations…</p>}
+                {!liveLoading && liveMessages.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No customer conversations yet. New messages appear here the moment they arrive.</p>
+                )}
+                {liveMessages.map((m) => (
+                  <div key={m.id} className={`mb-3 max-w-[85%] ${m.sender === "user" || m.sender === "visitor" || m.sender === "customer" ? "ml-auto" : "mr-auto"}`}>
+                    <div className={`inline-block px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap ${
+                      m.sender === "user" || m.sender === "visitor" || m.sender === "customer"
+                        ? "bg-primary text-primary-foreground rounded-br-md"
+                        : "bg-card border border-border shadow-sm rounded-bl-md"
+                    }`}>
+                      {m.message}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {new Date(m.created_at).toLocaleTimeString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+            <>
             {/* chat window */}
             <div ref={messagesRef} className="flex-1 overflow-auto bg-muted/30 rounded-xl p-4 mb-4" style={{ minHeight: 400 }}>
               {messages.length === 0 && (
@@ -1190,6 +1278,8 @@ capabilities: receptionist.capabilities,
               <button className="px-4 py-3 border border-border rounded-xl hover:bg-muted transition-all" title="Voice (coming soon)">🎙️</button>
               <button className="px-4 py-3 border border-border rounded-xl hover:bg-muted transition-all" title="Play reply (coming soon)">🔊</button>
             </div>
+            </>
+            )}
           </section>
         </main>
       </div>
