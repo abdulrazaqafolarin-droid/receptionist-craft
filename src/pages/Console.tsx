@@ -22,9 +22,51 @@ interface Msg {
   content: string;
 }
 
+interface TaskItem {
+  id: string;
+  title: string;
+  assignee?: string | null;
+  due?: string | null;
+}
+
+interface StockItem {
+  service_id: string;
+  name: string;
+  kind: string;
+  detail?: string;
+  stock_quantity?: number | null;
+}
+
+type Panel =
+  | { kind: "tasks"; overdue: TaskItem[]; today: TaskItem[]; upcoming: TaskItem[] }
+  | { kind: "stock"; alerts: StockItem[] };
+
 type QuickAction = "stock" | "tasks" | "roster";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function StockRow({ item, onSave, disabled }: { item: StockItem; onSave: (qty: string) => void; disabled: boolean }) {
+  const [qty, setQty] = useState(item.stock_quantity !== null && item.stock_quantity !== undefined ? String(item.stock_quantity) : "");
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <span className="flex-1 min-w-0 truncate">{item.name} <span className="text-muted-foreground">({item.kind})</span></span>
+      <Input className="w-20" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} disabled={disabled} aria-label={`Count for ${item.name}`} />
+      <Button size="sm" variant="outline" disabled={disabled || !qty.trim()} onClick={() => onSave(qty.trim())}>Save</Button>
+    </div>
+  );
+}
+
+function TaskRow({ item, flag, onDone, disabled }: { item: TaskItem; flag: string; onDone: () => void; disabled: boolean }) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 shrink-0" disabled={disabled} onClick={onDone} aria-label={`Mark done: ${item.title}`}>
+        <span className="flex h-4 w-4 items-center justify-center rounded border border-border" aria-hidden="true" />
+      </Button>
+      <span className="flex-1 min-w-0 truncate">{item.title}</span>
+      <span className="text-muted-foreground text-xs shrink-0">{flag}{item.assignee ? ` · ${item.assignee}` : ""}</span>
+    </div>
+  );
+}
 
 export default function Console() {
   const receptionistId = useActiveOperatorStore((s) => s.receptionistId);
@@ -34,6 +76,10 @@ export default function Console() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [acting, setActing] = useState<QuickAction | null>(null);
+  const [panel, setPanel] = useState<Panel | null>(null);
+  const [newTask, setNewTask] = useState("");
+  const [newTaskDue, setNewTaskDue] = useState("");
+  const [mutating, setMutating] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -127,10 +173,75 @@ export default function Console() {
     try {
       const d = await callFn({ action });
       setMessages((m) => [...m, { role: "assistant", content: formatAction(action, d) }]);
+      // Working panels: checks that can turn into doing. Roster stays
+      // read-only here — shifts are edited on the Staff page, and the
+      // roster check says so instead of pretending otherwise.
+      if (action === "tasks") {
+        const chase = (d.chase || {}) as { overdue?: TaskItem[]; due_today?: TaskItem[]; upcoming?: TaskItem[] };
+        setPanel({ kind: "tasks", overdue: chase.overdue || [], today: chase.due_today || [], upcoming: chase.upcoming || [] });
+      } else if (action === "stock") {
+        setPanel({ kind: "stock", alerts: ((d.alerts || []) as StockItem[]) });
+      } else {
+        setPanel(null);
+      }
     } catch (e) {
       setMessages((m) => [...m, { role: "assistant", content: `That check failed (${e instanceof Error ? e.message : "unknown error"}). Your records are untouched — try again in a moment.` }]);
     } finally {
       setActing(null);
+    }
+  }
+
+  async function addTask() {
+    const title = newTask.trim();
+    if (!title || mutating) return;
+    setMutating(true);
+    try {
+      const d = await callFn({ action: "add_task", title, ...(newTaskDue ? { due: newTaskDue } : {}) });
+      const task = d.task as TaskItem;
+      setNewTask("");
+      setNewTaskDue("");
+      setMessages((m) => [...m, { role: "assistant", content: `Added: "${task.title}"${task.due ? ` (due ${task.due})` : ""}. I will chase it.` }]);
+      await runAction("tasks");
+    } catch (e) {
+      setMessages((m) => [...m, { role: "assistant", content: `Could not add that task (${e instanceof Error ? e.message : "unknown error"}). Nothing was saved.` }]);
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function completeTask(id: string, title: string) {
+    if (mutating) return;
+    setMutating(true);
+    try {
+      await callFn({ action: "complete_task", task_id: id });
+      setPanel((p) => {
+        if (!p || p.kind !== "tasks") return p;
+        const drop = (list: TaskItem[]) => list.filter((t) => t.id !== id);
+        return { kind: "tasks", overdue: drop(p.overdue), today: drop(p.today), upcoming: drop(p.upcoming) };
+      });
+      setMessages((m) => [...m, { role: "assistant", content: `Done: "${title}". Off the chase list.` }]);
+    } catch (e) {
+      setMessages((m) => [...m, { role: "assistant", content: `Could not mark that done (${e instanceof Error ? e.message : "unknown error"}). It stays on the list.` }]);
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function setStock(serviceId: string, name: string, qty: string) {
+    const n = Number(qty);
+    if (!Number.isInteger(n) || n < 0 || mutating) return;
+    setMutating(true);
+    try {
+      await callFn({ action: "set_stock", service_id: serviceId, stock_quantity: n });
+      setPanel((p) => {
+        if (!p || p.kind !== "stock") return p;
+        return { kind: "stock", alerts: p.alerts.map((a) => a.service_id === serviceId ? { ...a, stock_quantity: n } : a) };
+      });
+      setMessages((m) => [...m, { role: "assistant", content: `Counted: ${name} is now ${n} on the shelf.` }]);
+    } catch (e) {
+      setMessages((m) => [...m, { role: "assistant", content: `Could not save that count (${e instanceof Error ? e.message : "unknown error"}). The old count stands.` }]);
+    } finally {
+      setMutating(false);
     }
   }
 
@@ -185,7 +296,7 @@ export default function Console() {
 
       <Card>
         <CardContent className="pt-6 flex flex-col gap-3 min-h-[240px]">
-          {messages.length === 0 && (
+          {messages.length === 0 && panel === null && (
             <p className="text-sm text-muted-foreground">
               No questions yet. Try a quick check above, or ask e.g. "what needs my attention today?"
             </p>
@@ -203,6 +314,49 @@ export default function Console() {
           <div ref={bottomRef} />
         </CardContent>
       </Card>
+
+      {panel?.kind === "tasks" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Task list — tap to mark done</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {panel.overdue.map((t) => (
+              <TaskRow key={t.id} item={t} flag="overdue" disabled={mutating || busy} onDone={() => completeTask(t.id, t.title)} />
+            ))}
+            {panel.today.map((t) => (
+              <TaskRow key={t.id} item={t} flag="due today" disabled={mutating || busy} onDone={() => completeTask(t.id, t.title)} />
+            ))}
+            {panel.upcoming.map((t) => (
+              <TaskRow key={t.id} item={t} flag={t.due ? `due ${t.due}` : "no date"} disabled={mutating || busy} onDone={() => completeTask(t.id, t.title)} />
+            ))}
+            {panel.overdue.length === 0 && panel.today.length === 0 && panel.upcoming.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nothing on the list.</p>
+            )}
+            <div className="flex gap-2 pt-2">
+              <Input value={newTask} onChange={(e) => setNewTask(e.target.value)} placeholder="New task, e.g. Count the fridge drugs" disabled={mutating || busy} />
+              <Input className="w-36" type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} disabled={mutating || busy} aria-label="Due date (optional)" />
+              <Button onClick={addTask} disabled={mutating || busy || !newTask.trim()}>Add</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {panel?.kind === "stock" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Stock counts — enter what you counted</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {panel.alerts.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nothing flagged. Counts you save here update the shelf truth.</p>
+            )}
+            {panel.alerts.map((a) => (
+              <StockRow key={a.service_id} item={a} disabled={mutating || busy} onSave={(qty) => setStock(a.service_id, a.name, qty)} />
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex gap-2">
         <Input

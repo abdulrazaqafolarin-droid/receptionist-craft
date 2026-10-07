@@ -16,9 +16,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { askRutex } from "../_shared/rutexMcp.ts";
 import { buildConsolePrompt, type ConsoleSnapshot } from "../_shared/config/consolePrompt.ts";
-import { getStockAlerts, reorderSuggestions, type StockAlert } from "../_shared/modules/stockTracker.ts";
-import { getTasks, chaseList } from "../_shared/modules/taskChaser.ts";
-import { getRoster, findConflicts, uncoveredDays } from "../_shared/modules/staffRoster.ts";
+import { getStockAlerts, reorderSuggestions, setStockLevel, type StockAlert } from "../_shared/modules/stockTracker.ts";
+import { getTasks, chaseList, addTask, completeTask } from "../_shared/modules/taskChaser.ts";
+import { getRoster, findConflicts, uncoveredDays, saveShifts, type Shift } from "../_shared/modules/staffRoster.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -157,6 +157,43 @@ serve(async (req) => {
       });
     }
     if (action !== "chat") {
+      // Write actions live behind the same ops gate above: only an
+      // internal operator's staff can touch its records, and every write
+      // runs through the module validators (bad shapes rejected, other
+      // operators' rows unreachable). Failures return as messages, never
+      // silent — the staff member sees exactly what did or did not save.
+      try {
+        if (action === "add_task") {
+          const task = await addTask(supabase, receptionist_id, {
+            title: clean(body.title, 200),
+            assignee: typeof body.assignee === "string" ? body.assignee : undefined,
+            due: typeof body.due === "string" ? body.due : undefined,
+          });
+          return jsonRes({ ok: true, action, task });
+        }
+        if (action === "complete_task") {
+          const taskId = clean(body.task_id, 120);
+          if (!taskId) return jsonRes({ ok: false, error: "missing_task_id" }, 400);
+          const task = await completeTask(supabase, receptionist_id, taskId);
+          return jsonRes({ ok: true, action, task });
+        }
+        if (action === "save_shifts") {
+          const shifts = (Array.isArray(body.shifts) ? body.shifts : []) as Shift[];
+          const saved = await saveShifts(supabase, receptionist_id, shifts);
+          return jsonRes({ ok: true, action, ...saved });
+        }
+        if (action === "set_stock") {
+          const serviceId = clean(body.service_id, 120);
+          if (!serviceId) return jsonRes({ ok: false, error: "missing_service_id" }, 400);
+          const updated = await setStockLevel(supabase, receptionist_id, serviceId, {
+            stock_quantity: body.stock_quantity,
+            expiry_date: body.expiry_date,
+          });
+          return jsonRes({ ok: true, action, item: updated });
+        }
+      } catch (e) {
+        return jsonRes({ ok: false, error: e instanceof Error ? e.message : "write_failed" }, 400);
+      }
       return jsonRes({ ok: false, error: "unknown_action" }, 400);
     }
 
