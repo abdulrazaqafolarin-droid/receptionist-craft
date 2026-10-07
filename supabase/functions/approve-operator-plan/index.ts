@@ -86,6 +86,16 @@ serve(async (req) => {
     const capabilities = (config.capabilities || {}) as Record<string, unknown>;
     const channels = (config.channels || {}) as Record<string, boolean>;
     void channels;
+    // The row stores the nested capabilities object, not the full config —
+    // so top-level identity fields must be stamped on explicitly, or every
+    // row reader (console gate, surface fallback) sees a kind-less operator.
+    // config_versions keeps the complete record; this is the live summary.
+    if (typeof config.operator_kind === "string") {
+      capabilities.operator_kind = config.operator_kind;
+    }
+    if (typeof config.problem_type === "string") {
+      capabilities.problem_type = config.problem_type;
+    }
 
     // Validate + persist the approved dashboard surface (approval-first:
     // the surface only lands here because the owner approved the plan).
