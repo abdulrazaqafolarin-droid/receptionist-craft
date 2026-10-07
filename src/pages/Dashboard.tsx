@@ -11,7 +11,6 @@ import { RevenueEngine } from "@/components/RevenueEngine";
 import { DashboardCharts } from "@/components/DashboardCharts";
 import { OwnerChat } from "@/components/OwnerChat";
 import { ConversationalManagement } from "@/components/ConversationalManagement";
-import { NumberTicker } from "@/components/ui/number-ticker";
 import { SpotlightCard } from "@/components/SpotlightCard";
 import { toast } from "sonner";
 import { useActiveOperatorStore } from "@/store/activeOperator";
@@ -169,7 +168,7 @@ export default function Dashboard() {
       <FloatingBackground variant="default" />
       {/* Owner Chat Sidebar - Persistent on Dashboard */}
       <OwnerChat />
-      <main id="main-content" className="relative z-10 container mx-auto px-4 py-6 sm:py-8 lg:py-12">
+      <main id="main-content" className="relative z-10 container mx-auto px-4 pt-16 pb-6 sm:pt-20 sm:pb-8 lg:py-12">
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 sm:mb-10">
           <div>
@@ -177,8 +176,7 @@ export default function Dashboard() {
               Dashboard
             </h1>
             <p className="text-muted-foreground text-sm sm:text-base lg:text-lg">AI operators for your business — customers served, shop work handled</p>
-            <p className="text-[10px] text-muted-foreground/80 mt-1">Build {import.meta.env.VITE_APP_BUILD_SHA || "unknown"}</p>
-          </div>
+                      </div>
           <Button
             onClick={() => navigate("/onboarding?returning=1")}
             size="lg"
@@ -281,7 +279,7 @@ export default function Dashboard() {
                           <span className="text-xs font-medium visual-secondary">{item.label}</span>
                         </div>
                         {item.count !== null && (
-                          <div className="text-2xl font-bold tnum visual-primary"><NumberTicker value={item.count} /></div>
+                          <div className="text-2xl font-bold tnum visual-primary">{item.count}</div>
                         )}
                         <div className="text-xs visual-tertiary">{item.sub}</div>
                       </button>
@@ -366,7 +364,7 @@ export default function Dashboard() {
                         <card.icon className="h-4 w-4 text-primary" aria-hidden="true" />
                         <span className="text-xs font-medium visual-secondary">{card.label}</span>
                       </div>
-                      <div className="text-2xl font-bold tnum visual-primary"><NumberTicker value={card.value} /></div>
+                      <div className="text-2xl font-bold tnum visual-primary">{card.value}</div>
                       <div className="text-xs visual-tertiary">{card.sub}</div>
                     </div>
                   ))}

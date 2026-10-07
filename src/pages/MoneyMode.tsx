@@ -100,7 +100,6 @@ export default function MoneyModePage() {
             <p className="text-muted-foreground">
               Configure Money Mode behavior, monitor conversion quality, and tune thresholds in one place.
             </p>
-            <p className="mt-1 text-[10px] text-muted-foreground/80">Build {import.meta.env.VITE_APP_BUILD_SHA || "unknown"}</p>
           </div>
           <Button variant="outline" onClick={() => navigate("/dashboard")}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
