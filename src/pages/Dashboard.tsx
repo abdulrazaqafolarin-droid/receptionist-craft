@@ -4,27 +4,27 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageCircle, Calendar, CalendarDays, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign, ShoppingBag, LayoutDashboard, Bot, TrendingUp, TrendingDown, Users, Target, ChevronUp, ChevronDown } from "lucide-react";
+import { MessageCircle, Calendar, CalendarDays, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign, ShoppingBag, LayoutDashboard, Bot, TrendingUp, TrendingDown, Users, Target, ChevronUp, ChevronDown, Package, ListChecks, AlertTriangle, Terminal, ClipboardCheck, Lightbulb } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { RevenueEngine } from "@/components/RevenueEngine";
 import { DashboardCharts } from "@/components/DashboardCharts";
-import { SuccessSignalsCard } from "@/components/SuccessSignalsCard";
 import { OwnerChat } from "@/components/OwnerChat";
 import { ConversationalManagement } from "@/components/ConversationalManagement";
 import { NumberTicker } from "@/components/ui/number-ticker";
 import { SpotlightCard } from "@/components/SpotlightCard";
 import { toast } from "sonner";
 import { useActiveOperatorStore } from "@/store/activeOperator";
-import { visiblePagesFromCapabilities } from "@/lib/operatorSurface";
+import { isRouteVisible, visiblePagesFromCapabilities } from "@/lib/operatorSurface";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
-  const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string; active: boolean; mock_mode?: boolean; ai_mode?: string; capabilities?: unknown }>>([]);
+  const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string; active: boolean; mock_mode?: boolean; ai_mode?: string; business_model?: string; capabilities?: unknown }>>([]);
   // Active operator is global (sidebar + route gates follow it). Dashboard
   // owns selection: picking here switches the whole dashboard surface.
   const selectedReceptionistId = useActiveOperatorStore((s) => s.receptionistId);
+  const visiblePages = useActiveOperatorStore((s) => s.visiblePages);
   const setActive = useActiveOperatorStore((s) => s.setActive);
   // Stable id list: a fresh array every render retriggers every chart
   // fetch loop downstream (the dashboard "shaking"). Memoize on the rows.
@@ -36,7 +36,26 @@ export default function Dashboard() {
     orders: 0,
     activeReceptionists: 0,
   });
+  // Attention numbers: what needs the owner NOW (not all-time museum
+  // stats). Degrades to zeros on any failure — never breaks the page.
+  const [attention, setAttention] = useState({
+    upcomingBookings: 0,
+    openEscalations: 0,
+    stockNeeds: 0,
+  });
   const [showOperatorDetail, setShowOperatorDetail] = useState(false);
+
+  // The active operator's shape drives the whole page: a pharmacy sees
+  // stock and tasks, a salon sees bookings — never each other's numbers.
+  const activeRow = receptionists.find((r) => r.id === selectedReceptionistId);
+  const activeKind = (() => {
+    const caps = ((activeRow?.capabilities || {}) as Record<string, unknown>);
+    if (caps.operator_kind === "ops" || caps.operator_kind === "assistant" || caps.operator_kind === "both") {
+      return caps.operator_kind as string;
+    }
+    if ((activeRow as { business_model?: string } | undefined)?.business_model === "internal") return "ops";
+    return "receptionist";
+  })();
 
   useEffect(() => {
     loadData();
@@ -58,6 +77,56 @@ export default function Dashboard() {
       if (current) setActive(current.id, current.business_name || current.name, visiblePagesFromCapabilities(current.capabilities));
     }
   }, [receptionists, selectedReceptionistId, setActive]);
+
+  useEffect(() => {
+    if (selectedReceptionistId) loadAttention(selectedReceptionistId);
+  }, [selectedReceptionistId]);
+
+  const dayStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const loadAttention = async (id: string) => {
+    try {
+      const midnight = new Date();
+      midnight.setHours(0, 0, 0, 0);
+      const [apptRes, escRes, stockRes] = await Promise.all([
+        supabase.from("appointments").select("*", { count: "exact", head: true }).eq("receptionist_id", id).gte("start_time", midnight.toISOString()),
+        supabase.from("escalations").select("*", { count: "exact", head: true }).eq("receptionist_id", id).is("resolved_at", null),
+        supabase.from("services").select("stock_quantity,low_stock_threshold,expiry_date").eq("receptionist_id", id).eq("active", true).not("stock_quantity", "is", null),
+      ]);
+      // Stock math runs client-side (small catalog): out, low, expired, or
+      // expiring within 30 days all count as "needs you".
+      const horizon = new Date();
+      horizon.setDate(horizon.getDate() + 30);
+      const horizonStr = dayStr(horizon);
+      let stockNeeds = 0;
+      // Generated DB types predate the expiry_date migration — cast
+      // through unknown rather than touching the never-edit types file.
+      const rows = ((stockRes.data || []) as unknown) as Array<{ stock_quantity: number | null; low_stock_threshold: number | null; expiry_date: string | null }>;
+      for (const row of rows) {
+        const qty = row.stock_quantity ?? 0;
+        const threshold = row.low_stock_threshold ?? 5;
+        if (qty <= 0 || qty <= threshold) { stockNeeds++; continue; }
+        if (row.expiry_date && row.expiry_date <= horizonStr) stockNeeds++;
+      }
+      setAttention((a) => ({ ...a, upcomingBookings: apptRes.count || 0, openEscalations: escRes.count || 0, stockNeeds }));
+    } catch {
+      // Attention degrades silently — the dashboard stays up with zeros.
+    }
+  };
+
+  // Tasks + shifts live in capabilities (already in memory — no query).
+  // overdue/due-today compare yyyy-mm-dd strings: chronological, no TZ lies.
+  const opsCounts = (() => {
+    const caps = ((activeRow?.capabilities || {}) as Record<string, unknown>);
+    const tasks = (Array.isArray(caps.ops_tasks) ? caps.ops_tasks : []) as Array<{ due?: string; done?: boolean }>;
+    const shifts = (Array.isArray(caps.ops_shifts) ? caps.ops_shifts : []) as unknown[];
+    const today = dayStr(new Date());
+    return {
+      overdue: tasks.filter((t) => !t.done && t.due && t.due < today).length,
+      dueToday: tasks.filter((t) => !t.done && t.due === today).length,
+      shifts: shifts.length,
+    };
+  })();
 
   const loadData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -102,7 +171,7 @@ export default function Dashboard() {
       <OwnerChat />
       <main id="main-content" className="relative z-10 container mx-auto px-4 py-6 sm:py-8 lg:py-12">
         {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 sm:mb-10 animate-fade-in">
+        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 sm:mb-10">
           <div>
             <h1 className="type-display mb-2 text-foreground">
               Dashboard
@@ -124,7 +193,7 @@ export default function Dashboard() {
         {/* Getting Started Guide */}
         {receptionists.length === 0 && (
           <section
-            className="mb-8 sm:mb-10 glass-1 animate-scale-in overflow-hidden relative rounded-xl p-6 sm:p-8"
+            className="mb-8 sm:mb-10 glass-1 overflow-hidden relative rounded-xl p-6 sm:p-8"
             aria-labelledby="getting-started-title"
           >
             <div className="relative">
@@ -166,30 +235,67 @@ export default function Dashboard() {
         )}
 
 
-        {receptionists.length > 0 && (
-          <section className="mb-6 animate-fade-in" aria-label="Revenue control center">
-            <Card className="glass-1">
-              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                <div>
-                  <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
-                    <DollarSign className="h-4 w-4 text-amber-500" aria-hidden="true" />
-                    Money Mode & Revenue Engine
+        {/* Needs your attention — kind-aware, surface-aware. A salon sees
+            bookings and escalations; a pharmacy sees stock and tasks. Only
+            links the active operator actually has; all-clear is good news. */}
+        {receptionists.length > 0 && selectedReceptionistId && (() => {
+          const items: Array<{ icon: typeof Calendar; label: string; count: number | null; sub: string; path: string }> =
+            activeKind === "ops"
+              ? [
+                { icon: Package, label: "Stock needs", count: attention.stockNeeds, sub: "low, out, or expiring", path: "/services" },
+                { icon: ListChecks, label: "Overdue tasks", count: opsCounts.overdue, sub: "past due, still open", path: "/console" },
+                { icon: ListChecks, label: "Due today", count: opsCounts.dueToday, sub: "on today's list", path: "/console" },
+                { icon: Users, label: "Shifts saved", count: opsCounts.shifts, sub: "on the roster", path: "/staff" },
+              ]
+              : activeKind === "assistant"
+                ? [
+                  { icon: MessageCircle, label: "Conversations", count: stats.conversations, sub: "all time", path: "/conversations" },
+                  { icon: ClipboardCheck, label: "Review answers", count: null, sub: "keep it sharp", path: "/quality-review" },
+                  { icon: Lightbulb, label: "Knowledge ideas", count: null, sub: "stay accurate", path: "/kb-rewrite" },
+                ]
+                : [
+                  { icon: Calendar, label: "Upcoming bookings", count: attention.upcomingBookings, sub: "scheduled", path: "/appointments" },
+                  { icon: AlertTriangle, label: "Open escalations", count: attention.openEscalations, sub: "need a human", path: "/escalations" },
+                  { icon: MessageCircle, label: "Conversations", count: stats.conversations, sub: "all time", path: "/conversations" },
+                  { icon: ShoppingBag, label: "Orders", count: stats.orders, sub: "all time", path: "/orders" },
+                ];
+          const shown = items.filter((i) => isRouteVisible(i.path, visiblePages));
+          const total = shown.reduce((a, i) => a + (i.count || 0), 0);
+          return (
+            <section className="mb-6 sm:mb-8" aria-label="Needs your attention">
+              <Card className="glass-1">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                    <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+                    {total > 0 ? "Needs your attention" : "All clear — nothing needs you right now"}
                   </div>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    Open the dedicated workspace to control AI mode, threshold, and conversion performance.
-                  </p>
-                </div>
-                <Button onClick={() => navigate('/money-mode')} className="bg-amber-500 text-white hover:bg-amber-600">
-                  Open Money Mode
-                </Button>
-              </CardContent>
-            </Card>
-          </section>
-        )}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {shown.map((item) => (
+                      <button
+                        key={item.label}
+                        onClick={() => navigate(item.path)}
+                        className="rounded-xl finance-surface p-3 text-left transition-colors hover:bg-primary/5"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <item.icon className="h-4 w-4 text-primary" aria-hidden="true" />
+                          <span className="text-xs font-medium visual-secondary">{item.label}</span>
+                        </div>
+                        {item.count !== null && (
+                          <div className="text-2xl font-bold tnum visual-primary"><NumberTicker value={item.count} /></div>
+                        )}
+                        <div className="text-xs visual-tertiary">{item.sub}</div>
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+          );
+        })()}
 
         {/* AI Operator Centerpiece */}
         {receptionists.length > 0 && selectedReceptionistId && (
-          <section className="mb-8 animate-fade-in" aria-label="Your AI Operator">
+          <section className="mb-8" aria-label="Your AI Operator">
             <SpotlightCard className="glass-2 overflow-hidden rounded-[16px] border">
               <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -241,43 +347,34 @@ export default function Dashboard() {
               {/* Executive Summary Card */}
               <CardContent className="pb-4">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-                  <div className="p-3 rounded-xl finance-surface">
-                    <div className="flex items-center gap-2 mb-1">
-                      <TrendingUp className="h-4 w-4 finance-positive" />
-                      <span className="text-xs font-medium visual-secondary">Revenue This Week</span>
+                  {(activeKind === "ops"
+                    ? [
+                      { icon: Package, label: "Stock needs", value: attention.stockNeeds, sub: "low, out, expiring" },
+                      { icon: ListChecks, label: "Overdue tasks", value: opsCounts.overdue, sub: "past due" },
+                      { icon: ListChecks, label: "Due today", value: opsCounts.dueToday, sub: "on today's list" },
+                      { icon: Users, label: "Shifts saved", value: opsCounts.shifts, sub: "on the roster" },
+                    ]
+                    : [
+                      { icon: MessageCircle, label: "Conversations", value: stats.conversations, sub: "all time" },
+                      { icon: Calendar, label: "Upcoming bookings", value: attention.upcomingBookings, sub: "scheduled" },
+                      { icon: AlertTriangle, label: "Open escalations", value: attention.openEscalations, sub: "need a human" },
+                      { icon: ShoppingBag, label: "Orders", value: stats.orders, sub: "all time" },
+                    ]
+                  ).map((card) => (
+                    <div key={card.label} className="p-3 rounded-xl finance-surface">
+                      <div className="flex items-center gap-2 mb-1">
+                        <card.icon className="h-4 w-4 text-primary" aria-hidden="true" />
+                        <span className="text-xs font-medium visual-secondary">{card.label}</span>
+                      </div>
+                      <div className="text-2xl font-bold tnum visual-primary"><NumberTicker value={card.value} /></div>
+                      <div className="text-xs visual-tertiary">{card.sub}</div>
                     </div>
-                    <div className="text-2xl font-bold tnum visual-primary">$0</div>
-                    <div className="text-xs visual-tertiary">vs last week</div>
-                  </div>
-                  <div className="p-3 rounded-xl finance-surface">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Target className="h-4 w-4 text-warning" />
-                      <span className="text-xs font-medium visual-secondary">Missed Opportunities</span>
-                    </div>
-                    <div className="text-2xl font-bold tnum visual-primary">0</div>
-                    <div className="text-xs visual-tertiary">Ghosted quotes</div>
-                  </div>
-                  <div className="p-3 rounded-xl finance-surface">
-                    <div className="flex items-center gap-2 mb-1">
-                      <MessageCircle className="h-4 w-4 text-primary" />
-                      <span className="text-xs font-medium visual-secondary">AI Conversion</span>
-                    </div>
-                    <div className="text-2xl font-bold tnum visual-primary">0%</div>
-                    <div className="text-xs visual-tertiary">Chat to booking</div>
-                  </div>
-                  <div className="p-3 rounded-xl finance-surface">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Users className="h-4 w-4 visual-secondary" />
-                      <span className="text-xs font-medium visual-secondary">Team Utilization</span>
-                    </div>
-                    <div className="text-2xl font-bold tnum visual-primary">0%</div>
-                    <div className="text-xs visual-tertiary">Staff capacity</div>
-                  </div>
+                  ))}
                 </div>
 
                 {/* Conversational Management - Expanded */}
                 {showOperatorDetail && (
-                  <div className="border-t border-border/50 pt-4 animate-enter">
+                  <div className="border-t border-border/50 pt-4">
                     <ConversationalManagement receptionistId={selectedReceptionistId} />
                   </div>
                 )}
@@ -286,43 +383,9 @@ export default function Dashboard() {
           </section>
         )}
 
-        {/* Stats Grid */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-8 sm:mb-10" aria-label="Statistics overview">
-          {[
-            { title: "Total Conversations", value: stats.conversations, icon: MessageCircle, desc: "All time" },
-            { title: "Appointments Booked", value: stats.appointments, icon: Calendar, desc: "All time" },
-            { title: "Orders", value: stats.orders, icon: ShoppingBag, desc: "All time" },
-            { title: "Active Receptionists", value: stats.activeReceptionists, icon: Zap, desc: "Ready to serve" },
-          ].map((stat, idx) => (
-            <Card
-              key={stat.title}
-              className="group card-hover animate-fade-in overflow-hidden relative"
-              style={{ animationDelay: `${idx * 80}ms` }}
-            >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 sm:pb-3">
-                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
-                <div className="h-9 w-9 sm:h-11 sm:w-11 rounded-xl bg-primary/10 flex items-center justify-center" aria-hidden="true">
-                  <stat.icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1" aria-label={`${stat.value} ${stat.title.toLowerCase()}`}>
-                  <NumberTicker value={stat.value} />
-                </div>
-                <p className="text-xs sm:text-sm text-muted-foreground">{stat.desc}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </section>
-
-        {/* Success Signals */}
-        <section className="mb-8 sm:mb-10 animate-fade-in" aria-label="Success signals">
-          <SuccessSignalsCard />
-        </section>
-
         {/* Charts Section */}
         {receptionists.length > 0 && (
-          <section className="mb-8 sm:mb-10 animate-fade-in" aria-label="Activity charts">
+          <section className="mb-8 sm:mb-10" aria-label="Activity charts">
             <DashboardCharts receptionistIds={chartReceptionistIds} />
           </section>
         )}
@@ -331,11 +394,11 @@ export default function Dashboard() {
         <section aria-labelledby="receptionists-title">
           <Card className="mb-6 sm:mb-8">
             <CardHeader>
-              <CardTitle id="receptionists-title" className="flex items-center gap-2">
-                <Phone className="h-5 w-5 text-primary" aria-hidden="true" />
-                Your Receptionists
-              </CardTitle>
-              <CardDescription>Manage and edit your AI receptionists</CardDescription>
+                <CardTitle id="receptionists-title" className="flex items-center gap-2">
+                  <Phone className="h-5 w-5 text-primary" aria-hidden="true" />
+                  Your Operators
+                </CardTitle>
+                <CardDescription>Manage your AI operators</CardDescription>
             </CardHeader>
             <CardContent>
               {receptionists.length === 0 ? (
@@ -343,14 +406,14 @@ export default function Dashboard() {
                   <div className="h-14 w-14 sm:h-16 sm:w-16 mx-auto mb-4 rounded-2xl bg-primary/10 flex items-center justify-center" aria-hidden="true">
                     <Phone className="h-7 w-7 sm:h-8 sm:w-8 text-primary" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold mb-2">No receptionists yet</h3>
-                  <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6">Create your first AI receptionist to get started</p>
-                  <Button
-                    onClick={() => navigate("/onboarding?returning=1")}
-                    className="touch-target"
-                  >
-                    <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Create Your First Receptionist
-                  </Button>
+                    <h3 className="text-base sm:text-lg font-semibold mb-2">No operators yet</h3>
+                    <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6">Create your first AI operator to get started</p>
+                    <Button
+                      onClick={() => navigate("/onboarding?returning=1")}
+                      className="touch-target"
+                    >
+                      <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Create Your First Operator
+                    </Button>
                 </div>
               ) : (
                 <ul className="space-y-3" role="list">
@@ -422,7 +485,8 @@ export default function Dashboard() {
           </Card>
         </section>
 
-        {/* Quick Actions */}
+        {/* Quick Actions — filtered by the active operator's approved
+            surface, so an ops owner never gets booking dead-ends. */}
         <section aria-label="Quick actions">
           <nav className="grid grid-cols-2 lg:grid-cols-7 gap-3 sm:gap-4 lg:gap-6">
             {[
@@ -433,7 +497,8 @@ export default function Dashboard() {
               { title: "Orders", desc: "Manage orders", icon: ShoppingBag, path: "/orders" },
               { title: "Analytics", desc: "Performance insights", icon: BarChart3, path: "/analytics" },
               { title: "Quality Review", desc: "Improve AI responses", icon: CheckCircle2, path: "/quality-review" },
-            ].map((item) => (
+              { title: "Operator Console", desc: "Talk to your helper", icon: Terminal, path: "/console" },
+            ].filter((item) => isRouteVisible(item.path, visiblePages)).map((item) => (
               <Card 
                 key={item.path}
                 className="cursor-pointer card-hover group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
@@ -455,25 +520,27 @@ export default function Dashboard() {
           </nav>
         </section>
 
-        {/* Revenue Engine Section */}
-        {receptionists.length > 0 && (
+        {/* Revenue Engine Section — only when the active operator moves
+            money or bookings. An ops helper gets none of this. */}
+        {(isRouteVisible("/appointments", visiblePages) || isRouteVisible("/orders", visiblePages)) && (
           <section className="mt-6 sm:mt-8" aria-labelledby="revenue-engine-title">
             <div className="mb-4">
               <h2 id="revenue-engine-title" className="sr-only">Revenue Engine</h2>
             </div>
             <div className="grid lg:grid-cols-2 gap-4 lg:gap-6">
               {/* Revenue Engine for first receptionist */}
-              <RevenueEngine 
+              <RevenueEngine
                 receptionistIds={receptionists[0]?.id ? [receptionists[0].id] : []}
                 receptionistNames={receptionists[0]?.id ? { [receptionists[0].id]: receptionists[0].name } : {}}
                 scopeLabel={receptionists[0]?.name}
                 currentMode={receptionists[0]?.ai_mode || 'booking'}
               />
-              
+
               {/* Setup Quick Actions */}
               <div className="space-y-4">
-                <Card 
-                  className="cursor-pointer hover:shadow-lg hover:border-primary/20 transition-all duration-300 focus-within:ring-2 focus-within:ring-ring" 
+                {isRouteVisible("/services", visiblePages) && (
+                <Card
+                  className="cursor-pointer hover:shadow-lg hover:border-primary/20 transition-all duration-300 focus-within:ring-2 focus-within:ring-ring"
                   onClick={() => navigate("/services")}
                   role="link"
                   tabIndex={0}
@@ -487,9 +554,11 @@ export default function Dashboard() {
                     <CardDescription className="text-xs sm:text-sm">Add and manage the services customers can book</CardDescription>
                   </CardHeader>
                 </Card>
-                
-                <Card 
-                  className="cursor-pointer hover:shadow-lg hover:border-primary/20 transition-all duration-300 focus-within:ring-2 focus-within:ring-ring" 
+                )}
+
+                {isRouteVisible("/availability", visiblePages) && (
+                <Card
+                  className="cursor-pointer hover:shadow-lg hover:border-primary/20 transition-all duration-300 focus-within:ring-2 focus-within:ring-ring"
                   onClick={() => navigate("/availability")}
                   role="link"
                   tabIndex={0}
@@ -503,6 +572,7 @@ export default function Dashboard() {
                     <CardDescription className="text-xs sm:text-sm">Configure when your AI can accept bookings</CardDescription>
                   </CardHeader>
                 </Card>
+                )}
               </div>
             </div>
           </section>
