@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Bot, Check, Loader2, Send, Sparkles } from "lucide-react";
+import { ArrowLeft, Bot, Check, Loader2, Send, Sparkles, Plus, History, X, Trash2, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { recordSignal } from "@/lib/successSignals";
 import { buildLocalPlan, detectProblemType, isSubstantive, nextInterviewTurn } from "@/lib/conversationalInterview";
@@ -235,8 +235,10 @@ async function invokePlanFn(
 export default function ConversationalOnboarding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const businessName = searchParams.get("businessName") || "";
-  const businessType = searchParams.get("businessType") || "";
+  const initialBizName = searchParams.get("businessName") || "";
+  const initialBizType = searchParams.get("businessType") || "";
+  const [bizName, setBizName] = useState(initialBizName);
+  const [bizType, setBizType] = useState(initialBizType);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -262,6 +264,171 @@ export default function ConversationalOnboarding() {
   // built-in guided questions (gateway down). Shown honestly in the header.
   const [smartMode, setSmartMode] = useState(true);
 
+  // Build threads (ChatGPT-style history): every build conversation
+  // persists with its messages, business context, linked operator, and
+  // status. Switching threads restores the chat; planning continues on the
+  // same operator because receptionistIdRef follows the thread. History is
+  // a courtesy — every DB touch is fire-and-forget, the chat never blocks.
+  interface BuildThread {
+    id: string;
+    title: string;
+    business_name: string;
+    business_type: string;
+    receptionist_id: string | null;
+    status: "chatting" | "planned" | "approved";
+    updated_at: string;
+  }
+  // Generated DB types lag behind migrations (never-edit file), so the new
+  // tables go through a narrow untyped handle. Rows are cast on read and
+  // validated by shape where it matters — the chat never trusts the DB.
+  interface LooseQuery {
+    select(s: string): LooseQuery;
+    eq(c: string, v: unknown): LooseQuery;
+    order(c: string, o?: unknown): LooseQuery;
+    limit(n: number): LooseQuery;
+    single(): Promise<{ data: unknown; error: { message: string } | null }>;
+    then(onf: (v: { data: unknown; error: { message: string } | null }) => unknown): Promise<unknown>;
+  }
+  interface LooseTable {
+    insert(v: unknown): LooseQuery;
+    select(s: string): LooseQuery;
+    update(v: unknown): LooseQuery;
+    delete(): LooseQuery;
+  }
+  const looseTable = (name: string): LooseTable =>
+    (supabase.from as unknown as (t: string) => LooseTable)(name);
+  const [threads, setThreads] = useState<BuildThread[]>([]);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [threadsOpen, setThreadsOpen] = useState(false);
+  const threadIdRef = useRef<string | null>(null);
+
+  async function ensureThread(firstText: string): Promise<string | null> {
+    if (threadIdRef.current) return threadIdRef.current;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const title = firstText.trim().slice(0, 42) || "New build";
+      const { data, error } = await looseTable("build_threads").insert({
+        user_id: user.id, title, business_name: bizName, business_type: bizType,
+      }).select("id,title,business_name,business_type,receptionist_id,status,updated_at").single();
+      if (error || !data) return null;
+      const t = data as BuildThread;
+      threadIdRef.current = t.id;
+      setThreadId(t.id);
+      setThreads((prev) => [t, ...prev]);
+      return t.id;
+    } catch {
+      return null;
+    }
+  }
+
+  async function saveThreadMsg(tid: string, role: "user" | "assistant", content: string) {
+    try {
+      await looseTable("build_messages").insert({ thread_id: tid, role, content });
+      setThreads((prev) => {
+        const t = prev.find((x) => x.id === tid);
+        return t ? [t, ...prev.filter((x) => x.id !== tid)] : prev;
+      });
+    } catch {
+      // History failed — the conversation itself already happened.
+    }
+  }
+
+  async function touchThread(patch: Partial<Pick<BuildThread, "receptionist_id" | "status" | "title" | "business_name" | "business_type">>) {
+    const tid = threadIdRef.current;
+    if (!tid) return;
+    try {
+      await looseTable("build_threads").update(patch).eq("id", tid);
+      setThreads((prev) => prev.map((t) => (t.id === tid ? { ...t, ...patch } : t)));
+    } catch {
+      // ignore
+    }
+  }
+
+  function resetRun(toMessages: Message[]) {
+    receptionistIdRef.current = null;
+    setMessages(toMessages);
+    setPlanData(null);
+    setPhase("chat");
+    setReady(false);
+    setSummary("");
+    setServices([]);
+    setFaqs([]);
+    setPlayTraces([]);
+    setBuildSteps(DONE_STEPS);
+    setMobileTab("chat");
+    setCtaDismissed(false);
+  }
+
+  function newChat() {
+    threadIdRef.current = null;
+    setThreadId(null);
+    setBizName(initialBizName);
+    setBizType(initialBizType);
+    greetedRef.current = true;
+    resetRun([makeGreeting(initialBizName, initialBizType)]);
+    setThreadsOpen(false);
+  }
+
+  async function openThread(id: string) {
+    const t = threads.find((x) => x.id === id);
+    if (!t) return;
+    try {
+      const { data } = await looseTable("build_messages")
+        .select("role,content,created_at").eq("thread_id", id).order("created_at", { ascending: true }).limit(200);
+      const loaded: Message[] = ((data || []) as Array<{ role: string; content: string; created_at: string }>)
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m, i) => ({ id: `h${i}`, role: m.role as "user" | "assistant", content: m.content, at: new Date(m.created_at) }));
+      threadIdRef.current = id;
+      setThreadId(id);
+      setBizName(t.business_name);
+      setBizType(t.business_type);
+      receptionistIdRef.current = t.receptionist_id;
+      greetedRef.current = true;
+      resetRun(loaded.length > 0 ? loaded : [makeGreeting(t.business_name, t.business_type)]);
+      // Restore CTA state deterministically from the loaded dialogue so a
+      // resumed thread does not need a fresh message to offer planning.
+      const userTexts = loaded.filter((m) => m.role === "user").map((m) => m.content);
+      if (userTexts.length > 0) {
+        const turn = nextInterviewTurn(userTexts, t.business_name, t.business_type);
+        setSummary(turn.summary);
+        if (turn.ready) setReady(true);
+      }
+    } catch {
+      toast.error("Could not open that conversation");
+    } finally {
+      setThreadsOpen(false);
+    }
+  }
+
+  async function deleteThread(id: string) {
+    try {
+      await looseTable("build_threads").delete().eq("id", id);
+    } catch {
+      // row may already be gone; list state is the truth
+    }
+    setThreads((prev) => prev.filter((t) => t.id !== id));
+    if (threadIdRef.current === id) newChat();
+  }
+
+  // Threads load once the user is known. A fresh visit starts a new
+  // conversation (greeting); history waits in the sidebar.
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await looseTable("build_threads")
+          .select("id,title,business_name,business_type,receptionist_id,status,updated_at")
+          .eq("user_id", user.id).order("updated_at", { ascending: false }).limit(30);
+        if (data) setThreads(data as BuildThread[]);
+      } catch {
+        // sidebar stays empty; chat works regardless
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const receptionistIdRef = useRef<string | null>(null);
   const greetedRef = useRef(false);
@@ -276,15 +443,20 @@ export default function ConversationalOnboarding() {
   const showSplit = phase === "preview" || phase === "building" || phase === "done";
 
   // Greet once — never re-greet (platform rule).
+  function makeGreeting(name: string, type: string): Message {
+    const content = type
+      ? `Welcome${name ? ` to ${name}` : ""}! I help set up AI operators for businesses like yours. In your own words — what do you offer, and where does it hurt most: serving customers, or work inside the business?`
+      : "Welcome! Tell me about your business in your own words — what you offer, and where it hurts most: serving customers, or work inside the business?";
+    return { id: nextId(), role: "assistant", content, at: new Date() };
+  }
+
   useEffect(() => {
     if (greetedRef.current) return;
     greetedRef.current = true;
-    const greeting = businessType
-      ? `Welcome${businessName ? ` to ${businessName}` : ""}! I help set up AI operators for businesses like yours. In your own words — what do you offer, and where does it hurt most: serving customers, or work inside the business?`
-      : "Welcome! Tell me about your business in your own words — what you offer, and where it hurts most: serving customers, or work inside the business?";
-    setMessages([{ id: nextId(), role: "assistant", content: greeting, at: new Date() }]);
+    setMessages([makeGreeting(bizName, bizType)]);
     setAgentState("watching");
-  }, [businessName, businessType]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bizName, bizType]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -314,13 +486,16 @@ export default function ConversationalOnboarding() {
     setMessages(next);
     setSending(true);
     setAgentState("thinking");
+    // Persist the turn (thread created lazily on the first message).
+    const tid = await ensureThread(text);
+    if (tid) void saveThreadMsg(tid, "user", text);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const payload = {
         messages: next.slice(-12).map((m) => ({ role: m.role, content: m.content })),
-        businessName,
-        businessType,
+        businessName: bizName,
+        businessType: bizType,
         conversationId: user?.id,
       };
       const ask = () => supabase.functions.invoke("configurator-chat", { body: payload });
@@ -338,6 +513,7 @@ export default function ConversationalOnboarding() {
 
       if (!error && good(data)) {
         appendAssistant(data.assistant_message);
+        if (threadIdRef.current) void saveThreadMsg(threadIdRef.current, "assistant", data.assistant_message);
         if (data.summary) setSummary(data.summary);
         if (data.ready === true) setReady(true);
         setSmartMode(true);
@@ -346,8 +522,9 @@ export default function ConversationalOnboarding() {
       }
     } catch {
       // Offline-safe fallback: the chat never dead-ends even if the gateway is down.
-      const turn = nextInterviewTurn(ownerTexts(next), businessName, businessType);
+      const turn = nextInterviewTurn(ownerTexts(next), bizName, bizType);
       appendAssistant(turn.assistant_message);
+      if (threadIdRef.current) void saveThreadMsg(threadIdRef.current, "assistant", turn.assistant_message);
       setSummary(turn.summary);
       if (turn.ready) setReady(true);
       setSmartMode(false);
@@ -391,8 +568,8 @@ export default function ConversationalOnboarding() {
           .insert({
             user_id: user.id,
             name: "Setting up...",
-            business_name: businessName || "Setting up...",
-            business_type: businessType || "General Business",
+            business_name: bizName || "Setting up...",
+            business_type: bizType || "General Business",
             tone: "friendly",
           })
           .select("id")
@@ -406,10 +583,10 @@ export default function ConversationalOnboarding() {
       // transcript — covers both the gateway interview and the offline
       // fallback. Stamped into the description (planner reads it) and the
       // body (edge stamps it onto the config for derivation + Phase C).
-      const detectedType = detectProblemType(transcriptOf(messages), businessType);
+      const detectedType = detectProblemType(transcriptOf(messages), bizType);
       const description = [
-        businessName ? `Business name: ${businessName}.` : "",
-        businessType ? `Business type: ${businessType}.` : "",
+        bizName ? `Business name: ${bizName}.` : "",
+        bizType ? `Business type: ${bizType}.` : "",
         detectedType ? `Interview detected problem type: ${detectedType}.` : "",
         summary ? `Interview summary: ${summary}.` : "",
         "Full discussion:",
@@ -455,7 +632,7 @@ export default function ConversationalOnboarding() {
       let candidates: PreviewService[] = [];
       try {
         const parsed = await supabase.functions.invoke("parse-services", {
-          body: { text: transcriptOf(messages).slice(0, 4000), businessType: businessType || undefined },
+          body: { text: transcriptOf(messages).slice(0, 4000), businessType: bizType || undefined },
         });
         const items = ((parsed.data as { items?: unknown[] } | null)?.items || []) as Array<Record<string, unknown>>;
         candidates = items.slice(0, 12).map((it) => ({
@@ -477,6 +654,7 @@ export default function ConversationalOnboarding() {
         versionId: d.version_id || "",
         receptionistId: recId,
       });
+      void touchThread({ receptionist_id: recId, status: "planned" });
       setStepStatus("structure", "done", `${candidates.length} item${candidates.length === 1 ? "" : "s"} found → Hours mapped → Answers prepared`);
       setPhase("preview");
       setMobileTab("build");
@@ -488,7 +666,7 @@ export default function ConversationalOnboarding() {
       // instead of dead-ending. It is conservative, clearly labelled, and
       // goes through the same approval review as an AI plan.
       try {
-        const local = buildLocalPlan(ownerTexts(messages), businessName, businessType);
+        const local = buildLocalPlan(ownerTexts(messages), bizName, bizType);
         setServices([]);
         setFaqs(deriveFaqs(local.config, summary));
         setPlayTraces([offlineDraftTrace(substantiveCount)]);
@@ -636,6 +814,7 @@ export default function ConversationalOnboarding() {
       setPhase("done");
       setAgentState("completed");
       toast.success("Your AI operator is live!");
+      void touchThread({ receptionist_id: recId, status: "approved" });
       setTimeout(() => navigate(`/builder/${recId}`), 1800);
     } catch (err) {
       console.error("Approval error:", err);
@@ -797,8 +976,8 @@ export default function ConversationalOnboarding() {
           </div>
         ) : (
           <OperatorPreview
-            businessName={businessName}
-            businessType={businessType}
+            businessName={bizName}
+            businessType={bizType}
             config={planData.config}
             services={services}
             faqs={faqs}
@@ -816,14 +995,57 @@ export default function ConversationalOnboarding() {
     </div>
   );
 
+  // Thread list shared by the desktop sidebar and the mobile drawer.
+  const statusDot = (s: BuildThread["status"]) =>
+    s === "approved" ? "bg-emerald-500" : s === "planned" ? "bg-amber-500" : "bg-muted-foreground/40";
+  const threadList = (
+    <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+      <Button variant="outline" size="sm" onClick={newChat} className="mb-2 shrink-0 justify-start gap-2">
+        <Plus className="h-4 w-4" /> New build
+      </Button>
+      {threads.length === 0 && (
+        <p className="px-2 py-4 text-xs text-muted-foreground">Past builds will appear here — pick any up where you left off.</p>
+      )}
+      {threads.map((t) => (
+        <div
+          key={t.id}
+          role="button"
+          tabIndex={0}
+          onClick={() => { if (t.id !== threadIdRef.current) void openThread(t.id); else setThreadsOpen(false); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { if (t.id !== threadIdRef.current) void openThread(t.id); else setThreadsOpen(false); } }}
+          className={`group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-accent ${t.id === threadId ? "bg-accent" : ""}`}
+          aria-label={`Open build: ${t.title}`}
+        >
+          <span className={`h-2 w-2 shrink-0 rounded-full ${statusDot(t.status)}`} aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium">{t.title}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {t.status === "approved" ? "Live" : t.status === "planned" ? "Plan ready" : "Chatting"} · {new Date(t.updated_at).toLocaleDateString()}
+            </span>
+          </span>
+          <button
+            onClick={(e) => { e.stopPropagation(); void deleteThread(t.id); }}
+            aria-label={`Delete build: ${t.title}`}
+            className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus:opacity-100 group-hover:opacity-100"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="relative min-h-screen bg-background">
       <FloatingBackground variant="minimal" />
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 p-4 sm:p-6">
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-4 p-4 sm:p-6">
         {/* Header — what matters, what you can do, what is happening */}
         <header className="flex flex-wrap items-center gap-3 animate-fade-in motion-reduce:animate-none">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Go back">
             <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => setThreadsOpen((v) => !v)} aria-label="Build history" className="lg:hidden">
+            <History className="h-4 w-4" />
           </Button>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-contact" aria-hidden="true">
             <Bot className="h-5 w-5 text-primary-foreground" />
@@ -856,7 +1078,34 @@ export default function ConversationalOnboarding() {
           </ol>
         </header>
 
-        {/* Body — single chat until the plan exists, then a smooth split */}
+        {/* Body — threads beside the chat; single chat until the plan
+            exists, then a smooth split */}
+        <div className="flex min-h-0 flex-1 gap-4">
+          {/* Desktop: persistent history rail */}
+          <aside className="hidden w-60 shrink-0 flex-col gap-2 lg:flex" aria-label="Build history">
+            <div className="flex items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
+              <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" /> Builds
+            </div>
+            {threadList}
+          </aside>
+          {/* Mobile: history drawer */}
+          {threadsOpen && (
+            <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-label="Build history">
+              <div className="absolute inset-0 bg-background/80" onClick={() => setThreadsOpen(false)} aria-hidden="true" />
+              <aside className="absolute inset-y-0 left-0 flex w-72 flex-col gap-2 bg-background p-4 shadow-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <MessageSquare className="h-4 w-4" aria-hidden="true" /> Builds
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => setThreadsOpen(false)} aria-label="Close history">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                {threadList}
+              </aside>
+            </div>
+          )}
+          <div className="flex min-h-0 flex-1 flex-col">
         {!showSplit ? (
           <main className="flex min-h-0 flex-1 flex-col" aria-label="Setup conversation">
             {chatPanel}
@@ -895,6 +1144,8 @@ export default function ConversationalOnboarding() {
             </main>
           </>
         )}
+          </div>
+        </div>
       </div>
     </div>
   );
