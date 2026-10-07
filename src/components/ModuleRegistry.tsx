@@ -55,6 +55,9 @@ const ALL_MODULES: ModuleDefinition[] = [
   { key: "referral_program", name: "Referral Program", description: "Generates referral codes and tracks conversions", category: "retention", tier: 1, required_connectors: [] },
   { key: "invoice_followup", name: "Invoice Follow-up", description: "Sends payment reminders for overdue invoices", category: "operations", tier: 2, required_connectors: ["gmail"] },
   { key: "document_generation", name: "Document Generation", description: "AI-drafts proposals, contracts, quotes, and agreements", category: "operations", tier: 1, required_connectors: [] },
+  { key: "stock_tracker", name: "Stock Tracker", description: "Watches stock levels and expiry dates, suggests what to reorder", category: "operations", tier: 1, required_connectors: [] },
+  { key: "staff_roster", name: "Staff Roster", description: "Keeps weekly shifts, flags overlaps and uncovered days", category: "operations", tier: 1, required_connectors: [] },
+  { key: "task_chaser", name: "Task Chaser", description: "Keeps the task list, chases overdue items and daily summaries", category: "operations", tier: 1, required_connectors: [] },
 
   // Tier 3 — Connector Slots Only
   { key: "social_media_posting", name: "Social Media Posting", description: "Posts content to Instagram, Facebook, TikTok, LinkedIn", category: "growth", tier: 3, required_connectors: ["instagram"] },

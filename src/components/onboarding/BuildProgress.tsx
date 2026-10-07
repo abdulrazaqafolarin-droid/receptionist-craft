@@ -74,7 +74,7 @@ export function BuildProgress({ steps, title = "Building your AI operator" }: Bu
           What is happening behind this screen
         </CollapsibleTrigger>
         <CollapsibleContent className="type-caption mt-2 rounded-lg bg-muted/60 p-3 leading-relaxed">
-          Your words are compiled into an operator plan, reviewed by you, then applied to your receptionist,
+          Your words are compiled into an operator plan, reviewed by you, then applied to your operator,
           services, hours, answers, and instructions — in that order. Nothing goes live until you approve it.
         </CollapsibleContent>
       </Collapsible>

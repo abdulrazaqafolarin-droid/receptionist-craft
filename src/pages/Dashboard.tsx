@@ -107,17 +107,17 @@ export default function Dashboard() {
             <h1 className="type-display mb-2 text-foreground">
               Dashboard
             </h1>
-            <p className="text-muted-foreground text-sm sm:text-base lg:text-lg">Your AI-powered appointment booking system</p>
+            <p className="text-muted-foreground text-sm sm:text-base lg:text-lg">AI operators for your business — customers served, shop work handled</p>
             <p className="text-[10px] text-muted-foreground/80 mt-1">Build {import.meta.env.VITE_APP_BUILD_SHA || "unknown"}</p>
           </div>
           <Button
             onClick={() => navigate("/onboarding?returning=1")}
             size="lg"
             className="group touch-target w-full sm:w-auto"
-            aria-label="Create a new AI receptionist"
+            aria-label="Create a new AI operator"
           >
             <Plus className="mr-2 h-5 w-5 group-hover:rotate-90 transition-transform" aria-hidden="true" /> 
-            Create Receptionist
+            Create Operator
           </Button>
         </header>
 
@@ -134,12 +134,12 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <h2 id="getting-started-title" className="text-xl sm:text-2xl font-bold">Getting Started</h2>
-                  <p className="text-sm sm:text-base text-muted-foreground">Follow these steps to set up your AI receptionist</p>
+                  <p className="text-sm sm:text-base text-muted-foreground">Follow these steps to set up your AI operator</p>
                 </div>
               </div>
               <ol className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4" role="list">
                 {[
-                  { num: 1, title: "Create Receptionist", desc: "Set up name, business details" },
+                  { num: 1, title: "Create Operator", desc: "Describe your business problem" },
                   { num: 2, title: "Add Services", desc: "Define your offerings" },
                   { num: 3, title: "Set Availability", desc: "Configure business hours" },
                   { num: 4, title: "Test AI Chat", desc: "Chat with your AI" },

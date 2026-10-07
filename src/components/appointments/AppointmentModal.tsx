@@ -201,10 +201,10 @@ export function AppointmentModal({ open, onOpenChange, onSuccess, receptionistId
         <form onSubmit={handleSubmit} className="space-y-4">
           {!receptionistId && (
             <div className="space-y-2">
-              <Label htmlFor="receptionist">Receptionist *</Label>
+              <Label htmlFor="receptionist">Operator *</Label>
               <Select value={selectedReceptionist} onValueChange={(value: unknown) => setSelectedReceptionist(typeof value === "string" ? value : "")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select receptionist" />
+                  <SelectValue placeholder="Select operator" />
                 </SelectTrigger>
                 <SelectContent>
                   {receptionists.map((r) => (

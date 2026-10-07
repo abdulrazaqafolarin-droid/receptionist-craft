@@ -280,8 +280,8 @@ export default function ConversationalOnboarding() {
     if (greetedRef.current) return;
     greetedRef.current = true;
     const greeting = businessType
-      ? `Welcome${businessName ? ` to ${businessName}` : ""}! I help set up AI operators for businesses like yours. In your own words — what do you offer, and how do customers book or buy from you today?`
-      : "Welcome! Tell me about your business in your own words — what you offer, and how customers book or buy from you today.";
+      ? `Welcome${businessName ? ` to ${businessName}` : ""}! I help set up AI operators for businesses like yours. In your own words — what do you offer, and where does it hurt most: serving customers, or work inside the business?`
+      : "Welcome! Tell me about your business in your own words — what you offer, and where it hurts most: serving customers, or work inside the business?";
     setMessages([{ id: nextId(), role: "assistant", content: greeting, at: new Date() }]);
     setAgentState("watching");
   }, [businessName, businessType]);

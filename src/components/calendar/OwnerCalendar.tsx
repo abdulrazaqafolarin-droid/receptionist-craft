@@ -240,7 +240,7 @@ export function OwnerCalendar() {
         : receptionists[0]?.id;
 
     if (!recId) {
-      toast.error("Please select a receptionist first");
+      toast.error("Please select an operator first");
       return;
     }
 
@@ -329,10 +329,10 @@ export function OwnerCalendar() {
               {receptionists.length > 1 && (
                 <Select value={selectedReceptionist} onValueChange={setSelectedReceptionist}>
                   <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="All Receptionists" />
+                    <SelectValue placeholder="All operators" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Receptionists</SelectItem>
+                    <SelectItem value="all">All operators</SelectItem>
                     {receptionists.map((r) => (
                       <SelectItem key={r.id} value={r.id}>
                         {r.name}

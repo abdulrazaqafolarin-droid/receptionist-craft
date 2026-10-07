@@ -32,6 +32,8 @@ interface EvalCase {
   mustShow: string[];
   mustHide: string[];
   widget: { booking: boolean; ordering: boolean; lead_capture: boolean };
+  // Phase E: ops modules must switch on for the matching profiles.
+  modulesOn?: string[];
 }
 
 const CASES: EvalCase[] = [
@@ -39,7 +41,7 @@ const CASES: EvalCase[] = [
     name: "unisex salon (booking receptionist)",
     profile: { operatorKind: "receptionist", tags: ["booking", "customers"] },
     mustShow: ["availability", "calendar", "appointments", "services", "staff"],
-    mustHide: [],
+    mustHide: ["console"],
     widget: { booking: true, ordering: false, lead_capture: true },
   },
   {
@@ -102,8 +104,32 @@ const CASES: EvalCase[] = [
     name: "business coach (both: sessions + content)",
     profile: { operatorKind: "both", tags: ["booking", "customers", "content", "payments"] },
     mustShow: ["availability", "quality-review", "money-mode", "appointments"],
-    mustHide: [],
+    mustHide: ["console"],
     widget: { booking: true, ordering: false, lead_capture: true },
+  },
+  // --- Phase E domain goldens: the platform's second shape ---
+  {
+    name: "pharmacy stock ops (internal, no customers)",
+    profile: { operatorKind: "ops", tags: ["internal"] },
+    mustShow: ["console", "services", "staff", "faqs", "kb-rewrite"],
+    mustHide: ["availability", "calendar", "appointments", "escalations", "channels", "customers", "money-mode", "meo-dashboard", "quality-review", "analytics"],
+    widget: { booking: false, ordering: false, lead_capture: false },
+    modulesOn: ["stockTracker", "staffRoster", "taskChaser"],
+  },
+  {
+    name: "clinic rota ops (internal + connected)",
+    profile: { operatorKind: "ops", tags: ["internal", "connected"] },
+    mustShow: ["console", "connections", "staff", "services"],
+    mustHide: ["availability", "appointments", "calendar", "escalations", "channels", "customers"],
+    widget: { booking: false, ordering: false, lead_capture: false },
+    modulesOn: ["stockTracker", "staffRoster", "taskChaser"],
+  },
+  {
+    name: "content helper has no console (assistant stays customer-adjacent)",
+    profile: { operatorKind: "assistant", tags: ["content"] },
+    mustShow: ["faqs", "quality-review", "kb-rewrite"],
+    mustHide: ["console", "availability", "appointments"],
+    widget: { booking: false, ordering: false, lead_capture: false },
   },
 ];
 
@@ -119,6 +145,11 @@ for (const c of CASES) {
   check(`${c.name} widget.lead=${c.widget.lead_capture}`, w.lead_capture === c.widget.lead_capture);
   // No page is both shown and hidden; account pages never hidden.
   for (const k of shown) check(`${c.name} no show+hide overlap on ${k}`, !hidden.has(k));
+  // Ops modules switch on by need, never by default (Phase E).
+  if (c.modulesOn) {
+    const on = new Set(s.modules_on.map((m) => m.key));
+    for (const k of c.modulesOn) check(`${c.name} module on: ${k}`, on.has(k));
+  }
 }
 
 // --- Frontend mirror check: PAGE_RULES vs OWNER_PAGES requires ---
