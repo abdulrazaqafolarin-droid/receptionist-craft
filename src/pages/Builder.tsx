@@ -5,10 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
 import { ConversationalManagement } from "@/components/ConversationalManagement";
+import { HistoryGlyph } from "@/components/HistoryGlyph";
+import { useBuildThreads } from "@/hooks/useBuildThreads";
 import { FAQManager } from "@/components/FAQManager";
 import { WidgetEmbedCode } from "@/components/WidgetEmbedCode";
 import { CustomerFieldsConfig, DEFAULT_CUSTOMER_FIELDS, type CustomerField } from "@/components/CustomerFieldsConfig";
 import { useToast } from "@/hooks/use-toast";
+import { Trash2 } from "lucide-react";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import {
   AlertDialog,
@@ -117,6 +120,80 @@ export default function BuilderPage() {
   const [rightTab, setRightTab] = useState<"test" | "improve" | "live">("test");
   const [liveMessages, setLiveMessages] = useState<Array<{ id: string; sender: string; message: string; created_at: string; session_id: string | null }>>([]);
   const [liveLoading, setLiveLoading] = useState(false);
+  // History rail (same threads as the talk-it-through chat, scoped here to
+  // this operator). Selecting a thread always lands in Improve — threads
+  // ARE build conversations; the Test tab stays an ephemeral rehearsal.
+  const { threads: opThreads, refresh: refreshThreads, remove: removeThread } = useBuildThreads(receptionistId ?? null);
+  const [threadCommand, setThreadCommand] = useState<{ kind: "open" | "new"; id?: string; nonce: number } | null>(null);
+  const [activeImproveThread, setActiveImproveThread] = useState<string | null>(null);
+  const [railOpen, setRailOpen] = useState(false);
+  const [railDragX, setRailDragX] = useState<number | null>(null);
+  const railSwipeStartX = useRef<number | null>(null);
+  const commandNonce = useRef(0);
+  const sendCommand = (cmd: { kind: "open" | "new"; id?: string }) => {
+    commandNonce.current += 1;
+    setThreadCommand({ ...cmd, nonce: commandNonce.current });
+  };
+
+  // History rail actions: threads ARE build chats, so selecting one always
+  // lands in Improve (the Test tab stays an ephemeral rehearsal).
+  const openThreadFromRail = (id: string) => {
+    if (rightTab !== "improve") setRightTab("improve");
+    sendCommand({ kind: "open", id });
+    setRailOpen(false);
+  };
+  const newThreadFromRail = () => {
+    if (rightTab !== "improve") setRightTab("improve");
+    sendCommand({ kind: "new" });
+    setRailOpen(false);
+  };
+  const deleteThreadFromRail = async (id: string) => {
+    await removeThread(id);
+    if (id === activeImproveThread) sendCommand({ kind: "new" });
+  };
+
+  const threadRail = (
+    <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+      <button
+        onClick={newThreadFromRail}
+        className="mb-1 shrink-0 rounded-lg border border-border px-2.5 py-2 text-left text-sm font-medium hover:bg-muted"
+      >
+        + New chat
+      </button>
+      {opThreads.length === 0 && (
+        <p className="px-2 py-4 text-xs text-muted-foreground">Past change chats will appear here — pick any up where you left off.</p>
+      )}
+      {opThreads.map((t) => (
+        <div
+          key={t.id}
+          role="button"
+          tabIndex={0}
+          onClick={() => { if (t.id !== activeImproveThread) openThreadFromRail(t.id); else setRailOpen(false); }}
+          onKeyDown={(e) => { if (e.key === "Enter") openThreadFromRail(t.id); }}
+          className={`group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted ${t.id === activeImproveThread ? "bg-muted" : ""}`}
+          aria-label={`Open change chat: ${t.title}`}
+        >
+          <span
+            className={`h-2 w-2 shrink-0 rounded-full ${t.status === "approved" ? "bg-emerald-500" : t.status === "planned" ? "bg-amber-500" : "bg-muted-foreground/40"}`}
+            aria-hidden="true"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium">{t.title}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {t.status === "approved" ? "Live" : t.status === "planned" ? "Plan ready" : "Chatting"} · {new Date(t.updated_at).toLocaleDateString()}
+            </span>
+          </span>
+          <button
+            onClick={(e) => { e.stopPropagation(); void deleteThreadFromRail(t.id); }}
+            aria-label={`Delete chat: ${t.title}`}
+            className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus:opacity-100 group-hover:opacity-100"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1119,7 +1196,33 @@ capabilities: receptionist.capabilities,
           </section>
 
           {/* Right panel: chat preview */}
-          <section id="builder-preview" className="lg:col-span-2 bg-card rounded-2xl shadow-card border border-border/50 p-6 flex flex-col animate-slide-in-right">
+          <section
+            id="builder-preview"
+            className="lg:col-span-2 bg-card rounded-2xl shadow-card border border-border/50 p-6 flex flex-col animate-slide-in-right"
+            onTouchStart={(e) => {
+              if (railOpen || e.touches.length !== 1 || e.touches[0].clientX >= 40) {
+                railSwipeStartX.current = null;
+                return;
+              }
+              railSwipeStartX.current = e.touches[0].clientX;
+            }}
+            onTouchMove={(e) => {
+              if (railSwipeStartX.current === null || railOpen || e.touches.length !== 1) return;
+              const dx = e.touches[0].clientX - railSwipeStartX.current;
+              if (dx > 8) setRailDragX(dx);
+            }}
+            onTouchEnd={() => {
+              if (railDragX !== null) {
+                if (railDragX > 100) setRailOpen(true);
+                setRailDragX(null);
+              }
+              railSwipeStartX.current = null;
+            }}
+            onTouchCancel={() => {
+              setRailDragX(null);
+              railSwipeStartX.current = null;
+            }}
+          >
             <div className="flex items-center justify-between mb-4 pb-4 border-b border-border">
               <div>
                 <div className="text-xl font-semibold flex items-center gap-2">
@@ -1129,6 +1232,13 @@ capabilities: receptionist.capabilities,
                 <div className="text-sm text-muted-foreground">{receptionist.business_name || "No business set yet"}</div>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setRailOpen((v) => !v)}
+                  aria-label="Change history"
+                  className="liquid-glass-btn flex h-9 w-9 items-center justify-center rounded-lg text-primary transition-transform active:scale-95 lg:hidden"
+                >
+                  <HistoryGlyph className="h-5 w-5" />
+                </button>
                 <div className="flex rounded-lg border border-border p-0.5" role="tablist" aria-label="Builder chat mode">
                   {(["test", "improve", "live"] as const).map((t) => (
                     <button
@@ -1152,16 +1262,53 @@ capabilities: receptionist.capabilities,
               </div>
             </div>
 
+            <div className="flex min-h-0 flex-1 gap-3">
+              {/* Desktop: history rail beside every tab — threads ARE build
+                  chats, so selecting one always lands in Improve */}
+                <aside className="hidden w-52 shrink-0 flex-col gap-2 lg:flex" aria-label="Change history">
+                  <div className="flex items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
+                    History
+                  </div>
+                  {threadRail}
+                </aside>
+                {/* Mobile: swipe/drawer history */}
+                {(railOpen || railDragX !== null) && (
+                  <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-label="Change history">
+                    <div
+                      className="absolute inset-0 bg-background/80"
+                      style={railDragX !== null ? { opacity: Math.min(0.8, railDragX / 300) } : undefined}
+                      onClick={() => setRailOpen(false)}
+                      aria-hidden="true"
+                    />
+                    <aside
+                      className="absolute inset-y-0 left-0 flex w-72 flex-col gap-2 bg-background p-4 shadow-xl"
+                      style={railDragX !== null && !railOpen
+                        ? { transform: `translateX(${Math.min(0, railDragX - 288)}px)` }
+                        : undefined}
+                    >
+                      <div className="flex items-center gap-2 px-2 text-sm font-medium">
+                        History
+                      </div>
+                      {threadRail}
+                    </aside>
+                  </div>
+                )}
+                <div className="min-h-0 flex-1">
             {rightTab === "improve" ? (
               <div className="flex-1 overflow-auto" style={{ minHeight: 400 }}>
                 {receptionistId ? (
-                  <ConversationalManagement receptionistId={receptionistId} />
+                  <ConversationalManagement
+                    receptionistId={receptionistId}
+                    threadCommand={threadCommand}
+                    onHistoryChanged={() => { void refreshThreads(); }}
+                    onActiveThreadChange={(id) => setActiveImproveThread(id)}
+                  />
                 ) : (
                   <div className="text-muted-foreground text-center py-12">
                     <p>Save the operator first — then describe changes here and they go live on approval.</p>
                   </div>
                 )}
-              </div>
+                </div>
             ) : rightTab === "live" ? (
               <div className="flex-1 overflow-auto bg-muted/30 rounded-xl p-4 mb-4" style={{ minHeight: 400 }}>
                 <div className="mb-3 flex items-center gap-2 text-xs font-medium">
@@ -1280,6 +1427,8 @@ capabilities: receptionist.capabilities,
             </div>
             </>
             )}
+                </div>
+              </div>
           </section>
         </main>
       </div>
