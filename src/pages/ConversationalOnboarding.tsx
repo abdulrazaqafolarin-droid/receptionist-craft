@@ -1117,7 +1117,7 @@ export default function ConversationalOnboarding() {
 
         {/* Body — threads beside the chat; single chat until the plan
             exists, then a smooth split */}
-        <div className="flex min-h-0 flex-1 gap-4">
+        <div className="flex min-h-0 min-w-0 flex-1 gap-4">
           {/* Desktop: persistent history rail */}
           <aside className="hidden w-60 shrink-0 flex-col gap-2 lg:flex" aria-label="Build history">
             <div className="flex items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
@@ -1152,7 +1152,7 @@ export default function ConversationalOnboarding() {
               </aside>
             </div>
           )}
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {!showSplit ? (
           <main className="flex min-h-0 flex-1 flex-col" aria-label="Setup conversation">
             {chatPanel}

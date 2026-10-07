@@ -1223,7 +1223,7 @@ capabilities: receptionist.capabilities,
               railSwipeStartX.current = null;
             }}
           >
-            <div className="flex items-center justify-between mb-4 pb-4 border-b border-border">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-4 border-b border-border">
               <div>
                 <div className="text-xl font-semibold flex items-center gap-2">
                   <div className="h-3 w-3 rounded-full bg-success animate-pulse"></div>
@@ -1231,7 +1231,7 @@ capabilities: receptionist.capabilities,
                 </div>
                 <div className="text-sm text-muted-foreground">{receptionist.business_name || "No business set yet"}</div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setRailOpen((v) => !v)}
                   aria-label="Change history"
@@ -1262,7 +1262,7 @@ capabilities: receptionist.capabilities,
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 gap-3">
+            <div className="flex min-h-0 min-w-0 flex-1 gap-3">
               {/* Desktop: history rail beside every tab — threads ARE build
                   chats, so selecting one always lands in Improve */}
                 <aside className="hidden w-52 shrink-0 flex-col gap-2 lg:flex" aria-label="Change history">
@@ -1293,7 +1293,7 @@ capabilities: receptionist.capabilities,
                     </aside>
                   </div>
                 )}
-                <div className="min-h-0 flex-1">
+                <div className="min-h-0 min-w-0 flex-1">
             {rightTab === "improve" ? (
               <div className="flex-1 overflow-auto" style={{ minHeight: 400 }}>
                 {receptionistId ? (
@@ -1416,14 +1416,12 @@ capabilities: receptionist.capabilities,
                 className="flex-1 border border-border bg-background rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" 
                 placeholder='Try: "Hi", "How much is a cleaning?"' 
               />
-              <button 
+              <button
                 className="px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium shadow-contact hover:-translate-y-0.5 transition-all"
                 onClick={handleSendMessage}
               >
                 Send
               </button>
-              <button className="px-4 py-3 border border-border rounded-xl hover:bg-muted transition-all" title="Voice (coming soon)">🎙️</button>
-              <button className="px-4 py-3 border border-border rounded-xl hover:bg-muted transition-all" title="Play reply (coming soon)">🔊</button>
             </div>
             </>
             )}
