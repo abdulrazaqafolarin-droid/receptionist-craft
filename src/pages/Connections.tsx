@@ -102,7 +102,7 @@ export default function Connections() {
           )}
         </div>
 
-        <ActorCursor point={tour.point} />
+        <ActorCursor point={tour.point} swallow={tour.swallow} arriving={tour.arriving} />
         <ActorOverlay
           ring={tour.ring}
           bubble={tour.bubble}

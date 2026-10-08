@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Square } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { runActorScript, type ActorReceipt } from "@/lib/actorRunner";
@@ -27,15 +28,32 @@ export interface CursorPoint {
 export function ActorCursor({
   point,
   color = "#2563eb",
+  swallow = false,
+  arriving = false,
 }: {
   point: CursorPoint | null;
   color?: string;
+  swallow?: boolean;
+  arriving?: boolean;
 }) {
-  if (!point) return null;
+  if (!point && !arriving) return null;
+  // Arrival: emerge top-center scaling up (black-hole exit). Position is
+  // fixed theater, not a claim about page content.
+  const at = point ?? { x: 0, y: 0 };
   return (
     <div
-      className="pointer-events-none fixed left-0 top-0 z-[90] transition-transform duration-500 ease-out motion-reduce:transition-none"
-      style={{ transform: `translate(${point.x}px, ${point.y}px)` }}
+      className={`pointer-events-none fixed left-0 top-0 z-[90] motion-reduce:transition-none ${arriving && !point ? "actor-arrive" : "transition-transform duration-500 ease-out"}`}
+      style={
+        arriving && !point
+          ? { left: "50%", top: "96px" }
+          : {
+              transform: `translate(${at.x}px, ${at.y}px)${swallow ? " scale(0.05)" : ""}`,
+              opacity: swallow ? 0 : 1,
+              transition: swallow
+                ? "transform 0.45s ease-in, opacity 0.45s ease-in"
+                : undefined,
+            }
+      }
       aria-hidden="true"
     >
       <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
@@ -83,7 +101,10 @@ export interface ConfirmAsk {
 }
 
 export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => void }) {
+  const navigate = useNavigate();
   const [point, setPoint] = useState<CursorPoint | null>(null);
+  const [swallow, setSwallow] = useState(false);
+  const [arriving, setArriving] = useState(false);
   const [ring, setRing] = useState<RingRect | null>(null);
   const [bubble, setBubble] = useState<string | null>(null);
   const [showcase, setShowcase] = useState<ShowcaseBox | null>(null);
@@ -93,6 +114,35 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
   const stopRef = useRef(false);
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
+
+  // Black-hole arrival: a traverse on the previous page leaves a note; a
+  // host on the new page picks it up and emerges the cursor. Cross-page
+  // script continuation arrives with actor_sessions (Director item 5) —
+  // until then, arrival is a flourish that ends the ride, stated as such.
+  useEffect(() => {
+    let alive = true;
+    try {
+      const raw = sessionStorage.getItem("rutex-actor-arrival");
+      if (raw) {
+        const note = JSON.parse(raw) as { at?: number };
+        if (note.at && Date.now() - note.at < 8000) {
+          sessionStorage.removeItem("rutex-actor-arrival");
+          setArriving(true);
+          setTimeout(() => {
+            if (alive) {
+              setArriving(false);
+              setPoint(null);
+            }
+          }, 1600);
+        }
+      }
+    } catch {
+      // storage unavailable — no arrival flourish, tour still works
+    }
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const stop = useCallback(() => {
     stopRef.current = true;
@@ -121,7 +171,35 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     setRunning(true);
     setReceipts([]);
     const out = await runActorScript(actions, {
-      resolve: (selector) => document.querySelector(selector),
+      resolve: (selector) => {
+        try {
+          return document.querySelector(selector);
+        } catch {
+          return null;
+        }
+      },
+      resolveNav: (route) => {
+        try {
+          return document.querySelector(`a[href="${route}"]`);
+        } catch {
+          return null;
+        }
+      },
+      traverse: async (route) => {
+        // Swallow into the anchor when there is one; otherwise fade the
+        // cursor out in place. Never glide to an unrelated button just
+        // to have somewhere to disappear into.
+        setSwallow(true);
+        await new Promise<void>((r) => setTimeout(r, 480));
+        setSwallow(false);
+        setPoint(null);
+        try {
+          sessionStorage.setItem("rutex-actor-arrival", JSON.stringify({ at: Date.now() }));
+        } catch {
+          // arrival flourish skipped; navigation still happens
+        }
+        navigate(route);
+      },
       moveCursor: (el) => {
         setPoint(centerOf(el as Element));
       },
@@ -186,6 +264,8 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
 
   const clear = useCallback(() => {
     setPoint(null);
+    setSwallow(false);
+    setArriving(false);
     setRing(null);
     setBubble(null);
     setShowcase(null);
@@ -208,7 +288,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     });
   }, []);
 
-  return { point, ring, bubble, showcase, confirmAsk, running, receipts, start, stop, clear, dismissBubble, dismissShowcase, answerConfirm };
+  return { point, ring, bubble, showcase, confirmAsk, running, receipts, start, stop, clear, dismissBubble, dismissShowcase, answerConfirm, swallow, arriving };
 }
 
 /** The highlight ring + narration bubble + STOP control for an active run. */

@@ -1558,7 +1558,7 @@ capabilities: receptionist.capabilities,
             )}
                 </div>
               </div>
-              <ActorCursor point={panelTour.point} />
+              <ActorCursor point={panelTour.point} swallow={panelTour.swallow} arriving={panelTour.arriving} />
               <ActorOverlay
                 ring={panelTour.ring}
                 bubble={panelTour.bubble}

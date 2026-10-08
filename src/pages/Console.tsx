@@ -382,7 +382,7 @@ export default function Console() {
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>
-      <ActorCursor point={tour.point} />
+      <ActorCursor point={tour.point} swallow={tour.swallow} arriving={tour.arriving} />
       <ActorOverlay
         ring={tour.ring}
         bubble={tour.bubble}

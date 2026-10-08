@@ -73,7 +73,7 @@ export function WhatsThis() {
           Tap anything — nothing will activate while I'm listening.
         </div>
       )}
-      <ActorCursor point={host.point} />
+      <ActorCursor point={host.point} swallow={host.swallow} arriving={host.arriving} />
       <ActorOverlay
         ring={host.ring}
         bubble={host.bubble}

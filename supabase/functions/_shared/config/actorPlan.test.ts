@@ -59,12 +59,22 @@ Deno.test("oversize tours capped, text capped", () => {
   check(report.rejected.some((r) => r.reason.includes("capped")), "cap announced");
 });
 
-Deno.test("dangerous clicks kept but flagged for live confirm", () => {
-  ACTOR_TARGETS.push({ key: "test-obliterate", selector: '[data-actor="test-obliterate"]', label: "Test", kind: "button", dangerous: true });
+Deno.test("dangerous clicks kept but flagged for live confirm", () => {  ACTOR_TARGETS.push({ key: "test-obliterate", selector: '[data-actor="test-obliterate"]', label: "Test", kind: "button", dangerous: true });
   try {
     const report = validateActorPlan([{ type: "click", target: "test-obliterate" }]);
     check(report.valid.length === 1 && report.valid[0].requiresConfirm === true, "kept and flagged");
   } finally {
     ACTOR_TARGETS.pop();
   }
+});
+
+Deno.test("goto validates against manifest routes only", () => {
+  const report = validateActorPlan([
+    { type: "goto", route: "/console", say: "Follow me." },
+    { type: "goto", route: "/admin/nuke" },
+    { type: "goto" },
+  ]);
+  check(report.valid.length === 1, "one honest ride survives");
+  check(report.valid[0].route === "/console", "route preserved");
+  check(report.rejected.length === 2, "invented + missing routes rejected");
 });

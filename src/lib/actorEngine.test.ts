@@ -193,3 +193,41 @@ Deno.test("runner: confirm gate asks, honors yes and no", async () => {
     ACTOR_TARGETS.pop();
   }
 });
+
+Deno.test("guard: goto allows manifest routes, rejects the invented", async () => {
+  const { guardCheck } = await import("./actorGuard.ts");
+  const ok = guardCheck({ type: "goto", route: "/console" });
+  check(ok.allowed && ok.reason === "manifest-route", "manifest route allowed");
+  const bad = guardCheck({ type: "goto", route: "/admin/nuke" });
+  check(!bad.allowed && bad.reason.startsWith("unknown-route"), "invented route rejected");
+});
+
+Deno.test("runner: goto needs traverse handling, glides when anchored", async () => {
+  const blind = await runActorScript(
+    [{ type: "goto", route: "/console" }],
+    stubDeps(),
+  );
+  check(!blind[0].ok && blind[0].detail === "no-traverse-handling", "jumping blind fails closed");
+
+  const moves: string[] = [];
+  let traversed: string | null = null;
+  const staged = await runActorScript(
+    [{ type: "goto", route: "/console", say: "Follow me." }],
+    stubDeps({
+      moveCursor: async (el) => { moves.push(el !== null ? "glide" : "none"); },
+      resolveNav: (route) => (route === "/console" ? { nav: true } : null),
+      traverse: async (route) => { traversed = route; },
+    }),
+  );
+  check(staged[0].ok && traversed === "/console" && moves.includes("glide"), "anchored ride glides then traverses");
+
+  const unanchored: string[] = [];
+  const bare = await runActorScript(
+    [{ type: "goto", route: "/console" }],
+    stubDeps({
+      resolveNav: () => null,
+      traverse: async () => { unanchored.push("traversed"); },
+    }),
+  );
+  check(bare[0].ok && unanchored.length === 1, "anchorless ride still traverses (fades in place)");
+});

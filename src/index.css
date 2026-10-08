@@ -359,6 +359,17 @@
   60%, 100% { transform: translateX(55%); }
 }
 
+/* Black-hole arrival: cursor emerges scaling up at the destination.
+   Covered by the global reduced-motion rule below like all motion. */
+.actor-arrive {
+  animation: actor-arrive 0.55s cubic-bezier(0.2, 0.9, 0.25, 1.2) both;
+  transform-origin: top center;
+}
+@keyframes actor-arrive {
+  from { transform: translate(-50%, 0) scale(0.15); opacity: 0; }
+  to { transform: translate(-50%, 0) scale(1); opacity: 1; }
+}
+
   /* ——— Finance surfaces: solid, precise, trustworthy ——— */
   .finance-surface {
     background: hsl(var(--finance-surface));

@@ -13,12 +13,13 @@
  */
 
 import { ACTOR_TARGETS } from "./actorRegistry.ts";
+import { OWNER_PAGES } from "./surfaceManifest.ts";
 
 export type ActorStepType =
-  | "point" | "click" | "highlight" | "scroll-to" | "say" | "showcase" | "collect";
+  | "point" | "click" | "highlight" | "scroll-to" | "say" | "showcase" | "collect" | "goto";
 
 const KNOWN_TYPES: ActorStepType[] = [
-  "point", "click", "highlight", "scroll-to", "say", "showcase", "collect",
+  "point", "click", "highlight", "scroll-to", "say", "showcase", "collect", "goto",
 ];
 
 const FORBIDDEN_PATTERNS = [
@@ -39,6 +40,7 @@ const MAX_LINES = 5;
 export interface ValidActorStep {
   type: ActorStepType;
   target?: string;
+  route?: string;
   text?: string;
   title?: string;
   lines?: string[];
@@ -97,6 +99,17 @@ export function validateActorPlan(input: unknown): ActorPlanReport {
       return;
     }
     const type = s.type as ActorStepType;
+    if (type === "goto") {
+      // Black-hole navigation: the destination must exist in the manifest.
+      // A wrong turn strands the owner, so invented routes reject.
+      const route = typeof s.route === "string" ? s.route.trim() : "";
+      if (!route || !OWNER_PAGES.some((p) => p.route === route)) {
+        rejected.push({ index, reason: `unknown-route:${route.slice(0, 60)}` });
+        return;
+      }
+      valid.push({ type, route, say: capText(s.say), requiresConfirm: false });
+      return;
+    }
     if (type === "say") {
       const text = capText(s.text);
       if (!text) {
@@ -164,5 +177,6 @@ RULES:
 2. Max 12 steps. Narration (say) under 40 words per step, business language.
 3. NEVER tour credentials, passwords, keys, logout, or deletion. NEVER invent a target — unlisted UI rejects your whole step.
 4. Clicks only open dialogs, tabs, and panels (reversible). Anything destructive stays a human tap — flag it in reasoning_notes instead.
-5. Showcase boxes describe connection chains (connector + module + retention) from this same manifest, never marketing copy.`;
+5. Showcase boxes describe connection chains (connector + module + retention) from this same manifest, never marketing copy.
+6. A "goto" step rides the cursor to another page: route MUST be a manifest route below (OwnerPageDef route). Invented routes reject the step.`;
 }

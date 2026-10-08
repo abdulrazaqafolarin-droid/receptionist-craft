@@ -8,6 +8,7 @@
  */
 
 import { findTarget } from "./actorMap";
+import { OWNER_PAGES } from "../../supabase/functions/_shared/config/surfaceManifest";
 
 export type ActorAction =
   | { type: "point"; target: string; say?: string }
@@ -16,7 +17,8 @@ export type ActorAction =
   | { type: "scroll-to"; target: string; say?: string }
   | { type: "say"; text: string }
   | { type: "showcase"; target: string; title: string; lines: string[]; say?: string }
-  | { type: "collect"; target: string; connector_key: string; say?: string };
+  | { type: "collect"; target: string; connector_key: string; say?: string }
+  | { type: "goto"; route: string; say?: string };
 
 export interface GuardVerdict {
   allowed: boolean;
@@ -51,6 +53,15 @@ export function guardCheck(
 ): GuardVerdict {
   if (action.type === "say") {
     return { allowed: true, reason: "narration-only" };
+  }
+  if (action.type === "goto") {
+    // Black-hole navigation: the destination MUST exist in the manifest.
+    // No invented routes — a wrong turn strands the owner.
+    const known = OWNER_PAGES.some((p) => p.route === action.route);
+    if (!known) {
+      return { allowed: false, reason: `unknown-route:${action.route.slice(0, 60)}` };
+    }
+    return { allowed: true, reason: "manifest-route" };
   }
   const target = findTarget(action.target);
   if (!target) {

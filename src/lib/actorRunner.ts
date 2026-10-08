@@ -41,6 +41,16 @@ export interface ActorDeps {
   showcase: (el: unknown, title: string, lines: string[]) => Promise<void> | void;
   /** Open the connector's real collection dialog for this key. */
   collect: (connectorKey: string) => Promise<void> | void;
+  /** Find a navigation element leading to this route (or null). */
+  resolveNav?: (route: string) => unknown;
+  /**
+   * Black-hole traverse: shrink the cursor into the element (or fade in
+   * place when there is none), record the arrival note, navigate. Owned
+   * entirely by the host — the runner only sequences it. Absent means the
+   * host cannot stage travel, so goto fails closed rather than jumping
+   * blind.
+   */
+  traverse?: (route: string, el: unknown | null) => Promise<void> | void;
   /**
    * Asked when the guard demands confirmation. MUST resolve true/false.
    * Absent means denial (fail closed) — confirmations cannot be skipped
@@ -102,13 +112,38 @@ export async function runActorScript(
       }
     }
 
-    const target = findTarget(action.target);
+    // goto carries a route, not a registry key — handled wholly here.
+    if (action.type === "goto") {
+      if (!deps.traverse) {
+        receipts.push({ action, ok: false, detail: "no-traverse-handling", at: at() });
+        if (!opts.continueOnFailure) break;
+        continue;
+      }
+      try {
+        if (action.say) await deps.say(action.say);
+        const navEl = deps.resolveNav ? deps.resolveNav(action.route) : null;
+        if (navEl) await deps.moveCursor(navEl);
+        await deps.traverse(action.route, navEl);
+        receipts.push({ action, ok: true, detail: "done", at: at() });
+      } catch (e) {
+        receipts.push({
+          action,
+          ok: false,
+          detail: `execution-failed:${e instanceof Error ? e.message : "unknown"}`.slice(0, 160),
+          at: at(),
+        });
+        if (!opts.continueOnFailure) break;
+      }
+      continue;
+    }
+
+    const target = findTarget((action as { target: string }).target);
     // Guard passed, so the target exists in the registry — but the live
     // page may not render it (surface gating hides pages per operator).
     // A missing element is an honest stop, never a silent skip.
     const el = target ? deps.resolve(target.selector) : null;
     if (!el) {
-      receipts.push({ action, ok: false, detail: `not-on-screen:${action.target}`, at: at() });
+      receipts.push({ action, ok: false, detail: `not-on-screen:${(action as { target: string }).target}`, at: at() });
       if (!opts.continueOnFailure) break;
       continue;
     }
