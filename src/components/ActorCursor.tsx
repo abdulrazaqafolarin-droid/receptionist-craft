@@ -13,7 +13,8 @@
  * - STOP (button + Esc) halts between actions via the runner's stop flag.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import type { SVGProps } from "react";
 import { useNavigate } from "react-router-dom";
 import { Square } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -89,21 +90,64 @@ export interface CursorPoint {
   y: number;
 }
 
+/**
+ * Global gaze publisher: every host reports the live cursor point so the
+ * Director buddy's pupils can look at it (Bluey's gaze behavior). Last
+ * writer wins; subscribers get a fresh snapshot, never a stream to leak.
+ */
+let lastCursorPoint: (CursorPoint & { at: number }) | null = null;
+const gazeListeners = new Set<() => void>();
+
+export function publishCursorPoint(p: CursorPoint | null) {
+  lastCursorPoint = p ? { ...p, at: Date.now() } : null;
+  gazeListeners.forEach((l) => l());
+}
+
+export function useCursorGaze(): CursorPoint | null {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const listener = () => setTick((t) => t + 1);
+    gazeListeners.add(listener);
+    return () => {
+      gazeListeners.delete(listener);
+    };
+  }, []);
+  if (!lastCursorPoint || Date.now() - lastCursorPoint.at > 4000) return null;
+  return { x: lastCursorPoint.x, y: lastCursorPoint.y };
+}
+
+export type CursorSize = 48 | 72 | 96 | 120;
+
 export function ActorCursor({
   point,
   color = "#2563eb",
   swallow = false,
   arriving = false,
+  size = 72,
+  glow = true,
 }: {
   point: CursorPoint | null;
   color?: string;
   swallow?: boolean;
   arriving?: boolean;
+  /** Body size in px (Bluey range 48–120). */
+  size?: CursorSize;
+  glow?: boolean;
 }) {
+  // Mirror the live point for gaze subscribers; clear on unmount-ish hides.
+  useEffect(() => {
+    if (point && !swallow) publishCursorPoint(point);
+    if (!point && !arriving) publishCursorPoint(null);
+  }, [point, swallow, arriving]);
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   if (!point && !arriving) return null;
   // Arrival: emerge top-center scaling up (black-hole exit). Position is
   // fixed theater, not a claim about page content.
   const at = point ?? { x: 0, y: 0 };
+  const k = size / 72;
+  const gid = `actor-teardrop-${uid}`;
+  const g1 = `actor-glow1-${uid}`;
+  const g2 = `actor-glow2-${uid}`;
   return (
     <div
       className={`pointer-events-none fixed left-0 top-0 z-[90] motion-reduce:transition-none ${arriving && !point ? "actor-arrive" : "transition-transform duration-500 ease-out"}`}
@@ -120,16 +164,44 @@ export function ActorCursor({
       }
       aria-hidden="true"
     >
-      <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-        <path
-          d="M6 3 L19 13 L12.5 14 L15.5 21 L12.5 22.5 L9.5 15.5 L6 19 Z"
-          fill={color}
-          stroke="white"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-        />
+      {/* Teardrop body (Bluey geometry, original art): rounded square with
+          one sharp tip corner, berry gradient, shine, white rim, double
+          soft glow. Drawn fresh each render — cheap SVG, no assets. */}
+      <svg width={Math.round(30 * k)} height={Math.round(30 * k)} viewBox="0 0 72 72" fill="none">
+        <defs>
+          <linearGradient id={gid} x1="12" y1="8" x2="60" y2="64" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor={color} stopOpacity="0.95" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.7" />
+          </linearGradient>
+          <filter id={g1} x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation={10 * k} result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id={g2} x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation={5 * k} result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+        <g filter={glow ? `url(#${g1})` : undefined} opacity={glow ? 0.7 : 0}>
+          <TeardropPath fill={color} />
+        </g>
+        <g filter={glow ? `url(#${g2})` : undefined} opacity={glow ? 0.45 : 0}>
+          <TeardropPath fill={color} />
+        </g>
+        <TeardropPath fill={`url(#${gid})`} stroke="white" strokeWidth={2.5 * k} strokeLinejoin="round" />
+        <ellipse cx={26} cy={20} rx={10 * k} ry={6 * k} fill="white" opacity="0.35" transform={`rotate(-24 26 20)`} />
       </svg>
     </div>
+  );
+}
+
+function TeardropPath(props: SVGProps<SVGPathElement>) {
+  // Square with three fully rounded corners, one sharp tip (top-left).
+  return (
+    <path
+      d="M14 4 H48 Q64 4 64 20 V48 Q64 64 48 64 H20 Q4 64 4 48 V20 Q4 4 14 4 Z"
+      {...props}
+    />
   );
 }
 
@@ -430,14 +502,20 @@ export function ActorOverlay({
         />
       )}
       {bubble && (
-        <div className="fixed bottom-24 left-1/2 z-[91] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-border bg-card p-3 shadow-xl">
-          <p className="text-sm">{bubble}</p>
-          <button
-            onClick={onDismissBubble}
-            className="mt-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            Dismiss
-          </button>
+        <div className="fixed bottom-24 left-1/2 z-[91] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2" role="status">
+          <div className="relative rounded-2xl border-2 border-primary/40 bg-card p-3 shadow-xl">
+            <p className="text-sm">{bubble}</p>
+            <button
+              onClick={onDismissBubble}
+              className="mt-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Dismiss
+            </button>
+            <span
+              className="absolute -bottom-[7px] left-8 h-3.5 w-3.5 rotate-45 border-b-2 border-r-2 border-primary/40 bg-card"
+              aria-hidden="true"
+            />
+          </div>
         </div>
       )}
       {showcase && (

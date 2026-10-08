@@ -275,10 +275,10 @@ export default function Dashboard() {
                 : "Watching your operators.";
           return (
             <section className="mb-6 sm:mb-8" aria-label="Director">
-              <Card className="glass-1">
-                <CardContent className="p-4 sm:p-5">
+              <Card className="liquid-glass-card">
+                <CardContent className="p-5 sm:p-7">
                   <button onClick={() => setDirectorOpen(true)} aria-label="Open Director briefing" className="rounded-2xl text-left transition-transform active:scale-95">
-                    <DirectorBuddy state={state as "idle" | "working" | "needs-you"} line={line} />
+                    <DirectorBuddy state={state as "idle" | "working" | "needs-you"} line={line} size="medium" briefingOpen={directorOpen} />
                   </button>
                 </CardContent>
               </Card>
