@@ -12,6 +12,7 @@ import { WidgetEmbedCode } from "@/components/WidgetEmbedCode";
 import { CustomerFieldsConfig, DEFAULT_CUSTOMER_FIELDS, type CustomerField } from "@/components/CustomerFieldsConfig";
 import { useToast } from "@/hooks/use-toast";
 import { recordManualVersion } from "@/lib/manualVersion";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Trash2 } from "lucide-react";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import {
@@ -68,6 +69,8 @@ type Receptionist = {
   goal?: string;
   created_at?: string;
   primary_goal?: PrimaryGoal;
+  active?: boolean;
+  business_model?: string;
   capabilities?: BusinessCapabilities | Json;
   customer_fields?: CustomerField[] | Json;
 };
@@ -298,7 +301,7 @@ export default function BuilderPage() {
       const { data, error } = await supabase
         .from("receptionists")
         .select(
-        "id, name, business_name, business_type, phone, tone, greeting_message, default_response, knowledge_base, system_prompt, temperature, language, currency, goal, created_at, primary_goal, capabilities, customer_fields"
+        "id, name, business_name, business_type, phone, tone, greeting_message, default_response, knowledge_base, system_prompt, temperature, language, currency, goal, created_at, primary_goal, capabilities, customer_fields, active, business_model"
         )
         .eq("id", id)
         .maybeSingle();
@@ -396,6 +399,7 @@ capabilities: receptionist.capabilities,
         toast({ title: "Success", description: "Receptionist updated successfully!" });
         // Side door closed: the hand-edit is versioned like everything else.
         void recordManualVersion(receptionistId, "Business details updated in the Builder.");
+        setHasUnsavedChanges(false);
         await loadReceptionist(receptionistId);
       } else {
         // Check plan limit before creating
@@ -741,6 +745,61 @@ capabilities: receptionist.capabilities,
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [autoGenerateTriggered, setAutoGenerateTriggered] = useState(false);
+  // Manual settings live collapsed (chat-first page) — jump buttons expand first.
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  // Attention strip: what needs the owner now (operator-scoped, dashboard pattern).
+  const [attention, setAttention] = useState({ bookings: 0, escalations: 0, stock: 0, tasks: 0 });
+
+  const operatorKind = (() => {
+    const caps = ((receptionist.capabilities || {}) as Record<string, unknown>);
+    if (caps.operator_kind === "ops" || caps.operator_kind === "assistant" || caps.operator_kind === "both") {
+      return caps.operator_kind as string;
+    }
+    if (receptionist.business_model === "internal") return "ops";
+    return "receptionist";
+  })();
+
+  const openAdvanced = (anchor: string) => {
+    setAdvancedOpen(true);
+    setTimeout(() => document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  };
+
+  useEffect(() => {
+    if (!receptionistId) return;
+    (async () => {
+      try {
+        const midnight = new Date();
+        midnight.setHours(0, 0, 0, 0);
+        const [apptRes, escRes, stockRes] = await Promise.all([
+          supabase.from("appointments").select("*", { count: "exact", head: true }).eq("receptionist_id", receptionistId).gte("start_time", midnight.toISOString()),
+          supabase.from("escalations").select("*", { count: "exact", head: true }).eq("receptionist_id", receptionistId).is("resolved_at", null),
+          supabase.from("services").select("stock_quantity,low_stock_threshold,expiry_date").eq("receptionist_id", receptionistId).eq("active", true).not("stock_quantity", "is", null),
+        ]);
+        let stock = 0;
+        const horizon = new Date();
+        horizon.setDate(horizon.getDate() + 30);
+        const hstr = `${horizon.getFullYear()}-${String(horizon.getMonth() + 1).padStart(2, "0")}-${String(horizon.getDate()).padStart(2, "0")}`;
+        for (const row of ((stockRes.data || []) as unknown) as Array<{ stock_quantity: number | null; low_stock_threshold: number | null; expiry_date: string | null }>) {
+          const qty = row.stock_quantity ?? 0;
+          if (qty <= 0 || qty <= (row.low_stock_threshold ?? 5)) { stock++; continue; }
+          if (row.expiry_date && row.expiry_date <= hstr) stock++;
+        }
+        const caps = ((receptionist.capabilities || {}) as Record<string, unknown>);
+        const tasks = (Array.isArray(caps.ops_tasks) ? caps.ops_tasks : []) as Array<{ due?: string; done?: boolean }>;
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        setAttention({
+          bookings: apptRes.count || 0,
+          escalations: escRes.count || 0,
+          stock,
+          tasks: tasks.filter((t) => !t.done && t.due && t.due <= today).length,
+        });
+      } catch {
+        // attention degrades silently
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [receptionistId]);
   
   // Auto-generate KB and System Prompt when receptionist loads
   useEffect(() => {
@@ -884,17 +943,17 @@ capabilities: receptionist.capabilities,
               <span className="text-lg font-bold text-primary-foreground">R</span>
             </div>
             <h1 className="type-display text-foreground">
-              Rutex FrontDesk Builder
+              Operator Builder
             </h1>
           </div>
-          <p className="text-muted-foreground ml-13">Create an AI receptionist and preview how it will talk to your customers.</p>
+          <p className="text-muted-foreground ml-13">Shape your AI operator — chat first, forms only if you insist.</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => document.getElementById('builder-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Business Details</button>
+            <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => openAdvanced('builder-details')}>Business Details</button>
             <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => document.getElementById('builder-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Preview & Test</button>
             {receptionistId && (
               <>
-                <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => document.getElementById('builder-faqs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>FAQs</button>
-                <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => document.getElementById('builder-embed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Widget Install</button>
+                <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => openAdvanced('builder-faqs')}>FAQs</button>
+                <button className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted" onClick={() => openAdvanced('builder-embed')}>Widget Install</button>
                 <button className="px-3 py-1.5 text-xs rounded-lg border border-blue-500/40 bg-blue-500/10 text-blue-700 hover:bg-blue-500/20" onClick={() => navigate(`/test/${receptionistId}`)}>Test Operator</button>
                 <button className="px-3 py-1.5 text-xs rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20" onClick={() => navigate('/operator-management')}>Manage Operator</button>
                 <button className="px-3 py-1.5 text-xs rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20" onClick={() => navigate('/money-mode')}>Money Mode</button>
@@ -904,9 +963,62 @@ capabilities: receptionist.capabilities,
           </div>
         </header>
 
+        {/* Operator identity + attention: what this is, what needs you.
+            Reads the loaded row only — no new concepts, no new queries
+            beyond the attention counts. */}
+        {receptionistId && (
+          <section className="mb-6 rounded-2xl border border-border/50 bg-card p-4 sm:p-5 shadow-card" aria-label="Operator overview">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold">
+                {receptionist.business_name || receptionist.name || "Untitled operator"}
+              </h2>
+              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                {operatorKind === "ops" ? "Internal helper" : operatorKind === "assistant" ? "Helper" : operatorKind === "both" ? "Customers + helper" : "Receptionist"}
+              </span>
+              {receptionist.active !== undefined && (
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${receptionist.active ? "bg-emerald-500/10 text-emerald-700" : "bg-muted text-muted-foreground"}`}>
+                  {receptionist.active ? "Live" : "Paused"}
+                </span>
+              )}
+              {receptionist.business_model && (
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
+                  {receptionist.business_model === "internal" ? "Internal" : receptionist.business_model === "both" ? "Bookings + orders" : receptionist.business_model === "products" ? "Orders" : "Bookings"}
+                </span>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              {operatorKind === "ops" ? (
+                <>
+                  {attention.stock > 0 && <button className="text-primary hover:underline" onClick={() => navigate("/services")}>{attention.stock} stock item{attention.stock === 1 ? "" : "s"} need{attention.stock === 1 ? "s" : ""} you</button>}
+                  {attention.tasks > 0 && <button className="text-primary hover:underline" onClick={() => navigate("/console")}>{attention.tasks} overdue task{attention.tasks === 1 ? "" : "s"}</button>}
+                  {attention.stock === 0 && attention.tasks === 0 && <span className="text-muted-foreground">All clear — nothing needs you right now.</span>}
+                </>
+              ) : (
+                <>
+                  {attention.bookings > 0 && <button className="text-primary hover:underline" onClick={() => navigate("/appointments")}>{attention.bookings} upcoming booking{attention.bookings === 1 ? "" : "s"}</button>}
+                  {attention.escalations > 0 && <button className="text-primary hover:underline" onClick={() => navigate("/escalations")}>{attention.escalations} open escalation{attention.escalations === 1 ? "" : "s"}</button>}
+                  {attention.bookings === 0 && attention.escalations === 0 && <span className="text-muted-foreground">All clear — nothing needs you right now.</span>}
+                </>
+              )}
+            </div>
+          </section>
+        )}
+
         <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left panel: form */}
-          <section className="lg:col-span-1 space-y-6">
+          {/* Left panel: manual settings — collapsed by default. The chat is
+              the builder now; forms are the fallback, still fully working. */}
+          <section className="lg:col-span-1 order-2">
+            <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+              <CollapsibleTrigger asChild>
+                <button className="mb-4 flex w-full items-center justify-between rounded-2xl border border-border/50 bg-card px-4 py-3 text-left shadow-card">
+                  <span className="text-sm font-medium">
+                    Advanced — manual settings
+                    {hasUnsavedChanges && <span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" aria-label="Unsaved changes" />}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{advancedOpen ? "Hide" : "Show"}</span>
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-6">
             {/* Analytics Panel */}
             {receptionistId && currentUserId && (
               <BuilderAnalyticsPanel 
@@ -918,7 +1030,7 @@ capabilities: receptionist.capabilities,
             <div id="builder-details" className="bg-card rounded-2xl shadow-card border border-border/50 p-6 animate-scale-in">
               <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
-                Edit AI Receptionist
+                Edit operator details
               </h2>
 
               <div className="space-y-4">
@@ -1192,18 +1304,20 @@ capabilities: receptionist.capabilities,
             {/* Widget Embed Code */}
             {receptionistId && receptionist.name && (
               <div id="builder-embed">
-                <WidgetEmbedCode 
-                  receptionistId={receptionistId} 
+                <WidgetEmbedCode
+                  receptionistId={receptionistId}
                   receptionistName={receptionist.name}
                 />
               </div>
             )}
+              </CollapsibleContent>
+            </Collapsible>
           </section>
 
-          {/* Right panel: chat preview */}
+          {/* Right panel: chat preview — first because it IS the builder now */}
           <section
             id="builder-preview"
-            className="lg:col-span-2 bg-card rounded-2xl shadow-card border border-border/50 p-6 flex flex-col animate-slide-in-right"
+            className="lg:col-span-2 order-1 bg-card rounded-2xl shadow-card border border-border/50 p-6 flex flex-col animate-slide-in-right"
             onTouchStart={(e) => {
               if (railOpen || e.touches.length !== 1 || e.touches[0].clientX >= 40) {
                 railSwipeStartX.current = null;
