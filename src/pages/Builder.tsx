@@ -6,6 +6,8 @@ import type { Json } from "@/integrations/supabase/types";
 import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
 import { ConversationalManagement } from "@/components/ConversationalManagement";
 import { HistoryGlyph } from "@/components/HistoryGlyph";
+import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
+import { BUILDER_TOUR } from "@/lib/actorScripts";
 import { useBuildThreads } from "@/hooks/useBuildThreads";
 import { FAQManager } from "@/components/FAQManager";
 import { WidgetEmbedCode } from "@/components/WidgetEmbedCode";
@@ -138,6 +140,7 @@ export default function BuilderPage() {
     commandNonce.current += 1;
     setThreadCommand({ ...cmd, nonce: commandNonce.current });
   };
+  const panelTour = useActorHost();
 
   // History rail actions: threads ARE build chats, so selecting one always
   // lands in Improve (the Test tab stays an ephemeral rehearsal).
@@ -1359,6 +1362,13 @@ capabilities: receptionist.capabilities,
                 >
                   <HistoryGlyph className="h-5 w-5" />
                 </button>
+                <button
+                  onClick={() => { void panelTour.start(BUILDER_TOUR, { tour: "builder-tour", userId: currentUserId ?? undefined, receptionistId }); }}
+                  disabled={panelTour.running}
+                  className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
+                >
+                  {panelTour.running ? "Touring…" : "Tour"}
+                </button>
                 <div className="flex rounded-lg border border-border p-0.5" role="tablist" aria-label="Builder chat mode">
                   {(["test", "improve", "live"] as const).map((t) => (
                     <button
@@ -1548,6 +1558,18 @@ capabilities: receptionist.capabilities,
             )}
                 </div>
               </div>
+              <ActorCursor point={panelTour.point} />
+              <ActorOverlay
+                ring={panelTour.ring}
+                bubble={panelTour.bubble}
+                showcase={panelTour.showcase}
+                confirmAsk={panelTour.confirmAsk}
+                running={panelTour.running}
+                onStop={panelTour.stop}
+                onDismissBubble={panelTour.dismissBubble}
+                onDismissShowcase={panelTour.dismissShowcase}
+                onAnswerConfirm={panelTour.answerConfirm}
+              />
           </section>
         </main>
       </div>

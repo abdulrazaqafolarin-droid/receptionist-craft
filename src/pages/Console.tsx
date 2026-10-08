@@ -14,6 +14,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
+import { CONSOLE_TOUR } from "@/lib/actorScripts";
 import { useActiveOperatorStore } from "@/store/activeOperator";
 import { isRouteVisible } from "@/lib/operatorSurface";
 
@@ -81,6 +83,7 @@ export default function Console() {
   const [newTaskDue, setNewTaskDue] = useState("");
   const [mutating, setMutating] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const tour = useActorHost();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -272,7 +275,15 @@ export default function Console() {
     <div className="p-6 max-w-3xl mx-auto flex flex-col gap-4">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Terminal className="h-5 w-5" /> Operator Console</CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2"><Terminal className="h-5 w-5" /> Operator Console</CardTitle>
+            <Button variant="ghost" size="sm" disabled={tour.running} onClick={async () => {
+              const { data: { user } } = await supabase.auth.getUser();
+              void tour.start(CONSOLE_TOUR, { tour: "console-tour", userId: user?.id, receptionistId: receptionistId ?? undefined });
+            }}>
+              {tour.running ? "Showing…" : "Show me around"}
+            </Button>
+          </div>
           <CardDescription>
             {operatorName ? `Talking to ${operatorName} — your inside-the-business helper. ` : ""}
             Ask about stock, tasks, or shifts. Answers come from your live records, not guesses.
@@ -371,6 +382,18 @@ export default function Console() {
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>
+      <ActorCursor point={tour.point} />
+      <ActorOverlay
+        ring={tour.ring}
+        bubble={tour.bubble}
+        showcase={tour.showcase}
+        confirmAsk={tour.confirmAsk}
+        running={tour.running}
+        onStop={tour.stop}
+        onDismissBubble={tour.dismissBubble}
+        onDismissShowcase={tour.dismissShowcase}
+        onAnswerConfirm={tour.answerConfirm}
+      />
     </div>
   );
 }

@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Square } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { runActorScript, type ActorReceipt } from "@/lib/actorRunner";
 import type { ActorAction } from "@/lib/actorGuard";
 
@@ -112,7 +113,10 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const start = useCallback(async (actions: ActorAction[]) => {
+  const start = useCallback(async (
+    actions: ActorAction[],
+    opts?: { tour?: string; userId?: string; receptionistId?: string },
+  ) => {
     stopRef.current = false;
     setRunning(true);
     setReceipts([]);
@@ -154,6 +158,29 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     });
     setReceipts(out);
     setRunning(false);
+    // Permanent half of the audit surface: one row per completed run.
+    // Fire-and-forget — a failed insert must never disturb a tour.
+    if (out.length > 0 && opts?.userId) {
+      const failed = out.find((r) => !r.ok);
+      void (async () => {
+        try {
+          // Generated DB types lag behind migrations (never-edit file).
+          const table = (supabase.from as unknown as (t: string) => {
+            insert(v: unknown): PromiseLike<unknown>;
+          })("actor_receipts");
+          await table.insert({
+            user_id: opts.userId,
+            receptionist_id: opts.receptionistId ?? null,
+            tour: opts.tour ?? "ad-hoc",
+            ok: !failed,
+            steps: out.length,
+            failed_detail: failed ? failed.detail.slice(0, 200) : null,
+          });
+        } catch {
+          // receipts are a courtesy, not a dependency
+        }
+      })();
+    }
     return out;
   }, []);
 

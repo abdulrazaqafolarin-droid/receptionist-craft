@@ -73,3 +73,59 @@ export const GOOGLE_WALKTHROUGH: ActorAction[] = [
     say: "This opens the real connection form — your credentials go straight to the provider, never through me.",
   },
 ];
+
+/** Operator Console tour: the shop's live numbers, three checks, one chat. */
+export const CONSOLE_TOUR: ActorAction[] = [
+  {
+    type: "say",
+    text: "This is your console — the shop's live numbers, not a demo. Three checks, one chat.",
+  },
+  {
+    type: "point",
+    target: "console-stock-check",
+    say: "Stock check scans your shelf records for low, out, and expiring items.",
+  },
+  {
+    type: "point",
+    target: "console-tasks-check",
+    say: "Tasks keeps the chase list — overdue first, due-today second. Tap any row to mark it done.",
+  },
+  {
+    type: "point",
+    target: "console-roster-check",
+    say: "Roster gaps flags overlaps and uncovered days. Shifts themselves live on the Staff page.",
+  },
+  {
+    type: "point",
+    target: "console-chat-input",
+    say: "Or skip the buttons — just ask about the shop in plain words.",
+  },
+];
+
+/** Builder tour: three chats, one history, no wrong door. */
+export const BUILDER_TOUR: ActorAction[] = [
+  {
+    type: "say",
+    text: "This panel has three chats. Here is which one to use when.",
+  },
+  {
+    type: "point",
+    target: "builder-tab-test",
+    say: "Test rehearses as a customer would experience it — nothing here touches reality.",
+  },
+  {
+    type: "point",
+    target: "builder-tab-improve",
+    say: "Improve changes the operator in words — every change goes live only on your approval.",
+  },
+  {
+    type: "point",
+    target: "builder-tab-live",
+    say: "Live shows real customers arriving right now, read-only.",
+  },
+  {
+    type: "point",
+    target: "builder-history",
+    say: "History keeps every past change chat — reopen any of them where you left off.",
+  },
+];

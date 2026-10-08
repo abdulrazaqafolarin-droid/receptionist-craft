@@ -12,6 +12,7 @@ import { Navbar } from "@/components/Navbar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import { CommandPalette } from "@/components/CommandPalette";
+import { WhatsThis } from "@/components/WhatsThis";
 import { SurfaceGate } from "@/components/SurfaceGate";
 
 import Landing from "./pages/Landing";
@@ -214,7 +215,7 @@ const App = () => {
                             </Routes>
                           </main>
                           <CommandPalette />
-                          <CommandPalette />
+                          <WhatsThis />
                         </div>
                       </div>
                     </SidebarProvider>

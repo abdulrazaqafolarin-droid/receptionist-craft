@@ -28,6 +28,9 @@ function sources() {
         if (e === "node_modules" || e === "dist") continue;
         walk(p);
       } else if (/\.(tsx?|jsx?)$/.test(e)) {
+        // Test fixtures stage synthetic anchors (e.g. the staged dangerous
+        // entry) — they are not real UI and must not pollute the check.
+        if (/\.test\.(ts|tsx|js|jsx)$/.test(e)) continue;
         out.push(p);
       }
     }
@@ -37,8 +40,10 @@ function sources() {
   return out;
 }
 
-// Registry entries: key: "..." + selector: '[data-actor="..."]'
-const mapSrc = readFileSync(join(ROOT, "src/lib/actorMap.ts"), "utf8");
+// Registry entries: key: "..." + selector: '[data-actor="..."]'.
+// Single source of truth is edge-side so the planner validator reads the
+// same list (frontend re-exports it).
+const mapSrc = readFileSync(join(ROOT, "supabase/functions/_shared/config/actorRegistry.ts"), "utf8");
 const registered = new Map();
 for (const m of mapSrc.matchAll(/key:\s*"([^"]+)"[\s\S]*?selector:\s*'\[data-actor="([^"]+)"\]'/g)) {
   registered.set(m[1], m[2]);

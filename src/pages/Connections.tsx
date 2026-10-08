@@ -86,7 +86,7 @@ export default function Connections() {
                 variant="outline"
                 size="sm"
                 disabled={tour.running}
-                onClick={() => { void tour.start(CONNECTIONS_TOUR); }}
+                onClick={() => { void tour.start(CONNECTIONS_TOUR, { tour: "connections-tour", userId, receptionistId: selectedReceptionistId }); }}
               >
                 {tour.running ? "Showing you around…" : "Show me around"}
               </Button>
@@ -94,7 +94,7 @@ export default function Connections() {
                 variant="outline"
                 size="sm"
                 disabled={tour.running}
-                onClick={() => { void tour.start(GOOGLE_WALKTHROUGH); }}
+                onClick={() => { void tour.start(GOOGLE_WALKTHROUGH, { tour: "walkthrough-google", userId, receptionistId: selectedReceptionistId }); }}
               >
                 {tour.running ? "Walking through…" : "Connect Google Reviews"}
               </Button>

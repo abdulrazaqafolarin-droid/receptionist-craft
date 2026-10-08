@@ -13,51 +13,35 @@
  * source are registered, including template prefixes for dynamic keys).
  */
 
-export type ActorTargetKind = "button" | "card" | "input" | "panel" | "tab";
+import { CONNECTORS } from "../../supabase/functions/_shared/config/surfaceManifest";
 
-export interface ActorTarget {
-  /** Stable key used in action scripts, e.g. "connect-google_reviews". */
-  key: string;
-  /** CSS selector that resolves it. Exact data-actor match, never fuzzy. */
-  selector: string;
-  /** Plain words for narration and receipts. */
-  label: string;
-  kind: ActorTargetKind;
-  /**
-   * Dangerous elements (delete, send, publish, pay, credentials, logout)
-   * always require an inline owner confirm before a click. Nothing in the
-   * pilot set is dangerous — the flag and its gate ship first anyway.
-   */
-  dangerous?: boolean;
-}
-
-export const ACTOR_TARGETS: ActorTarget[] = [
-  // -- Connections page --
-  { key: "connections-list", selector: '[data-actor="connections-list"]', label: "Connectors list", kind: "panel" },
-  { key: "modules-list", selector: '[data-actor="modules-list"]', label: "Modules list", kind: "panel" },
-  { key: "connect-google_reviews", selector: '[data-actor="connect-google_reviews"]', label: "Connect Google Reviews button", kind: "button" },
-  { key: "connector-card-google_reviews", selector: '[data-actor="connector-card-google_reviews"]', label: "Google Reviews connector card", kind: "card" },
-  // -- Operator Console --
-  { key: "console-stock-check", selector: '[data-actor="console-stock-check"]', label: "Stock check button", kind: "button" },
-  { key: "console-tasks-check", selector: '[data-actor="console-tasks-check"]', label: "Today's tasks button", kind: "button" },
-  { key: "console-roster-check", selector: '[data-actor="console-roster-check"]', label: "Roster gaps button", kind: "button" },
-  { key: "console-chat-input", selector: '[data-actor="console-chat-input"]', label: "Console chat input", kind: "input" },
-  // -- Builder right panel --
-  { key: "builder-tab-test", selector: '[data-actor="builder-tab-test"]', label: "Test tab", kind: "tab" },
-  { key: "builder-tab-improve", selector: '[data-actor="builder-tab-improve"]', label: "Improve tab", kind: "tab" },
-  { key: "builder-tab-live", selector: '[data-actor="builder-tab-live"]', label: "Live tab", kind: "tab" },
-  { key: "builder-history", selector: '[data-actor="builder-history"]', label: "Change history button", kind: "button" },
-];
+// Single source of truth lives edge-side so the planner validator reads
+// the exact same entries (see supabase/functions/_shared/config/
+// actorRegistry.ts). This module re-exports it plus the UI-side helper.
+export {
+  ACTOR_TARGETS,
+  ACTOR_TEMPLATE_PREFIXES,
+  findActorTarget as findTarget,
+} from "../../supabase/functions/_shared/config/actorRegistry";
+export type {
+  ActorTarget,
+  ActorTargetKind,
+} from "../../supabase/functions/_shared/config/actorRegistry";
+import { findActorTarget } from "../../supabase/functions/_shared/config/actorRegistry";
 
 /**
- * Template prefixes for dynamically-rendered keys (connector cards render
- * one per catalog entry: data-actor={`connect-${def.connector_key}`}). A
- * registered key matches when its literal attribute exists in source OR its
- * template prefix does — the CI check enforces this, so dynamic keys can
- * never silently lose their anchors.
+ * "What's this?" explainer. Static entries answer from their own why;
+ * dynamic connector entries answer from the connector catalog (the same
+ * unlocks text the planner reasons from). Anything else returns null —
+ * the UI says it has no description yet rather than inventing one.
  */
-export const ACTOR_TEMPLATE_PREFIXES = ["connect-", "connector-card-", "builder-tab-"];
-
-export function findTarget(key: string): ActorTarget | null {
-  return ACTOR_TARGETS.find((t) => t.key === key) ?? null;
+export function describeTarget(key: string): string | null {
+  const entry = findActorTarget(key);
+  if (entry?.why) return entry.why;
+  if (key.startsWith("connect-") || key.startsWith("connector-card-")) {
+    const connectorKey = key.replace(/^connect(or-card)?-/, "");
+    const found = CONNECTORS.find((c) => c.key === connectorKey);
+    if (found) return `${found.name}: ${found.unlocks}`;
+  }
+  return null;
 }
