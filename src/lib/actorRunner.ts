@@ -67,7 +67,20 @@ export interface ActorDeps {
 
 export interface RunOptions {
   continueOnFailure?: boolean;
+  /**
+   * Item 3 modes — the honesty split:
+   * - ride (default): full theater (cursor, narration, boxes). For watching.
+   * - handle: background execution. No cursor moves, no bubbles, no boxes,
+   *   no scroll jumps — clicks/collects still execute, say steps record
+   *   silently. The owner keeps working undisturbed.
+   * - takeover: ride theater PLUS an explicit foreground grant (host shows
+   *   the control banner; Esc revokes). The only mode that may disturb,
+   *   and only because it was granted.
+   */
+  mode?: ActorMode;
 }
+
+export type ActorMode = "ride" | "handle" | "takeover";
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -80,14 +93,19 @@ export async function runActorScript(
   const at = () => new Date().toISOString();
 
   for (const action of actions) {
+    // Handle mode: background execution. Theater calls are skipped with
+    // honest receipts; state-changing work still runs. goto/collect never
+    // run headless — navigating the owner's tab away and popping dialogs
+    // at them IS obstruction, so those steps defer with reasons instead.
+    const silent = opts.mode === "handle";
     if (deps.isStopped()) {
       receipts.push({ action, ok: false, detail: "stopped-by-owner", at: at() });
       break;
     }
 
     if (action.type === "say") {
-      await deps.say(action.text);
-      receipts.push({ action, ok: true, detail: "narrated", at: at() });
+      if (!silent) await deps.say(action.text);
+      receipts.push({ action, ok: true, detail: silent ? "muted-background" : "narrated", at: at() });
       continue;
     }
 
@@ -114,13 +132,18 @@ export async function runActorScript(
 
     // goto carries a route, not a registry key — handled wholly here.
     if (action.type === "goto") {
+      if (silent) {
+        receipts.push({ action, ok: false, detail: "deferred-background", at: at() });
+        if (!opts.continueOnFailure) break;
+        continue;
+      }
       if (!deps.traverse) {
         receipts.push({ action, ok: false, detail: "no-traverse-handling", at: at() });
         if (!opts.continueOnFailure) break;
         continue;
       }
       try {
-        if (action.say) await deps.say(action.say);
+        if (action.say && !silent) await deps.say(action.say);
         const navEl = deps.resolveNav ? deps.resolveNav(action.route) : null;
         if (navEl) await deps.moveCursor(navEl);
         await deps.traverse(action.route, navEl);
@@ -149,25 +172,51 @@ export async function runActorScript(
     }
 
     try {
-      if (action.say) await deps.say(action.say);
+      if (action.say && !silent) await deps.say(action.say);
       if (action.type === "scroll-to") {
+        if (silent) {
+          receipts.push({ action, ok: false, detail: "skipped-background", at: at() });
+          if (!opts.continueOnFailure) break;
+          continue;
+        }
         await deps.scrollTo(el);
       } else if (action.type === "showcase") {
+        if (silent) {
+          receipts.push({ action, ok: false, detail: "skipped-background", at: at() });
+          if (!opts.continueOnFailure) break;
+          continue;
+        }
         await deps.moveCursor(el);
         await deps.showcase(el, action.title, action.lines);
       } else if (action.type === "collect") {
+        if (silent) {
+          // Collecting means presenting a form to the owner — meaningless
+          // without them. Deferred, never faked.
+          receipts.push({ action, ok: false, detail: "needs-owner", at: at() });
+          if (!opts.continueOnFailure) break;
+          continue;
+        }
         await deps.moveCursor(el);
         await deps.collect(action.connector_key);
       } else {
-        await deps.moveCursor(el);
+        if (!silent) await deps.moveCursor(el);
         if (action.type === "highlight") {
+          if (silent) {
+            receipts.push({ action, ok: true, detail: "noted-background", at: at() });
+            continue;
+          }
           await deps.highlight(el, action.ms ?? 1200);
         } else if (action.type === "click") {
+          // Clicks execute in every mode — that IS background work. A click
+          // may still surface app behavior (dialogs, navigation); the runner
+          // eliminates the theater it controls (cursor, scrolls, popups),
+          // never the app's own reactions. That boundary is documented,
+          // not hidden.
           await deps.click(el);
         }
-        // point = move only.
+        // point = move only (skipped silently in handle mode).
       }
-      receipts.push({ action, ok: true, detail: "done", at: at() });
+      receipts.push({ action, ok: true, detail: silent ? "done-background" : "done", at: at() });
     } catch (e) {
       receipts.push({
         action,

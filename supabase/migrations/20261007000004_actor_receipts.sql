@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.actor_receipts (
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   receptionist_id uuid REFERENCES public.receptionists(id) ON DELETE SET NULL,
   tour text NOT NULL DEFAULT 'ad-hoc',
+  mode text NOT NULL DEFAULT 'ride' CHECK (mode IN ('ride', 'handle', 'takeover')),
   ok boolean NOT NULL DEFAULT true,
   steps integer NOT NULL DEFAULT 0,
   failed_detail text,

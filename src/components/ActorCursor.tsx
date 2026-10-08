@@ -17,8 +17,72 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Square } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { runActorScript, type ActorReceipt } from "@/lib/actorRunner";
+import { runActorScript, type ActorReceipt, type ActorMode } from "@/lib/actorRunner";
 import type { ActorAction } from "@/lib/actorGuard";
+
+/**
+ * Global run registry: every host run registers here so one indicator can
+ * show and stop them all, whatever page started them. The registry holds
+ * stop callbacks only — no DOM, no state, nothing to leak.
+ */
+interface RunEntry {
+  stop: () => void;
+  mode: ActorMode;
+}
+
+let runSeq = 0;
+const activeRuns = new Map<number, RunEntry>();
+const runListeners = new Set<() => void>();
+
+function publishRuns() {
+  runListeners.forEach((l) => l());
+}
+
+export function stopAllActorRuns() {
+  activeRuns.forEach((r) => r.stop());
+}
+
+export function useActorRuns(): Array<{ id: number; mode: ActorMode }> {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const listener = () => setTick((t) => t + 1);
+    runListeners.add(listener);
+    return () => {
+      runListeners.delete(listener);
+    };
+  }, []);
+  return [...activeRuns.entries()].map(([id, r]) => ({ id, mode: r.mode }));
+}
+
+/** Persistent footprint: what is running, in what mode, with one STOP. */
+export function ActorRunIndicator() {
+  const runs = useActorRuns();
+  if (runs.length === 0) return null;
+  const takeover = runs.some((r) => r.mode === "takeover");
+  const background = runs.every((r) => r.mode === "handle");
+  return (
+    <div className="fixed bottom-6 left-1/2 z-[95] flex -translate-x-1/2 items-center gap-3 rounded-full border border-border bg-card py-2 pl-4 pr-2 shadow-xl" role="status">
+      <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60 motion-reduce:animate-none" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+      </span>
+      <span className="whitespace-nowrap text-xs font-medium">
+        {takeover
+          ? "Operator in control (granted) — Esc takes it back"
+          : background
+            ? "Working in the background"
+            : "Guide showing you around"}
+      </span>
+      <button
+        onClick={stopAllActorRuns}
+        className="rounded-full bg-destructive px-3 py-1 text-xs font-medium text-destructive-foreground"
+        aria-label="Stop all guided runs"
+      >
+        Stop
+      </button>
+    </div>
+  );
+}
 
 export interface CursorPoint {
   x: number;
@@ -149,6 +213,39 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     setRunning(false);
   }, []);
 
+  const answerConfirm = useCallback((granted: boolean) => {
+    setConfirmAsk((ask) => {
+      ask?.resolve(granted);
+      return null;
+    });
+  }, []);
+
+  /**
+   * Takeover grant ceremony: the ONLY way the takeover mode starts. An
+   * inline confirm names exactly what is granted (foreground control, Esc
+   * revokes); a "no" (or silence) means ride mode or nothing — the caller
+   * decides via onDenied. Nothing proceeds ungranted.
+   */
+  const requestTakeover = useCallback(
+    async (actions: ActorAction[], opts?: { tour?: string; userId?: string; receptionistId?: string; onDenied?: () => void }) => {
+      const granted = await new Promise<boolean>((resolve) => {
+        setConfirmAsk({
+          label: "Hand over foreground control? The operator will move, click, and travel while you watch. Esc takes it back anytime.",
+          resolve,
+        });
+      });
+      if (!granted) {
+        opts?.onDenied?.();
+        return [];
+      }
+      // start is declared below; this closure only runs on user action,
+      // long after the component finished rendering.
+      return start(actions, { ...opts, mode: "takeover" as ActorMode });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && stopRef.current === false) {
@@ -165,11 +262,15 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
 
   const start = useCallback(async (
     actions: ActorAction[],
-    opts?: { tour?: string; userId?: string; receptionistId?: string },
+    opts?: { tour?: string; userId?: string; receptionistId?: string; mode?: ActorMode },
   ) => {
+    const mode = opts?.mode ?? "ride";
     stopRef.current = false;
     setRunning(true);
     setReceipts([]);
+    const runId = ++runSeq;
+    activeRuns.set(runId, { stop: () => { stopRef.current = true; setRunning(false); }, mode });
+    publishRuns();
     const out = await runActorScript(actions, {
       resolve: (selector) => {
         try {
@@ -233,9 +334,11 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       }),
       isStopped: () => stopRef.current,
       stepDelayMs: 500,
-    });
+    }, { mode });
     setReceipts(out);
     setRunning(false);
+    activeRuns.delete(runId);
+    publishRuns();
     // Permanent half of the audit surface: one row per completed run.
     // Fire-and-forget — a failed insert must never disturb a tour.
     if (out.length > 0 && opts?.userId) {
@@ -250,6 +353,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
             user_id: opts.userId,
             receptionist_id: opts.receptionistId ?? null,
             tour: opts.tour ?? "ad-hoc",
+            mode,
             ok: !failed,
             steps: out.length,
             failed_detail: failed ? failed.detail.slice(0, 200) : null,
@@ -260,7 +364,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       })();
     }
     return out;
-  }, []);
+  }, [navigate]);
 
   const clear = useCallback(() => {
     setPoint(null);
@@ -281,14 +385,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     setShowcase(null);
   }, []);
 
-  const answerConfirm = useCallback((granted: boolean) => {
-    setConfirmAsk((ask) => {
-      ask?.resolve(granted);
-      return null;
-    });
-  }, []);
-
-  return { point, ring, bubble, showcase, confirmAsk, running, receipts, start, stop, clear, dismissBubble, dismissShowcase, answerConfirm, swallow, arriving };
+  return { point, ring, bubble, showcase, confirmAsk, running, receipts, start, stop, clear, dismissBubble, dismissShowcase, answerConfirm, swallow, arriving, requestTakeover };
 }
 
 /** The highlight ring + narration bubble + STOP control for an active run. */

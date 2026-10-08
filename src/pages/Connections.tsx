@@ -24,6 +24,8 @@ export default function Connections() {
   // as a manual click) — the cursor presents, never reimplements.
   const dialogNonce = useRef(0);
   const [dialogRequest, setDialogRequest] = useState<{ key: string; nonce: number } | null>(null);
+  const [tourMode, setTourMode] = useState<"ride" | "handle">("ride");
+  const tourCtx = { userId, receptionistId: selectedReceptionistId };
   const tour = useActorHost({
     onCollect: (key) => {
       dialogNonce.current += 1;
@@ -82,11 +84,24 @@ export default function Connections() {
                 title="Change operator setup"
                 className="sm:self-start"
               />
+              <div className="flex rounded-lg border border-border p-0.5" role="group" aria-label="Tour mode: watch it, or let it work in the background">
+                {(["ride", "handle"] as const).map((m) => (
+                  <button
+                    key={m}
+                    aria-pressed={tourMode === m}
+                    onClick={() => setTourMode(m)}
+                    title={m === "ride" ? "Watch the cursor work" : "Work silently in the background — no cursor, no popups"}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${tourMode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    {m === "ride" ? "Ride along" : "Handle it"}
+                  </button>
+                ))}
+              </div>
               <Button
                 variant="outline"
                 size="sm"
                 disabled={tour.running}
-                onClick={() => { void tour.start(CONNECTIONS_TOUR, { tour: "connections-tour", userId, receptionistId: selectedReceptionistId }); }}
+                onClick={() => { void tour.start(CONNECTIONS_TOUR, { ...tourCtx, tour: "connections-tour", mode: tourMode }); }}
               >
                 {tour.running ? "Showing you around…" : "Show me around"}
               </Button>
@@ -94,9 +109,18 @@ export default function Connections() {
                 variant="outline"
                 size="sm"
                 disabled={tour.running}
-                onClick={() => { void tour.start(GOOGLE_WALKTHROUGH, { tour: "walkthrough-google", userId, receptionistId: selectedReceptionistId }); }}
+                onClick={() => { void tour.start(GOOGLE_WALKTHROUGH, { ...tourCtx, tour: "walkthrough-google", mode: tourMode }); }}
               >
                 {tour.running ? "Walking through…" : "Connect Google Reviews"}
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={tour.running}
+                title="Hand over foreground control. Esc takes it back anytime."
+                onClick={() => { void tour.requestTakeover(CONNECTIONS_TOUR, { ...tourCtx, tour: "connections-tour" }); }}
+              >
+                Take over
               </Button>
             </div>
           )}

@@ -231,3 +231,33 @@ Deno.test("runner: goto needs traverse handling, glides when anchored", async ()
   );
   check(bare[0].ok && unanchored.length === 1, "anchorless ride still traverses (fades in place)");
 });
+
+Deno.test("runner handle mode: silent theater, live hands", async () => {
+  const calls: string[] = [];
+  const deps = stubDeps({
+    moveCursor: async () => { calls.push("move"); },
+    click: async () => { calls.push("click"); },
+    say: async () => { calls.push("say"); },
+    showcase: async () => { calls.push("showcase"); },
+    scrollTo: async () => { calls.push("scroll"); },
+    collect: async () => { calls.push("collect"); },
+    traverse: async () => { calls.push("traverse"); },
+  });
+  const receipts = await runActorScript([
+    { type: "say", text: "quietly" },
+    { type: "point", target: "console-stock-check" },
+    { type: "click", target: "console-stock-check" },
+    { type: "scroll-to", target: "connections-list" },
+    { type: "showcase", target: "connector-card-google_reviews", title: "t", lines: ["a"] },
+    { type: "goto", route: "/console" },
+    { type: "collect", target: "connect-google_reviews", connector_key: "google_reviews" },
+  ], deps, { mode: "handle", continueOnFailure: true });
+  check(!calls.includes("say") && !calls.includes("move") && !calls.includes("showcase") && !calls.includes("scroll") && !calls.includes("traverse") && !calls.includes("collect"), "no theater calls in handle mode");
+  check(calls.includes("click"), "clicks still execute — that is the work");
+  const byDetail = (d: string) => receipts.filter((r) => r.detail === d).length;
+  check(byDetail("muted-background") === 1, "say muted honestly");
+  check(byDetail("done-background") === 2, "point + click done in background");
+  check(byDetail("skipped-background") === 2, "scroll + showcase skipped");
+  check(byDetail("deferred-background") === 1, "goto deferred, never jumped blind");
+  check(byDetail("needs-owner") === 1, "collect waits for its human");
+});
