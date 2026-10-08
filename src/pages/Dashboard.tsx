@@ -17,6 +17,7 @@ import { useActiveOperatorStore } from "@/store/activeOperator";
 import { isRouteVisible, visiblePagesFromCapabilities } from "@/lib/operatorSurface";
 import { GuidedActivity } from "@/components/GuidedActivity";
 import { DirectorBuddy } from "@/components/DirectorBuddy";
+import { DirectorPanel } from "@/components/DirectorPanel";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -118,6 +119,7 @@ export default function Dashboard() {
   // Director presence: working while background jobs run, needs-you on
   // failures or open attention items, idle otherwise. Real rows only.
   const [directorJobs, setDirectorJobs] = useState({ active: 0, failed: 0 });
+  const [directorOpen, setDirectorOpen] = useState(false);
   useEffect(() => {
     if (!user || receptionists.length === 0) return;
     (async () => {
@@ -209,7 +211,14 @@ export default function Dashboard() {
                   : openItems > 0
                     ? `${openItems} thing${openItems === 1 ? "" : "s"} need${openItems === 1 ? "s" : ""} you below`
                     : "Watching your operators.";
-              return <DirectorBuddy state={state as "idle" | "working" | "needs-you"} line={line} />;
+              return (
+                <>
+                  <button onClick={() => setDirectorOpen(true)} aria-label="Open Director briefing" className="rounded-2xl text-left transition-transform active:scale-95">
+                    <DirectorBuddy state={state as "idle" | "working" | "needs-you"} line={line} />
+                  </button>
+                  <DirectorPanel open={directorOpen} onClose={() => setDirectorOpen(false)} userId={user?.id} />
+                </>
+              );
             })()}
             <div>
             <h1 className="type-display mb-2 text-foreground">
