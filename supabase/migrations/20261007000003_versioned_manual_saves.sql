@@ -67,12 +67,14 @@ BEGIN
     ELSE 'internal'
   END;
 
+  -- NOTE: tone is a real Postgres enum (receptionist_tone), not text —
+  -- COALESCE across the two types is a 42804 error, hence the cast.
   UPDATE receptionists
   SET name = COALESCE(v_business ->> 'display_name', name),
       business_name = COALESCE(v_business ->> 'display_name', business_name),
       business_type = COALESCE(v_business ->> 'business_type', business_type),
       greeting_message = COALESCE(v_business ->> 'greeting_message', greeting_message),
-      tone = COALESCE(v_business ->> 'tone', tone),
+      tone = COALESCE((v_business ->> 'tone')::public.receptionist_tone, tone),
       language = COALESCE(v_business ->> 'language', language),
       currency = COALESCE(v_business ->> 'currency', currency),
       business_phone = COALESCE(v_contact ->> 'phone', business_phone),
