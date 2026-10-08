@@ -37,6 +37,16 @@ export interface ActorDeps {
   click: (el: unknown) => Promise<void> | void;
   /** Speak a narration line (speech bubble, chat line, aria-live). */
   say: (text: string) => Promise<void> | void;
+  /** Open the showcase box beside the resolved element. */
+  showcase: (el: unknown, title: string, lines: string[]) => Promise<void> | void;
+  /** Open the connector's real collection dialog for this key. */
+  collect: (connectorKey: string) => Promise<void> | void;
+  /**
+   * Asked when the guard demands confirmation. MUST resolve true/false.
+   * Absent means denial (fail closed) — confirmations cannot be skipped
+   * by forgetting to wire them.
+   */
+  requestConfirm?: (action: ActorAction) => Promise<boolean>;
   /** Stop requested (kill switch). Checked before every step. */
   isStopped: () => boolean;
   /** Owner confirmed the run's destructive steps (confirm gate). */
@@ -71,11 +81,25 @@ export async function runActorScript(
       continue;
     }
 
-    const verdict = guardCheck(action, { confirmed: deps.confirmed });
+    let verdict = guardCheck(action, { confirmed: deps.confirmed });
     if (!verdict.allowed) {
-      receipts.push({ action, ok: false, detail: verdict.reason, at: at() });
-      if (!opts.continueOnFailure) break;
-      continue;
+      // Confirm gate: pause and ask through the host's inline dialog.
+      // A "no" (or no dialog wired at all) ends the run with an honest
+      // receipt — confirmations can never be skipped by omission.
+      if (verdict.reason.startsWith("confirm-required") && deps.requestConfirm) {
+        const granted = await deps.requestConfirm(action).catch(() => false);
+        if (granted) {
+          verdict = guardCheck(action, { confirmed: true });
+        } else {
+          receipts.push({ action, ok: false, detail: "cancelled-by-owner", at: at() });
+          break;
+        }
+      }
+      if (!verdict.allowed) {
+        receipts.push({ action, ok: false, detail: verdict.reason, at: at() });
+        if (!opts.continueOnFailure) break;
+        continue;
+      }
     }
 
     const target = findTarget(action.target);
@@ -93,6 +117,12 @@ export async function runActorScript(
       if (action.say) await deps.say(action.say);
       if (action.type === "scroll-to") {
         await deps.scrollTo(el);
+      } else if (action.type === "showcase") {
+        await deps.moveCursor(el);
+        await deps.showcase(el, action.title, action.lines);
+      } else if (action.type === "collect") {
+        await deps.moveCursor(el);
+        await deps.collect(action.connector_key);
       } else {
         await deps.moveCursor(el);
         if (action.type === "highlight") {

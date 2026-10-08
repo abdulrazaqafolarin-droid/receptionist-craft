@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Puzzle, Bot, ArrowLeft } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { ConnectorRegistryPage } from "@/components/ConnectorRegistry";
 import { ModuleRegistry } from "@/components/ModuleRegistry";
 import { ConfiguratorAffordance } from "@/components/ConfiguratorAffordance";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
-import { CONNECTIONS_TOUR } from "@/lib/actorScripts";
+import { CONNECTIONS_TOUR, GOOGLE_WALKTHROUGH } from "@/lib/actorScripts";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Connections() {
@@ -20,7 +20,16 @@ export default function Connections() {
   const [selectedReceptionistId, setSelectedReceptionistId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   // Phase 0 actor tour: cursor + narration only, touches nothing.
-  const tour = useActorHost();
+  // The collect handoff opens the connector's REAL dialog (same save path
+  // as a manual click) — the cursor presents, never reimplements.
+  const dialogNonce = useRef(0);
+  const [dialogRequest, setDialogRequest] = useState<{ key: string; nonce: number } | null>(null);
+  const tour = useActorHost({
+    onCollect: (key) => {
+      dialogNonce.current += 1;
+      setDialogRequest({ key, nonce: dialogNonce.current });
+    },
+  });
 
   useEffect(() => {
     (async () => {
@@ -81,6 +90,14 @@ export default function Connections() {
               >
                 {tour.running ? "Showing you around…" : "Show me around"}
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={tour.running}
+                onClick={() => { void tour.start(GOOGLE_WALKTHROUGH); }}
+              >
+                {tour.running ? "Walking through…" : "Connect Google Reviews"}
+              </Button>
             </div>
           )}
         </div>
@@ -89,9 +106,13 @@ export default function Connections() {
         <ActorOverlay
           ring={tour.ring}
           bubble={tour.bubble}
+          showcase={tour.showcase}
+          confirmAsk={tour.confirmAsk}
           running={tour.running}
           onStop={tour.stop}
           onDismissBubble={tour.dismissBubble}
+          onDismissShowcase={tour.dismissShowcase}
+          onAnswerConfirm={tour.answerConfirm}
         />
 
         {loading ? (
@@ -142,7 +163,7 @@ export default function Connections() {
                     </Select>
                   </div>
                 )}
-                {userId && <ConnectorRegistryPage userId={userId} />}
+                {userId && <ConnectorRegistryPage userId={userId} openRequest={dialogRequest} />}
               </div>
             </Card>
 

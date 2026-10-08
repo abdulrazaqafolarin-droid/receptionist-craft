@@ -71,13 +71,27 @@ function rectOf(el: Element): RingRect {
  * Hosts a tour: cursor + ring + narration + STOP, driven by the runner.
  * Returns everything a page needs to offer a "watch" experience.
  */
-export function useActorHost() {
+export interface ShowcaseBox {
+  title: string;
+  lines: string[];
+}
+
+export interface ConfirmAsk {
+  label: string;
+  resolve: (granted: boolean) => void;
+}
+
+export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => void }) {
   const [point, setPoint] = useState<CursorPoint | null>(null);
   const [ring, setRing] = useState<RingRect | null>(null);
   const [bubble, setBubble] = useState<string | null>(null);
+  const [showcase, setShowcase] = useState<ShowcaseBox | null>(null);
+  const [confirmAsk, setConfirmAsk] = useState<ConfirmAsk | null>(null);
   const [running, setRunning] = useState(false);
   const [receipts, setReceipts] = useState<ActorReceipt[]>([]);
   const stopRef = useRef(false);
+  const handlersRef = useRef(handlers);
+  handlersRef.current = handlers;
 
   const stop = useCallback(() => {
     stopRef.current = true;
@@ -123,6 +137,18 @@ export function useActorHost() {
       say: async (text) => {
         setBubble(text);
       },
+      showcase: async (_el, title, lines) => {
+        setShowcase({ title, lines });
+      },
+      collect: async (connectorKey) => {
+        handlersRef.current?.onCollect?.(connectorKey);
+      },
+      requestConfirm: (action) => new Promise<boolean>((resolve) => {
+        const label = action.type === "click" || action.type === "collect"
+          ? `Allow this step on "${action.target}"?`
+          : "Allow this step?";
+        setConfirmAsk({ label, resolve });
+      }),
       isStopped: () => stopRef.current,
       stepDelayMs: 500,
     });
@@ -135,6 +161,8 @@ export function useActorHost() {
     setPoint(null);
     setRing(null);
     setBubble(null);
+    setShowcase(null);
+    setConfirmAsk(null);
     setReceipts([]);
   }, []);
 
@@ -142,24 +170,43 @@ export function useActorHost() {
     setBubble(null);
   }, []);
 
-  return { point, ring, bubble, running, receipts, start, stop, clear, dismissBubble };
+  const dismissShowcase = useCallback(() => {
+    setShowcase(null);
+  }, []);
+
+  const answerConfirm = useCallback((granted: boolean) => {
+    setConfirmAsk((ask) => {
+      ask?.resolve(granted);
+      return null;
+    });
+  }, []);
+
+  return { point, ring, bubble, showcase, confirmAsk, running, receipts, start, stop, clear, dismissBubble, dismissShowcase, answerConfirm };
 }
 
 /** The highlight ring + narration bubble + STOP control for an active run. */
 export function ActorOverlay({
   ring,
   bubble,
+  showcase,
+  confirmAsk,
   running,
   color = "#2563eb",
   onStop,
   onDismissBubble,
+  onDismissShowcase,
+  onAnswerConfirm,
 }: {
   ring: RingRect | null;
   bubble: string | null;
+  showcase: ShowcaseBox | null;
+  confirmAsk: ConfirmAsk | null;
   running: boolean;
   color?: string;
   onStop: () => void;
   onDismissBubble: () => void;
+  onDismissShowcase: () => void;
+  onAnswerConfirm: (granted: boolean) => void;
 }) {
   return (
     <>
@@ -187,6 +234,56 @@ export function ActorOverlay({
           >
             Dismiss
           </button>
+        </div>
+      )}
+      {showcase && (
+        <div
+          className="fixed bottom-24 right-4 z-[91] w-[calc(100%-2rem)] max-w-xs rounded-2xl border border-primary/25 bg-card p-4 shadow-xl"
+          role="status"
+          aria-label={showcase.title}
+        >
+          <p className="text-sm font-semibold">{showcase.title}</p>
+          <ul className="mt-2 space-y-1.5">
+            {showcase.lines.map((line, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} aria-hidden="true" />
+                {line}
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={onDismissShowcase}
+            className="mt-2 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      {confirmAsk && (
+        <div
+          className="fixed inset-0 z-[92] flex items-center justify-center bg-background/70 p-4"
+          role="alertdialog"
+          aria-label="Confirm guided step"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-xl">
+            <p className="text-sm font-medium">The guide wants to take this step:</p>
+            <p className="mt-1 text-sm text-muted-foreground">{confirmAsk.label}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Nothing happens until you approve. Declining stops the tour.</p>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => onAnswerConfirm(true)}
+                className="flex-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+              >
+                Approve step
+              </button>
+              <button
+                onClick={() => onAnswerConfirm(false)}
+                className="flex-1 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
+              >
+                Stop tour
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {running && (

@@ -230,9 +230,15 @@ export function ConnectorCard({
 
 interface ConnectorRegistryPageProps {
   userId: string;
+  /**
+   * External open request (e.g. the actor cursor's collect action): the
+   * page opens the connector's REAL dialog — no duplicated forms, the same
+   * save path as a manual click.
+   */
+  openRequest?: { key: string; nonce: number } | null;
 }
 
-export function ConnectorRegistryPage({ userId }: ConnectorRegistryPageProps) {
+export function ConnectorRegistryPage({ userId, openRequest }: ConnectorRegistryPageProps) {
   const [definitions, setDefinitions] = useState<ConnectorDef[]>([]);
   const [statuses, setStatuses] = useState<Map<string, ConnectorStatus>>(
     new Map(),
@@ -244,6 +250,13 @@ export function ConnectorRegistryPage({ userId }: ConnectorRegistryPageProps) {
   useEffect(() => {
     loadData();
   }, [userId, loadData]);
+
+  useEffect(() => {
+    if (!openRequest) return;
+    const def = definitions.find((d) => d.connector_key === openRequest.key);
+    if (def && !def.is_coming_soon) setConnecting(def);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRequest?.nonce]);
 
   async function loadData() {
     setLoading(true);

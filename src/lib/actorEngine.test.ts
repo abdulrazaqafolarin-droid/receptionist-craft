@@ -57,6 +57,8 @@ Deno.test("runner: happy path produces done receipts in order", async () => {
     scrollTo: async (el) => { seen.push("scroll:" + (el as { sel: string }).sel); },
     click: async (el) => { seen.push("click:" + (el as { sel: string }).sel); },
     say: async (t) => { seen.push("say:" + t); },
+    showcase: async (_el, title) => { seen.push("showcase:" + title); },
+    collect: async (k) => { seen.push("collect:" + k); },
     isStopped: () => false,
     stepDelayMs: 0,
   };
@@ -80,6 +82,8 @@ Deno.test("runner: halts on first failure, stop flag respected", async () => {
     scrollTo: async () => { calls.push("scroll"); },
     click: async () => { calls.push("click"); },
     say: async () => { calls.push("say"); },
+    showcase: async () => { calls.push("showcase"); },
+    collect: async () => { calls.push("collect"); },
     isStopped: () => false,
   };
   const halted = await runActorScript([
@@ -109,6 +113,8 @@ Deno.test("runner: continue-on-failure is explicit opt-in", async () => {
     scrollTo: async () => {},
     click: async () => {},
     say: async () => {},
+    showcase: async () => {},
+    collect: async () => {},
     isStopped: () => false,
   };
   const receipts = await runActorScript([
@@ -118,4 +124,72 @@ Deno.test("runner: continue-on-failure is explicit opt-in", async () => {
   ], deps, { continueOnFailure: true });
   check(receipts.length === 3, "all three attempted");
   check(receipts[0].ok && !receipts[1].ok && !receipts[2].ok, "only the resolvable one succeeds");
+});
+
+function stubDeps(extra: Partial<ActorDeps> = {}): ActorDeps {
+  return {
+    resolve: (sel) => ({ sel }),
+    moveCursor: async () => {},
+    highlight: async () => {},
+    scrollTo: async () => {},
+    click: async () => {},
+    say: async () => {},
+    showcase: async () => {},
+    collect: async () => {},
+    isStopped: () => false,
+    ...extra,
+  };
+}
+
+Deno.test("runner: showcase opens beside its anchor", async () => {
+  let shown: { title: string; lines: string[] } | null = null;
+  const deps = stubDeps({
+    showcase: async (_el, title, lines) => { shown = { title, lines }; },
+  });
+  const receipts = await runActorScript([
+    { type: "showcase", target: "connector-card-google_reviews", title: "Google Reviews chain", lines: ["a", "b"] },
+  ], deps);
+  check(receipts[0].ok, "showcase succeeds");
+  check(shown !== null && (shown as { title: string }).title === "Google Reviews chain", "box content delivered");
+});
+
+Deno.test("runner: collect hands the connector key to the host", async () => {
+  let collected: string | null = null;
+  const deps = stubDeps({ collect: async (k) => { collected = k; } });
+  const receipts = await runActorScript([
+    { type: "collect", target: "connect-google_reviews", connector_key: "google_reviews" },
+  ], deps);
+  check(receipts[0].ok && collected === "google_reviews", "real dialog requested for the right key");
+});
+
+Deno.test("runner: confirm gate asks, honors yes and no", async () => {
+  // No dangerous entries ship in the pilot registry by design, so the test
+  // stages one, proves the handshake, and removes it — the verdict,
+  // dialog call, and both outcomes run through the real code path.
+  const { ACTOR_TARGETS } = await import("./actorMap.ts");
+  ACTOR_TARGETS.push({ key: "test-nuke-everything", selector: '[data-actor="test-nuke"]', label: "Test nuke", kind: "button", dangerous: true });
+  try {
+    let asked = 0;
+    const clicked: string[] = [];
+    const base = stubDeps({
+      click: async () => { clicked.push("boom"); },
+      requestConfirm: async () => { asked++; return true; },
+    });
+    const granted = await runActorScript([{ type: "click", target: "test-nuke-everything" }], base);
+    check(granted[0].ok && asked === 1 && clicked.length === 1, "yes proceeds after asking");
+
+    const denied = await runActorScript(
+      [{ type: "click", target: "test-nuke-everything" }],
+      stubDeps({ requestConfirm: async () => false }),
+    );
+    check(!denied[0].ok && denied[0].detail === "cancelled-by-owner", "no cancels honestly");
+
+    const unwired = await runActorScript(
+      [{ type: "click", target: "test-nuke-everything" }],
+      stubDeps(),
+    );
+    check(!unwired[0].ok && unwired[0].detail.startsWith("confirm-required"), "missing dialog fails closed");
+  } finally {
+    ACTOR_TARGETS.pop();
+  }
 });

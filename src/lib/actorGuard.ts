@@ -14,7 +14,9 @@ export type ActorAction =
   | { type: "click"; target: string; say?: string }
   | { type: "highlight"; target: string; ms?: number; say?: string }
   | { type: "scroll-to"; target: string; say?: string }
-  | { type: "say"; text: string };
+  | { type: "say"; text: string }
+  | { type: "showcase"; target: string; title: string; lines: string[]; say?: string }
+  | { type: "collect"; target: string; connector_key: string; say?: string };
 
 export interface GuardVerdict {
   allowed: boolean;
@@ -58,12 +60,14 @@ export function guardCheck(
   if (isForbiddenKey(target.key)) {
     return { allowed: false, reason: `forbidden-target:${target.key}` };
   }
-  if (action.type === "click" && target.dangerous && !opts.confirmed) {
-    return { allowed: false, reason: `confirm-required:${target.key}` };
-  }
-  if (action.type === "click") {
+  if (action.type === "click" || action.type === "collect") {
+    // collect opens the connector's REAL dialog — no state changes until
+    // the owner submits there through its own buttons. Same bar as click.
+    if (target.dangerous && !opts.confirmed) {
+      return { allowed: false, reason: `confirm-required:${target.key}` };
+    }
     return { allowed: true, reason: "asked-or-routine" };
   }
-  // point / highlight / scroll-to never change state — always safe to show.
+  // point / highlight / scroll-to / showcase never change state.
   return { allowed: true, reason: "read-only-gesture" };
 }
