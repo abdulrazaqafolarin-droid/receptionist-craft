@@ -11,6 +11,7 @@ import { FAQManager } from "@/components/FAQManager";
 import { WidgetEmbedCode } from "@/components/WidgetEmbedCode";
 import { CustomerFieldsConfig, DEFAULT_CUSTOMER_FIELDS, type CustomerField } from "@/components/CustomerFieldsConfig";
 import { useToast } from "@/hooks/use-toast";
+import { recordManualVersion } from "@/lib/manualVersion";
 import { Trash2 } from "lucide-react";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import {
@@ -391,8 +392,10 @@ capabilities: receptionist.capabilities,
           console.error("Update error:", error);
           throw new Error(`Failed to update: ${error.message}`);
         }
-        
+
         toast({ title: "Success", description: "Receptionist updated successfully!" });
+        // Side door closed: the hand-edit is versioned like everything else.
+        void recordManualVersion(receptionistId, "Business details updated in the Builder.");
         await loadReceptionist(receptionistId);
       } else {
         // Check plan limit before creating
@@ -441,8 +444,10 @@ capabilities: receptionist.capabilities,
         }
         
         toast({ title: "Success", description: "Receptionist created successfully!" });
-        
+
         if (data?.id) {
+          // History starts at birth: the created row gets its first version.
+          void recordManualVersion(data.id, "Operator created in the Builder.");
           navigate(`/builder/${data.id}`, { replace: true });
         }
       }

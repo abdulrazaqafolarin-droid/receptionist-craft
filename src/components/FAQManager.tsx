@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Plus, Trash2, Save } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { recordManualVersion } from "@/lib/manualVersion";
 import { toast } from "sonner";
 
 interface FAQ {
@@ -68,6 +69,7 @@ export function FAQManager({ receptionistId }: FAQManagerProps) {
       toast.success("FAQ added successfully");
       setNewFaq({ question: "", answer: "", priority: 0 });
       loadFAQs();
+      if (receptionistId) void recordManualVersion(receptionistId, "FAQ added.");
     } catch (error) {
       console.error("Error saving FAQ:", error);
       toast.error("Failed to save FAQ");
@@ -84,6 +86,7 @@ export function FAQManager({ receptionistId }: FAQManagerProps) {
 
       toast.success("FAQ deleted");
       loadFAQs();
+      if (receptionistId) void recordManualVersion(receptionistId, "FAQ removed.");
     } catch (error) {
       console.error("Error deleting FAQ:", error);
       toast.error("Failed to delete FAQ");
@@ -107,6 +110,7 @@ export function FAQManager({ receptionistId }: FAQManagerProps) {
 
       toast.success("FAQ updated");
       loadFAQs();
+      if (receptionistId) void recordManualVersion(receptionistId, "FAQ updated.");
     } catch (error) {
       console.error("Error updating FAQ:", error);
       toast.error("Failed to update FAQ");
