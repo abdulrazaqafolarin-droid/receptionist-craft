@@ -10,7 +10,7 @@ import { ConnectorRegistryPage } from "@/components/ConnectorRegistry";
 import { ModuleRegistry } from "@/components/ModuleRegistry";
 import { ConfiguratorAffordance } from "@/components/ConfiguratorAffordance";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
-import { CONNECTIONS_TOUR, GOOGLE_WALKTHROUGH } from "@/lib/actorScripts";
+import { GOOGLE_WALKTHROUGH } from "@/lib/actorScripts";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Connections() {
@@ -101,14 +101,6 @@ export default function Connections() {
                 variant="outline"
                 size="sm"
                 disabled={tour.running}
-                onClick={() => { void tour.start(CONNECTIONS_TOUR, { ...tourCtx, tour: "connections-tour", mode: tourMode }); }}
-              >
-                {tour.running ? "Showing you around…" : "Show me around"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={tour.running}
                 onClick={() => { void tour.start(GOOGLE_WALKTHROUGH, { ...tourCtx, tour: "walkthrough-google", mode: tourMode }); }}
               >
                 {tour.running ? "Walking through…" : "Connect Google Reviews"}
@@ -117,8 +109,8 @@ export default function Connections() {
                 variant="destructive"
                 size="sm"
                 disabled={tour.running}
-                title="Hand over foreground control. Esc takes it back anytime."
-                onClick={() => { void tour.requestTakeover(CONNECTIONS_TOUR, { ...tourCtx, tour: "connections-tour" }); }}
+                title="Hand over foreground control for the walkthrough. Esc takes it back anytime."
+                onClick={() => { void tour.requestTakeover(GOOGLE_WALKTHROUGH, { ...tourCtx, tour: "walkthrough-google" }); }}
               >
                 Take over
               </Button>

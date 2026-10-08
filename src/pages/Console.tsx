@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
-import { CONSOLE_TOUR } from "@/lib/actorScripts";
 import { useActiveOperatorStore } from "@/store/activeOperator";
 import { isRouteVisible } from "@/lib/operatorSurface";
 
@@ -277,12 +276,6 @@ export default function Console() {
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2"><Terminal className="h-5 w-5" /> Operator Console</CardTitle>
-            <Button variant="ghost" size="sm" disabled={tour.running} onClick={async () => {
-              const { data: { user } } = await supabase.auth.getUser();
-              void tour.start(CONSOLE_TOUR, { tour: "console-tour", userId: user?.id, receptionistId: receptionistId ?? undefined });
-            }}>
-              {tour.running ? "Showing…" : "Show me around"}
-            </Button>
           </div>
           <CardDescription>
             {operatorName ? `Talking to ${operatorName} — your inside-the-business helper. ` : ""}

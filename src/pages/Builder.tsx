@@ -7,7 +7,6 @@ import { BuilderAnalyticsPanel } from "@/components/BuilderAnalyticsPanel";
 import { ConversationalManagement } from "@/components/ConversationalManagement";
 import { HistoryGlyph } from "@/components/HistoryGlyph";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
-import { BUILDER_TOUR } from "@/lib/actorScripts";
 import { useBuildThreads } from "@/hooks/useBuildThreads";
 import { FAQManager } from "@/components/FAQManager";
 import { WidgetEmbedCode } from "@/components/WidgetEmbedCode";
@@ -1361,13 +1360,6 @@ capabilities: receptionist.capabilities,
                   className="liquid-glass-btn flex h-9 w-9 items-center justify-center rounded-lg text-primary transition-transform active:scale-95 lg:hidden"
                 >
                   <HistoryGlyph className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => { void panelTour.start(BUILDER_TOUR, { tour: "builder-tour", userId: currentUserId ?? undefined, receptionistId }); }}
-                  disabled={panelTour.running}
-                  className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
-                >
-                  {panelTour.running ? "Touring…" : "Tour"}
                 </button>
                 <div className="flex rounded-lg border border-border p-0.5" role="tablist" aria-label="Builder chat mode">
                   {(["test", "improve", "live"] as const).map((t) => (
