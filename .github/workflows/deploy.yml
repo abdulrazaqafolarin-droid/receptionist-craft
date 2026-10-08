@@ -48,6 +48,9 @@ jobs:
       - name: Verify surface manifest has not drifted
         run: npm run verify:manifest
 
+      - name: Verify actor map has not drifted
+        run: npm run verify:actor-map
+
       - name: Derivation matrix test (model never guesses pages)
         uses: denoland/setup-deno@v2
         with:
@@ -67,6 +70,9 @@ jobs:
 
       - name: Run snake engine test (planning-game rules)
         run: deno test --no-check --unstable-sloppy-imports src/lib/snakeEngine.test.ts
+
+      - name: Run actor engine test (map + guardrails + runner)
+        run: deno test --no-check --unstable-sloppy-imports src/lib/actorEngine.test.ts
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1

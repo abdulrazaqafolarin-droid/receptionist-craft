@@ -9,6 +9,8 @@ import { FloatingBackground } from "@/components/FloatingBackground";
 import { ConnectorRegistryPage } from "@/components/ConnectorRegistry";
 import { ModuleRegistry } from "@/components/ModuleRegistry";
 import { ConfiguratorAffordance } from "@/components/ConfiguratorAffordance";
+import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
+import { CONNECTIONS_TOUR } from "@/lib/actorScripts";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Connections() {
@@ -17,6 +19,8 @@ export default function Connections() {
   const [receptionists, setReceptionists] = useState<Array<{ id: string; name: string; business_name: string }>>([]);
   const [selectedReceptionistId, setSelectedReceptionistId] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  // Phase 0 actor tour: cursor + narration only, touches nothing.
+  const tour = useActorHost();
 
   useEffect(() => {
     (async () => {
@@ -62,14 +66,33 @@ export default function Connections() {
             </p>
           </div>
           {selectedReceptionistId && (
-            <ConfiguratorAffordance
-              receptionistId={selectedReceptionistId}
-              context="Connections"
-              title="Change operator setup"
-              className="sm:self-start"
-            />
+            <div className="flex flex-col gap-2 sm:items-end">
+              <ConfiguratorAffordance
+                receptionistId={selectedReceptionistId}
+                context="Connections"
+                title="Change operator setup"
+                className="sm:self-start"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={tour.running}
+                onClick={() => { void tour.start(CONNECTIONS_TOUR); }}
+              >
+                {tour.running ? "Showing you around…" : "Show me around"}
+              </Button>
+            </div>
           )}
         </div>
+
+        <ActorCursor point={tour.point} />
+        <ActorOverlay
+          ring={tour.ring}
+          bubble={tour.bubble}
+          running={tour.running}
+          onStop={tour.stop}
+          onDismissBubble={tour.dismissBubble}
+        />
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -88,7 +111,7 @@ export default function Connections() {
           </div>
         ) : (
           <div className="space-y-8">
-            <Card className="border-2 border-border/50 shadow-lg">
+            <Card className="border-2 border-border/50 shadow-lg" data-actor="connections-list">
               <CardHeader>
                 <CardTitle className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -123,7 +146,7 @@ export default function Connections() {
               </div>
             </Card>
 
-            <Card className="border-2 border-border/50 shadow-lg">
+            <Card className="border-2 border-border/50 shadow-lg" data-actor="modules-list">
               <CardHeader>
                 <CardTitle className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">

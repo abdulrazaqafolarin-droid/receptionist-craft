@@ -111,7 +111,7 @@ export function ConnectorCard({
   const status = userStatus?.status || "not_configured";
 
   return (
-    <Card className="transition-all hover:shadow-md">
+    <Card className="transition-all hover:shadow-md" data-actor={`connector-card-${def.connector_key}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -165,6 +165,7 @@ export function ConnectorCard({
               onClick={() => onConnect?.(def.connector_key)}
               disabled={def.is_coming_soon}
               className="gap-1"
+              data-actor={`connect-${def.connector_key}`}
             >
               <Link2 className="h-3.5 w-3.5" />
               {def.is_coming_soon

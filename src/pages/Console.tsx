@@ -279,15 +279,15 @@ export default function Console() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => runAction("stock")}>
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => runAction("stock")} data-actor="console-stock-check">
             {acting === "stock" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
             <span className="ml-1">Stock check</span>
           </Button>
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => runAction("tasks")}>
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => runAction("tasks")} data-actor="console-tasks-check">
             {acting === "tasks" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />}
             <span className="ml-1">Today's tasks</span>
           </Button>
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => runAction("roster")}>
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => runAction("roster")} data-actor="console-roster-check">
             {acting === "roster" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
             <span className="ml-1">Roster gaps</span>
           </Button>
@@ -364,6 +364,7 @@ export default function Console() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") send(); }}
           placeholder='Ask about your shop, e.g. "what is running low?"'
+          data-actor="console-chat-input"
           disabled={busy}
         />
         <Button onClick={send} disabled={busy || !input.trim()}>

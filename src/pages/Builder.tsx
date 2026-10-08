@@ -1354,6 +1354,7 @@ capabilities: receptionist.capabilities,
                 <button
                   onClick={() => setRailOpen((v) => !v)}
                   aria-label="Change history"
+                  data-actor="builder-history"
                   className="liquid-glass-btn flex h-9 w-9 items-center justify-center rounded-lg text-primary transition-transform active:scale-95 lg:hidden"
                 >
                   <HistoryGlyph className="h-5 w-5" />
@@ -1364,6 +1365,7 @@ capabilities: receptionist.capabilities,
                       key={t}
                       role="tab"
                       aria-selected={rightTab === t}
+                      data-actor={`builder-tab-${t}`}
                       onClick={() => setRightTab(t)}
                       className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${rightTab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
                     >
