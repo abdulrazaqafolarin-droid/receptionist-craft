@@ -80,6 +80,9 @@ jobs:
       - name: Run actor plan validation test (planner tours)
         run: deno test supabase/functions/_shared/config/actorPlan.test.ts
 
+      - name: Run capability resolution test (interface priority + verification)
+        run: deno test supabase/functions/_shared/config/capabilityRegistry.test.ts
+
       - name: Actor tours export is fresh (Jev reads this file)
         run: |
           deno run --allow-read --allow-write scripts/export-actor-tours.ts

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOperatorPlan } from "../_shared/config/enhancedConfigurator.ts";
 import { saveConfigVersion } from "../_shared/config/versioning.ts";
 import { researchNeeds } from "../_shared/config/solutionResearch.ts";
+import { resolveCapabilities } from "../_shared/config/capabilityRegistry.ts";
 import { TraceCollector } from "../_shared/config/trace.ts";
 import { RutexMcpError } from "../_shared/rutexMcp.ts";
 
@@ -103,12 +104,16 @@ serve(async (req) => {
 
     // Stage 4: research each external need (open-source first). Failures
     // degrade to empty candidates — research never blocks planning.
+    // Resolution (capability layer) annotates the research with the working
+    // interface, risk, verification, and provenance — additive only, the
+    // solutions shape below is untouched.
+    let solutions: Awaited<ReturnType<typeof researchNeeds>> = [];
     try {
       const needs = (result.config.external_needs || []) as unknown[];
       const names = needs.filter((n): n is string => typeof n === "string" && !!n.trim());
       if (names.length > 0) {
         trace.start("research-needs");
-        const solutions = await researchNeeds(names);
+        solutions = await researchNeeds(names);
         const found = solutions.reduce((a, s) => a + s.candidates.length, 0);
         const oss = solutions.reduce((a, s) => a + s.candidates.filter((c) => c.open_source).length, 0);
         trace.end("research-needs", `Researched ${names.length} connector need${names.length === 1 ? "" : "s"}`, [
@@ -122,6 +127,21 @@ serve(async (req) => {
     } catch (researchErr) {
       trace.fail("research-needs", "Solution research failed", researchErr instanceof Error ? researchErr.message : String(researchErr));
       console.warn("[propose-operator-plan] Solution research failed (non-fatal):", researchErr);
+    }
+
+    // Capability resolution (CLI-Anything pattern): annotate the research
+    // with working interface, risk, verification, and provenance. Pure and
+    // synchronous — no network, never blocks, never throws.
+    if (solutions.length > 0) {
+      trace.start("resolve-capabilities");
+      const resolved = resolveCapabilities(solutions);
+      const okCount = resolved.filter((r) => r.success).length;
+      trace.end("resolve-capabilities", `Resolved ${okCount}/${resolved.length} needs to working interfaces`, [
+        ...resolved.slice(0, 3).map((r) => `${r.need}:${r.best_interface}${r.success ? "" : "(unverified)"}`),
+      ]);
+      (result.config as Record<string, unknown>).capability_resolution = resolved;
+    } else {
+      trace.skip("resolve-capabilities", "Nothing researched, nothing to resolve");
     }
 
     // Save as a draft config version (not yet approved)
