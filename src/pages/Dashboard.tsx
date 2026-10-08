@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageCircle, Calendar, CalendarDays, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign, ShoppingBag, LayoutDashboard, Bot, TrendingUp, TrendingDown, Users, Target, ChevronUp, ChevronDown, Package, ListChecks, AlertTriangle, Terminal, ClipboardCheck, Lightbulb } from "lucide-react";
+import { MessageCircle, Calendar, CalendarDays, BarChart3, Plus, Phone, CheckCircle2, Sparkles, ArrowRight, Zap, DollarSign, ShoppingBag, LayoutDashboard, Bot, TrendingUp, TrendingDown, Users, Target, ChevronUp, ChevronDown, Package, ListChecks, AlertTriangle, Terminal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FloatingBackground } from "@/components/FloatingBackground";
 import { RevenueEngine } from "@/components/RevenueEngine";
@@ -200,32 +200,11 @@ export default function Dashboard() {
       <main id="main-content" className="relative z-10 container mx-auto px-4 pt-16 pb-6 sm:pt-20 sm:pb-8 lg:py-12">
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 sm:mb-10">
-          <div className="flex items-center gap-4">
-            {(() => {
-              const openItems = attention.upcomingBookings + attention.openEscalations + attention.stockNeeds + opsCounts.overdue;
-              const state = directorJobs.failed > 0 || openItems > 0 ? "needs-you" : directorJobs.active > 0 ? "working" : "idle";
-              const line = directorJobs.failed > 0
-                ? `${directorJobs.failed} background job${directorJobs.failed === 1 ? "" : "s"} failed — tap in to see`
-                : directorJobs.active > 0
-                  ? `${directorJobs.active} job${directorJobs.active === 1 ? "" : "s"} running in the background`
-                  : openItems > 0
-                    ? `${openItems} thing${openItems === 1 ? "" : "s"} need${openItems === 1 ? "s" : ""} you below`
-                    : "Watching your operators.";
-              return (
-                <>
-                  <button onClick={() => setDirectorOpen(true)} aria-label="Open Director briefing" className="rounded-2xl text-left transition-transform active:scale-95">
-                    <DirectorBuddy state={state as "idle" | "working" | "needs-you"} line={line} />
-                  </button>
-                  <DirectorPanel open={directorOpen} onClose={() => setDirectorOpen(false)} userId={user?.id} />
-                </>
-              );
-            })()}
-            <div>
+          <div>
             <h1 className="type-display mb-2 text-foreground">
               Dashboard
             </h1>
             <p className="text-muted-foreground text-sm sm:text-base lg:text-lg">AI operators for your business — customers served, shop work handled</p>
-            </div>
           </div>
           <Button
             onClick={() => navigate("/onboarding?returning=1")}
@@ -283,60 +262,27 @@ export default function Dashboard() {
         )}
 
 
-        {/* Needs your attention — kind-aware, surface-aware. A salon sees
-            bookings and escalations; a pharmacy sees stock and tasks. Only
-            links the active operator actually has; all-clear is good news. */}
+        {/* Director — the face lives here now. Tap it for the briefing. */}
         {receptionists.length > 0 && selectedReceptionistId && (() => {
-          const items: Array<{ icon: typeof Calendar; label: string; count: number | null; sub: string; path: string }> =
-            activeKind === "ops"
-              ? [
-                { icon: Package, label: "Stock needs", count: attention.stockNeeds, sub: "low, out, or expiring", path: "/services" },
-                { icon: ListChecks, label: "Overdue tasks", count: opsCounts.overdue, sub: "past due, still open", path: "/console" },
-                { icon: ListChecks, label: "Due today", count: opsCounts.dueToday, sub: "on today's list", path: "/console" },
-                { icon: Users, label: "Shifts saved", count: opsCounts.shifts, sub: "on the roster", path: "/staff" },
-              ]
-              : activeKind === "assistant"
-                ? [
-                  { icon: MessageCircle, label: "Conversations", count: stats.conversations, sub: "all time", path: "/conversations" },
-                  { icon: ClipboardCheck, label: "Review answers", count: null, sub: "keep it sharp", path: "/quality-review" },
-                  { icon: Lightbulb, label: "Knowledge ideas", count: null, sub: "stay accurate", path: "/kb-rewrite" },
-                ]
-                : [
-                  { icon: Calendar, label: "Upcoming bookings", count: attention.upcomingBookings, sub: "scheduled", path: "/appointments" },
-                  { icon: AlertTriangle, label: "Open escalations", count: attention.openEscalations, sub: "need a human", path: "/escalations" },
-                  { icon: MessageCircle, label: "Conversations", count: stats.conversations, sub: "all time", path: "/conversations" },
-                  { icon: ShoppingBag, label: "Orders", count: stats.orders, sub: "all time", path: "/orders" },
-                ];
-          const shown = items.filter((i) => isRouteVisible(i.path, visiblePages));
-          const total = shown.reduce((a, i) => a + (i.count || 0), 0);
+          const openItems = attention.upcomingBookings + attention.openEscalations + attention.stockNeeds + opsCounts.overdue;
+          const state = directorJobs.failed > 0 || openItems > 0 ? "needs-you" : directorJobs.active > 0 ? "working" : "idle";
+          const line = directorJobs.failed > 0
+            ? `${directorJobs.failed} background job${directorJobs.failed === 1 ? "" : "s"} failed — tap in to see`
+            : directorJobs.active > 0
+              ? `${directorJobs.active} job${directorJobs.active === 1 ? "" : "s"} running in the background`
+              : openItems > 0
+                ? `${openItems} thing${openItems === 1 ? "" : "s"} need${openItems === 1 ? "s" : ""} you — tap in to see`
+                : "Watching your operators.";
           return (
-            <section className="mb-6 sm:mb-8" aria-label="Needs your attention">
+            <section className="mb-6 sm:mb-8" aria-label="Director">
               <Card className="glass-1">
                 <CardContent className="p-4 sm:p-5">
-                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                    <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-                    {total > 0 ? "Needs your attention" : "All clear — nothing needs you right now"}
-                  </div>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    {shown.map((item) => (
-                      <button
-                        key={item.label}
-                        onClick={() => navigate(item.path)}
-                        className="rounded-xl finance-surface p-3 text-left transition-colors hover:bg-primary/5"
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <item.icon className="h-4 w-4 text-primary" aria-hidden="true" />
-                          <span className="text-xs font-medium visual-secondary">{item.label}</span>
-                        </div>
-                        {item.count !== null && (
-                          <div className="text-2xl font-bold tnum visual-primary">{item.count}</div>
-                        )}
-                        <div className="text-xs visual-tertiary">{item.sub}</div>
-                      </button>
-                    ))}
-                  </div>
+                  <button onClick={() => setDirectorOpen(true)} aria-label="Open Director briefing" className="rounded-2xl text-left transition-transform active:scale-95">
+                    <DirectorBuddy state={state as "idle" | "working" | "needs-you"} line={line} />
+                  </button>
                 </CardContent>
               </Card>
+              <DirectorPanel open={directorOpen} onClose={() => setDirectorOpen(false)} userId={user?.id} />
             </section>
           );
         })()}
