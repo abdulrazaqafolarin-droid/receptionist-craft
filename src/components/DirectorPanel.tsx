@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDirectorBriefing } from "@/hooks/useDirectorBriefing";
 import { GRANT_SCOPES, useDirectorGrants, type GrantScope } from "@/lib/directorGrants";
-import { Sunrise, KeyRound } from "lucide-react";
+import { DirectorBuildTab } from "@/components/DirectorBuildTab";
+import { Sunrise, KeyRound, Hammer } from "lucide-react";
 
 export function DirectorPanel({
   open,
@@ -27,8 +28,9 @@ export function DirectorPanel({
 }) {
   const navigate = useNavigate();
   const lines = useDirectorBriefing(userId, open);
-  const { grants, available, setGrant } = useDirectorGrants(userId, open);
+  const { grants, available, setGrant, check } = useDirectorGrants(userId, open);
   const [saving, setSaving] = useState<string | null>(null);
+  const [tab, setTab] = useState("brief");
 
   const go = (path: string | null) => {
     if (!path) return;
@@ -42,10 +44,13 @@ export function DirectorPanel({
         <DialogHeader>
           <DialogTitle>Director</DialogTitle>
         </DialogHeader>
-        <Tabs defaultValue="brief" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={tab} onValueChange={setTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="brief" className="gap-1.5">
               <Sunrise className="h-3.5 w-3.5" aria-hidden="true" /> Morning brief
+            </TabsTrigger>
+            <TabsTrigger value="build" className="gap-1.5">
+              <Hammer className="h-3.5 w-3.5" aria-hidden="true" /> Build
             </TabsTrigger>
             <TabsTrigger value="grants" className="gap-1.5">
               <KeyRound className="h-3.5 w-3.5" aria-hidden="true" /> Standing grants
@@ -69,6 +74,9 @@ export function DirectorPanel({
                 </li>
               ))}
             </ul>
+          </TabsContent>
+          <TabsContent value="build" className="mt-3">
+            <DirectorBuildTab userId={userId} check={check} onNeedGrant={() => setTab("grants")} />
           </TabsContent>
           <TabsContent value="grants" className="mt-3">
             {!available && (

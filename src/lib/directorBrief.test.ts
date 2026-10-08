@@ -48,3 +48,14 @@ Deno.test("grants deny by default, grant exactly", () => {
   check(checkGrant([{ scope: "build_helpers", allowed: true }], "build_helpers") === true, "granted scope passes");
   check(checkGrant([{ scope: "build_helpers", allowed: true }], "delete_everything") === false, "unknown scope never passes");
 });
+
+Deno.test("director actions map to real grant scopes", async () => {
+  const { DIRECTOR_ACTIONS } = await import("./directorActionDefs.ts");
+  const { GRANT_SCOPES } = await import("./directorGrantRules.ts");
+  const scopes = new Set(GRANT_SCOPES.map((s) => s.scope));
+  check(DIRECTOR_ACTIONS.length === 3, "three shipped actions");
+  for (const a of DIRECTOR_ACTIONS) {
+    check(scopes.has(a.scope), `${a.key} maps to a real scope`);
+    check(a.does.length > 20, `${a.key} explains itself`);
+  }
+});
