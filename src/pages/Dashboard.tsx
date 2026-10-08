@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useActiveOperatorStore } from "@/store/activeOperator";
 import { isRouteVisible, visiblePagesFromCapabilities } from "@/lib/operatorSurface";
 import { GuidedActivity } from "@/components/GuidedActivity";
+import { DirectorBuddy } from "@/components/DirectorBuddy";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -114,6 +115,31 @@ export default function Dashboard() {
     }
   };
 
+  // Director presence: working while background jobs run, needs-you on
+  // failures or open attention items, idle otherwise. Real rows only.
+  const [directorJobs, setDirectorJobs] = useState({ active: 0, failed: 0 });
+  useEffect(() => {
+    if (!user || receptionists.length === 0) return;
+    (async () => {
+      try {
+        const ids = receptionists.map((r) => r.id);
+        // Generated DB types lag behind migrations (never-edit file).
+        const table = (supabase.from as unknown as (t: string) => {
+          select(s: string): {
+            in(c: string, v: string[]): Promise<{ data: unknown }>;
+          };
+        })("plan_jobs");
+        const { data } = await table.select("status").in("receptionist_id", ids);
+        const rows = ((data || []) as unknown) as Array<{ status: string }>;
+        setDirectorJobs({
+          active: rows.filter((r) => r.status === "queued" || r.status === "running").length,
+          failed: rows.filter((r) => r.status === "failed").length,
+        });
+      } catch {
+        // buddy falls back to attention numbers alone
+      }
+    })();
+  }, [user, receptionists]);
   // Tasks + shifts live in capabilities (already in memory — no query).
   // overdue/due-today compare yyyy-mm-dd strings: chronological, no TZ lies.
   const opsCounts = (() => {
@@ -172,12 +198,26 @@ export default function Dashboard() {
       <main id="main-content" className="relative z-10 container mx-auto px-4 pt-16 pb-6 sm:pt-20 sm:pb-8 lg:py-12">
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 sm:mb-10">
-          <div>
+          <div className="flex items-center gap-4">
+            {(() => {
+              const openItems = attention.upcomingBookings + attention.openEscalations + attention.stockNeeds + opsCounts.overdue;
+              const state = directorJobs.failed > 0 || openItems > 0 ? "needs-you" : directorJobs.active > 0 ? "working" : "idle";
+              const line = directorJobs.failed > 0
+                ? `${directorJobs.failed} background job${directorJobs.failed === 1 ? "" : "s"} failed — tap in to see`
+                : directorJobs.active > 0
+                  ? `${directorJobs.active} job${directorJobs.active === 1 ? "" : "s"} running in the background`
+                  : openItems > 0
+                    ? `${openItems} thing${openItems === 1 ? "" : "s"} need${openItems === 1 ? "s" : ""} you below`
+                    : "Watching your operators.";
+              return <DirectorBuddy state={state as "idle" | "working" | "needs-you"} line={line} />;
+            })()}
+            <div>
             <h1 className="type-display mb-2 text-foreground">
               Dashboard
             </h1>
             <p className="text-muted-foreground text-sm sm:text-base lg:text-lg">AI operators for your business — customers served, shop work handled</p>
-                      </div>
+            </div>
+          </div>
           <Button
             onClick={() => navigate("/onboarding?returning=1")}
             size="lg"
