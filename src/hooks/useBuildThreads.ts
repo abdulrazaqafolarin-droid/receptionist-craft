@@ -52,15 +52,21 @@ const THREAD_COLS = "id,title,business_name,business_type,receptionist_id,status
 /**
  * @param receptionistId when set, lists only that operator's threads (Builder);
  * when null, lists the owner's threads across operators (talk-it-through).
+ * @param tables override for other chat domains (Director) — same row shape.
  */
-export function useBuildThreads(receptionistId: string | null | undefined) {
+export function useBuildThreads(
+  receptionistId: string | null | undefined,
+  // Callers never switch tables mid-mount; the first value wins for the
+  // memoised callbacks below (deliberate — avoids refetch loops).
+  tables: { threads: string; messages: string } = { threads: "build_threads", messages: "build_messages" },
+) {
   const [threads, setThreads] = useState<BuildThread[]>([]);
 
   const refresh = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      let q = looseTable("build_threads").select(THREAD_COLS).order("updated_at", { ascending: false }).limit(30);
+      let q = looseTable(tables.threads).select(THREAD_COLS).order("updated_at", { ascending: false }).limit(30);
       q = receptionistId ? q.eq("receptionist_id", receptionistId) : q.eq("user_id", user.id);
       const { data } = await q;
       if (data) setThreads(data as BuildThread[]);
@@ -80,7 +86,7 @@ export function useBuildThreads(receptionistId: string | null | undefined) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
-      const { data, error } = await looseTable("build_threads").insert({
+      const { data, error } = await looseTable(tables.threads).insert({
         user_id: user.id,
         receptionist_id: opts.receptionistId ?? null,
         title: firstText.trim().slice(0, 42) || "New build",
@@ -98,7 +104,7 @@ export function useBuildThreads(receptionistId: string | null | undefined) {
 
   const saveMsg = useCallback(async (tid: string, role: "user" | "assistant", content: string) => {
     try {
-      await looseTable("build_messages").insert({ thread_id: tid, role, content });
+      await looseTable(tables.messages).insert({ thread_id: tid, role, content });
       setThreads((prev) => {
         const t = prev.find((x) => x.id === tid);
         return t ? [t, ...prev.filter((x) => x.id !== tid)] : prev;
@@ -110,7 +116,7 @@ export function useBuildThreads(receptionistId: string | null | undefined) {
 
   const touch = useCallback(async (tid: string, patch: Partial<Pick<BuildThread, "receptionist_id" | "status" | "title" | "business_name" | "business_type">>) => {
     try {
-      await looseTable("build_threads").update(patch).eq("id", tid);
+      await looseTable(tables.threads).update(patch).eq("id", tid);
       setThreads((prev) => prev.map((t) => (t.id === tid ? { ...t, ...patch } : t)));
     } catch {
       // ignore
@@ -118,7 +124,7 @@ export function useBuildThreads(receptionistId: string | null | undefined) {
   }, []);
 
   const loadMessages = useCallback(async (tid: string): Promise<ThreadMessage[]> => {
-    const { data } = await looseTable("build_messages")
+    const { data } = await looseTable(tables.messages)
       .select("role,content,created_at").eq("thread_id", tid).order("created_at", { ascending: true }).limit(200);
     return (((data || []) as Array<{ role: string; content: string; created_at: string }>)
       .filter((m) => m.role === "user" || m.role === "assistant") as ThreadMessage[]);
@@ -126,7 +132,7 @@ export function useBuildThreads(receptionistId: string | null | undefined) {
 
   const remove = useCallback(async (tid: string) => {
     try {
-      await looseTable("build_threads").delete().eq("id", tid);
+      await looseTable(tables.threads).delete().eq("id", tid);
     } catch {
       // list state is the truth
     }

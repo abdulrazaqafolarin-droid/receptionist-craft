@@ -1,21 +1,18 @@
 /**
- * DirectorPanel — the morning brief plus standing grants, behind one dialog.
+ * DirectorPanel — talk to the Director.
  *
- * Opened by tapping the Director buddy. Brief tab: every line cites real
- * rows and links where to look; empty means all-clear, never filler.
- * Grants tab: what the Director may do solo — everything else always
- * comes back as a proposal. Deny-by-default when the grants table is
- * missing (migration pending): the tab says so instead of pretending.
+ * The morning-brief and build tabs are gone: the chat IS the interface.
+ * It welcomes, answers from live rows, proposes actions, and executes the
+ * grant-gated ones — drafts link to the Builder, approval stays human.
+ * Standing grants collapsed into the corner key button: tap to review
+ * what the Director may do solo, tap back to keep talking.
  */
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useDirectorBriefing } from "@/hooks/useDirectorBriefing";
+import { DirectorChat } from "@/components/DirectorChat";
 import { GRANT_SCOPES, useDirectorGrants, type GrantScope } from "@/lib/directorGrants";
-import { DirectorBuildTab } from "@/components/DirectorBuildTab";
-import { Sunrise, KeyRound, Hammer } from "lucide-react";
+import { ArrowLeft, KeyRound } from "lucide-react";
 
 export function DirectorPanel({
   open,
@@ -26,59 +23,42 @@ export function DirectorPanel({
   onClose: () => void;
   userId: string | undefined;
 }) {
-  const navigate = useNavigate();
-  const lines = useDirectorBriefing(userId, open);
+  const [view, setView] = useState<"chat" | "grants">("chat");
   const { grants, available, setGrant, check } = useDirectorGrants(userId, open);
   const [saving, setSaving] = useState<string | null>(null);
-  const [tab, setTab] = useState("brief");
-
-  const go = (path: string | null) => {
-    if (!path) return;
-    onClose();
-    navigate(path);
-  };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg" aria-label="Director briefing and grants">
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setView("chat"); } }}>
+      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-lg" aria-label="Director chat">
         <DialogHeader>
-          <DialogTitle>Director</DialogTitle>
-        </DialogHeader>
-        <Tabs value={tab} onValueChange={setTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="brief" className="gap-1.5">
-              <Sunrise className="h-3.5 w-3.5" aria-hidden="true" /> Morning brief
-            </TabsTrigger>
-            <TabsTrigger value="build" className="gap-1.5">
-              <Hammer className="h-3.5 w-3.5" aria-hidden="true" /> Build
-            </TabsTrigger>
-            <TabsTrigger value="grants" className="gap-1.5">
-              <KeyRound className="h-3.5 w-3.5" aria-hidden="true" /> Standing grants
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="brief" className="mt-3">
-            {lines === null && <p className="py-4 text-sm text-muted-foreground">Reading your businesses…</p>}
-            {lines !== null && lines.length === 0 && (
-              <p className="py-4 text-sm text-muted-foreground">All clear across every operator. Nothing needs you.</p>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {view === "grants" && (
+                <button
+                  onClick={() => setView("chat")}
+                  aria-label="Back to chat"
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              )}
+              <DialogTitle>{view === "grants" ? "Standing grants" : "Director"}</DialogTitle>
+            </div>
+            {view === "chat" && (
+              <button
+                onClick={() => setView("grants")}
+                aria-label="Review standing grants"
+                title="What the Director may do solo"
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <KeyRound className="h-4 w-4" />
+              </button>
             )}
-            <ul className="space-y-2">
-              {(lines || []).map((l, i) => (
-                <li key={i}>
-                  {l.path ? (
-                    <button onClick={() => go(l.path)} className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-left text-sm transition-colors hover:bg-primary/5">
-                      {l.text}
-                    </button>
-                  ) : (
-                    <p className="rounded-xl bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">{l.text}</p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </TabsContent>
-          <TabsContent value="build" className="mt-3">
-            <DirectorBuildTab userId={userId} check={check} onNeedGrant={() => setTab("grants")} />
-          </TabsContent>
-          <TabsContent value="grants" className="mt-3">
+          </div>
+        </DialogHeader>
+
+        {view === "grants" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {!available && (
               <p className="rounded-xl bg-muted/60 px-3 py-2.5 text-xs text-muted-foreground">
                 Standing grants activate with the next platform update. Until then, everything comes to you as a proposal — nothing moves solo.
@@ -114,8 +94,16 @@ export function DirectorPanel({
                 );
               })}
             </ul>
-          </TabsContent>
-        </Tabs>
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col" style={{ minHeight: "50vh" }}>
+            <DirectorChat
+              userId={userId}
+              check={check}
+              onNeedGrant={() => setView("grants")}
+            />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
