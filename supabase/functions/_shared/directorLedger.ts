@@ -31,18 +31,11 @@ export interface LedgerFinish {
   error?: string;
 }
 
-/** Minimal shape of the supabase-js surface the ledger touches. */
+/** Minimal shape of the supabase-js surface the ledger touches. `any` on
+ * purpose: the generated DB types lag migrations, and a ledger write must
+ * never fail type-check over a column the types don't know yet. */
 export interface LedgerClient {
-  from(table: string): {
-    insert(row: Record<string, unknown>): {
-      select(col: string): {
-        single(): Promise<{ data: { id: string } | null; error: unknown }>;
-      };
-    };
-    update(patch: Record<string, unknown>): {
-      eq(col: string, v: string): Promise<{ error: unknown }>;
-    };
-  };
+  from(table: string): any;
 }
 
 /** Open a ledger row. Returns its id, or null when recording failed. */
