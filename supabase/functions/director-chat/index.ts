@@ -43,8 +43,26 @@ function dayStr(d: Date): string {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
+    // Identity comes from the caller's JWT, never from the body. A leaked
+    // anon key must not let anyone read another owner's operators.
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!token) {
+      return jsonRes({ ok: false, error: "missing_authorization" }, 401);
+    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return jsonRes({ ok: false, error: "invalid_token" }, 401);
+    }
+    const user_id = user.id;
+
     const body = await req.json().catch(() => ({}));
-    const user_id = typeof body.user_id === "string" ? body.user_id : "";
     const message = typeof body.message === "string" ? body.message.slice(0, 2000) : "";
     const rawHistory: unknown[] = Array.isArray(body.history) ? body.history : [];
     const history = rawHistory
@@ -52,14 +70,9 @@ serve(async (req) => {
       .slice(-10)
       .map((m: ChatMsg) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content.slice(0, 2000) }));
     const thread_id = typeof body.thread_id === "string" ? body.thread_id : `director-${user_id.slice(0, 8)}`;
-    if (!user_id || !message.trim()) {
-      return jsonRes({ ok: false, error: "missing_user_id_or_message" }, 400);
+    if (!message.trim()) {
+      return jsonRes({ ok: false, error: "missing_message" }, 400);
     }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
-    );
 
     const { data: recs } = await supabase
       .from("receptionists")

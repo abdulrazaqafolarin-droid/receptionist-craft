@@ -74,3 +74,13 @@ Deno.test("research actions survive the contract with need intact", () => {
   check((parsed.actions[0] as { need?: string }).need === "tiktok-auto-post", "need preserved for the resolver");
 });
 
+
+Deno.test("route list is generated from OWNER_PAGES, never hand-written", async () => {
+  const { OWNER_PAGES } = await import("./surfaceManifest.ts");
+  const p = buildDirectorSystemPrompt(CTX);
+  for (const page of OWNER_PAGES) {
+    check(p.includes(page.route), `manifest route listed: ${page.route}`);
+  }
+  check(!p.includes("/orders ") && !p.includes("/orders,"), "invented /orders route gone");
+  check(!p.includes("/builder ") && !p.includes("/builder,"), "invented /builder route gone");
+});

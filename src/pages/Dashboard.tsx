@@ -118,6 +118,11 @@ export default function Dashboard() {
   // Director presence: working while background jobs run, needs-you on
   // failures or open attention items, idle otherwise. Real rows only.
   const [directorJobs, setDirectorJobs] = useState({ active: 0, failed: 0 });
+  // Buddy's count spans ALL operators (same rule as the edge's
+  // attentionTotal: overdue or due-today counts). The summary cards above
+  // keep showing the selected operator's own numbers.
+  const [directorOpenItems, setDirectorOpenItems] = useState(0);
+  const [directorSweepDone, setDirectorSweepDone] = useState(false);
   const [directorOpen, setDirectorOpen] = useState(false);
   useEffect(() => {
     if (!user || receptionists.length === 0) return;
@@ -136,6 +141,33 @@ export default function Dashboard() {
           active: rows.filter((r) => r.status === "queued" || r.status === "running").length,
           failed: rows.filter((r) => r.status === "failed").length,
         });
+        const midnight = new Date();
+        midnight.setHours(0, 0, 0, 0);
+        const [apptRes, escRes, stockRes] = await Promise.all([
+          supabase.from("appointments").select("*", { count: "exact", head: true }).in("receptionist_id", ids).gte("start_time", midnight.toISOString()),
+          supabase.from("escalations").select("*", { count: "exact", head: true }).in("receptionist_id", ids).is("resolved_at", null),
+          supabase.from("services").select("stock_quantity,low_stock_threshold,expiry_date").in("receptionist_id", ids).eq("active", true).not("stock_quantity", "is", null),
+        ]);
+        const horizon = new Date();
+        horizon.setDate(horizon.getDate() + 30);
+        const horizonStr = dayStr(horizon);
+        let stockNeeds = 0;
+        const stockRows = ((stockRes.data || []) as unknown) as Array<{ stock_quantity: number | null; low_stock_threshold: number | null; expiry_date: string | null }>;
+        for (const row of stockRows) {
+          const qty = row.stock_quantity ?? 0;
+          const threshold = row.low_stock_threshold ?? 5;
+          if (qty <= 0 || qty <= threshold) { stockNeeds++; continue; }
+          if (row.expiry_date && row.expiry_date <= horizonStr) stockNeeds++;
+        }
+        const today = dayStr(new Date());
+        let taskNeeds = 0;
+        for (const r of receptionists) {
+          const caps = ((r.capabilities || {}) as Record<string, unknown>);
+          const tasks = (Array.isArray(caps.ops_tasks) ? caps.ops_tasks : []) as Array<{ due?: string; done?: boolean }>;
+          taskNeeds += tasks.filter((t) => !t.done && t.due && t.due <= today).length;
+        }
+        setDirectorOpenItems((apptRes.count || 0) + (escRes.count || 0) + stockNeeds + taskNeeds);
+        setDirectorSweepDone(true);
       } catch {
         // buddy falls back to attention numbers alone
       }
@@ -263,7 +295,12 @@ export default function Dashboard() {
 
         {/* Director — the face lives here now. Tap it for the briefing. */}
         {receptionists.length > 0 && selectedReceptionistId && (() => {
-          const openItems = attention.upcomingBookings + attention.openEscalations + attention.stockNeeds + opsCounts.overdue;
+          // Buddy counts every operator (same rule as the edge: overdue or
+          // due-today counts). The summary cards keep the selected
+          // operator's own numbers; the face watches them all. Until the
+          // all-operator sweep lands, fall back to the selected operator.
+          const selectedItems = attention.upcomingBookings + attention.openEscalations + attention.stockNeeds + opsCounts.overdue + opsCounts.dueToday;
+          const openItems = directorSweepDone ? directorOpenItems : selectedItems;
           const state = directorJobs.failed > 0 || openItems > 0 ? "needs-you" : directorJobs.active > 0 ? "working" : "idle";
           const line = directorJobs.failed > 0
             ? `${directorJobs.failed} background job${directorJobs.failed === 1 ? "" : "s"} failed — tap in to see`

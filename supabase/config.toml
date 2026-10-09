@@ -85,6 +85,9 @@ verify_jwt = false
 [functions.kb-rewrite]
 verify_jwt = false
 
+[functions.director-chat]
+verify_jwt = false
+
 [functions.request-change]
 verify_jwt = false
 

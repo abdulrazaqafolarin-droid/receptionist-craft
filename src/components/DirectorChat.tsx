@@ -19,12 +19,10 @@ import { toast } from "sonner";
 import { ChatShell } from "@/components/widget/ChatShell";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
 import { useBuildThreads } from "@/hooks/useBuildThreads";
-import { actionDef } from "@/lib/directorActionDefs";
 import type { GrantScope } from "@/lib/directorGrantRules";
 import { retryDirectorJob, adjustDirectorOperator, draftDirectorHelper } from "@/lib/directorExecutors";
 import type { DirectorAction } from "../../supabase/functions/_shared/config/directorPrompt";
 import { OWNER_PAGES } from "../../supabase/functions/_shared/config/surfaceManifest";
-import type { ActorAction } from "@/lib/actorGuard";
 
 interface ChatMessage {
   role: "owner" | "ai";

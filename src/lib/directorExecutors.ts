@@ -93,6 +93,10 @@ export async function draftDirectorHelper(
       .single();
     if (recErr || !rec) return { ok: false, error: "Could not create the helper shell." };
     const recId = (rec as { id: string }).id;
+    // If planning fails after this point, the shell row is removed so a
+    // failed draft never strands a "Setting up..." operator on the dashboard.
+    const removeShell = () =>
+      supabase.from("receptionists").delete().eq("id", recId).eq("user_id", userId);
     const body = { description: description.trim(), receptionist_id: recId, user_id: userId, nofiles: true };
     onStatus?.("Planning the helper — this takes a minute…");
     try {
@@ -104,8 +108,12 @@ export async function draftDirectorHelper(
     onStatus?.("Long job — queued in the background…");
     const queued = await supabase.functions.invoke("propose-operator-plan", { body: { ...body, async: true } });
     const jobId = (queued.data as { job_id?: string } | null)?.job_id;
-    if (queued.error || !jobId) return { ok: false, error: "Could not queue the plan." };
+    if (queued.error || !jobId) {
+      await removeShell();
+      return { ok: false, error: "Could not queue the plan." };
+    }
     const res = await pollJob(jobId, () => onStatus?.("Still planning…"));
+    if (!res.ok) await removeShell();
     return res.ok ? { ok: true, receptionistId: recId } : { ok: false, error: res.error || "Planning failed." };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Draft failed." };

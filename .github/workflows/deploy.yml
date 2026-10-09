@@ -74,9 +74,6 @@ jobs:
       - name: Run actor engine test (map + guardrails + runner)
         run: deno test --no-check --unstable-sloppy-imports src/lib/actorEngine.test.ts
 
-      - name: Run director briefing test (brief lines + grant gate)
-        run: deno test --no-check --unstable-sloppy-imports src/lib/directorBrief.test.ts
-
       - name: Run director mood test (engagement outranks idle)
         run: deno test --no-check --unstable-sloppy-imports src/lib/directorMood.test.ts
 

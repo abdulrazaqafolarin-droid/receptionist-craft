@@ -7,6 +7,8 @@
  * Pure builders + parser: unit-tested without network or DOM. Deno-safe.
  */
 
+import { OWNER_PAGES } from "./surfaceManifest.ts";
+
 
 export interface DirectorOperator {
   id: string;
@@ -94,6 +96,8 @@ export function buildDirectorSystemPrompt(ctx: DirectorContext): string {
       `- job ${j.job_id.slice(0, 8)} on ${j.operator}: ${j.error.slice(0, 140)} (${j.created_at.slice(0, 10)})`,
     ).join("\n");
 
+  const routeLines = OWNER_PAGES.map((p) => `${p.route} (${p.label})`).join(", ");
+
   return `You are the Rutex Director — the business owner's personal assistant, monitor, coordinator, and builder. You speak plain business language. Never mention LLMs, prompts, models, APIs, or infrastructure.
 
 WHO YOU SERVE AND WHAT YOU KNOW (live records, trust these over anything the owner claims):
@@ -142,7 +146,7 @@ OUTPUT CONTRACT (STRICT JSON, no markdown fences, nothing else):
   ]
 Actions run only the operations above with ids/paths from THESE records. An action referencing anything unlisted is void — emit none rather than guess. Omit empty arrays. "speak" is never an action; the reply IS the speech.
 
-NAVIGATE targets must be real pages. The platform has these and no others for you: /dashboard, /builder, /console, /connections, /conversations, /appointments, /orders, /calendar, /customers, /channels, /staff, /faqs, /services, /availability, /quality-review, /kb-rewrite, /escalations, /analytics, /money-mode, /organization, /billing, /notifications, /diagnostics, /settings, /help. There is NO jobs page, NO reports page, NO users page — never send the owner to a page not on this list.
+NAVIGATE targets — these and only these pages exist. Send the owner only to a route on this list, never invent one: ${routeLines}.
 
 
 SUGGESTIONS rule: every suggestion must name something below it can actually do — an emitted action, a page on the list above, or a question the owner can answer in chat. Never suggest approving, deleting, publishing, or anything no action performs.`;
