@@ -51,16 +51,8 @@ export interface ActorDeps {
    * blind.
    */
   traverse?: (route: string, el: unknown | null) => Promise<void> | void;
-  /**
-   * Asked when the guard demands confirmation. MUST resolve true/false.
-   * Absent means denial (fail closed) — confirmations cannot be skipped
-   * by forgetting to wire them.
-   */
-  requestConfirm?: (action: ActorAction) => Promise<boolean>;
   /** Stop requested (kill switch). Checked before every step. */
   isStopped: () => boolean;
-  /** Owner confirmed the run's destructive steps (confirm gate). */
-  confirmed?: boolean;
   /** Pause between steps so the owner can follow along. */
   stepDelayMs?: number;
 }
@@ -68,19 +60,14 @@ export interface ActorDeps {
 export interface RunOptions {
   continueOnFailure?: boolean;
   /**
-   * Item 3 modes — the honesty split:
-   * - ride (default): full theater (cursor, narration, boxes). For watching.
-   * - handle: background execution. No cursor moves, no bubbles, no boxes,
-   *   no scroll jumps — clicks/collects still execute, say steps record
-   *   silently. The owner keeps working undisturbed.
-   * - takeover: ride theater PLUS an explicit foreground grant (host shows
-   *   the control banner; Esc revokes). The only mode that may disturb,
-   *   and only because it was granted.
+   * Ride (default) is full theater for watching; handle runs the same work
+   * headless — no cursor moves, no bubbles, no boxes, no scroll jumps. The
+   * owner keeps working undisturbed.
    */
   mode?: ActorMode;
 }
 
-export type ActorMode = "ride" | "handle" | "takeover";
+export type ActorMode = "ride" | "handle";
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -109,25 +96,11 @@ export async function runActorScript(
       continue;
     }
 
-    let verdict = guardCheck(action, { confirmed: deps.confirmed });
+    const verdict = guardCheck(action);
     if (!verdict.allowed) {
-      // Confirm gate: pause and ask through the host's inline dialog.
-      // A "no" (or no dialog wired at all) ends the run with an honest
-      // receipt — confirmations can never be skipped by omission.
-      if (verdict.reason.startsWith("confirm-required") && deps.requestConfirm) {
-        const granted = await deps.requestConfirm(action).catch(() => false);
-        if (granted) {
-          verdict = guardCheck(action, { confirmed: true });
-        } else {
-          receipts.push({ action, ok: false, detail: "cancelled-by-owner", at: at() });
-          break;
-        }
-      }
-      if (!verdict.allowed) {
-        receipts.push({ action, ok: false, detail: verdict.reason, at: at() });
-        if (!opts.continueOnFailure) break;
-        continue;
-      }
+      receipts.push({ action, ok: false, detail: verdict.reason, at: at() });
+      if (!opts.continueOnFailure) break;
+      continue;
     }
 
     // goto carries a route, not a registry key — handled wholly here.

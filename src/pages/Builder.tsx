@@ -1555,13 +1555,11 @@ capabilities: receptionist.capabilities,
                 ring={panelTour.ring}
                 bubble={panelTour.bubble}
                 showcase={panelTour.showcase}
-                confirmAsk={panelTour.confirmAsk}
-                running={panelTour.running}
+                        running={panelTour.running}
                 onStop={panelTour.stop}
                 onDismissBubble={panelTour.dismissBubble}
                 onDismissShowcase={panelTour.dismissShowcase}
-                onAnswerConfirm={panelTour.answerConfirm}
-              />
+                      />
           </section>
         </main>
       </div>

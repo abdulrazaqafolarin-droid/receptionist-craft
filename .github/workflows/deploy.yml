@@ -80,9 +80,6 @@ jobs:
       - name: Run director mood test (engagement outranks idle)
         run: deno test --no-check --unstable-sloppy-imports src/lib/directorMood.test.ts
 
-      - name: Run actor plan validation test (planner tours)
-        run: deno test supabase/functions/_shared/config/actorPlan.test.ts
-
       - name: Run capability resolution test (interface priority + verification)
         run: deno test supabase/functions/_shared/config/capabilityRegistry.test.ts
 

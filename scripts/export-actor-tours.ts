@@ -12,7 +12,7 @@ import { ACTOR_TARGETS } from "../supabase/functions/_shared/config/actorRegistr
 const out = {
   version: 1,
   generated_note: "Regenerate with: deno run --allow-read --allow-write scripts/export-actor-tours.ts",
-  targets: ACTOR_TARGETS.map((t) => ({ key: t.key, selector: t.selector, label: t.label, kind: t.kind, dangerous: !!t.dangerous })),
+  targets: ACTOR_TARGETS.map((t) => ({ key: t.key, selector: t.selector, label: t.label, kind: t.kind })),
   tours: {
     "walkthrough-google": GOOGLE_WALKTHROUGH,
   },

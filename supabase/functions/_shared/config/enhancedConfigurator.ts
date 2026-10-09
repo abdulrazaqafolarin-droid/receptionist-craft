@@ -16,7 +16,6 @@
 
 import { generatePlanFromConfig, type GeneratedPlan } from "./planGenerator.ts";
 import { applyDerivedSurface } from "./surfaceDerivation.ts";
-import { buildActorPrompt, validateActorPlan } from "./actorPlan.ts";
 import { buildManifestPrompt } from "./manifest.ts";
 import { buildSurfacePrompt } from "./surfaceManifest.ts";
 import { buildSpecPrompt } from "./platformSpec.ts";
@@ -35,37 +34,7 @@ import { TraceCollector } from "./trace.ts";
 const MANIFEST_BUNDLE_NAME = "rutex-platform-manifest.txt";
 
 function buildInventoryBundle(): string {
-  return `${buildManifestPrompt()}\n\n${buildSurfacePrompt()}\n\n${buildActorPrompt()}\n\n${buildSpecPrompt()}`;
-}
-
-/**
- * Phase 2c: the model may propose a guided tour (actor_plan), but code
- * decides what survives. Unknown/forbidden/malformed steps are rejected
- * with reasons in the trace; the sanitized list replaces the model's.
- * Runs on the FULL config (post-merge), like surface derivation.
- */
-function applyActorPlanValidation(
-  config: Record<string, unknown>,
-  trace?: TraceCollector,
-): void {
-  if (config.actor_plan === undefined || config.actor_plan === null) {
-    trace?.skip("validate-actor-plan", "No tour proposed", ["omit-is-normal"]);
-    return;
-  }
-  trace?.start("validate-actor-plan");
-  const report = validateActorPlan(config.actor_plan);
-  config.actor_plan = report.valid;
-  if (trace) {
-    const facts = [
-      `valid:${report.valid.length}`,
-      ...report.rejected.slice(0, 5).map((r) => `rejected:${r.reason}`),
-    ];
-    if (report.rejected.length > 0) {
-      trace.end("validate-actor-plan", "Tour sanitized — bad steps rejected, good steps kept", facts);
-    } else {
-      trace.end("validate-actor-plan", "Tour validated — every step targets real UI", facts);
-    }
-  }
+  return `${buildManifestPrompt()}\n\n${buildSurfacePrompt()}\n\n${buildSpecPrompt()}`;
 }
 
 async function uploadInventory(trace?: TraceCollector): Promise<string[] | null> {
@@ -246,7 +215,6 @@ CRITICAL RULES:
   },
   "knowledge_base": string,
   "operator_kind": "receptionist" | "assistant" | "both" | "ops",
-  "actor_plan": [ { "type": "say|point|click|highlight|scroll-to|showcase|collect", "target": "registered actor key (see GUIDED TOURS)", "text"|"title"|"lines"|"connector_key"|"ms"|"say": ... } ],
   "will_do": string[],
   "wont_do": string[],
   "external_needs": string[],
@@ -266,7 +234,6 @@ SURFACE PLANNING (do this AFTER the config above):
 - Switch on only the modules whose "when" tags match this business; a module needing an unconnected connector stays listed under modules_on but its connector ALSO lands in connectors_needed.
 - Activate retention plays wherever their tags match.
 - ui_plan lives INSIDE the config object above (config.ui_plan), so approval writes it straight through.
-- ACTOR PLAN (optional guided tour, max 12 steps): propose one ONLY when a tour genuinely helps this operator (a connector to set up, a console to learn). Steps use registered actor keys only — unlisted targets are rejected automatically. Narration under 40 words per step. Omit the field entirely when no tour is needed; omission is normal, not a gap.
 - SIZE DISCIPLINE (your reply must fit): every "why" is ONE short phrase, max 12 words. reasoning_notes max 5 sentences. No markdown, no fences, no commentary outside the JSON — the reply must BE the JSON object and nothing else.
 - BUILD NEEDS (never leave a gap silent): if mid-build you lacked power (a tool you couldn't use), information (a fact nowhere in your reference file), or a capability (no action covers it), list each in build_needs with a one-line why. This is how the platform learns what to add next — an unlisted gap is a lie by omission. Empty array when nothing was missing.
 
@@ -325,9 +292,6 @@ Then produce the OperationsConfig and your reasoning notes.`;
   // always matches the surface that will actually be written.
   applyDerivedSurface(parsed.config, trace);
 
-  // Phase 2c: same split for tours — the model proposes actor_plan steps,
-  // validation keeps only steps targeting real, allowed UI.
-  applyActorPlanValidation(parsed.config, trace);
 
   // Generate the plain-language plan from the config
   const plan = generatePlanFromConfig(parsed.config);
@@ -462,8 +426,7 @@ OUTPUT FORMAT (STRICT JSON, no markdown fences):
   "reasoning_notes": "What changed, why, and what you're uncertain about"
 }
 
-If the change affects what the operator does (new capability, removed offering, new connector need), update config.ui_plan to match — show/hide the affected pages, switch modules, refresh connectors_needed and retention_on. Otherwise carry the existing ui_plan through untouched. The same applies to config.actor_plan: refresh the tour only when the surface it walks changed, otherwise carry it through untouched (or omit it — omission is normal).`;
-
+If the change affects what the operator does (new capability, removed offering, new connector need), update config.ui_plan to match — show/hide the affected pages, switch modules, refresh connectors_needed and retention_on. Otherwise carry the existing ui_plan through untouched.`;
   const changeFull = `${changeBase}
 
 ${buildInventoryBundle()}`;
@@ -492,8 +455,6 @@ Apply this change to the configuration. Only modify what's necessary.`;
   // silent. Deriving before the merge would shrink the surface on
   // unrelated changes (model omits capabilities it did not touch).
   applyDerivedSurface(config, trace);
-  // Phase 2c: tour validation on the same final config.
-  applyActorPlanValidation(config, trace);
   const plan = generatePlanFromConfig(config);
 
   return {

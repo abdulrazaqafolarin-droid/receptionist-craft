@@ -6,85 +6,73 @@
       "key": "connections-list",
       "selector": "[data-actor=\"connections-list\"]",
       "label": "Connectors list",
-      "kind": "panel",
-      "dangerous": false
+      "kind": "panel"
     },
     {
       "key": "modules-list",
       "selector": "[data-actor=\"modules-list\"]",
       "label": "Modules list",
-      "kind": "panel",
-      "dangerous": false
+      "kind": "panel"
     },
     {
       "key": "connect-google_reviews",
       "selector": "[data-actor=\"connect-google_reviews\"]",
       "label": "Connect Google Reviews button",
-      "kind": "button",
-      "dangerous": false
+      "kind": "button"
     },
     {
       "key": "connector-card-google_reviews",
       "selector": "[data-actor=\"connector-card-google_reviews\"]",
       "label": "Google Reviews connector card",
-      "kind": "card",
-      "dangerous": false
+      "kind": "card"
     },
     {
       "key": "console-stock-check",
       "selector": "[data-actor=\"console-stock-check\"]",
       "label": "Stock check button",
-      "kind": "button",
-      "dangerous": false
+      "kind": "button"
     },
     {
       "key": "console-tasks-check",
       "selector": "[data-actor=\"console-tasks-check\"]",
       "label": "Today's tasks button",
-      "kind": "button",
-      "dangerous": false
+      "kind": "button"
     },
     {
       "key": "console-roster-check",
       "selector": "[data-actor=\"console-roster-check\"]",
       "label": "Roster gaps button",
-      "kind": "button",
-      "dangerous": false
+      "kind": "button"
     },
     {
       "key": "console-chat-input",
       "selector": "[data-actor=\"console-chat-input\"]",
       "label": "Console chat input",
-      "kind": "input",
-      "dangerous": false
+      "kind": "input"
     },
     {
       "key": "builder-tab-test",
       "selector": "[data-actor=\"builder-tab-test\"]",
       "label": "Test tab",
-      "kind": "tab",
-      "dangerous": false
+      "kind": "tab"
     },
     {
       "key": "builder-tab-improve",
       "selector": "[data-actor=\"builder-tab-improve\"]",
       "label": "Improve tab",
-      "kind": "tab",
-      "dangerous": false
+      "kind": "tab"
     },
     {
       "key": "builder-tab-live",
       "selector": "[data-actor=\"builder-tab-live\"]",
       "label": "Live tab",
-      "kind": "tab",
-      "dangerous": false
+      "kind": "tab"
     },
     {
       "key": "builder-history",
       "selector": "[data-actor=\"builder-history\"]",
       "label": "Change history button",
-      "kind": "button",
-      "dangerous": false
+      "kind": "button"
     }
   ],
   "tours": {

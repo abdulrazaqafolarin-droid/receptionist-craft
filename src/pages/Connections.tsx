@@ -105,15 +105,6 @@ export default function Connections() {
               >
                 {tour.running ? "Walking through…" : "Connect Google Reviews"}
               </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={tour.running}
-                title="Hand over foreground control for the walkthrough. Esc takes it back anytime."
-                onClick={() => { void tour.requestTakeover(GOOGLE_WALKTHROUGH, { ...tourCtx, tour: "walkthrough-google" }); }}
-              >
-                Take over
-              </Button>
             </div>
           )}
         </div>
@@ -123,13 +114,11 @@ export default function Connections() {
           ring={tour.ring}
           bubble={tour.bubble}
           showcase={tour.showcase}
-          confirmAsk={tour.confirmAsk}
-          running={tour.running}
+            running={tour.running}
           onStop={tour.stop}
           onDismissBubble={tour.dismissBubble}
           onDismissShowcase={tour.dismissShowcase}
-          onAnswerConfirm={tour.answerConfirm}
-        />
+          />
 
         {loading ? (
           <div className="flex items-center justify-center py-20">

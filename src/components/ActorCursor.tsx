@@ -18,7 +18,6 @@ import type { SVGProps } from "react";
 import { BlueySpeechBubble } from "@/components/BlueySpeechBubble";
 import { useNavigate } from "react-router-dom";
 import { Square } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { runActorScript, type ActorReceipt, type ActorMode } from "@/lib/actorRunner";
 import type { ActorAction } from "@/lib/actorGuard";
 
@@ -60,7 +59,6 @@ export function useActorRuns(): Array<{ id: number; mode: ActorMode }> {
 export function ActorRunIndicator() {
   const runs = useActorRuns();
   if (runs.length === 0) return null;
-  const takeover = runs.some((r) => r.mode === "takeover");
   const background = runs.every((r) => r.mode === "handle");
   return (
     <div className="fixed bottom-6 left-1/2 z-[95] flex -translate-x-1/2 items-center gap-3 rounded-full border border-border bg-card py-2 pl-4 pr-2 shadow-xl" role="status">
@@ -69,11 +67,9 @@ export function ActorRunIndicator() {
         <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
       </span>
       <span className="whitespace-nowrap text-xs font-medium">
-        {takeover
-          ? "Operator in control (granted) — Esc takes it back"
-          : background
-            ? "Working in the background"
-            : "Guide showing you around"}
+        {background
+          ? "Working in the background"
+          : "Guide showing you around"}
       </span>
       <button
         onClick={stopAllActorRuns}
@@ -235,11 +231,6 @@ export interface ShowcaseBox {
   lines: string[];
 }
 
-export interface ConfirmAsk {
-  label: string;
-  resolve: (granted: boolean) => void;
-}
-
 export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => void }) {
   const navigate = useNavigate();
   const [point, setPoint] = useState<CursorPoint | null>(null);
@@ -248,7 +239,6 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
   const [ring, setRing] = useState<RingRect | null>(null);
   const [bubble, setBubble] = useState<string | null>(null);
   const [showcase, setShowcase] = useState<ShowcaseBox | null>(null);
-  const [confirmAsk, setConfirmAsk] = useState<ConfirmAsk | null>(null);
   const [running, setRunning] = useState(false);
   const [receipts, setReceipts] = useState<ActorReceipt[]>([]);
   // Bluey life: follow mode trails the owner's mouse when idle; the cursor
@@ -375,38 +365,6 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     setRunning(false);
   }, []);
 
-  const answerConfirm = useCallback((granted: boolean) => {
-    setConfirmAsk((ask) => {
-      ask?.resolve(granted);
-      return null;
-    });
-  }, []);
-
-  /**
-   * Takeover grant ceremony: the ONLY way the takeover mode starts. An
-   * inline confirm names exactly what is granted (foreground control, Esc
-   * revokes); a "no" (or silence) means ride mode or nothing — the caller
-   * decides via onDenied. Nothing proceeds ungranted.
-   */
-  const requestTakeover = useCallback(
-    async (actions: ActorAction[], opts?: { tour?: string; userId?: string; receptionistId?: string; onDenied?: () => void }) => {
-      const granted = await new Promise<boolean>((resolve) => {
-        setConfirmAsk({
-          label: "Hand over foreground control? The operator will move, click, and travel while you watch. Esc takes it back anytime.",
-          resolve,
-        });
-      });
-      if (!granted) {
-        opts?.onDenied?.();
-        return [];
-      }
-      // start is declared below; this closure only runs on user action,
-      // long after the component finished rendering.
-      return start(actions, { ...opts, mode: "takeover" as ActorMode });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -490,12 +448,6 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       collect: async (connectorKey) => {
         handlersRef.current?.onCollect?.(connectorKey);
       },
-      requestConfirm: (action) => new Promise<boolean>((resolve) => {
-        const label = action.type === "click" || action.type === "collect"
-          ? `Allow this step on "${action.target}"?`
-          : "Allow this step?";
-        setConfirmAsk({ label, resolve });
-      }),
       isStopped: () => stopRef.current,
       stepDelayMs: 500,
     }, { mode });
@@ -512,30 +464,6 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
         if (runSeqRef.current === seq && !runningRef.current) goHome();
       }, 2200);
     }
-    // Permanent half of the audit surface: one row per completed run.
-    // Fire-and-forget — a failed insert must never disturb a tour.
-    if (out.length > 0 && opts?.userId) {
-      const failed = out.find((r) => !r.ok);
-      void (async () => {
-        try {
-          // Generated DB types lag behind migrations (never-edit file).
-          const table = (supabase.from as unknown as (t: string) => {
-            insert(v: unknown): PromiseLike<unknown>;
-          })("actor_receipts");
-          await table.insert({
-            user_id: opts.userId,
-            receptionist_id: opts.receptionistId ?? null,
-            tour: opts.tour ?? "ad-hoc",
-            mode,
-            ok: !failed,
-            steps: out.length,
-            failed_detail: failed ? failed.detail.slice(0, 200) : null,
-          });
-        } catch {
-          // receipts are a courtesy, not a dependency
-        }
-      })();
-    }
     return out;
   }, [navigate, follow, goHome]);
 
@@ -546,7 +474,6 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     setRing(null);
     setBubble(null);
     setShowcase(null);
-    setConfirmAsk(null);
     setReceipts([]);
   }, []);
 
@@ -558,7 +485,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     setShowcase(null);
   }, []);
 
-  return { point, ring, bubble, showcase, confirmAsk, running, receipts, start, stop, clear, dismissBubble, dismissShowcase, answerConfirm, swallow, arriving, requestTakeover, follow, toggleFollow, setVisible, cursorHidden, goHome, bounce, bouncing };
+  return { point, ring, bubble, showcase, running, receipts, start, stop, clear, dismissBubble, dismissShowcase, swallow, arriving, follow, toggleFollow, setVisible, cursorHidden, goHome, bounce, bouncing };
 }
 
 /** The highlight ring + narration bubble + STOP control for an active run. */
@@ -566,24 +493,20 @@ export function ActorOverlay({
   ring,
   bubble,
   showcase,
-  confirmAsk,
   running,
   color = "#2563eb",
   onStop,
   onDismissBubble,
   onDismissShowcase,
-  onAnswerConfirm,
 }: {
   ring: RingRect | null;
   bubble: string | null;
   showcase: ShowcaseBox | null;
-  confirmAsk: ConfirmAsk | null;
   running: boolean;
   color?: string;
   onStop: () => void;
   onDismissBubble: () => void;
   onDismissShowcase: () => void;
-  onAnswerConfirm: (granted: boolean) => void;
 }) {
   return (
     <>
@@ -626,33 +549,6 @@ export function ActorOverlay({
           >
             Dismiss
           </button>
-        </div>
-      )}
-      {confirmAsk && (
-        <div
-          className="fixed inset-0 z-[92] flex items-center justify-center bg-background/70 p-4"
-          role="alertdialog"
-          aria-label="Confirm guided step"
-        >
-          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-xl">
-            <p className="text-sm font-medium">The guide wants to take this step:</p>
-            <p className="mt-1 text-sm text-muted-foreground">{confirmAsk.label}</p>
-            <p className="mt-2 text-xs text-muted-foreground">Nothing happens until you approve. Declining stops the tour.</p>
-            <div className="mt-3 flex gap-2">
-              <button
-                onClick={() => onAnswerConfirm(true)}
-                className="flex-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-              >
-                Approve step
-              </button>
-              <button
-                onClick={() => onAnswerConfirm(false)}
-                className="flex-1 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
-              >
-                Stop tour
-              </button>
-            </div>
-          </div>
         </div>
       )}
       {running && (

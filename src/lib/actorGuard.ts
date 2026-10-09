@@ -1,9 +1,9 @@
 /**
  * Actor guardrails — enforced in code, never in prompts.
  *
- * Ported 1:1 from the Bluey ruleset that inspired this program:
- * act only when asked or running an approved routine, confirm the
- * destructive, refuse credentials and lock-out paths, stop on demand.
+ * Refuse credential and lock-out targets, refuse UI that does not exist,
+ * refuse routes outside the page manifest. Everything else the Director
+ * does on its own: small work runs solo, so there is no confirmation gate.
  * Pure functions: every decision is unit-tested, no DOM needed.
  */
 
@@ -47,10 +47,7 @@ export function isForbiddenKey(key: string): boolean {
   return FORBIDDEN_KEY_PATTERNS.some((pattern) => pattern.test(key));
 }
 
-export function guardCheck(
-  action: ActorAction,
-  opts: { confirmed?: boolean; routineApproved?: boolean } = {},
-): GuardVerdict {
+export function guardCheck(action: ActorAction): GuardVerdict {
   if (action.type === "say") {
     return { allowed: true, reason: "narration-only" };
   }
@@ -74,10 +71,7 @@ export function guardCheck(
   if (action.type === "click" || action.type === "collect") {
     // collect opens the connector's REAL dialog — no state changes until
     // the owner submits there through its own buttons. Same bar as click.
-    if (target.dangerous && !opts.confirmed) {
-      return { allowed: false, reason: `confirm-required:${target.key}` };
-    }
-    return { allowed: true, reason: "asked-or-routine" };
+    return { allowed: true, reason: "owner-visible-action" };
   }
   // point / highlight / scroll-to / showcase never change state.
   return { allowed: true, reason: "read-only-gesture" };

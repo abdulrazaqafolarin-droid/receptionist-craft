@@ -78,12 +78,10 @@ export function WhatsThis() {
         ring={host.ring}
         bubble={host.bubble}
         showcase={host.showcase}
-        confirmAsk={host.confirmAsk}
         running={host.running}
         onStop={host.stop}
         onDismissBubble={host.dismissBubble}
         onDismissShowcase={host.dismissShowcase}
-        onAnswerConfirm={host.answerConfirm}
       />
     </>
   );

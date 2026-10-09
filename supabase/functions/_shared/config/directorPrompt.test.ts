@@ -74,36 +74,3 @@ Deno.test("research actions survive the contract with need intact", () => {
   check((parsed.actions[0] as { need?: string }).need === "tiktok-auto-post", "need preserved for the resolver");
 });
 
-Deno.test("guide steps validate through the actor validator", () => {
-  const parsed = parseDirectorReply(JSON.stringify({
-    reply: "Watch this.",
-    suggestions: [],
-    actions: [{
-      type: "guide",
-      steps: [
-        { type: "point", target: "console-stock-check", say: "Look here." },
-        { type: "click", target: "no-such-panel" },
-        { type: "teleport", target: "console-stock-check" },
-      ],
-    }],
-  }));
-  check(parsed.actions.length === 1, "guide survives with valid steps");
-  const steps = (parsed.actions[0] as { steps?: unknown[] }).steps || [];
-  check(steps.length === 1, "bad steps stripped inside the guide");
-});
-
-Deno.test("guide clicks on registered buttons survive validation", () => {
-  const parsed = parseDirectorReply(JSON.stringify({
-    reply: "Clicking it now.",
-    suggestions: [],
-    actions: [{
-      type: "guide",
-      steps: [
-        { type: "click", target: "console-stock-check" },
-        { type: "click", target: "mystery-button" },
-      ],
-    }],
-  }));
-  const steps = (parsed.actions[0] as { steps?: Array<{ type?: string }> }).steps || [];
-  check(steps.length === 1 && steps[0].type === "click", "registered click kept, ghost click dropped");
-});

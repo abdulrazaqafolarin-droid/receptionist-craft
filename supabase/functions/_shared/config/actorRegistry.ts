@@ -1,11 +1,10 @@
 /**
  * Actor registry — single source of truth for actor-reachable UI.
  *
- * Both the frontend (actorMap.ts re-exports this) and the edge planner
- * validator (actorPlan.ts) read these exact entries, so the model can
- * never propose a tour step the UI does not have — and the UI can never
- * drop an anchor the planner still references. The CI actor-map check
- * pins the data-actor attributes to the same list.
+ * The frontend (actorMap.ts re-exports this) and the CI actor-map check
+ * read these exact entries, so an AI-driven cursor can never be pointed at
+ * UI that does not exist, and the UI can never drop an anchor the agent
+ * still references.
  *
  * Deno-safe: ASCII only, no imports, no Node APIs.
  */
@@ -20,12 +19,6 @@ export interface ActorTarget {
   /** Plain words for narration and receipts. */
   label: string;
   kind: ActorTargetKind;
-  /**
-   * Dangerous elements (delete, send, publish, pay, credentials, logout)
-   * always require an inline owner confirm before a click. Nothing in the
-   * pilot set is dangerous — the flag and its gate ship first anyway.
-   */
-  dangerous?: boolean;
   /** One plain-words line for "what's this?" — business language, no jargon. */
   why?: string;
 }

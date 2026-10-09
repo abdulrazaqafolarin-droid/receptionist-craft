@@ -162,33 +162,18 @@ Deno.test("runner: collect hands the connector key to the host", async () => {
   check(receipts[0].ok && collected === "google_reviews", "real dialog requested for the right key");
 });
 
-Deno.test("runner: confirm gate asks, honors yes and no", async () => {
-  // No dangerous entries ship in the pilot registry by design, so the test
-  // stages one, proves the handshake, and removes it — the verdict,
-  // dialog call, and both outcomes run through the real code path.
+Deno.test("runner: every registered click runs solo, no confirmation ceremony", async () => {
+  // The Director works on small things on its own. Nothing in the registry
+  // is click-blocked; only unknown and forbidden targets are refused.
   const { ACTOR_TARGETS } = await import("./actorMap.ts");
-  ACTOR_TARGETS.push({ key: "test-nuke-everything", selector: '[data-actor="test-nuke"]', label: "Test nuke", kind: "button", dangerous: true });
+  ACTOR_TARGETS.push({ key: "test-solo-click", selector: '[data-actor="test-solo"]', label: "Test solo", kind: "button" });
   try {
-    let asked = 0;
     const clicked: string[] = [];
     const base = stubDeps({
       click: async () => { clicked.push("boom"); },
-      requestConfirm: async () => { asked++; return true; },
     });
-    const granted = await runActorScript([{ type: "click", target: "test-nuke-everything" }], base);
-    check(granted[0].ok && asked === 1 && clicked.length === 1, "yes proceeds after asking");
-
-    const denied = await runActorScript(
-      [{ type: "click", target: "test-nuke-everything" }],
-      stubDeps({ requestConfirm: async () => false }),
-    );
-    check(!denied[0].ok && denied[0].detail === "cancelled-by-owner", "no cancels honestly");
-
-    const unwired = await runActorScript(
-      [{ type: "click", target: "test-nuke-everything" }],
-      stubDeps(),
-    );
-    check(!unwired[0].ok && unwired[0].detail.startsWith("confirm-required"), "missing dialog fails closed");
+    const done = await runActorScript([{ type: "click", target: "test-solo-click" }], base);
+    check(done[0].ok && clicked.length === 1, "registered click runs without a gate");
   } finally {
     ACTOR_TARGETS.pop();
   }

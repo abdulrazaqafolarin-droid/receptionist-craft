@@ -15,7 +15,6 @@ import { SpotlightCard } from "@/components/SpotlightCard";
 import { toast } from "sonner";
 import { useActiveOperatorStore } from "@/store/activeOperator";
 import { isRouteVisible, visiblePagesFromCapabilities } from "@/lib/operatorSurface";
-import { GuidedActivity } from "@/components/GuidedActivity";
 import { DirectorBuddy } from "@/components/DirectorBuddy";
 import { DirectorPanel } from "@/components/DirectorPanel";
 
@@ -286,10 +285,6 @@ export default function Dashboard() {
             </section>
           );
         })()}
-
-        {/* Recent guided activity — the permanent half of the cursor's work.
-            Renders only when tours actually ran; no empty-state noise. */}
-        <GuidedActivity userId={user?.id} />
 
         {/* AI Operator Centerpiece */}
         {receptionists.length > 0 && selectedReceptionistId && (

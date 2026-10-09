@@ -380,12 +380,10 @@ export default function Console() {
         ring={tour.ring}
         bubble={tour.bubble}
         showcase={tour.showcase}
-        confirmAsk={tour.confirmAsk}
         running={tour.running}
         onStop={tour.stop}
         onDismissBubble={tour.dismissBubble}
         onDismissShowcase={tour.dismissShowcase}
-        onAnswerConfirm={tour.answerConfirm}
       />
     </div>
   );
