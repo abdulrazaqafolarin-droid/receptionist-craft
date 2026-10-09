@@ -22,6 +22,30 @@ import { actionDef } from "@/lib/directorActionDefs";
 import type { GrantScope } from "@/lib/directorGrantRules";
 import { retryDirectorJob, adjustDirectorOperator, draftDirectorHelper } from "@/lib/directorExecutors";
 import type { DirectorAction } from "../../supabase/functions/_shared/config/directorPrompt";
+import type { ValidActorStep } from "../../supabase/functions/_shared/config/actorPlan";
+import type { ActorAction } from "@/lib/actorGuard";
+
+/**
+ * Boundary sanitize: edge-validated steps become runner actions. Anything
+ * malformed is dropped here too — two gates, zero trust across the wire.
+ */
+function toActorActions(steps: ValidActorStep[]): ActorAction[] {
+  const out: ActorAction[] = [];
+  for (const s of steps) {
+    if (s.type === "say" && s.text) out.push({ type: "say", text: s.text });
+    else if (s.type === "goto" && s.route) out.push({ type: "goto", route: s.route, ...(s.say ? { say: s.say } : {}) });
+    else if ((s.type === "point" || s.type === "click" || s.type === "scroll-to") && s.target) {
+      out.push({ type: s.type, target: s.target, ...(s.say ? { say: s.say } : {}) });
+    } else if (s.type === "highlight" && s.target) {
+      out.push({ type: "highlight", target: s.target, ...(typeof s.ms === "number" ? { ms: s.ms } : {}), ...(s.say ? { say: s.say } : {}) });
+    } else if (s.type === "showcase" && s.target && s.title && s.lines) {
+      out.push({ type: "showcase", target: s.target, title: s.title, lines: s.lines, ...(s.say ? { say: s.say } : {}) });
+    } else if (s.type === "collect" && s.target && s.connector_key) {
+      out.push({ type: "collect", target: s.target, connector_key: s.connector_key, ...(s.say ? { say: s.say } : {}) });
+    }
+  }
+  return out;
+}
 
 interface ChatMessage {
   role: "owner" | "ai";
@@ -67,9 +91,6 @@ export function DirectorChat({
 
   async function runAction(action: DirectorAction, msgIdx: number) {
     if (action.type === "navigate") {
-      // Ride there like a human: black-hole through the nav element when
-      // one exists, emerge at the destination. Falls back to instant
-      // navigation if the ride cannot stage — arrival either way.
       const receipts = await ride.start(
         [{ type: "goto", route: action.path }],
         { tour: "director-ride", userId },
@@ -83,6 +104,15 @@ export function DirectorChat({
     }
     if (action.type === "open_grants") {
       onNeedGrant("build_helpers");
+      return;
+    }
+    if (action.type === "guide") {
+      // The Director drives the cursor: validated steps run through the
+      // same guarded runner as every tour. No grant needed to SHOW —
+      // clicks inside still pass their own confirm gates.
+      setExecuting(`guide-${msgIdx}`);
+      await ride.start(toActorActions(action.steps), { tour: "director-guide", userId });
+      setExecuting(null);
       return;
     }
     if (!userId) return;
@@ -347,5 +377,6 @@ function actionLabel(a: DirectorAction): string {
     case "open_builder": return "Open in Builder";
     case "open_grants": return "Review grants";
     case "research_need": return "Research it";
+    case "guide": return "Show me";
   }
 }

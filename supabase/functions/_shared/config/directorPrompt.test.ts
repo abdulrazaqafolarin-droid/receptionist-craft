@@ -19,6 +19,7 @@ const CTX: DirectorContext = {
   versions: [{ operator: "Pharmacy", version_number: 3, change_source: "owner_revert", owner_input: "back to v2", created_at: "2026-10-01T00:00:00Z" }],
   threads: [{ title: "Stock setup", status: "approved", receptionist_name: "Pharmacy", updated_at: "2026-10-02T00:00:00Z" }],
   failedJobs: 1,
+  failedJobDetails: [{ job_id: "abcd1234-efgh", operator: "Pharmacy", error: "gateway_timeout", created_at: "2026-10-07T00:00:00Z" }],
   activeJobs: 0,
   connectorsDown: ["Gmail"],
   attentionTotal: 3,
@@ -30,13 +31,14 @@ Deno.test("prompt cites live rows, never filler", () => {
   check(p.includes("v3") && p.includes("owner_revert"), "version cited");
   check(p.includes("Stock setup"), "thread cited");
   check(p.includes("Gmail"), "dead connector cited");
+  check(p.includes("abcd1234") && p.includes("gateway_timeout"), "failed job identity cited, never hidden");
   check(p.includes("NEVER approve"), "approval boundary stated");
   check(p.includes("STRICT JSON"), "contract stated");
 });
 
 Deno.test("empty context is explicit, not invented", () => {
   const p = buildDirectorSystemPrompt({
-    operators: [], versions: [], threads: [], failedJobs: 0,
+    operators: [], versions: [], threads: [], failedJobs: 0, failedJobDetails: [],
     activeJobs: 0, connectorsDown: [], attentionTotal: 0,
   });
   check(p.includes("No operators yet"), "emptiness stated");
@@ -70,4 +72,22 @@ Deno.test("research actions survive the contract with need intact", () => {
   }));
   check(parsed.actions.length === 1, "research kept, junk dropped");
   check((parsed.actions[0] as { need?: string }).need === "tiktok-auto-post", "need preserved for the resolver");
+});
+
+Deno.test("guide steps validate through the actor validator", () => {
+  const parsed = parseDirectorReply(JSON.stringify({
+    reply: "Watch this.",
+    suggestions: [],
+    actions: [{
+      type: "guide",
+      steps: [
+        { type: "point", target: "console-stock-check", say: "Look here." },
+        { type: "click", target: "no-such-panel" },
+        { type: "teleport", target: "console-stock-check" },
+      ],
+    }],
+  }));
+  check(parsed.actions.length === 1, "guide survives with valid steps");
+  const steps = (parsed.actions[0] as { steps?: unknown[] }).steps || [];
+  check(steps.length === 1, "bad steps stripped inside the guide");
 });

@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { askRutex, RutexMcpError } from "../_shared/rutexMcp.ts";
 import { researchNeed } from "../_shared/config/solutionResearch.ts";
 import { resolveNeed } from "../_shared/config/capabilityRegistry.ts";
+import { OWNER_PAGES } from "../_shared/config/surfaceManifest.ts";
 import {
   buildDirectorSystemPrompt,
   parseDirectorReply,
@@ -117,10 +118,16 @@ serve(async (req) => {
     const [versRes, threadsRes, jobsRes, connRes] = await Promise.all([
       supabase.from("config_versions").select("receptionist_id,version_number,change_source,owner_input,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(8),
       supabase.from("build_threads").select("title,status,receptionist_id,updated_at").eq("user_id", user_id).order("updated_at", { ascending: false }).limit(8),
-      supabase.from("plan_jobs").select("status").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]),
+      supabase.from("plan_jobs").select("id,receptionist_id,status,error_text,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(20),
       supabase.from("connectors").select("display_name,status").eq("user_id", user_id),
     ]);
-    const jobs = (((jobsRes as { data?: unknown }).data || []) as unknown) as Array<{ status: string }>;
+    const jobs = (((jobsRes as { data?: unknown }).data || []) as unknown) as Array<{ id: string; receptionist_id: string; status: string; error_text: string | null; created_at: string }>;
+    const failedDetail = jobs.filter((j) => j.status === "failed").slice(0, 5).map((j) => ({
+      job_id: j.id,
+      operator: nameOf(j.receptionist_id),
+      error: j.error_text || "no error recorded",
+      created_at: j.created_at,
+    }));
     const conns = (((connRes as { data?: unknown }).data || []) as unknown) as Array<{ display_name: string; status: string }>;
     const vers = (((versRes as { data?: unknown }).data || []) as unknown) as Array<{
       receptionist_id: string; version_number: number; change_source: string; owner_input: string | null; created_at: string;
@@ -145,6 +152,7 @@ serve(async (req) => {
         updated_at: t.updated_at,
       })),
       failedJobs: jobs.filter((j) => j.status === "failed").length,
+      failedJobDetails: failedDetail,
       activeJobs: jobs.filter((j) => j.status === "queued" || j.status === "running").length,
       connectorsDown: conns.filter((c) => c.status === "error" || c.status === "expired").map((c) => c.display_name),
       attentionTotal: perOp.reduce((a, o) => a + o.upcomingBookings + o.openEscalations + o.stockNeeds + o.overdueTasks, 0),
@@ -156,6 +164,14 @@ serve(async (req) => {
     try {
       const r = await askRutex(thread_id, `${system}\n\n---\n\n${convo}`, { timeoutMs: 90000 });
       const parsed = parseDirectorReply(r.text || "");
+      // Navigate targets must be real manifest routes. The prompt lists
+      // them, but prompts are wishes — this is enforcement. Anything else
+      // ("/jobs page" inventions) is dropped, never ridden.
+      const validRoutes = new Set(OWNER_PAGES.map((p) => p.route));
+      parsed.actions = parsed.actions.filter((a) => {
+        const act = a as { type?: string; path?: unknown };
+        return act.type !== "navigate" || (typeof act.path === "string" && validRoutes.has(act.path));
+      });
       // research_need executes server-side: resolved evidence rides back
       // INLINE on the action (verified interface + provenance), so the
       // client renders findings, never bare links. Informational — no

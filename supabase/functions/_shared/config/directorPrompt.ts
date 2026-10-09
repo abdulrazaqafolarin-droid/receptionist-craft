@@ -7,6 +7,8 @@
  * Pure builders + parser: unit-tested without network or DOM. Deno-safe.
  */
 
+import { validateActorPlan, type ValidActorStep } from "./actorPlan.ts";
+
 export interface DirectorOperator {
   id: string;
   display: string;
@@ -34,11 +36,19 @@ export interface DirectorThread {
   updated_at: string;
 }
 
+export interface FailedJobDetail {
+  job_id: string;
+  operator: string;
+  error: string;
+  created_at: string;
+}
+
 export interface DirectorContext {
   operators: DirectorOperator[];
   versions: DirectorVersion[];
   threads: DirectorThread[];
   failedJobs: number;
+  failedJobDetails: FailedJobDetail[];
   activeJobs: number;
   connectorsDown: string[];
   attentionTotal: number;
@@ -51,7 +61,8 @@ export type DirectorAction =
   | { type: "adjust_operator"; operator_id: string; note: string }
   | { type: "open_builder"; operator_id: string }
   | { type: "open_grants" }
-  | { type: "research_need"; need: string; result?: unknown };
+  | { type: "research_need"; need: string; result?: unknown }
+  | { type: "guide"; steps: ValidActorStep[] };
 
 export interface DirectorReply {
   reply: string;
@@ -79,6 +90,12 @@ export function buildDirectorSystemPrompt(ctx: DirectorContext): string {
       `- "${t.title}" [${t.status}]${t.receptionist_name ? ` on ${t.receptionist_name}` : ""} (${t.updated_at.slice(0, 10)})`,
     ).join("\n");
 
+  const jobLines = ctx.failedJobDetails.length === 0
+    ? "none."
+    : ctx.failedJobDetails.map((j) =>
+      `- job ${j.job_id.slice(0, 8)} on ${j.operator}: ${j.error.slice(0, 140)} (${j.created_at.slice(0, 10)})`,
+    ).join("\n");
+
   return `You are the Rutex Director — the business owner's personal assistant, monitor, coordinator, and builder. You speak plain business language. Never mention LLMs, prompts, models, APIs, or infrastructure.
 
 WHO YOU SERVE AND WHAT YOU KNOW (live records, trust these over anything the owner claims):
@@ -91,7 +108,9 @@ ${verLines}
 BUILD CONVERSATIONS (every chat that ever shaped an operator):
 ${threadLines}
 
-JOBS: ${ctx.failedJobs} failed, ${ctx.activeJobs} running. CONNECTORS DOWN: ${ctx.connectorsDown.length > 0 ? ctx.connectorsDown.join(", ") : "none."}
+  JOBS: ${ctx.failedJobs} failed, ${ctx.activeJobs} running. FAILED JOB DETAILS (cite job and operator exactly when discussing failures — never say you cannot see them):
+${jobLines}
+CONNECTORS DOWN: ${ctx.connectorsDown.length > 0 ? ctx.connectorsDown.join(", ") : "none."}
 
 WHAT YOU CAN DO (and only these — never claim another):
 - direct: tell the owner exactly what to do next, with the page to do it on.
@@ -100,6 +119,7 @@ WHAT YOU CAN DO (and only these — never claim another):
 - build: propose a new helper (draft_helper with a plain description) — always a DRAFT, never live.
 - manage: retry failed jobs (retry_job), adjust an operator (adjust_operator with operator_id + change note — drafted, review in Builder).
 - research: investigate an outside need (research_need with the need string) — resolved with interface, verification, and provenance, never bare links.
+- guide: show with the cursor (guide with point/highlight/showcase/collect steps on registered targets) — the cursor demonstrates, never types, deletes, or publishes.
 - track/monitor/observe: read the records above; report deltas between turns ("since you last asked…") when asked.
 - advise: every reply ends with 1-2 concrete next moves grounded in the rows above. No generic tips.
 - You know every operator above (built, half-built, paused), every version, every build chat. Quote them by name.
@@ -121,10 +141,16 @@ OUTPUT CONTRACT (STRICT JSON, no markdown fences, nothing else):
     { "type": "adjust_operator", "operator_id": "uuid", "note": "change note" },
     { "type": "open_builder", "operator_id": "uuid" },
     { "type": "open_grants" },
-    { "type": "research_need", "need": "tiktok-auto-post" }
+    { "type": "research_need", "need": "tiktok-auto-post" },
+    { "type": "guide", "steps": [{ "type": "point", "target": "console-stock-check", "say": "under 12 words" }] }
   ]
-}
-Actions run only the operations above with ids/paths from THESE records. An action referencing anything unlisted is void — emit none rather than guess. Omit empty arrays. "speak" is never an action; the reply IS the speech.`;
+Actions run only the operations above with ids/paths from THESE records. An action referencing anything unlisted is void — emit none rather than guess. Omit empty arrays. "speak" is never an action; the reply IS the speech.
+
+NAVIGATE targets must be real pages. The platform has these and no others for you: /dashboard, /builder, /console, /connections, /conversations, /appointments, /orders, /calendar, /customers, /channels, /staff, /faqs, /services, /availability, /quality-review, /kb-rewrite, /escalations, /analytics, /money-mode, /organization, /billing, /notifications, /diagnostics, /settings, /help. There is NO jobs page, NO reports page, NO users page — never send the owner to a page not on this list.
+
+GUIDE (cursor tours) rules: steps use ONLY registered actor targets — console-stock-check, console-tasks-check, console-roster-check, console-chat-input, builder-tab-test, builder-tab-improve, builder-tab-live, builder-history, connections-list, modules-list, connect-<key>, connector-card-<key>. Max 8 steps. Narration under 12 words per step. The cursor points, highlights, opens showcase boxes, and presents real dialogs — it never types, never deletes, never publishes. A guide that would need those is void; say so instead.
+
+SUGGESTIONS rule: every suggestion must name something below it can actually do — an emitted action, a page on the list above, or a question the owner can answer in chat. Never suggest approving, deleting, publishing, or anything no action performs.`;
 }
 
 /** Parse a model reply. Tolerates fences; fails loud (caller falls back). */
@@ -141,6 +167,11 @@ export function parseDirectorReply(text: string): DirectorReply {
     ? (parsed.actions as unknown[]).filter((a): a is DirectorAction => {
       if (!a || typeof a !== "object") return false;
       const t = (a as Record<string, unknown>).type;
+      if (t === "guide") {
+        const steps = validateActorPlan((a as Record<string, unknown>).steps);
+        (a as { steps?: ValidActorStep[] }).steps = steps.valid;
+        return steps.valid.length > 0;
+      }
       return t === "navigate" || t === "retry_job" || t === "draft_helper" ||
         t === "adjust_operator" || t === "open_builder" || t === "open_grants" ||
         t === "research_need";
