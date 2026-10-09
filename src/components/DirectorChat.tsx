@@ -4,9 +4,10 @@
  * Emulates the talk-it-through chat it was asked to mirror: welcome message,
  * suggestion chips, message bubbles, input row, and conversation history tabs
  * (new / resume / delete) backed by director_threads. Replies come from the
- * director-chat edge function (live platform context + strict action
- * contract); actions execute through the same grant-gated executors as the
- * Build tab. Approval stays human — drafts link to the Builder.
+ * director-chat edge function (live platform context + Director actions);
+ * actions execute through the same executors as the Build tab, with the
+ * cursor riding along visibly. Approval stays human — drafts link to the
+ * Builder.
  */
 
 import { useRef, useState } from "react";
@@ -22,6 +23,7 @@ import { actionDef } from "@/lib/directorActionDefs";
 import type { GrantScope } from "@/lib/directorGrantRules";
 import { retryDirectorJob, adjustDirectorOperator, draftDirectorHelper } from "@/lib/directorExecutors";
 import type { DirectorAction } from "../../supabase/functions/_shared/config/directorPrompt";
+import { OWNER_PAGES } from "../../supabase/functions/_shared/config/surfaceManifest";
 import type { ActorAction } from "@/lib/actorGuard";
 
 interface ChatMessage {
@@ -72,7 +74,20 @@ export function DirectorChat({
         [{ type: "goto", route: action.path }],
         { tour: "director-ride", userId },
       );
-      if (!receipts[0]?.ok) navigate(action.path);
+      if (!receipts[0]?.ok) {
+        // The ride refused: the requested page is not a real manifest
+        // route. Never push a dead route into the router — say so openly
+        // and name where the owner CAN go.
+        const want = action.path.replace(/^\//, "").toLowerCase();
+        const words = want.split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+        const scored = OWNER_PAGES.map((p) => {
+          const hay = `${p.key} ${p.label} ${p.route}`.toLowerCase();
+          return { p, hits: words.filter((w) => hay.includes(w)).length };
+        }).filter((s) => s.hits > 0).sort((a, b) => b.hits - a.hits).slice(0, 3);
+        const options = (scored.length > 0 ? scored : OWNER_PAGES.slice(0, 3).map((p) => ({ p, hits: 0 })))
+          .map((s) => s.p.label).join(", ");
+        toast.message(`There's no ${action.path} page — I can take you to ${options} instead. Just say which.`, { duration: 6000 });
+      }
       return;
     }
     if (action.type === "open_builder") {

@@ -13,7 +13,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { askRutex, RutexMcpError } from "../_shared/rutexMcp.ts";
 import { researchNeed } from "../_shared/config/solutionResearch.ts";
 import { resolveNeed } from "../_shared/config/capabilityRegistry.ts";
-import { OWNER_PAGES } from "../_shared/config/surfaceManifest.ts";
 import {
   buildDirectorSystemPrompt,
   parseDirectorReply,
@@ -164,14 +163,6 @@ serve(async (req) => {
     try {
       const r = await askRutex(thread_id, `${system}\n\n---\n\n${convo}`, { timeoutMs: 90000 });
       const parsed = parseDirectorReply(r.text || "");
-      // Navigate targets must be real manifest routes. The prompt lists
-      // them, but prompts are wishes — this is enforcement. Anything else
-      // ("/jobs page" inventions) is dropped, never ridden.
-      const validRoutes = new Set(OWNER_PAGES.map((p) => p.route));
-      parsed.actions = parsed.actions.filter((a) => {
-        const act = a as { type?: string; path?: unknown };
-        return act.type !== "navigate" || (typeof act.path === "string" && validRoutes.has(act.path));
-      });
       // research_need executes server-side: resolved evidence rides back
       // INLINE on the action (verified interface + provenance), so the
       // client renders findings, never bare links. Informational — no
