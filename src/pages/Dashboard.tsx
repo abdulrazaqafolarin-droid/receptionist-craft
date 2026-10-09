@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,9 @@ import { useActiveOperatorStore } from "@/store/activeOperator";
 import { isRouteVisible, visiblePagesFromCapabilities } from "@/lib/operatorSurface";
 import { DirectorBuddy } from "@/components/DirectorBuddy";
 import { DirectorPanel } from "@/components/DirectorPanel";
+import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
+import { useDirectorPresence } from "@/hooks/useDirectorPresence";
+import type { ActorAction } from "@/lib/actorGuard";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -82,6 +85,20 @@ export default function Dashboard() {
   useEffect(() => {
     if (selectedReceptionistId) loadAttention(selectedReceptionistId);
   }, [selectedReceptionistId]);
+
+  // Director presence: the sweep's live signal. When a visible
+  // autonomous run starts while the owner watches, the cursor replays
+  // its steps here on the Dashboard; the buddy names the work.
+  const presenceHost = useActorHost();
+  const presence = useDirectorPresence();
+  const replayedPresence = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const run = presence.active;
+    if (!run || run.steps.length === 0 || replayedPresence.current.has(run.id)) return;
+    replayedPresence.current.add(run.id);
+    void presenceHost.start(run.steps as ActorAction[], { tour: "director-presence" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presence.active]);
 
   const dayStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -301,14 +318,27 @@ export default function Dashboard() {
           // all-operator sweep lands, fall back to the selected operator.
           const selectedItems = attention.upcomingBookings + attention.openEscalations + attention.stockNeeds + opsCounts.overdue + opsCounts.dueToday;
           const openItems = directorSweepDone ? directorOpenItems : selectedItems;
-          const state = directorJobs.failed > 0 || openItems > 0 ? "needs-you" : directorJobs.active > 0 ? "working" : "idle";
-          const line = directorJobs.failed > 0
-            ? `${directorJobs.failed} background job${directorJobs.failed === 1 ? "" : "s"} failed — tap in to see`
-            : directorJobs.active > 0
-              ? `${directorJobs.active} job${directorJobs.active === 1 ? "" : "s"} running in the background`
-              : openItems > 0
-                ? `${openItems} thing${openItems === 1 ? "" : "s"} need${openItems === 1 ? "s" : ""} you — tap in to see`
-                : "Watching your operators.";
+          // A live autonomous run outranks every count: the buddy says
+          // what the Director is doing right now, in its own words.
+          const liveRun = presence.active;
+          const freshDone = (() => {
+            const done = presence.lastDone;
+            if (!done) return null;
+            const mins = Math.max(0, Math.round((Date.now() - new Date(done.at).getTime()) / 60000));
+            return mins < 60 ? { label: done.label, mins } : null;
+          })();
+          const state = liveRun ? "working" : directorJobs.failed > 0 || openItems > 0 ? "needs-you" : directorJobs.active > 0 ? "working" : "idle";
+          const line = liveRun
+            ? liveRun.label
+            : directorJobs.failed > 0
+              ? `${directorJobs.failed} background job${directorJobs.failed === 1 ? "" : "s"} failed — tap in to see`
+              : directorJobs.active > 0
+                ? `${directorJobs.active} job${directorJobs.active === 1 ? "" : "s"} running in the background`
+                : openItems > 0
+                  ? `${openItems} thing${openItems === 1 ? "" : "s"} need${openItems === 1 ? "s" : ""} you — tap in to see`
+                  : freshDone
+                    ? `Done: ${freshDone.label} (${freshDone.mins === 0 ? "just now" : `${freshDone.mins}m ago`}). Watching your operators.`
+                    : "Watching your operators.";
           return (
             <section className="mb-6 sm:mb-8" aria-label="Director">
               <Card className="liquid-glass-card">
@@ -319,6 +349,17 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
               <DirectorPanel open={directorOpen} onClose={() => setDirectorOpen(false)} userId={user?.id} />
+              {/* Presence cursor: invisible until an autonomous run replays. */}
+              <ActorCursor point={presenceHost.point} swallow={presenceHost.swallow} arriving={presenceHost.arriving} />
+              <ActorOverlay
+                ring={presenceHost.ring}
+                bubble={presenceHost.bubble}
+                showcase={presenceHost.showcase}
+                running={presenceHost.running}
+                onStop={presenceHost.stop}
+                onDismissBubble={presenceHost.dismissBubble}
+                onDismissShowcase={presenceHost.dismissShowcase}
+              />
             </section>
           );
         })()}

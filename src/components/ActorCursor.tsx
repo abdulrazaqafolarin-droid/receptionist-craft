@@ -20,6 +20,7 @@ import { useNavigate } from "react-router-dom";
 import { Square } from "lucide-react";
 import { runActorScript, type ActorReceipt, type ActorMode } from "@/lib/actorRunner";
 import type { ActorAction } from "@/lib/actorGuard";
+import { useDirectorPresence } from "@/hooks/useDirectorPresence";
 
 /**
  * Global run registry: every host run registers here so one indicator can
@@ -58,8 +59,15 @@ export function useActorRuns(): Array<{ id: number; mode: ActorMode }> {
 /** Persistent footprint: what is running, in what mode, with one STOP. */
 export function ActorRunIndicator() {
   const runs = useActorRuns();
-  if (runs.length === 0) return null;
-  const background = runs.every((r) => r.mode === "handle");
+  // Autonomous Director work is server-side and unstoppable from here —
+  // the pill names it instead of offering a stop it cannot honor.
+  const presence = useDirectorPresence();
+  const presenceLabel = presence.active?.label ?? null;
+  if (runs.length === 0 && !presenceLabel) return null;
+  const background = runs.length > 0 && runs.every((r) => r.mode === "handle");
+  const text = runs.length > 0
+    ? background ? "Working in the background" : "Guide showing you around"
+    : `Director: ${presenceLabel}`;
   return (
     <div className="fixed bottom-6 left-1/2 z-[95] flex -translate-x-1/2 items-center gap-3 rounded-full border border-border bg-card py-2 pl-4 pr-2 shadow-xl" role="status">
       <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
@@ -67,17 +75,17 @@ export function ActorRunIndicator() {
         <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
       </span>
       <span className="whitespace-nowrap text-xs font-medium">
-        {background
-          ? "Working in the background"
-          : "Guide showing you around"}
+        {text}
       </span>
-      <button
-        onClick={stopAllActorRuns}
-        className="rounded-full bg-destructive px-3 py-1 text-xs font-medium text-destructive-foreground"
-        aria-label="Stop all guided runs"
-      >
-        Stop
-      </button>
+      {runs.length > 0 && (
+        <button
+          onClick={stopAllActorRuns}
+          className="rounded-full bg-destructive px-3 py-1 text-xs font-medium text-destructive-foreground"
+          aria-label="Stop all guided runs"
+        >
+          Stop
+        </button>
+      )}
     </div>
   );
 }

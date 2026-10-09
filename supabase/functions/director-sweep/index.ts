@@ -30,6 +30,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyJobError } from "../_shared/directorTriage.ts";
 import { ledgerStart, ledgerFinish } from "../_shared/directorLedger.ts";
+import { stockSteps, requeueSteps, draftSteps } from "../_shared/directorSteps.ts";
+import type { PresenceStep } from "../_shared/directorSteps.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,6 +80,33 @@ async function notify(
     });
   } catch {
     // A failed notification must never break the sweep.
+  }
+}
+
+/**
+ * Presence signal: one 'running' row when a visible action starts, one
+ * 'done' row when it finishes. The app subscribes via Realtime and the
+ * cursor replays `steps` — autopilot stays visible while it happens.
+ * Never throws; presence is a courtesy, not a dependency.
+ */
+async function activity(
+  supabase: { from(table: string): any },
+  user_id: string,
+  action_id: string | null,
+  phase: "running" | "done",
+  label: string,
+  steps: PresenceStep[],
+): Promise<void> {
+  try {
+    await supabase.from("director_activity").insert({
+      user_id,
+      action_id,
+      phase,
+      label: label.slice(0, 200),
+      steps,
+    });
+  } catch {
+    // Presence failed; the ledger still records the work.
   }
 }
 
@@ -184,6 +213,9 @@ async function sweepUser(
         before: { status: "failed", attempts: job.attempts },
         visible: true,
       });
+      const steps = requeueSteps(opName);
+      const stepLabel = `Re-queued ${opName}'s failed plan`;
+      await activity(supabase, user_id, lid, "running", stepLabel, steps);
       const { error } = await supabase.from("plan_jobs").update({
         status: "queued",
         attempts: 0,
@@ -192,7 +224,8 @@ async function sweepUser(
       }).eq("id", job.id);
       await ledgerFinish(supabase, lid, error
         ? { status: "failed", error: String(error).slice(0, 300) }
-        : { status: "done", after: { job_id: job.id, status: "queued" } });
+        : { status: "done", after: { job_id: job.id, status: "queued", actor_steps: steps } });
+      await activity(supabase, user_id, lid, "done", stepLabel, steps);
       report.requeued.push(job.id.slice(0, 8));
     } else {
       const why = verdict !== "retry" ? reason : "needs the fix_small grant";
@@ -242,17 +275,23 @@ async function sweepUser(
         continue;
       }
       const before: Record<string, number> = {};
-      const after: Record<string, number> = {};
+      const qtys: Array<{ product_id: string; qty: number; take: number }> = [];
       for (const item of linked) {
         const { data: svc } = await supabase.from("services").select("stock_quantity").eq("id", item.product_id).maybeSingle();
         const qty = (svc as { stock_quantity: number | null } | null)?.stock_quantity;
         if (qty === null || qty === undefined) continue;
         before[item.product_id as string] = qty;
-        const next = qty - (item.quantity || 0);
-        await supabase.from("services").update({ stock_quantity: next }).eq("id", item.product_id);
-        after[item.product_id as string] = next;
+        qtys.push({ product_id: item.product_id as string, qty, take: item.quantity || 0 });
       }
-      await supabase.from("orders").update({ metadata: { ...meta, stock_decremented: true } }).eq("id", order.id);
+      if (qtys.length === 0) {
+        if (!dry) {
+          await supabase.from("orders").update({ metadata: { ...meta, stock_decremented: true } }).eq("id", order.id);
+        }
+        continue;
+      }
+      const opName = nameOf(order.receptionist_id);
+      const steps = stockSteps(opName, linked.length);
+      const stepLabel = `Stock updated for ${opName}`;
       const lid = await ledgerStart(supabase, {
         user_id,
         receptionist_id: order.receptionist_id,
@@ -261,7 +300,16 @@ async function sweepUser(
         before,
         visible: true,
       });
-      await ledgerFinish(supabase, lid, { status: "done", after });
+      await activity(supabase, user_id, lid, "running", stepLabel, steps);
+      const after: Record<string, number> = {};
+      for (const q of qtys) {
+        const next = q.qty - q.take;
+        await supabase.from("services").update({ stock_quantity: next }).eq("id", q.product_id);
+        after[q.product_id] = next;
+      }
+      await supabase.from("orders").update({ metadata: { ...meta, stock_decremented: true } }).eq("id", order.id);
+      await ledgerFinish(supabase, lid, { status: "done", after: { ...after, actor_steps: steps } });
+      await activity(supabase, user_id, lid, "done", stepLabel, steps);
       report.stock_decremented.push(order.id.slice(0, 8));
     }
   } else {
@@ -327,6 +375,8 @@ async function sweepUser(
         report.drafts_resumed.push(shell.business_name);
         continue;
       }
+      const steps = draftSteps(shell.business_name);
+      const stepLabel = `Picked ${shell.business_name} back up`;
       const lid = await ledgerStart(supabase, {
         user_id,
         receptionist_id: shell.id,
@@ -335,6 +385,7 @@ async function sweepUser(
         before: { status: "shell" },
         visible: true,
       });
+      await activity(supabase, user_id, lid, "running", stepLabel, steps);
       const { data: job, error } = await supabase.from("plan_jobs").insert({
         receptionist_id: shell.id,
         user_id,
@@ -347,7 +398,8 @@ async function sweepUser(
       }).select("id").single();
       await ledgerFinish(supabase, lid, error || !job
         ? { status: "failed", error: "job queue failed" }
-        : { status: "done", after: { job_id: (job as { id: string }).id, receptionist_id: shell.id } });
+        : { status: "done", after: { job_id: (job as { id: string }).id, receptionist_id: shell.id, actor_steps: steps } });
+      await activity(supabase, user_id, lid, "done", stepLabel, steps);
       if (!error && job) report.drafts_resumed.push(shell.business_name);
     }
   } else {
