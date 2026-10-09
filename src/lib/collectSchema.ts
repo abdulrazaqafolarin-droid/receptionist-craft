@@ -157,8 +157,7 @@ const CONNECTOR_SCHEMAS: Record<string, CollectSchema> = {
   },
 };
 
-/** Generic OAuth credential schema (per-provider guide filled by caller). */
-export function oauthSchema(
+/** Generic OAuth credential schema (per-provider guide filled by caller). */export function oauthSchema(
   connectorKey: string,
   displayName: string,
   description: string,
@@ -177,6 +176,31 @@ export function oauthSchema(
     oauthGuide: guide,
     helpUrl: helpUrl ?? null,
     verifyFn: null,
+  };
+}
+
+/**
+ * CLI-harness connector schema (anything-CLI pattern): the connection runs
+ * a real command where a shell exists (companion or gateway runner), never
+ * in the browser. The dialog collects the command spec and where it runs;
+ * execution availability is reported honestly at verify time.
+ */
+export function cliSchema(
+  connectorKey: string,
+  displayName: string,
+  description: string,
+  harnessHint?: string | null,
+): CollectSchema {
+  return {
+    key: connectorKey,
+    title: `Connect ${displayName} via command`,
+    description: `${description} Runs as a real command where you allow it — never inside the browser.`,
+    fields: [
+      { name: "cli_command", label: "Command", placeholder: harnessHint || "e.g. tiktok-post --help", hint: "The exact command the runner executes." },
+      { name: "cli_context", label: "Where it runs", placeholder: "e.g. shop computer via companion", required: false, hint: "Which machine or runner should execute this." },
+    ],
+    submitLabel: "Save & check runner",
+    verifyFn: "verify-connector",
   };
 }
 

@@ -11,6 +11,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { askRutex, RutexMcpError } from "../_shared/rutexMcp.ts";
+import { researchNeed } from "../_shared/config/solutionResearch.ts";
+import { resolveNeed } from "../_shared/config/capabilityRegistry.ts";
 import {
   buildDirectorSystemPrompt,
   parseDirectorReply,
@@ -44,10 +46,11 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const user_id = typeof body.user_id === "string" ? body.user_id : "";
     const message = typeof body.message === "string" ? body.message.slice(0, 2000) : "";
-    const history = (Array.isArray(body.history) ? body.history : [])
-      .filter((m): m is ChatMsg => !!m && typeof m === "object" && typeof (m as ChatMsg).content === "string")
+    const rawHistory: unknown[] = Array.isArray(body.history) ? body.history : [];
+    const history = rawHistory
+      .filter((m: unknown): m is ChatMsg => !!m && typeof m === "object" && typeof (m as ChatMsg).content === "string")
       .slice(-10)
-      .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content.slice(0, 2000) }));
+      .map((m: ChatMsg) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content.slice(0, 2000) }));
     const thread_id = typeof body.thread_id === "string" ? body.thread_id : `director-${user_id.slice(0, 8)}`;
     if (!user_id || !message.trim()) {
       return jsonRes({ ok: false, error: "missing_user_id_or_message" }, 400);
@@ -153,6 +156,26 @@ serve(async (req) => {
     try {
       const r = await askRutex(thread_id, `${system}\n\n---\n\n${convo}`, { timeoutMs: 90000 });
       const parsed = parseDirectorReply(r.text || "");
+      // research_need executes server-side: resolved evidence rides back
+      // INLINE on the action (verified interface + provenance), so the
+      // client renders findings, never bare links. Informational — no
+      // grant needed, nothing moves but knowledge.
+      for (const a of parsed.actions) {
+        const act = a as { type?: string; need?: string; result?: unknown };
+        if (act.type === "research_need" && typeof act.need === "string" && act.need.trim()) {
+          try {
+            const researched = await researchNeed(act.need.trim().slice(0, 120));
+            act.result = resolveNeed(researched);
+          } catch {
+            act.result = {
+              success: false, need: act.need, best_interface: "search",
+              fallbacks: [], verification: "unverified", risk: "informational",
+              candidates: [], errors: ["research unavailable right now"],
+              provenance: { sources: [], retrieved_at: new Date().toISOString() },
+            };
+          }
+        }
+      }
       reply = { reply: parsed.reply, suggestions: parsed.suggestions, actions: parsed.actions };
     } catch (e) {
       if (e instanceof RutexMcpError) {

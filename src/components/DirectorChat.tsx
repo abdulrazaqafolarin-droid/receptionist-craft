@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ChatShell } from "@/components/widget/ChatShell";
+import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
 import { useBuildThreads } from "@/hooks/useBuildThreads";
 import { actionDef } from "@/lib/directorActionDefs";
 import type { GrantScope } from "@/lib/directorGrantRules";
@@ -42,6 +43,7 @@ export function DirectorChat({
   onNeedGrant: (scope: GrantScope) => void;
 }) {
   const navigate = useNavigate();
+  const ride = useActorHost();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -65,7 +67,14 @@ export function DirectorChat({
 
   async function runAction(action: DirectorAction, msgIdx: number) {
     if (action.type === "navigate") {
-      navigate(action.path);
+      // Ride there like a human: black-hole through the nav element when
+      // one exists, emerge at the destination. Falls back to instant
+      // navigation if the ride cannot stage — arrival either way.
+      const receipts = await ride.start(
+        [{ type: "goto", route: action.path }],
+        { tour: "director-ride", userId },
+      );
+      if (!receipts[0]?.ok) navigate(action.path);
       return;
     }
     if (action.type === "open_builder") {
@@ -272,9 +281,9 @@ export function DirectorChat({
                   ))}
                 </div>
               )}
-              {message.role === "ai" && message.actions && message.actions.length > 0 && (
+              {message.role === "ai" && message.actions && message.actions.some((a) => a.type !== "research_need") && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {message.actions.map((a, i) => (
+                  {message.actions.filter((a) => a.type !== "research_need").map((a, i) => (
                     <button
                       key={i}
                       disabled={executing !== null}
@@ -286,21 +295,57 @@ export function DirectorChat({
                   ))}
                 </div>
               )}
+              {message.role === "ai" && message.actions && message.actions.some((a) => a.type === "research_need" && (a as { result?: unknown }).result) && (
+                <div className="mt-2 space-y-2">
+                  {(message.actions.filter((a) => a.type === "research_need") as Array<{ need?: string; result?: {
+                    success: boolean; best_interface: string; fallbacks: string[]; verification: string;
+                    errors: string[]; candidates: Array<{ name: string; url: string; verification: string; evidence: string[] }>;
+                  } }>).map((a, i) => a.result && (
+                    <div key={i} className="rounded-xl border border-border bg-card p-2.5">
+                      <p className="text-xs font-medium">
+                        {a.result.success ? `Connects via ${a.result.best_interface}` : "No verified option yet"}
+                        <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{a.result.verification}</span>
+                      </p>
+                      {a.result.candidates.slice(0, 2).map((c, j) => (
+                        <a key={j} href={c.url} target="_blank" rel="noreferrer" className="mt-1 block truncate text-xs text-primary hover:underline">
+                          {c.name}
+                        </a>
+                      ))}
+                      {a.result.errors.length > 0 && (
+                        <p className="mt-1 text-[11px] text-muted-foreground">{a.result.errors[0]}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
         />
       </div>
+      <ActorCursor point={ride.point} swallow={ride.swallow} arriving={ride.arriving} size={48} />
+      <ActorOverlay
+        ring={ride.ring}
+        bubble={ride.bubble}
+        showcase={ride.showcase}
+        confirmAsk={ride.confirmAsk}
+        running={ride.running}
+        onStop={ride.stop}
+        onDismissBubble={ride.dismissBubble}
+        onDismissShowcase={ride.dismissShowcase}
+        onAnswerConfirm={ride.answerConfirm}
+      />
     </div>
   );
 }
 
 function actionLabel(a: DirectorAction): string {
   switch (a.type) {
-    case "navigate": return "Open";
+    case "navigate": return "Take me there";
     case "retry_job": return "Retry job";
     case "draft_helper": return `Draft helper`;
     case "adjust_operator": return "Plan change";
     case "open_builder": return "Open in Builder";
     case "open_grants": return "Review grants";
+    case "research_need": return "Research it";
   }
 }

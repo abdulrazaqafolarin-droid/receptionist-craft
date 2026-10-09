@@ -30,6 +30,7 @@ import QualityReview from "./pages/QualityReview";
 import Analytics from "./pages/Analytics";
 import KBRewrite from "./pages/KBRewrite";
 import Diagnostics from "./pages/Diagnostics";
+import BlueyDemo from "./pages/BlueyDemo";
 import Notifications from "./pages/Notifications";
 import RealtimeLogs from "./pages/RealtimeLogs";
 import Services from "./pages/Services";
@@ -194,6 +195,7 @@ const App = () => {
                               <Route path="/quality-review" element={<SurfaceGate><QualityReview /></SurfaceGate>} />
                               <Route path="/kb-rewrite" element={<SurfaceGate><KBRewrite /></SurfaceGate>} />
                               <Route path="/diagnostics" element={<Diagnostics />} />
+                              <Route path="/director-lab" element={<BlueyDemo />} />
                               <Route path="/notifications" element={<Notifications />} />
                               <Route path="/realtime-logs" element={<RealtimeLogs />} />
                               <Route path="/organization" element={<OrganizationPage />} />

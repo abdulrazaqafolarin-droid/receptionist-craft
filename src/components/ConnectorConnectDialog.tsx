@@ -7,6 +7,7 @@ import { CollectDialog } from "@/components/CollectDialog";
 import {
   getCollectSchema,
   oauthSchema,
+  cliSchema,
   type CollectSchema,
 } from "@/lib/collectSchema";
 import type { Database } from "@/integrations/supabase/types";
@@ -54,6 +55,7 @@ export function ConnectorConnectDialog({ definition, userId, onClose, onSaved }:
   const def = definition;
 
   const isOauth = def.auth_type === "oauth";
+  const isCli = def.auth_type === "cli";
   const schema: CollectSchema | null = isOauth
     ? (() => {
         const consoleInfo = def.oauth_provider ? OAUTH_CONSOLES[def.oauth_provider] : undefined;
@@ -64,7 +66,9 @@ export function ConnectorConnectDialog({ definition, userId, onClose, onSaved }:
           scopes: def.oauth_scopes || [],
         }, def.help_url);
       })()
-    : getCollectSchema(def.connector_key);
+    : isCli
+      ? cliSchema(def.connector_key, def.display_name, def.description)
+      : getCollectSchema(def.connector_key);
   if (!schema) return null;
   // Narrowed once for closures below (TS can't narrow across callbacks).
   const sch: CollectSchema = schema;

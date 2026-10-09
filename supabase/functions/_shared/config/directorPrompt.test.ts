@@ -61,3 +61,13 @@ Deno.test("replies parse strictly, junk fails loud", () => {
   }
   check(threw, "missing reply fails loud");
 });
+
+Deno.test("research actions survive the contract with need intact", () => {
+  const parsed = parseDirectorReply(JSON.stringify({
+    reply: "Looking into it.",
+    suggestions: [],
+    actions: [{ type: "research_need", need: "tiktok-auto-post" }, { type: "teleport" }],
+  }));
+  check(parsed.actions.length === 1, "research kept, junk dropped");
+  check((parsed.actions[0] as { need?: string }).need === "tiktok-auto-post", "need preserved for the resolver");
+});

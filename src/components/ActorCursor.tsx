@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { SVGProps } from "react";
+import { BlueySpeechBubble } from "@/components/BlueySpeechBubble";
 import { useNavigate } from "react-router-dom";
 import { Square } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -125,6 +126,7 @@ export function ActorCursor({
   arriving = false,
   size = 72,
   glow = true,
+  bouncing = false,
 }: {
   point: CursorPoint | null;
   color?: string;
@@ -133,6 +135,8 @@ export function ActorCursor({
   /** Body size in px (Bluey range 48–120). */
   size?: CursorSize;
   glow?: boolean;
+  /** Talk-test bounce in progress. */
+  bouncing?: boolean;
 }) {
   // Mirror the live point for gaze subscribers; clear on unmount-ish hides.
   useEffect(() => {
@@ -150,7 +154,7 @@ export function ActorCursor({
   const g2 = `actor-glow2-${uid}`;
   return (
     <div
-      className={`pointer-events-none fixed left-0 top-0 z-[90] motion-reduce:transition-none ${arriving && !point ? "actor-arrive" : "transition-transform duration-500 ease-out"}`}
+      className={`pointer-events-none fixed left-0 top-0 z-[90] motion-reduce:transition-none ${arriving && !point ? "actor-arrive" : "transition-transform duration-500 ease-out"} ${bouncing ? "bluey-bounce" : ""}`}
       style={
         arriving && !point
           ? { left: "50%", top: "96px" }
@@ -247,9 +251,94 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
   const [confirmAsk, setConfirmAsk] = useState<ConfirmAsk | null>(null);
   const [running, setRunning] = useState(false);
   const [receipts, setReceipts] = useState<ActorReceipt[]>([]);
+  // Bluey life: follow mode trails the owner's mouse when idle; the cursor
+  // rests at its dock (bottom-right home) after work and when hidden it
+  // stays hidden until asked back. Preferences persist locally per user.
+  const [follow, setFollow] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("rutex-cursor-follow") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [cursorHidden, setCursorHidden] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("rutex-cursor-hidden") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [bouncing, setBouncing] = useState(false);
   const stopRef = useRef(false);
+  const runningRef = useRef(false);
+  const runSeqRef = useRef(0);
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
+
+  const dockPoint = useCallback((): CursorPoint => {
+    const w = typeof window !== "undefined" ? window.innerWidth : 1280;
+    const h = typeof window !== "undefined" ? window.innerHeight : 800;
+    return { x: Math.max(16, w - 96), y: Math.max(16, h - 150) };
+  }, []);
+
+  const goHome = useCallback(() => {
+    setPoint(dockPoint());
+  }, [dockPoint]);
+
+  const toggleFollow = useCallback((on?: boolean) => {
+    setFollow((v) => {
+      const next = on ?? !v;
+      try {
+        localStorage.setItem("rutex-cursor-follow", next ? "1" : "0");
+      } catch {
+        // preference stays session-local
+      }
+      return next;
+    });
+  }, []);
+
+  const setVisible = useCallback((visible: boolean) => {
+    try {
+      localStorage.setItem("rutex-cursor-hidden", visible ? "0" : "1");
+    } catch {
+      // ignore
+    }
+    setCursorHidden(!visible);
+    if (!visible) {
+      setPoint(null);
+      publishCursorPoint(null);
+    }
+  }, []);
+
+  const bounce = useCallback(() => {
+    setBouncing(true);
+    setTimeout(() => setBouncing(false), 2800);
+  }, []);
+
+  // Follow engine: while enabled and no run is active, the cursor trails
+  // the owner's mouse (rAF-throttled, CSS lag does the smoothing). Tours
+  // take precedence instantly; when they end, the cursor glides home and
+  // follow resumes from the live mouse.
+  useEffect(() => {
+    if (!follow || cursorHidden) return;
+    let raf = 0;
+    let pending: CursorPoint | null = null;
+    const onMove = (e: MouseEvent) => {
+      pending = { x: e.clientX, y: e.clientY };
+      if (!raf) {
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          if (pending && !runningRef.current) setPoint(pending);
+          pending = null;
+        });
+      }
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [follow, cursorHidden]);
 
   // Black-hole arrival: a traverse on the previous page leaves a note; a
   // host on the new page picks it up and emerges the cursor. Cross-page
@@ -282,6 +371,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
 
   const stop = useCallback(() => {
     stopRef.current = true;
+    runningRef.current = false;
     setRunning(false);
   }, []);
 
@@ -338,6 +428,8 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
   ) => {
     const mode = opts?.mode ?? "ride";
     stopRef.current = false;
+    runningRef.current = true;
+    const mySeq = ++runSeqRef.current;
     setRunning(true);
     setReceipts([]);
     const runId = ++runSeq;
@@ -409,8 +501,17 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     }, { mode });
     setReceipts(out);
     setRunning(false);
+    runningRef.current = false;
     activeRuns.delete(runId);
     publishRuns();
+    // Resting place: when no follow mode is waiting to take over, glide
+    // home after a beat so the cursor visibly finishes its work.
+    if (!follow) {
+      const seq = mySeq;
+      setTimeout(() => {
+        if (runSeqRef.current === seq && !runningRef.current) goHome();
+      }, 2200);
+    }
     // Permanent half of the audit surface: one row per completed run.
     // Fire-and-forget — a failed insert must never disturb a tour.
     if (out.length > 0 && opts?.userId) {
@@ -436,7 +537,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       })();
     }
     return out;
-  }, [navigate]);
+  }, [navigate, follow, goHome]);
 
   const clear = useCallback(() => {
     setPoint(null);
@@ -457,7 +558,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     setShowcase(null);
   }, []);
 
-  return { point, ring, bubble, showcase, confirmAsk, running, receipts, start, stop, clear, dismissBubble, dismissShowcase, answerConfirm, swallow, arriving, requestTakeover };
+  return { point, ring, bubble, showcase, confirmAsk, running, receipts, start, stop, clear, dismissBubble, dismissShowcase, answerConfirm, swallow, arriving, requestTakeover, follow, toggleFollow, setVisible, cursorHidden, goHome, bounce, bouncing };
 }
 
 /** The highlight ring + narration bubble + STOP control for an active run. */
@@ -502,21 +603,7 @@ export function ActorOverlay({
         />
       )}
       {bubble && (
-        <div className="fixed bottom-24 left-1/2 z-[91] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2" role="status">
-          <div className="relative rounded-2xl border-2 border-primary/40 bg-card p-3 shadow-xl">
-            <p className="text-sm">{bubble}</p>
-            <button
-              onClick={onDismissBubble}
-              className="mt-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Dismiss
-            </button>
-            <span
-              className="absolute -bottom-[7px] left-8 h-3.5 w-3.5 rotate-45 border-b-2 border-r-2 border-primary/40 bg-card"
-              aria-hidden="true"
-            />
-          </div>
-        </div>
+        <BlueySpeechBubble text={bubble} onDismiss={onDismissBubble} />
       )}
       {showcase && (
         <div

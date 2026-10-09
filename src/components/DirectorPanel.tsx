@@ -9,6 +9,7 @@
  */
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DirectorChat } from "@/components/DirectorChat";
 import { GRANT_SCOPES, useDirectorGrants, type GrantScope } from "@/lib/directorGrants";
@@ -24,6 +25,7 @@ export function DirectorPanel({
   userId: string | undefined;
 }) {
   const [view, setView] = useState<"chat" | "grants">("chat");
+  const navigate = useNavigate();
   const { grants, available, setGrant, check } = useDirectorGrants(userId, open);
   const [saving, setSaving] = useState<string | null>(null);
 
@@ -94,6 +96,12 @@ export function DirectorPanel({
                 );
               })}
             </ul>
+            <button
+              onClick={() => { onClose(); navigate("/director-lab"); }}
+              className="mt-3 w-full rounded-xl border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Open Director lab (cursor playground — touches nothing)
+            </button>
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col" style={{ minHeight: "50vh" }}>

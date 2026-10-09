@@ -16,6 +16,7 @@ import { useActorRuns, useCursorGaze } from "@/components/ActorCursor";
 import { resolveMood, type BuddyMood } from "@/lib/directorMood";
 
 export type BuddyState = "idle" | "working" | "needs-you";
+export type { BuddyMood } from "@/lib/directorMood";
 
 const STATE_DOT: Record<BuddyState, string> = {
   idle: "bg-muted-foreground/40",
@@ -43,11 +44,14 @@ export function DirectorBuddy({
   line,
   size = "medium",
   briefingOpen = false,
+  forceMood,
 }: {
   state: BuddyState;
   line: string;
   size?: keyof typeof FACE_PX;
   briefingOpen?: boolean;
+  /** Demo override: show this mood regardless of live state. */
+  forceMood?: BuddyMood;
 }) {
   const gaze = useCursorGaze();
   const runs = useActorRuns();
@@ -72,7 +76,7 @@ export function DirectorBuddy({
     };
   }, []);
 
-  const mood = resolveMood({
+  const mood = forceMood ?? resolveMood({
     briefingOpen,
     runsActive: runs.length > 0,
     idleMinutes: idleMin,

@@ -50,7 +50,8 @@ export type DirectorAction =
   | { type: "draft_helper"; description: string; name?: string }
   | { type: "adjust_operator"; operator_id: string; note: string }
   | { type: "open_builder"; operator_id: string }
-  | { type: "open_grants" };
+  | { type: "open_grants" }
+  | { type: "research_need"; need: string; result?: unknown };
 
 export interface DirectorReply {
   reply: string;
@@ -98,6 +99,7 @@ WHAT YOU CAN DO (and only these — never claim another):
 - coordinate: connect dots across operators (a review that needs stock info, bookings leaking while shifts gap).
 - build: propose a new helper (draft_helper with a plain description) — always a DRAFT, never live.
 - manage: retry failed jobs (retry_job), adjust an operator (adjust_operator with operator_id + change note — drafted, review in Builder).
+- research: investigate an outside need (research_need with the need string) — resolved with interface, verification, and provenance, never bare links.
 - track/monitor/observe: read the records above; report deltas between turns ("since you last asked…") when asked.
 - advise: every reply ends with 1-2 concrete next moves grounded in the rows above. No generic tips.
 - You know every operator above (built, half-built, paused), every version, every build chat. Quote them by name.
@@ -118,7 +120,8 @@ OUTPUT CONTRACT (STRICT JSON, no markdown fences, nothing else):
     { "type": "draft_helper", "description": "plain words", "name": "optional" },
     { "type": "adjust_operator", "operator_id": "uuid", "note": "change note" },
     { "type": "open_builder", "operator_id": "uuid" },
-    { "type": "open_grants" }
+    { "type": "open_grants" },
+    { "type": "research_need", "need": "tiktok-auto-post" }
   ]
 }
 Actions run only the operations above with ids/paths from THESE records. An action referencing anything unlisted is void — emit none rather than guess. Omit empty arrays. "speak" is never an action; the reply IS the speech.`;
@@ -139,7 +142,8 @@ export function parseDirectorReply(text: string): DirectorReply {
       if (!a || typeof a !== "object") return false;
       const t = (a as Record<string, unknown>).type;
       return t === "navigate" || t === "retry_job" || t === "draft_helper" ||
-        t === "adjust_operator" || t === "open_builder" || t === "open_grants";
+        t === "adjust_operator" || t === "open_builder" || t === "open_grants" ||
+        t === "research_need";
     }).slice(0, 4)
     : [];
   return { reply: parsed.reply.trim().slice(0, 2000), suggestions, actions };

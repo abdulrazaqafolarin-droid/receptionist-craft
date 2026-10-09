@@ -1,0 +1,74 @@
+/**
+ * bluey-animations.css — Bluey motion vocabulary, translated for the web.
+ *
+ * Studied from the Bluey source (eased follow, landing wobble, talk-test
+ * bounce, dock glide, sleep breathing, glow pulse). Original keyframes in
+ * our timing system; every animation below is killed by the global
+ * reduced-motion rule in index.css. Imported once from index.css.
+ */
+
+/* Talk-test bounce: the "are you alive" hop (their 3-second bounce test). */
+@keyframes bluey-bounce {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  30% { transform: translateY(-22%) scale(0.96, 1.06); }
+  55% { transform: translateY(0) scale(1.04, 0.94); }
+  75% { transform: translateY(-10%) scale(0.99, 1.02); }
+}
+.bluey-bounce {
+  animation: bluey-bounce 0.9s ease-in-out 3;
+}
+
+/* Sleep breathing: slow scale swell for the resting buddy. */
+@keyframes bluey-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.035); }
+}
+.bluey-breathe {
+  animation: bluey-breathe 4.5s ease-in-out infinite;
+}
+
+/* Dock glide home: eased return to the resting place. */
+@keyframes bluey-dock {
+  0% { opacity: 1; }
+  100% { opacity: 1; }
+}
+.bluey-dock {
+  transition: transform 0.9s cubic-bezier(0.25, 1, 0.35, 1), opacity 0.4s ease;
+}
+
+/* Follow drift: the cursor trails the owner's mouse with a soft lag.
+   Applied by the follow engine; the lag lives in JS, the smoothing here. */
+.bluey-follow {
+  transition: transform 0.45s cubic-bezier(0.3, 0.9, 0.3, 1);
+}
+
+/* Glow pulse: breathing halo for the working state. */
+@keyframes bluey-glow-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+}
+.bluey-glow-pulse {
+  animation: bluey-glow-pulse 2.4s ease-in-out infinite;
+}
+
+/* Speech bubble pop-in (their cartoon appearance, our easing). */
+@keyframes bluey-bubble-in {
+  0% { transform: translate(-50%, 8px) scale(0.92); opacity: 0; }
+  60% { transform: translate(-50%, -1px) scale(1.01); opacity: 1; }
+  100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+}
+.bluey-bubble-in {
+  animation: bluey-bubble-in 0.28s ease-out both;
+}
+
+/* Landing wobble tail (extends the black-hole arrival). */
+@keyframes bluey-land {
+  0% { transform: rotate(-6deg) scale(1.06); }
+  45% { transform: rotate(4deg) scale(0.99); }
+  70% { transform: rotate(-2deg) scale(1.01); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+.bluey-land {
+  animation: bluey-land 0.6s ease-out both;
+  transform-origin: top center;
+}

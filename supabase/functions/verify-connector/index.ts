@@ -115,6 +115,38 @@ serve(async (req) => {
       return jsonRes({ ok: true, status: "configured", detail: "saved — first review check confirms it" });
     }
 
+    // CLI-harness connectors (anything-CLI pattern): the command runs where
+    // a shell exists (companion app or gateway runner) — never in the
+    // browser, never here. If a runner endpoint is configured, probe it;
+    // otherwise save honestly as pending instead of faking a connection.
+    if (typeof creds.cli_command === "string" && creds.cli_command.trim()) {
+      const runnerUrl = (Deno.env.get("RUTEX_RUNNER_URL") || "").replace(/\/$/, "");
+      if (runnerUrl) {
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 15000);
+          let probe: Response;
+          try {
+            probe = await fetch(`${runnerUrl}/run`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ command: "check", connector_key: key }),
+              signal: ctrl.signal,
+            });
+          } finally {
+            clearTimeout(timer);
+          }
+          if (probe.ok) {
+            return jsonRes({ ok: true, status: "connected", detail: "runner reachable — commands execute on next use" });
+          }
+          return jsonRes({ ok: true, status: "configured", detail: "saved — runner answered with an error, will retry on next use" });
+        } catch {
+          return jsonRes({ ok: true, status: "configured", detail: "saved — runner unreachable right now, will retry on next use" });
+        }
+      }
+      return jsonRes({ ok: true, status: "configured", detail: "saved — runs when your companion or gateway runner connects" });
+    }
+
     return jsonRes({ ok: false, error: "unsupported_connector", detail: `${key} verifies via OAuth, not keys` }, 400);
   } catch (e) {
     console.error("[verify-connector] Error:", e);
