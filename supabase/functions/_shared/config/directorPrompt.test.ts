@@ -91,3 +91,19 @@ Deno.test("guide steps validate through the actor validator", () => {
   const steps = (parsed.actions[0] as { steps?: unknown[] }).steps || [];
   check(steps.length === 1, "bad steps stripped inside the guide");
 });
+
+Deno.test("guide clicks on registered buttons survive validation", () => {
+  const parsed = parseDirectorReply(JSON.stringify({
+    reply: "Clicking it now.",
+    suggestions: [],
+    actions: [{
+      type: "guide",
+      steps: [
+        { type: "click", target: "console-stock-check" },
+        { type: "click", target: "mystery-button" },
+      ],
+    }],
+  }));
+  const steps = (parsed.actions[0] as { steps?: Array<{ type?: string }> }).steps || [];
+  check(steps.length === 1 && steps[0].type === "click", "registered click kept, ghost click dropped");
+});
