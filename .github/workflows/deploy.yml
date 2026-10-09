@@ -83,6 +83,9 @@ jobs:
       - name: Run director prompt test (contract + research action)
         run: deno test supabase/functions/_shared/config/directorPrompt.test.ts
 
+      - name: Run director ledger test (writers never throw)
+        run: deno test supabase/functions/_shared/directorLedger.test.ts
+
       - name: Actor tours export is fresh (Jev reads this file)
         run: |
           deno run --allow-read --allow-write scripts/export-actor-tours.ts
