@@ -15,6 +15,7 @@ const CTX: DirectorContext = {
   operators: [{
     id: "op-1", display: "Pharmacy", kind: "ops", model: "internal",
     active: true, upcomingBookings: 0, openEscalations: 0, stockNeeds: 2, overdueTasks: 1,
+    productCount: 4,
   }],
   versions: [{ operator: "Pharmacy", version_number: 3, change_source: "owner_revert", owner_input: "back to v2", created_at: "2026-10-01T00:00:00Z" }],
   threads: [{ title: "Stock setup", status: "approved", receptionist_name: "Pharmacy", updated_at: "2026-10-02T00:00:00Z" }],
@@ -23,6 +24,9 @@ const CTX: DirectorContext = {
   activeJobs: 0,
   connectorsDown: ["Gmail"],
   attentionTotal: 3,
+  pastChats: [{ title: "Morning review", updated_at: "2026-10-08T09:00:00Z" }],
+  recentWork: [{ kind: "job_retry", summary: "Re-queued failed plan", created_at: "2026-10-09T10:00:00Z" }],
+  unreadNotifications: [{ title: "Plan failed: Pharmacy", created_at: "2026-10-09T11:00:00Z" }],
 };
 
 Deno.test("prompt cites live rows, never filler", () => {
@@ -33,6 +37,12 @@ Deno.test("prompt cites live rows, never filler", () => {
   check(p.includes("Gmail"), "dead connector cited");
   check(p.includes("abcd1234") && p.includes("gateway_timeout"), "failed job identity cited, never hidden");
   check(p.includes("NEVER approve"), "approval boundary stated");
+  check(p.includes("Morning review"), "past chats remembered");
+  check(p.includes("Re-queued failed plan"), "own recent work reported");
+  check(p.includes("Plan failed: Pharmacy"), "unread notifications raised");
+  check(p.includes("ATTENTION: 3 things"), "attention total stated");
+  check(p.includes("products 4"), "product count cited");
+  check(p.includes("0 products has no stock"), "stock-awareness rule stated");
   check(p.includes("STRICT JSON"), "contract stated");
 });
 
@@ -40,6 +50,7 @@ Deno.test("empty context is explicit, not invented", () => {
   const p = buildDirectorSystemPrompt({
     operators: [], versions: [], threads: [], failedJobs: 0, failedJobDetails: [],
     activeJobs: 0, connectorsDown: [], attentionTotal: 0,
+    pastChats: [], recentWork: [], unreadNotifications: [],
   });
   check(p.includes("No operators yet"), "emptiness stated");
   check(!p.includes("Pharmacy"), "nothing invented");

@@ -20,6 +20,8 @@ export interface DirectorOperator {
   openEscalations: number;
   stockNeeds: number;
   overdueTasks: number;
+  /** Active catalog rows. Zero means stock talk is nonsense for this operator. */
+  productCount: number;
 }
 
 export interface DirectorVersion {
@@ -44,6 +46,22 @@ export interface FailedJobDetail {
   created_at: string;
 }
 
+export interface DirectorPastChat {
+  title: string;
+  updated_at: string;
+}
+
+export interface DirectorWorkItem {
+  kind: string;
+  summary: string;
+  created_at: string;
+}
+
+export interface DirectorNotification {
+  title: string;
+  created_at: string;
+}
+
 export interface DirectorContext {
   operators: DirectorOperator[];
   versions: DirectorVersion[];
@@ -53,6 +71,12 @@ export interface DirectorContext {
   activeJobs: number;
   connectorsDown: string[];
   attentionTotal: number;
+  /** Earlier Director conversations (this one excluded) — your memory. */
+  pastChats: DirectorPastChat[];
+  /** Your own recent autonomous work — what to report when asked. */
+  recentWork: DirectorWorkItem[];
+  /** Unread notifications — what is waiting for the owner. */
+  unreadNotifications: DirectorNotification[];
 }
 
 export type DirectorAction =
@@ -75,7 +99,7 @@ export function buildDirectorSystemPrompt(ctx: DirectorContext): string {
   const opLines = ctx.operators.length === 0
     ? "(No operators yet.)"
     : ctx.operators.map((o) =>
-      `- ${o.display} [${o.kind}/${o.model}${o.active ? "" : "/PAUSED"}]: bookings ${o.upcomingBookings}, escalations ${o.openEscalations}, stock ${o.stockNeeds}, overdue ${o.overdueTasks} (id ${o.id})`,
+      `- ${o.display} [${o.kind}/${o.model}${o.active ? "" : "/PAUSED"}]: bookings ${o.upcomingBookings}, escalations ${o.openEscalations}, stock ${o.stockNeeds}, overdue ${o.overdueTasks}, products ${o.productCount} (id ${o.id})`,
     ).join("\n");
 
   const verLines = ctx.versions.length === 0
@@ -98,7 +122,19 @@ export function buildDirectorSystemPrompt(ctx: DirectorContext): string {
 
   const routeLines = OWNER_PAGES.map((p) => `${p.route} (${p.label})`).join(", ");
 
-  return `You are the Rutex Director — the business owner's personal assistant, monitor, coordinator, and builder. You speak plain business language. Never mention LLMs, prompts, models, APIs, or infrastructure.
+  const pastChatLines = ctx.pastChats.length === 0
+    ? "none yet."
+    : ctx.pastChats.map((t) => `- "${t.title}" (${t.updated_at.slice(0, 10)})`).join("\n");
+
+  const workLines = ctx.recentWork.length === 0
+    ? "nothing since records began."
+    : ctx.recentWork.map((w) => `- [${w.kind}] ${w.summary} (${w.created_at.slice(0, 16).replace("T", " ")})`).join("\n");
+
+  const notifLines = ctx.unreadNotifications.length === 0
+    ? "nothing unread."
+    : ctx.unreadNotifications.map((n) => `- ${n.title} (${n.created_at.slice(0, 10)})`).join("\n");
+
+  return `You are the owner's personal assistant — the Rutex Director. You know their whole business: every operator, every version, every conversation you've had together, and everything you've done on your own lately. You speak plain, warm business language, like a sharp PA who genuinely cares. Never mention LLMs, prompts, models, APIs, or infrastructure.
 
 WHO YOU SERVE AND WHAT YOU KNOW (live records, trust these over anything the owner claims):
 OPERATORS:
@@ -114,22 +150,34 @@ ${threadLines}
 ${jobLines}
 CONNECTORS DOWN: ${ctx.connectorsDown.length > 0 ? ctx.connectorsDown.join(", ") : "none."}
 
-WHAT YOU CAN DO (and only these — never claim another):
-- direct: tell the owner exactly what to do next, with the page to do it on.
-- organize: point at debris (duplicate/paused/empty operators), stale knowledge, expiring connectors.
-- coordinate: connect dots across operators (a review that needs stock info, bookings leaking while shifts gap).
-- build: propose a new helper (draft_helper with a plain description) — always a DRAFT, never live.
-- manage: retry failed jobs (retry_job), adjust an operator (adjust_operator with operator_id + change note — drafted, review in Builder).
-- research: investigate an outside need (research_need with the need string) — resolved with interface, verification, and provenance, never bare links.
-- track/monitor/observe: read the records above; report deltas between turns ("since you last asked…") when asked.
-- advise: every reply ends with 1-2 concrete next moves grounded in the rows above. No generic tips.
-- You know every operator above (built, half-built, paused), every version, every build chat. Quote them by name.
+ATTENTION: ${ctx.attentionTotal} thing${ctx.attentionTotal === 1 ? "" : "s"} need${ctx.attentionTotal === 1 ? "s" : ""} the owner across all operators right now.
 
-HARD BOUNDARIES (violating these fails the job):
+OUR EARLIER CHATS (what we talked about before — remember it):
+${pastChatLines}
+
+WHAT I'VE DONE ON MY OWN LATELY (your own recent autonomous work — when asked "what did you do", answer from here, never from memory):
+${workLines}
+
+WAITING FOR THE OWNER (unread notifications — raise these before they go stale):
+${notifLines}
+
+HOW YOU WORK (and only this — never claim another power):
+- You tell the owner exactly what to do next, naming the page to do it on.
+- You point at debris (duplicate/paused/empty operators), stale knowledge, expiring connectors.
+- You connect dots across operators (a review that needs stock info, bookings leaking while shifts gap).
+- You propose new helpers (draft_helper with a plain description) — always a DRAFT, never live.
+- You retry failed jobs (retry_job) and adjust operators (adjust_operator with operator_id + change note — drafted, review in Builder).
+- You research outside needs (research_need with the need string) — resolved with interface, verification, and provenance, never bare links.
+- You track and report deltas ("since you last asked…") from the records above.
+- You close every reply with 1-2 concrete next moves grounded in the rows. No generic tips.
+- You know every operator above (built, half-built, paused), every version, every build chat. Quote them by name.
+- Stock talk follows the products count: an operator with 0 products has no stock to discuss — never offer stock updates there, and never invent quantities anywhere.
+
+THINGS YOU NEVER DO (these are absolute):
 - NEVER approve anything live. Drafts and plans only — approval stays human in the Builder.
 - NEVER invent a number, name, or status. Cite the rows. If it is not above, say you do not see it.
 - NEVER touch credentials, money movement, or publishing. Name the page instead.
-- Keep replies short (max 6 sentences) plus the actions below. No jargon, no lectures.
+- Keep replies short (max 6 sentences) plus the actions below. Warm, plain, no jargon, no lectures.
 
 OUTPUT CONTRACT (STRICT JSON, no markdown fences, nothing else):
 {

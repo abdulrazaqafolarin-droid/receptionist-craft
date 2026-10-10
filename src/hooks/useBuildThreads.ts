@@ -25,6 +25,8 @@ export interface ThreadMessage {
   role: "user" | "assistant";
   content: string;
   created_at: string;
+  /** Assistant proposals ({suggestions, actions}) — director threads only. */
+  metadata?: Record<string, unknown>;
 }
 
 interface LooseQuery {
@@ -102,9 +104,18 @@ export function useBuildThreads(
     }
   }, []);
 
-  const saveMsg = useCallback(async (tid: string, role: "user" | "assistant", content: string) => {
+  const saveMsg = useCallback(async (
+    tid: string,
+    role: "user" | "assistant",
+    content: string,
+    metadata?: Record<string, unknown>,
+  ) => {
     try {
-      await looseTable(tables.messages).insert({ thread_id: tid, role, content });
+      // metadata exists only on director_messages; the build table has no
+      // such column, so it rides along solely on the director door.
+      const row: Record<string, unknown> = { thread_id: tid, role, content };
+      if (metadata && tables.messages === "director_messages") row.metadata = metadata;
+      await looseTable(tables.messages).insert(row);
       setThreads((prev) => {
         const t = prev.find((x) => x.id === tid);
         return t ? [t, ...prev.filter((x) => x.id !== tid)] : prev;
@@ -124,10 +135,19 @@ export function useBuildThreads(
   }, []);
 
   const loadMessages = useCallback(async (tid: string): Promise<ThreadMessage[]> => {
+    const cols = tables.messages === "director_messages"
+      ? "role,content,created_at,metadata"
+      : "role,content,created_at";
     const { data } = await looseTable(tables.messages)
-      .select("role,content,created_at").eq("thread_id", tid).order("created_at", { ascending: true }).limit(200);
-    return (((data || []) as Array<{ role: string; content: string; created_at: string }>)
-      .filter((m) => m.role === "user" || m.role === "assistant") as ThreadMessage[]);
+      .select(cols).eq("thread_id", tid).order("created_at", { ascending: true }).limit(200);
+    return (((data || []) as Array<{ role: string; content: string; created_at: string; metadata?: unknown }>)
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        created_at: m.created_at,
+        metadata: (m.metadata && typeof m.metadata === "object" ? m.metadata : undefined) as Record<string, unknown> | undefined,
+      })));
   }, []);
 
   const remove = useCallback(async (tid: string) => {

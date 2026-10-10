@@ -1,11 +1,15 @@
 /**
  * DirectorBuddy — the Director's face.
  *
- * Original Rutex character with Bluey's behavior spec: gaze-tracking
- * pupils (they look at the live cursor), engagement moods (listening,
- * talking, pointing, sleepy, resting), drowsiness timers, calm blinking.
+ * An original blue-heeler-inspired dog face (blue fur, upright ears,
+ * light muzzle) with Bluey's behavior spec: gaze-tracking pupils (they
+ * look at the live cursor), engagement moods (listening, talking,
+ * pointing, sleepy, resting), drowsiness timers, calm blinking.
  * Presence (idle/working/needs-you) stays a separate data dot — mood is
  * about attention in the room, never about inventing urgency.
+ *
+ * Deliberately not the cartoon character: same warmth and palette
+ * family, original drawing. The gaze/blink/mood machine is untouched.
  *
  * Sizes: compact (48px, headers) and medium (104px, the home section —
  * roughly a quarter of the card, the resting presence).
@@ -26,17 +30,24 @@ const STATE_DOT: Record<BuddyState, string> = {
 
 const FACE_PX = { compact: 48, medium: 104 } as const;
 
+const INK = "hsl(222 32% 14% / 0.88)";
+
 function Mouth({ mood }: { mood: BuddyMood }) {
   if (mood === "talking") {
-    return <ellipse cx="24" cy="33" rx="3.4" ry="4.4" fill="hsl(0 0% 100% / 0.92)" />;
+    return (
+      <g>
+        <ellipse cx="24" cy="34" rx="3.4" ry="4.2" fill={INK} />
+        <ellipse cx="24" cy="35.6" rx="1.7" ry="1.8" fill="hsl(0 65% 62% / 0.9)" />
+      </g>
+    );
   }
   if (mood === "sleepy") {
-    return <line x1="20" y1="33" x2="28" y2="33" stroke="hsl(0 0% 100% / 0.9)" strokeWidth="1.8" strokeLinecap="round" />;
+    return <line x1="20" y1="34" x2="28" y2="34" stroke={INK} strokeWidth="1.8" strokeLinecap="round" />;
   }
   if (mood === "resting") {
-    return <path d="M21 34 Q24 32.5 27 34" stroke="hsl(0 0% 100% / 0.85)" strokeWidth="1.6" fill="none" strokeLinecap="round" />;
+    return <path d="M21 35 Q24 33.5 27 35" stroke={INK} strokeWidth="1.6" fill="none" strokeLinecap="round" />;
   }
-  return <path d="M19 32 Q24 35.5 29 32" stroke="hsl(0 0% 100% / 0.9)" strokeWidth="1.8" fill="none" strokeLinecap="round" />;
+  return <path d="M19 33 Q24 36.5 29 33" stroke={INK} strokeWidth="1.8" fill="none" strokeLinecap="round" />;
 }
 
 export function DirectorBuddy({
@@ -98,16 +109,28 @@ export function DirectorBuddy({
   const px = FACE_PX[size];
   return (
     <div className="flex items-center gap-4" role="status" aria-label={`Assistant status: ${state}, mood ${mood}. ${line}`}>
-      <div ref={faceRef} className="relative shrink-0" style={{ width: px, height: px }} aria-hidden="true">
+      <div ref={faceRef} className="bluey-breathe relative shrink-0" style={{ width: px, height: px }} aria-hidden="true">
         <svg viewBox="0 0 48 48" className="h-full w-full drop-shadow-md">
           <defs>
-            <radialGradient id={`buddy-body-${size}`} cx="38%" cy="32%" r="75%">
-              <stop offset="0%" stopColor="hsl(var(--primary) / 0.9)" />
-              <stop offset="100%" stopColor="hsl(var(--primary) / 0.55)" />
+            <radialGradient id={`buddy-fur-${size}`} cx="38%" cy="30%" r="78%">
+              <stop offset="0%" stopColor="#7ba7e6" />
+              <stop offset="100%" stopColor="#3f66a3" />
             </radialGradient>
           </defs>
-          <circle cx="24" cy="26" r="18" fill={`url(#buddy-body-${size})`} />
-          <ellipse cx="24" cy="26" rx="18" ry="18" fill="none" stroke="hsl(var(--primary) / 0.35)" strokeWidth="1.5" />
+          {/* Upright ears */}
+          <path d="M11 16 L8 2 Q8 0.5 9.5 1 L20 9 Z" fill="#2e4a76" />
+          <path d="M37 16 L40 2 Q40 0.5 38.5 1 L28 9 Z" fill="#2e4a76" />
+          <path d="M12 13 L10.5 5 L17 10 Z" fill="#4a6fa0" />
+          <path d="M36 13 L37.5 5 L31 10 Z" fill="#4a6fa0" />
+          {/* Head */}
+          <circle cx="24" cy="27" r="17" fill={`url(#buddy-fur-${size})`} />
+          <ellipse cx="24" cy="27" rx="17" ry="17" fill="none" stroke="#2e4a76" strokeOpacity="0.4" strokeWidth="1.5" />
+          {/* Tan brow dots */}
+          <ellipse cx="17.5" cy="15.5" rx="2" ry="1.4" fill="#c9a06a" opacity="0.9" />
+          <ellipse cx="30.5" cy="15.5" rx="2" ry="1.4" fill="#c9a06a" opacity="0.9" />
+          {/* Light muzzle + nose */}
+          <ellipse cx="24" cy="32" rx="8.5" ry="6" fill="#dce7f5" />
+          <ellipse cx="24" cy="29.5" rx="2.6" ry="1.9" fill="#1e2a3a" />
           <g className="buddy-blink" style={{ transformOrigin: "24px 22px" }}>
             <g style={{ transform: `translate(${gx}px, ${gy}px) scale(1, ${lidScale})`, transformOrigin: "24px 22px" }}>
               <ellipse cx="17.5" cy="22" rx="3.2" ry="4.2" fill="white" />

@@ -207,7 +207,12 @@ export function DirectorChat({
         actions: (d.actions || []).filter((a): a is DirectorAction => !!a && typeof a === "object"),
       };
       setMessages((prev) => [...prev, aiMsg]);
-      if (tid) void saveMsg(tid, "assistant", d.reply || "…");
+      if (tid) {
+        void saveMsg(tid, "assistant", d.reply || "…", {
+          suggestions: aiMsg.suggestions || [],
+          actions: aiMsg.actions || [],
+        });
+      }
       if (voiceOn && d.reply && d.reply !== "…") {
         void speakDirectorText(d.reply, voiceProvider).catch(() => {
           // voice is a courtesy — a failed lane never breaks the chat
@@ -228,11 +233,22 @@ export function DirectorChat({
     try {
       const loaded = await loadMessages(id);
       threadIdRef.current = id;
-      setMessages(loaded.map((m) => ({
-        role: (m.role === "assistant" ? "ai" : "owner") as ChatMessage["role"],
-        content: m.content,
-        timestamp: m.created_at,
-      })));
+      setMessages(loaded.map((m) => {
+        const meta = m.metadata || {};
+        const suggestions = Array.isArray(meta.suggestions)
+          ? meta.suggestions.filter((s): s is string => typeof s === "string")
+          : undefined;
+        const actions = Array.isArray(meta.actions)
+          ? (meta.actions as DirectorAction[]).filter((a) => !!a && typeof a === "object")
+          : undefined;
+        return {
+          role: (m.role === "assistant" ? "ai" : "owner") as ChatMessage["role"],
+          content: m.content,
+          timestamp: m.created_at,
+          ...(suggestions && suggestions.length > 0 ? { suggestions } : {}),
+          ...(actions && actions.length > 0 ? { actions } : {}),
+        };
+      }));
       setShowHistory(false);
     } catch {
       toast.error("Could not open that conversation");

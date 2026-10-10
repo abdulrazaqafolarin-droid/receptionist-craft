@@ -96,10 +96,11 @@ serve(async (req) => {
     const todayStr = dayStr(new Date());
 
     const perOp = await Promise.all(operators.map(async (op) => {
-      const [apptRes, escRes, stockRes] = await Promise.all([
+      const [apptRes, escRes, stockRes, prodRes] = await Promise.all([
         supabase.from("appointments").select("*", { count: "exact", head: true }).eq("receptionist_id", op.id).gte("start_time", today.toISOString()),
         supabase.from("escalations").select("*", { count: "exact", head: true }).eq("receptionist_id", op.id).is("resolved_at", null),
         supabase.from("services").select("stock_quantity,low_stock_threshold,expiry_date").eq("receptionist_id", op.id).eq("active", true).not("stock_quantity", "is", null).limit(200),
+        supabase.from("services").select("*", { count: "exact", head: true }).eq("receptionist_id", op.id).eq("active", true),
       ]);
       const rows = (((stockRes as { data?: unknown }).data || []) as unknown) as Array<{
         stock_quantity: number | null; low_stock_threshold: number | null; expiry_date: string | null;
@@ -124,17 +125,21 @@ serve(async (req) => {
         openEscalations: ((escRes as { count?: number }).count) || 0,
         stockNeeds,
         overdueTasks: tasks.filter((t) => !t.done && t.due && t.due <= todayStr).length,
+        productCount: ((prodRes as { count?: number }).count) || 0,
       };
     }));
 
-    const [versRes, threadsRes, jobsRes, connRes] = await Promise.all([
-      supabase.from("config_versions").select("receptionist_id,version_number,change_source,owner_input,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(8),
-      supabase.from("build_threads").select("title,status,receptionist_id,updated_at").eq("user_id", user_id).order("updated_at", { ascending: false }).limit(8),
+    const [versRes, threadsRes, jobsRes, connRes, dirThreadsRes, ledgerRes, notifRes] = await Promise.all([
+      supabase.from("config_versions").select("receptionist_id,version_number,change_source,owner_input,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(15),
+      supabase.from("build_threads").select("title,status,receptionist_id,updated_at").eq("user_id", user_id).order("updated_at", { ascending: false }).limit(12),
       supabase.from("plan_jobs").select("id,receptionist_id,status,error_text,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(20),
       supabase.from("connectors").select("display_name,status").eq("user_id", user_id),
+      supabase.from("director_threads").select("id,title,updated_at").eq("user_id", user_id).order("updated_at", { ascending: false }).limit(6),
+      supabase.from("director_actions").select("kind,summary,created_at").eq("user_id", user_id).eq("visible", true).order("created_at", { ascending: false }).limit(5),
+      supabase.from("notifications").select("title,created_at").eq("user_id", user_id).eq("read", false).order("created_at", { ascending: false }).limit(5),
     ]);
     const jobs = (((jobsRes as { data?: unknown }).data || []) as unknown) as Array<{ id: string; receptionist_id: string; status: string; error_text: string | null; created_at: string }>;
-    const failedDetail = jobs.filter((j) => j.status === "failed").slice(0, 5).map((j) => ({
+    const failedDetail = jobs.filter((j) => j.status === "failed").slice(0, 8).map((j) => ({
       job_id: j.id,
       operator: nameOf(j.receptionist_id),
       error: j.error_text || "no error recorded",
@@ -147,6 +152,15 @@ serve(async (req) => {
     const threads = (((threadsRes as { data?: unknown }).data || []) as unknown) as Array<{
       title: string; status: string; receptionist_id: string | null; updated_at: string;
     }>;
+    const dirThreads = ((((dirThreadsRes as { data?: unknown }).data || []) as unknown) as Array<{
+      id: string; title: string; updated_at: string;
+    }>).filter((t) => t.id !== (typeof body.thread_id === "string" ? body.thread_id : ""));
+    const reports = ((((ledgerRes as { data?: unknown }).data || []) as unknown) as Array<{
+      kind: string; summary: string; created_at: string;
+    }>);
+    const unread = ((((notifRes as { data?: unknown }).data || []) as unknown) as Array<{
+      title: string; created_at: string;
+    }>);
 
     const ctx: DirectorContext = {
       operators: perOp,
@@ -168,6 +182,9 @@ serve(async (req) => {
       activeJobs: jobs.filter((j) => j.status === "queued" || j.status === "running").length,
       connectorsDown: conns.filter((c) => c.status === "error" || c.status === "expired").map((c) => c.display_name),
       attentionTotal: perOp.reduce((a, o) => a + o.upcomingBookings + o.openEscalations + o.stockNeeds + o.overdueTasks, 0),
+      pastChats: dirThreads.map((t) => ({ title: t.title, updated_at: t.updated_at })),
+      recentWork: reports.map((r) => ({ kind: r.kind, summary: r.summary, created_at: r.created_at })),
+      unreadNotifications: unread.map((n) => ({ title: n.title, created_at: n.created_at })),
     };
 
     const system = buildDirectorSystemPrompt(ctx);
