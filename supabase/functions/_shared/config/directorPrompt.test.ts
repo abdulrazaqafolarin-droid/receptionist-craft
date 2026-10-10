@@ -112,3 +112,15 @@ Deno.test("runner section teaches run_cli with the iron rule doubled", () => {
   check(p.includes("run_cli"), "shell tool named");
   check(p.includes("never rephrase a refused command"), "refusal-dodging banned");
 });
+
+Deno.test("one-tap connect and web reading are taught", () => {
+  const p = buildDirectorSystemPrompt(CTX);
+  check(p.includes("connect_start"), "connect action documented");
+  check(p.includes("browse_url"), "browse tool documented");
+  const parsed = parseDirectorReply(JSON.stringify({
+    reply: "Connecting now.",
+    suggestions: [],
+    actions: [{ type: "connect_start", connector_key: "google_reviews" }],
+  }));
+  check(parsed.actions.length === 1, "connect_start survives the contract");
+});

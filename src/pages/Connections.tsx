@@ -25,6 +25,20 @@ export default function Connections() {
   const dialogNonce = useRef(0);
   const [dialogRequest, setDialogRequest] = useState<{ key: string; nonce: number } | null>(null);
   const [tourMode, setTourMode] = useState<"ride" | "handle">("ride");
+  // Deep link (?connect=<key>): the Director's one-tap connect lands
+  // here with the real dialog already opening — same save path as taps.
+  useEffect(() => {
+    try {
+      const key = new URLSearchParams(window.location.search).get("connect");
+      if (key && key.trim()) {
+        dialogNonce.current += 1;
+        setDialogRequest({ key: key.trim().slice(0, 60), nonce: dialogNonce.current });
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    } catch {
+      // malformed URL — page loads normally
+    }
+  }, []);
   const tourCtx = { userId, receptionistId: selectedReceptionistId };
   const tour = useActorHost({
     onCollect: (key) => {

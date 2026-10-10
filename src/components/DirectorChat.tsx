@@ -149,6 +149,12 @@ export function DirectorChat({
       onNeedGrant("build_helpers");
       return;
     }
+    if (action.type === "connect_start") {
+      const key = action.connector_key.trim().slice(0, 60);
+      if (key) navigate(`/connections?connect=${encodeURIComponent(key)}`);
+      else toast.error("No connector named.");
+      return;
+    }
     if (!userId) return;
     if (action.type === "retry_job") {
       if (!gate("fix_small")) return;
@@ -513,6 +519,7 @@ function actionLabel(a: DirectorAction): string {
     case "adjust_operator": return "Plan change";
     case "open_builder": return "Open in Builder";
     case "open_grants": return "Review grants";
+    case "connect_start": return "Connect it";
     case "research_need": return "Research it";
   }
 }

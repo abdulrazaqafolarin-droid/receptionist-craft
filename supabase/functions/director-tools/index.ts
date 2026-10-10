@@ -20,13 +20,19 @@
  * Phase A tools (in-app, browser-executed): look_at_page, click_target,
  * type_text, goto_page, point_at. Companion tools (Phase B) ride the
  * same endpoint with a device_id arg: look_at_screen, click, type_text,
- * press_keys, scroll, drag, open_app, open_url. The endpoint checks the
- * device belongs to the user and is enabled; the companion polls and
- * executes. Either side stops it instantly (enabled flag / row delete).
+ * press_keys, scroll, drag, open_app, open_url. browse_url executes
+ * SERVER-SIDE here (no browser, no device needed): the page is fetched
+ * with SSRF guards and returned as a numbered grid; acting on it means
+ * browsing the next URL or handing a companion open_url. The endpoint
+ * checks the device belongs to the user and is enabled; the companion
+ * polls and executes. Either side stops it instantly (enabled flag /
+ * row delete).
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { browseUrl } from "../_shared/browse.ts";
+import { ledgerStart, ledgerFinish } from "../_shared/directorLedger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -90,6 +96,33 @@ serve(async (req) => {
       const tool = typeof body.tool === "string" ? body.tool : "";
       if (!user_id) return jsonRes({ ok: false, error: "user_id required" }, 400);
       const device_id = typeof body.device_id === "string" && body.device_id ? body.device_id : null;
+      const args = (body.args && typeof body.args === "object" ? body.args : {}) as Record<string, unknown>;
+      if (tool === "browse_url" && device_id) {
+        return jsonRes({ ok: false, error: "companions open pages with open_url — browse_url reads server-side" }, 400);
+      }
+      if (tool === "browse_url") {
+        // Server-side read: no browser, no device, no waiting. The ledger
+        // records it like any hands run; refusals return honest errors.
+        const url = typeof args.url === "string" ? args.url : "";
+        if (!url.trim()) return jsonRes({ ok: false, error: "url required" }, 400);
+        const page = await browseUrl(url.slice(0, 2000));
+        const lid = await ledgerStart(supabase, {
+          user_id,
+          kind: "hands",
+          summary: `Browsed ${url.slice(0, 120)}`,
+          before: { tool: "browse_url", session: typeof body.session_id === "string" ? body.session_id.slice(0, 120) : "" },
+          visible: false,
+        });
+        if ("error" in page) {
+          await ledgerFinish(supabase, lid, { status: "failed", error: page.error });
+          return jsonRes({ ok: false, error: page.error });
+        }
+        await ledgerFinish(supabase, lid, {
+          status: "done",
+          after: { url: page.url, title: page.title, links: page.links.length, forms: page.forms.length },
+        });
+        return jsonRes({ ok: true, status: "done", result: { page } });
+      }
       const allowed = device_id ? COMPANION_TOOLS : INAPP_TOOLS;
       if (!allowed.includes(tool)) {
         return jsonRes({ ok: false, error: `unknown tool: ${tool.slice(0, 40)}` }, 400);
@@ -109,7 +142,6 @@ serve(async (req) => {
           return jsonRes({ ok: false, error: "device paused — enable it first" }, 409);
         }
       }
-      const args = (body.args && typeof body.args === "object" ? body.args : {}) as Record<string, unknown>;
       const { data, error } = await supabase.from("director_commands").insert({
         user_id,
         session_id: typeof body.session_id === "string" ? body.session_id.slice(0, 120) : "",
