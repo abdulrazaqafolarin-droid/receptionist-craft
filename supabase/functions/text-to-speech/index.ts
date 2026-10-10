@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getActiveVaultKey, VAULT_OWNER_ID } from "../_shared/vault.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,7 +25,19 @@ serve(async (req) => {
 
     console.log('[TTS] Processing with ElevenLabs, voice:', voiceId);
 
-    const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
+    // Owner's vault first (proxy — key never reaches the browser), env fallback.
+    let ELEVENLABS_API_KEY = '';
+    try {
+      const svc = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        (Deno.env.get('RUTEX_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''),
+        { auth: { autoRefreshToken: false, persistSession: false } },
+      );
+      ELEVENLABS_API_KEY = (await getActiveVaultKey(svc, VAULT_OWNER_ID, 'elevenlabs')) || '';
+    } catch {
+      ELEVENLABS_API_KEY = '';
+    }
+    if (!ELEVENLABS_API_KEY) ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY') || '';
     if (!ELEVENLABS_API_KEY) {
       throw new Error('ELEVENLABS_API_KEY not configured');
     }

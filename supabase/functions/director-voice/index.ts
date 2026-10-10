@@ -16,7 +16,9 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { askRutex } from "../_shared/rutexMcp.ts";
+import { getActiveVaultKey, VAULT_OWNER_ID } from "../_shared/vault.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -67,10 +69,22 @@ async function localSpeak(text: string): Promise<Uint8Array | null> {
   }
 }
 
-/** Lane 2: ElevenLabs direct. Null on any failure. */
+/** Lane 2: ElevenLabs direct. Key comes from the owner's vault first
+ * (server-side proxy — no browser ever sees it), env key as fallback. */
 async function cloudSpeak(text: string, voiceId: string): Promise<Uint8Array | null> {
   try {
-    const key = Deno.env.get("ELEVENLABS_API_KEY") || "";
+    let key = "";
+    try {
+      const svc = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
+        { auth: { autoRefreshToken: false, persistSession: false } },
+      );
+      key = (await getActiveVaultKey(svc, VAULT_OWNER_ID, "elevenlabs")) || "";
+    } catch {
+      key = "";
+    }
+    if (!key) key = Deno.env.get("ELEVENLABS_API_KEY") || "";
     if (!key) return null;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 30000);

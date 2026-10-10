@@ -92,6 +92,9 @@ jobs:
       - name: Run director steps test (registered targets only)
         run: deno test supabase/functions/_shared/directorSteps.test.ts
 
+      - name: Run vault crypto test (roundtrip + owner gate)
+        run: deno test supabase/functions/_shared/vault.test.ts
+
       - name: Actor tours export is fresh (Jev reads this file)
         run: |
           deno run --allow-read --allow-write scripts/export-actor-tours.ts

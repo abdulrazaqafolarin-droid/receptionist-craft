@@ -12,8 +12,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DirectorChat } from "@/components/DirectorChat";
+import { VaultPanel } from "@/components/VaultPanel";
 import { GRANT_SCOPES, useDirectorGrants, type GrantScope } from "@/lib/directorGrants";
-import { ArrowLeft, KeyRound } from "lucide-react";
+import { ArrowLeft, KeyRound, Lock } from "lucide-react";
 
 export function DirectorPanel({
   open,
@@ -24,7 +25,7 @@ export function DirectorPanel({
   onClose: () => void;
   userId: string | undefined;
 }) {
-  const [view, setView] = useState<"chat" | "grants">("chat");
+  const [view, setView] = useState<"chat" | "grants" | "keys">("chat");
   const navigate = useNavigate();
   const { grants, available, setGrant, check } = useDirectorGrants(userId, open);
   const [saving, setSaving] = useState<string | null>(null);
@@ -35,7 +36,7 @@ export function DirectorPanel({
         <DialogHeader>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              {view === "grants" && (
+              {view !== "chat" && (
                 <button
                   onClick={() => setView("chat")}
                   aria-label="Back to chat"
@@ -44,22 +45,38 @@ export function DirectorPanel({
                   <ArrowLeft className="h-4 w-4" />
                 </button>
               )}
-              <DialogTitle>{view === "grants" ? "Standing grants" : "Director"}</DialogTitle>
+              <DialogTitle>{view === "grants" ? "Standing grants" : view === "keys" ? "Key vault" : "Director"}</DialogTitle>
             </div>
+            <div className="flex gap-1">
             {view === "chat" && (
-              <button
-                onClick={() => setView("grants")}
-                aria-label="Review standing grants"
-                title="What the Director may do solo"
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-              >
-                <KeyRound className="h-4 w-4" />
-              </button>
+              <>
+                <button
+                  onClick={() => setView("keys")}
+                  aria-label="API key vault"
+                  title="Provider keys — encrypted, this account only"
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <Lock className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setView("grants")}
+                  aria-label="Review standing grants"
+                  title="What the Director may do solo"
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <KeyRound className="h-4 w-4" />
+                </button>
+              </>
             )}
+          </div>
           </div>
         </DialogHeader>
 
-        {view === "grants" ? (
+        {view === "keys" ? (
+          <div className="flex min-h-0 flex-1 flex-col" style={{ minHeight: "50vh" }}>
+            <VaultPanel />
+          </div>
+        ) : view === "grants" ? (
           <div className="min-h-0 flex-1 overflow-y-auto">
             {!available && (
               <p className="rounded-xl bg-muted/60 px-3 py-2.5 text-xs text-muted-foreground">

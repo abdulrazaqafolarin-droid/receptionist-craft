@@ -94,6 +94,21 @@ verify_jwt = false
 [functions.director-voice]
 verify_jwt = false
 
+[functions.vault-create]
+verify_jwt = false
+
+[functions.vault-list]
+verify_jwt = false
+
+[functions.vault-reveal]
+verify_jwt = false
+
+[functions.vault-rotate]
+verify_jwt = false
+
+[functions.vault-revoke]
+verify_jwt = false
+
 [functions.request-change]
 verify_jwt = false
 
