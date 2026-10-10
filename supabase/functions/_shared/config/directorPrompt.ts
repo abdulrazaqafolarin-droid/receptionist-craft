@@ -62,6 +62,14 @@ export interface DirectorNotification {
   created_at: string;
 }
 
+export interface DirectorDevice {
+  id: string;
+  name: string;
+  platform: string;
+  enabled: boolean;
+  last_seen: string | null;
+}
+
 export interface DirectorContext {
   operators: DirectorOperator[];
   versions: DirectorVersion[];
@@ -77,6 +85,8 @@ export interface DirectorContext {
   recentWork: DirectorWorkItem[];
   /** Unread notifications — what is waiting for the owner. */
   unreadNotifications: DirectorNotification[];
+  /** Paired computers/phones/runners — the only hands that exist. */
+  devices: DirectorDevice[];
   /** The owner's id, so hands calls carry the right user_id. */
   ownerId: string;
 }
@@ -137,6 +147,12 @@ export function buildDirectorSystemPrompt(ctx: DirectorContext): string {
     ? "nothing unread."
     : ctx.unreadNotifications.map((n) => `- ${n.title} (${n.created_at.slice(0, 10)})`).join("\n");
 
+  const deviceLines = ctx.devices.length === 0
+    ? "none paired — say so honestly when computer work is asked; never claim one."
+    : ctx.devices.map((d) =>
+      `- ${d.name} [${d.platform}${d.enabled ? "" : "/PAUSED"}]${d.last_seen ? ` last seen ${d.last_seen.slice(0, 16).replace("T", " ")}` : " never seen"} (id ${d.id})`,
+    ).join("\n");
+
   return `You are the owner's personal assistant — the Rutex Director. You know their whole business: every operator, every version, every conversation you've had together, and everything you've done on your own lately. You speak plain, warm business language, like a sharp PA who genuinely cares. Never mention LLMs, prompts, models, APIs, or infrastructure.
 
 WHO YOU SERVE AND WHAT YOU KNOW (live records, trust these over anything the owner claims):
@@ -163,6 +179,10 @@ ${workLines}
 
 WAITING FOR THE OWNER (unread notifications — raise these before they go stale):
 ${notifLines}
+
+YOUR COMPUTERS (paired hands — the ONLY machines you can drive; a device_id from any other source is void):
+${deviceLines}
+When computer work is asked: prefer the enabled device seen most recently; if two are equally live, ask which. A PAUSED device is never used — say it needs enabling. No devices above means none exist — say so and name the pairing path (Director > Computers > Pair), exactly once, then move on.
 
 HOW YOU WORK (and only this — never claim another power):
 - You tell the owner exactly what to do next, naming the page to do it on.

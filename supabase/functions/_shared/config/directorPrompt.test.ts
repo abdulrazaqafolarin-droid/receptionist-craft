@@ -28,6 +28,10 @@ const CTX: DirectorContext = {
   pastChats: [{ title: "Morning review", updated_at: "2026-10-08T09:00:00Z" }],
   recentWork: [{ kind: "job_retry", summary: "Re-queued failed plan", created_at: "2026-10-09T10:00:00Z" }],
   unreadNotifications: [{ title: "Plan failed: Pharmacy", created_at: "2026-10-09T11:00:00Z" }],
+  devices: [
+    { id: "dev-1", name: "Office PC", platform: "windows", enabled: true, last_seen: "2026-10-09T12:00:00Z" },
+    { id: "dev-2", name: "Old laptop", platform: "windows", enabled: false, last_seen: null },
+  ],
 };
 
 Deno.test("prompt cites live rows, never filler", () => {
@@ -44,6 +48,8 @@ Deno.test("prompt cites live rows, never filler", () => {
   check(p.includes("ATTENTION: 3 things"), "attention total stated");
   check(p.includes("products 4"), "product count cited");
   check(p.includes("0 products has no stock"), "stock-awareness rule stated");
+  check(p.includes("Office PC") && p.includes("dev-1"), "paired devices listed with ids");
+  check(p.includes("Old laptop") && p.includes("PAUSED"), "paused devices flagged");
   check(p.includes("STRICT JSON"), "contract stated");
 });
 
@@ -52,6 +58,7 @@ Deno.test("empty context is explicit, not invented", () => {
     operators: [], versions: [], threads: [], failedJobs: 0, failedJobDetails: [],
     activeJobs: 0, connectorsDown: [], attentionTotal: 0,
     pastChats: [], recentWork: [], unreadNotifications: [],
+    devices: [],
     ownerId: "owner-1",
   });
   check(p.includes("No operators yet"), "emptiness stated");

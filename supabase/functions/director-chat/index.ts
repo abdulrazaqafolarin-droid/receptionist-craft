@@ -129,7 +129,7 @@ serve(async (req) => {
       };
     }));
 
-    const [versRes, threadsRes, jobsRes, connRes, dirThreadsRes, ledgerRes, notifRes] = await Promise.all([
+    const [versRes, threadsRes, jobsRes, connRes, dirThreadsRes, ledgerRes, notifRes, devRes] = await Promise.all([
       supabase.from("config_versions").select("receptionist_id,version_number,change_source,owner_input,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(15),
       supabase.from("build_threads").select("title,status,receptionist_id,updated_at").eq("user_id", user_id).order("updated_at", { ascending: false }).limit(12),
       supabase.from("plan_jobs").select("id,receptionist_id,status,error_text,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(20),
@@ -137,6 +137,7 @@ serve(async (req) => {
       supabase.from("director_threads").select("id,title,updated_at").eq("user_id", user_id).order("updated_at", { ascending: false }).limit(6),
       supabase.from("director_actions").select("kind,summary,created_at").eq("user_id", user_id).eq("visible", true).order("created_at", { ascending: false }).limit(5),
       supabase.from("notifications").select("title,created_at").eq("user_id", user_id).eq("read", false).order("created_at", { ascending: false }).limit(5),
+      supabase.from("companion_devices").select("id,name,platform,enabled,last_seen").eq("user_id", user_id).order("last_seen", { ascending: false, nullsFirst: true }),
     ]);
     const jobs = (((jobsRes as { data?: unknown }).data || []) as unknown) as Array<{ id: string; receptionist_id: string; status: string; error_text: string | null; created_at: string }>;
     const failedDetail = jobs.filter((j) => j.status === "failed").slice(0, 8).map((j) => ({
@@ -160,6 +161,9 @@ serve(async (req) => {
     }>);
     const unread = ((((notifRes as { data?: unknown }).data || []) as unknown) as Array<{
       title: string; created_at: string;
+    }>);
+    const devices = ((((devRes as { data?: unknown }).data || []) as unknown) as Array<{
+      id: string; name: string; platform: string; enabled: boolean; last_seen: string | null;
     }>);
 
     const ctx: DirectorContext = {
@@ -186,6 +190,7 @@ serve(async (req) => {
       pastChats: dirThreads.map((t) => ({ title: t.title, updated_at: t.updated_at })),
       recentWork: reports.map((r) => ({ kind: r.kind, summary: r.summary, created_at: r.created_at })),
       unreadNotifications: unread.map((n) => ({ title: n.title, created_at: n.created_at })),
+      devices: devices.map((d) => ({ id: d.id, name: d.name, platform: d.platform, enabled: d.enabled, last_seen: d.last_seen })),
     };
 
     const system = buildDirectorSystemPrompt(ctx);
