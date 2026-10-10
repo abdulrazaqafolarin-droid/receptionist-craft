@@ -124,6 +124,28 @@ serve(async (req) => {
           error: typeof body.error === "string" ? body.error.slice(0, 500) : null,
           finished_at: new Date().toISOString(),
         }).eq("id", command_id);
+        // The audit trail covers companions too: every completed command
+        // lands in the ledger as kind 'hands', same as in-app runs.
+        try {
+          const { data: cmd } = await supabase
+            .from("director_commands")
+            .select("tool,args")
+            .eq("id", command_id)
+            .maybeSingle();
+          const info = cmd as { tool: string; args: unknown } | null;
+          await supabase.from("director_actions").insert({
+            user_id: dev.user_id,
+            kind: "hands",
+            status: ok ? "done" : "failed",
+            summary: `Companion ${info?.tool || "tool"} ${ok ? "done" : "failed"} on device`,
+            before: { command_id, tool: info?.tool, device_id: dev.id },
+            after: { result: body.result !== undefined ? body.result : null },
+            visible: true,
+            finished_at: new Date().toISOString(),
+          });
+        } catch {
+          // the command row is the record; the ledger is the courtesy
+        }
         return jsonRes({ ok: true });
       }
       return jsonRes({ ok: false, error: "action must be poll, complete, or heartbeat" }, 400);
