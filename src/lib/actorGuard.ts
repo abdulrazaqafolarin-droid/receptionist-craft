@@ -16,6 +16,7 @@ export type ActorAction =
   | { type: "highlight"; target: string; ms?: number; say?: string }
   | { type: "scroll-to"; target: string; say?: string }
   | { type: "type"; target: string; text: string; press_return?: boolean; say?: string }
+  | { type: "drag"; from: string; to: string; say?: string }
   | { type: "say"; text: string }
   | { type: "showcase"; target: string; title: string; lines: string[]; say?: string }
   | { type: "collect"; target: string; connector_key: string; say?: string }
@@ -60,6 +61,19 @@ export function guardCheck(action: ActorAction): GuardVerdict {
       return { allowed: false, reason: `unknown-route:${action.route.slice(0, 60)}` };
     }
     return { allowed: true, reason: "manifest-route" };
+  }
+  if (action.type === "drag") {
+    // Both ends must be known, reachable, and touchable. Either end
+    // unknown or forbidden fails the whole drag — a half-drag that
+    // grabs and drops blind is worse than none. Checked before the
+    // single-target resolution below (drag carries from/to, no target).
+    const from = findTarget(action.from);
+    const to = findTarget(action.to);
+    if (!from) return { allowed: false, reason: `unknown-target:${action.from}` };
+    if (!to) return { allowed: false, reason: `unknown-target:${action.to}` };
+    if (isForbiddenKey(from.key)) return { allowed: false, reason: `forbidden-target:${from.key}` };
+    if (isForbiddenKey(to.key)) return { allowed: false, reason: `forbidden-target:${to.key}` };
+    return { allowed: true, reason: "registered-drag" };
   }
   const target = findTarget(action.target);
   if (!target) {

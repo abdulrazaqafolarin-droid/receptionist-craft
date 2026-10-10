@@ -230,9 +230,35 @@ export function DirectorChat({
         });
       }
     } catch (e) {
+      // Name the failure honestly: an expired session is a re-login, a
+      // live function with a dead gateway is a wait-and-retry. A ping
+      // (no gateway call) tells the two apart instead of one mystery.
+      let detail = "I could not reach my brain just now. Your operators are untouched — try again in a moment.";
+      try {
+        const status = (e as { context?: { status?: number }; status?: number })?.context?.status
+          ?? (e as { status?: number })?.status;
+        if (status === 401) {
+          detail = "You look signed out — sign in again and retry. Nothing was touched.";
+        } else if (status !== undefined && status !== 401) {
+          const ping = await Promise.race([
+            supabase.functions.invoke("director-chat", { body: { action: "ping" } }),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
+          ]);
+          const pong = (ping as { data?: { ok?: boolean; gateway_configured?: boolean } } | null)?.data;
+          if (pong?.ok === true && pong?.gateway_configured === false) {
+            detail = "My thinking service isn't configured right now — the chat line works, the brain doesn't. Tell the owner to check the gateway setup.";
+          } else if (pong?.ok === true) {
+            detail = "My brain didn't answer just now (its line dropped). The chat line itself is fine — try again in a moment.";
+          } else {
+            detail = "The chat service itself stumbled just now — not the brain, the line. Try again in a moment.";
+          }
+        }
+      } catch {
+        // diagnosis best-effort; the generic line below still stands
+      }
       setMessages((prev) => [...prev, {
         role: "ai",
-        content: `I could not reach my brain just now (${e instanceof Error ? e.message : "unknown error"}). Your operators are untouched — try again in a moment.`,
+        content: detail,
         timestamp: new Date().toISOString(),
       }]);
     } finally {

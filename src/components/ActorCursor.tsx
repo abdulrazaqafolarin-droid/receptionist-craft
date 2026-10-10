@@ -462,6 +462,37 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       click: async (el) => {
         (el as HTMLElement).click();
       },
+      dragInto: async (fromEl, toEl) => {
+        // Real drag: pointer presses at the source center, travels in
+        // steps so sortable lists and sliders track it, releases at the
+        // target center. Mouse events (not HTML5 DnD) — covers the
+        // overwhelmingly common custom implementations.
+        const r1 = (fromEl as Element).getBoundingClientRect();
+        const r2 = (toEl as Element).getBoundingClientRect();
+        const x1 = r1.left + r1.width / 2;
+        const y1 = r1.top + r1.height / 2;
+        const x2 = r2.left + r2.width / 2;
+        const y2 = r2.top + r2.height / 2;
+        const at = (x: number, y: number) => ({
+          bubbles: true, cancelable: true, composed: true,
+          clientX: x, clientY: y, button: 0, buttons: 1,
+        });
+        const src = document.elementFromPoint(x1, y1) || (fromEl as Element);
+        src.dispatchEvent(new PointerEvent("pointerdown", { ...at(x1, y1), pointerId: 1, isPrimary: true }));
+        (fromEl as HTMLElement).dispatchEvent(new MouseEvent("mousedown", at(x1, y1)));
+        const steps = 12;
+        for (let i = 1; i <= steps; i++) {
+          const x = x1 + ((x2 - x1) * i) / steps;
+          const y = y1 + ((y2 - y1) * i) / steps;
+          document.dispatchEvent(new PointerEvent("pointermove", { ...at(x, y), pointerId: 1, isPrimary: true }));
+          document.dispatchEvent(new MouseEvent("mousemove", at(x, y)));
+          await new Promise<void>((r) => setTimeout(r, 16));
+        }
+        const dst = document.elementFromPoint(x2, y2) || (toEl as Element);
+        document.dispatchEvent(new PointerEvent("pointerup", { ...at(x2, y2), pointerId: 1, isPrimary: true }));
+        dst.dispatchEvent(new MouseEvent("mouseup", { ...at(x2, y2), button: 0, buttons: 0 }));
+        (toEl as HTMLElement).dispatchEvent(new MouseEvent("click", at(x2, y2)));
+      },
       typeInto: async (el, text, pressReturn) => {
         const input = el as HTMLInputElement | HTMLTextAreaElement;
         const tag = (input.tagName || "").toLowerCase();

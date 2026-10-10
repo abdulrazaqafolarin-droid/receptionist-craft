@@ -39,7 +39,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-gateway-key",
 };
 
-const INAPP_TOOLS = ["look_at_page", "click_target", "type_text", "goto_page", "point_at"];
+const INAPP_TOOLS = ["look_at_page", "click_target", "type_text", "goto_page", "point_at", "drag_target"];
 const COMPANION_TOOLS = [
   "look_at_screen", "click", "type_text", "press_keys",
   "scroll", "drag", "open_app", "open_url",

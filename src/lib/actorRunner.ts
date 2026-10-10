@@ -41,6 +41,12 @@ export interface ActorDeps {
    * see guardCheck for the kind gate, the host for the DOM inspection.
    */
   typeInto?: (el: unknown, text: string, pressReturn: boolean) => Promise<void> | void;
+  /**
+   * Drag from one resolved element to another (mouse down, move in
+   * steps, mouse up). Ride-only like typing — a blind background drag
+   * is obstruction, so handle mode defers it.
+   */
+  dragInto?: (fromEl: unknown, toEl: unknown) => Promise<void> | void;
   /** Speak a narration line (speech bubble, chat line, aria-live). */
   say: (text: string) => Promise<void> | void;
   /** Open the showcase box beside the resolved element. */
@@ -106,6 +112,44 @@ export async function runActorScript(
     if (!verdict.allowed) {
       receipts.push({ action, ok: false, detail: verdict.reason, at: at() });
       if (!opts.continueOnFailure) break;
+      continue;
+    }
+
+    // drag carries from/to, not a registry target — resolved wholly here.
+    if (action.type === "drag") {
+      if (silent) {
+        receipts.push({ action, ok: false, detail: "deferred-background", at: at() });
+        if (!opts.continueOnFailure) break;
+        continue;
+      }
+      if (!deps.dragInto) {
+        receipts.push({ action, ok: false, detail: "no-drag-handling", at: at() });
+        if (!opts.continueOnFailure) break;
+        continue;
+      }
+      const fromTarget = findTarget(action.from);
+      const toTarget = findTarget(action.to);
+      const fromEl = fromTarget ? deps.resolve(fromTarget.selector) : null;
+      const toEl = toTarget ? deps.resolve(toTarget.selector) : null;
+      if (!fromEl || !toEl) {
+        receipts.push({ action, ok: false, detail: `not-on-screen:${!fromEl ? action.from : action.to}`, at: at() });
+        if (!opts.continueOnFailure) break;
+        continue;
+      }
+      try {
+        if (action.say) await deps.say(action.say);
+        await deps.moveCursor(fromEl);
+        await deps.dragInto(fromEl, toEl);
+        receipts.push({ action, ok: true, detail: "done", at: at() });
+      } catch (e) {
+        receipts.push({
+          action, ok: false,
+          detail: `execution-failed:${e instanceof Error ? e.message : "unknown"}`.slice(0, 160),
+          at: at(),
+        });
+        if (!opts.continueOnFailure) break;
+      }
+      if (deps.stepDelayMs) await delay(deps.stepDelayMs);
       continue;
     }
 

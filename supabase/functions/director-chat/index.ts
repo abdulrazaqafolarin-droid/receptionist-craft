@@ -60,9 +60,23 @@ serve(async (req) => {
     if (authError || !user) {
       return jsonRes({ ok: false, error: "invalid_token" }, 401);
     }
-    const user_id = user.id;
 
-    const body = await req.json().catch(() => ({}));
+    // Ping: proves the function is alive WITHOUT calling the gateway.
+    // Lets the app (and the owner) tell "chat service broken" apart from
+    // "brain service unreachable" instead of one mystery error.
+    const earlyBody = await req.json().catch(() => ({}));
+    if ((earlyBody as Record<string, unknown>).action === "ping") {
+      return jsonRes({
+        ok: true,
+        pong: true,
+        user_id: user.id,
+        gateway_configured: !!(Deno.env.get("RUTEX_GATEWAY_URL") && Deno.env.get("RUTEX_GATEWAY_KEY")),
+        time: new Date().toISOString(),
+      });
+    }
+
+    const body = earlyBody as Record<string, unknown>;
+    const user_id = user.id;
     const message = typeof body.message === "string" ? body.message.slice(0, 2000) : "";
     const rawHistory: unknown[] = Array.isArray(body.history) ? body.history : [];
     const history = rawHistory

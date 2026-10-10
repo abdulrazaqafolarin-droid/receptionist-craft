@@ -280,3 +280,45 @@ Deno.test("runner: type writes through the host and defers headless", async () =
   );
   check(!noHands[0].ok && noHands[0].detail === "no-type-handling", "missing host fails closed");
 });
+
+Deno.test("guard: drag needs both ends known and touchable", async () => {
+  const ok = guardCheck({ type: "drag", from: "console-stock-check", to: "console-tasks-check" });
+  check(ok.allowed && ok.reason === "registered-drag", "two registered ends drag");
+  const ghost = guardCheck({ type: "drag", from: "console-stock-check", to: "no-such-panel" });
+  check(!ghost.allowed && ghost.reason.startsWith("unknown-target"), "unknown end fails the whole drag");
+  const { ACTOR_TARGETS } = await import("./actorMap.ts");
+  ACTOR_TARGETS.push({ key: "test-logout-link", selector: '[data-actor="test-logout"]', label: "Logout", kind: "button" });
+  try {
+    const locked = guardCheck({ type: "drag", from: "console-stock-check", to: "test-logout-link" });
+    check(!locked.allowed && locked.reason.startsWith("forbidden-target"), "forbidden end fails the whole drag");
+  } finally {
+    ACTOR_TARGETS.pop();
+  }
+});
+
+Deno.test("runner: drag moves through the host, defers headless", async () => {
+  const drags: string[] = [];
+  const { ACTOR_TARGETS } = await import("./actorMap.ts");
+  ACTOR_TARGETS.push(
+    { key: "test-drag-a", selector: '[data-actor="test-drag-a"]', label: "A", kind: "button" },
+    { key: "test-drag-b", selector: '[data-actor="test-drag-b"]', label: "B", kind: "button" },
+  );
+  try {
+    const deps = stubDeps({
+      resolve: () => ({ el: true }),
+      moveCursor: async () => {},
+      dragInto: async () => { drags.push("dragged"); },
+    });
+    const done = await runActorScript([{ type: "drag", from: "test-drag-a", to: "test-drag-b" }], deps);
+    check(done[0].ok && drags.length === 1, "drag executes through the host");
+    const silent = await runActorScript(
+      [{ type: "drag", from: "test-drag-a", to: "test-drag-b" }],
+      stubDeps({ dragInto: async () => { drags.push("nope"); } }),
+      { mode: "handle" },
+    );
+    check(!silent[0].ok && silent[0].detail === "deferred-background", "headless drag defers");
+  } finally {
+    ACTOR_TARGETS.pop();
+    ACTOR_TARGETS.pop();
+  }
+});

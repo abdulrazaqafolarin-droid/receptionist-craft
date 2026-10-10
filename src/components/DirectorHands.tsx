@@ -133,6 +133,10 @@ export function DirectorHands() {
           return str(a.target) && typeof a.text === "string"
             ? [{ type: "type", target: str(a.target), text: (a.text as string).slice(0, 500), press_return: a.press_return === true }]
             : null;
+        case "drag_target":
+          return str(a.from) && str(a.to)
+            ? [{ type: "drag", from: str(a.from), to: str(a.to), say: str(a.say) || undefined }]
+            : null;
         default:
           return null;
       }
