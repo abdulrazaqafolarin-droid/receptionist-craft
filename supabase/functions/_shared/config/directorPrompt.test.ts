@@ -139,3 +139,10 @@ Deno.test("cursor visibility and platform coverage are stated", () => {
   check(p.includes("NO iOS companion"), "iOS gap stated, never promised");
   check(p.includes("paired\" is not \"awake"), "paired-vs-awake distinction stated");
 });
+
+Deno.test("browser lane is taught with verification discipline", () => {
+  const p = buildDirectorSystemPrompt(CTX);
+  check(p.includes("browse_task"), "browser task tool named");
+  check(p.includes("DONE claim is never"), "done-is-not-proof rule stated");
+  check(p.includes("never go to the lane"), "login/payment boundary for lanes");
+});

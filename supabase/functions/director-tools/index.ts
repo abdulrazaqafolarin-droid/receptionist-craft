@@ -44,6 +44,8 @@ const COMPANION_TOOLS = [
   "look_at_screen", "click", "type_text", "press_keys",
   "scroll", "drag", "open_app", "open_url",
 ];
+const BROWSER_TOOLS = ["browse_task"];
+const RUNNER_TOOLS = ["run_cli"];
 const MAX_WAIT_MS = 90000;
 const POLL_STEP_MS = 1500;
 
@@ -123,7 +125,9 @@ serve(async (req) => {
         });
         return jsonRes({ ok: true, status: "done", result: { page } });
       }
-      const allowed = device_id ? COMPANION_TOOLS : INAPP_TOOLS;
+      const allowed = device_id
+        ? [...COMPANION_TOOLS, ...BROWSER_TOOLS, ...RUNNER_TOOLS]
+        : INAPP_TOOLS;
       if (!allowed.includes(tool)) {
         return jsonRes({ ok: false, error: `unknown tool: ${tool.slice(0, 40)}` }, 400);
       }
@@ -131,15 +135,24 @@ serve(async (req) => {
         // Route to a live, owned, enabled device — never blind.
         const { data: dev } = await supabase
           .from("companion_devices")
-          .select("id,user_id,enabled")
+          .select("id,user_id,enabled,platform")
           .eq("id", device_id)
           .maybeSingle();
-        const owned = dev as { id: string; user_id: string; enabled: boolean } | null;
+        const owned = dev as { id: string; user_id: string; enabled: boolean; platform: string } | null;
         if (!owned || owned.user_id !== user_id) {
           return jsonRes({ ok: false, error: "unknown device" }, 404);
         }
         if (!owned.enabled) {
           return jsonRes({ ok: false, error: "device paused — enable it first" }, 409);
+        }
+        // Tool-to-platform match: hands go to hands, shells to shells,
+        // browser tasks to browser lanes. A mismatch is a 400, never a
+        // misfire on the wrong kind of machine.
+        const family = owned.platform === "runner" ? RUNNER_TOOLS
+          : owned.platform === "browser" ? BROWSER_TOOLS
+          : COMPANION_TOOLS;
+        if (!family.includes(tool)) {
+          return jsonRes({ ok: false, error: `${tool} does not run on ${owned.platform} devices` }, 400);
         }
       }
       const { data, error } = await supabase.from("director_commands").insert({

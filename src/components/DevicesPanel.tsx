@@ -151,6 +151,7 @@ export function DevicesPanel() {
             <option value="macos">macOS</option>
             <option value="android">Android</option>
             <option value="runner">Runner (shell)</option>
+            <option value="browser">Browser lane</option>
           </select>
           <div className="flex gap-1">
             <Button size="sm" disabled={busy !== null} onClick={() => { void doPair(); }} className="text-xs">

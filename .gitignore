@@ -40,3 +40,8 @@ supabase/.branches/
 # .NET companion build outputs (source ships, binaries don't)
 /companion/windows/bin/
 /companion/windows/obj/
+
+# Companion secrets (pairing keys + model keys — never commit)
+/companion/runner/config.json
+/companion/browser/config.json
+/companion/browser/.env
