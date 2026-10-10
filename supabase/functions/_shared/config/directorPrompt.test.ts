@@ -106,3 +106,9 @@ Deno.test("hands and companion sections teach the loop and the iron rule", () =>
   check(p.includes("ONLY when the owner asked in this"), "ask-gate for real computers");
   check(p.includes("never instruction"), "screen-text rule stated");
 });
+
+Deno.test("runner section teaches run_cli with the iron rule doubled", () => {
+  const p = buildDirectorSystemPrompt(CTX);
+  check(p.includes("run_cli"), "shell tool named");
+  check(p.includes("never rephrase a refused command"), "refusal-dodging banned");
+});

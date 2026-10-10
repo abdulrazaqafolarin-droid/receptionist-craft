@@ -102,7 +102,7 @@ export function ConnectorConnectDialog({ definition, userId, onClose, onSaved }:
     let lastError: string | null = null;
     if (!isOauth && sch.verifyFn) {
       const { data, error } = await supabase.functions.invoke(sch.verifyFn, {
-        body: { connector_key: def.connector_key, credentials: values },
+        body: { connector_key: def.connector_key, credentials: values, user_id: userId },
       });
       if (error) throw error;
       const d = (data || {}) as { ok?: boolean; error?: string; detail?: string; status?: string };

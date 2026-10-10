@@ -157,7 +157,7 @@ serve(async (req) => {
 
     if (action === "create_device") {
       const name = (typeof body.name === "string" && body.name.trim() ? body.name.trim() : "My computer").slice(0, 60);
-      const platform = body.platform === "macos" || body.platform === "android" ? body.platform : "windows";
+      const platform = body.platform === "macos" || body.platform === "android" || body.platform === "runner" ? body.platform : "windows";
       const secret = randomSecret();
       const { data, error } = await supabase.from("companion_devices").insert({
         user_id: user.id,

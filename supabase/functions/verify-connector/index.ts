@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -115,36 +116,79 @@ serve(async (req) => {
       return jsonRes({ ok: true, status: "configured", detail: "saved — first review check confirms it" });
     }
 
-    // CLI-harness connectors (anything-CLI pattern): the command runs where
-    // a shell exists (companion app or gateway runner) — never in the
-    // browser, never here. If a runner endpoint is configured, probe it;
-    // otherwise save honestly as pending instead of faking a connection.
+    // CLI-harness connectors (anything-CLI pattern): the check command
+    // runs on the owner's paired runner — never in the browser, never
+    // here. No runner means honestly-pending, never faked. A refused or
+    // failing check saves configured with the real stderr, so the owner
+    // sees what actually happened instead of a green lie.
     if (typeof creds.cli_command === "string" && creds.cli_command.trim()) {
-      const runnerUrl = (Deno.env.get("RUTEX_RUNNER_URL") || "").replace(/\/$/, "");
-      if (runnerUrl) {
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 15000);
-          let probe: Response;
-          try {
-            probe = await fetch(`${runnerUrl}/run`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ command: "check", connector_key: key }),
-              signal: ctrl.signal,
-            });
-          } finally {
-            clearTimeout(timer);
-          }
-          if (probe.ok) {
-            return jsonRes({ ok: true, status: "connected", detail: "runner reachable — commands execute on next use" });
-          }
-          return jsonRes({ ok: true, status: "configured", detail: "saved — runner answered with an error, will retry on next use" });
-        } catch {
-          return jsonRes({ ok: true, status: "configured", detail: "saved — runner unreachable right now, will retry on next use" });
-        }
+      const checkCmd = creds.cli_command.trim().slice(0, 2000);
+      const user_id = typeof body.user_id === "string" ? body.user_id : "";
+      if (!user_id) {
+        return jsonRes({ ok: true, status: "configured", detail: "saved — sign in to verify through your runner" });
       }
-      return jsonRes({ ok: true, status: "configured", detail: "saved — runs when your companion or gateway runner connects" });
+      try {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
+          { auth: { autoRefreshToken: false, persistSession: false } },
+        );
+        const { data: devRows } = await supabase
+          .from("companion_devices")
+          .select("id")
+          .eq("user_id", user_id)
+          .eq("platform", "runner")
+          .eq("enabled", true)
+          .order("last_seen", { ascending: false, nullsFirst: false })
+          .limit(1);
+        const dev = (Array.isArray(devRows) ? devRows : [])[0] as { id: string } | undefined;
+        if (!dev) {
+          return jsonRes({ ok: true, status: "configured", detail: "saved — pair a Runner in Director > Computers to verify" });
+        }
+        const { data: cmd, error: qErr } = await supabase.from("director_commands").insert({
+          user_id,
+          session_id: `verify-${key}`.slice(0, 120),
+          device_id: dev.id,
+          tool: "run_cli",
+          args: { command: checkCmd, timeout: 45 },
+          status: "queued",
+        }).select("id").single();
+        if (qErr || !cmd) {
+          return jsonRes({ ok: true, status: "configured", detail: "saved — could not queue the check, will retry on next use" });
+        }
+        const commandId = (cmd as { id: string }).id;
+        const deadline = Date.now() + 60000;
+        for (;;) {
+          const { data: row } = await supabase
+            .from("director_commands")
+            .select("status,result,error")
+            .eq("id", commandId)
+            .maybeSingle();
+          const st = row as { status: string; result: unknown; error: string | null } | null;
+          if (!st) {
+            return jsonRes({ ok: true, status: "configured", detail: "saved — check vanished, will retry on next use" });
+          }
+          if (st.status === "done" || st.status === "failed") {
+            const res = (st.result || {}) as { exit_code?: number | null; stdout?: string; stderr?: string; timed_out?: boolean };
+            if (st.status === "done" && res.exit_code === 0 && !res.timed_out) {
+              const snippet = String(res.stdout || "").trim().slice(0, 160);
+              return jsonRes({ ok: true, status: "connected", detail: snippet ? `check passed — ${snippet}` : "check passed" });
+            }
+            const why = res.timed_out
+              ? "check timed out"
+              : st.status === "failed"
+                ? String(st.error || "runner refused it").slice(0, 160)
+                : `exit ${res.exit_code ?? "?"}: ${String(res.stderr || res.stdout || "").trim().slice(0, 160)}`;
+            return jsonRes({ ok: true, status: "configured", detail: `saved — ${why}` });
+          }
+          if (Date.now() >= deadline) {
+            return jsonRes({ ok: true, status: "configured", detail: "saved — runner didn't answer in 60s, is it running?" });
+          }
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      } catch {
+        return jsonRes({ ok: true, status: "configured", detail: "saved — verification hiccup, will retry on next use" });
+      }
     }
 
     return jsonRes({ ok: false, error: "unsupported_connector", detail: `${key} verifies via OAuth, not keys` }, 400);
