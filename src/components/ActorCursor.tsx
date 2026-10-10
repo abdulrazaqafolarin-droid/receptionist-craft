@@ -462,6 +462,38 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       click: async (el) => {
         (el as HTMLElement).click();
       },
+      typeInto: async (el, text, pressReturn) => {
+        const input = el as HTMLInputElement | HTMLTextAreaElement;
+        const tag = (input.tagName || "").toLowerCase();
+        if (tag !== "input" && tag !== "textarea") {
+          throw new Error("not-typable-element");
+        }
+        const typeAttr = (input.getAttribute("type") || "text").toLowerCase();
+        const auto = (input.getAttribute("autocomplete") || "").toLowerCase();
+        const nameId = `${input.getAttribute("name") || ""} ${input.id || ""}`.toLowerCase();
+        // Credential fields are refused at the live DOM, where they can
+        // actually be inspected — Bluey's rule, enforced in code.
+        if (
+          typeAttr === "password" ||
+          auto.includes("current-password") || auto.includes("new-password") ||
+          /password|passwd|secret|api[-_ ]?key|credit[-_ ]?card|cvv|cvc/.test(nameId)
+        ) {
+          throw new Error("refused-password-field");
+        }
+        input.focus();
+        // Native setter + events so React-controlled inputs accept the value.
+        const proto = tag === "textarea"
+          ? HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+        setter ? setter.call(input, text) : (input.value = text);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        if (pressReturn) {
+          await new Promise<void>((r) => setTimeout(r, 120));
+          input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+        }
+      },
       say: async (text) => {
         setBubble(text);
       },

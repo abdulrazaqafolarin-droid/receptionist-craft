@@ -246,3 +246,37 @@ Deno.test("runner handle mode: silent theater, live hands", async () => {
   check(byDetail("deferred-background") === 1, "goto deferred, never jumped blind");
   check(byDetail("needs-owner") === 1, "collect waits for its human");
 });
+
+Deno.test("guard: type allowed into registered inputs only, never empty", async () => {
+  const ok = guardCheck({ type: "type", target: "console-chat-input", text: "hello stock" });
+  check(ok.allowed && ok.reason === "registered-input", "input target typeable");
+  const wrong = guardCheck({ type: "type", target: "console-stock-check", text: "x" });
+  check(!wrong.allowed && wrong.reason.startsWith("wrong-kind"), "button target not typeable");
+  const empty = guardCheck({ type: "type", target: "console-chat-input", text: "   " });
+  check(!empty.allowed && empty.reason === "empty-text", "empty text refused");
+  const ghost = guardCheck({ type: "type", target: "no-such-input", text: "x" });
+  check(!ghost.allowed && ghost.reason.startsWith("unknown-target"), "unknown fails closed");
+});
+
+Deno.test("runner: type writes through the host and defers headless", async () => {
+  const typed: string[] = [];
+  const deps = stubDeps({
+    typeInto: async (_el, text, pressReturn) => { typed.push(`${text}|${pressReturn}`); },
+  });
+  const done = await runActorScript(
+    [{ type: "type", target: "console-chat-input", text: "low stock?", press_return: true }],
+    deps,
+  );
+  check(done[0].ok && typed[0] === "low stock?|true", "typed with return flag");
+  const silent = await runActorScript(
+    [{ type: "type", target: "console-chat-input", text: "x" }],
+    stubDeps(),
+    { mode: "handle" },
+  );
+  check(!silent[0].ok && silent[0].detail === "deferred-background", "headless typing defers, never obstructs");
+  const noHands = await runActorScript(
+    [{ type: "type", target: "console-chat-input", text: "x" }],
+    stubDeps(),
+  );
+  check(!noHands[0].ok && noHands[0].detail === "no-type-handling", "missing host fails closed");
+});

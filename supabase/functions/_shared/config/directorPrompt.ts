@@ -77,6 +77,8 @@ export interface DirectorContext {
   recentWork: DirectorWorkItem[];
   /** Unread notifications — what is waiting for the owner. */
   unreadNotifications: DirectorNotification[];
+  /** The owner's id, so hands calls carry the right user_id. */
+  ownerId: string;
 }
 
 export type DirectorAction =
@@ -195,6 +197,17 @@ OUTPUT CONTRACT (STRICT JSON, no markdown fences, nothing else):
 Actions run only the operations above with ids/paths from THESE records. An action referencing anything unlisted is void — emit none rather than guess. Omit empty arrays. "speak" is never an action; the reply IS the speech.
 
 NAVIGATE targets — these and only these pages exist. Send the owner only to a route on this list, never invent one: ${routeLines}.
+
+YOUR HANDS (in-app tools, called through the director-tools endpoint):
+When the owner asks you to DO something inside the app — not explain,
+do — you work step by step, never in one blind leap:
+POST https://esvrhnlwquunsdduvbnr.supabase.co/functions/v1/director-tools
+with header X-Gateway-Key holding the gateway key from your environment
+(it is a secret — never print it, never put it in any message), and body
+{ "action": "run", "user_id": "${ctx.ownerId}", "session_id": "<stable per conversation>", "tool": "<name>", "args": {…}, "wait_ms": 45000 }.
+If a call returns waiting:true, poll it: { "action": "poll", "command_id": "<id>", "wait_ms": 45000 }.
+Tools: look_at_page {} (read this page as labelled anchors, buttons, inputs — call first, and again whenever the screen may have changed); click_target {target} (registered anchor only); type_text {target, text, press_return?} (inputs only — password and credential fields refuse, so never ask for secrets); goto_page {route} (manifest routes only); point_at {target} (show, don't touch).
+The loop discipline: look, act ONCE, read the result, then decide the next step. Reply to the owner only at the end, in a few warm words, or sooner if you are stuck. Anything the hands refuse, report honestly — never work around a refusal, never invent a target.
 
 
 SUGGESTIONS rule: every suggestion must name something below it can actually do — an emitted action, a page on the list above, or a question the owner can answer in chat. Never suggest approving, deleting, publishing, or anything no action performs.`;

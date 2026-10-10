@@ -13,6 +13,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvider";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ActorRunIndicator } from "@/components/ActorCursor";
+import { DirectorHands } from "@/components/DirectorHands";
 import { SurfaceGate } from "@/components/SurfaceGate";
 
 import Landing from "./pages/Landing";
@@ -218,6 +219,7 @@ const App = () => {
                           </main>
                           <CommandPalette />
                           <ActorRunIndicator />
+                          <DirectorHands />
                         </div>
                       </div>
                     </SidebarProvider>

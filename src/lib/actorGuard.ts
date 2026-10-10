@@ -15,6 +15,7 @@ export type ActorAction =
   | { type: "click"; target: string; say?: string }
   | { type: "highlight"; target: string; ms?: number; say?: string }
   | { type: "scroll-to"; target: string; say?: string }
+  | { type: "type"; target: string; text: string; press_return?: boolean; say?: string }
   | { type: "say"; text: string }
   | { type: "showcase"; target: string; title: string; lines: string[]; say?: string }
   | { type: "collect"; target: string; connector_key: string; say?: string }
@@ -72,6 +73,19 @@ export function guardCheck(action: ActorAction): GuardVerdict {
     // collect opens the connector's REAL dialog — no state changes until
     // the owner submits there through its own buttons. Same bar as click.
     return { allowed: true, reason: "owner-visible-action" };
+  }
+  if (action.type === "type") {
+    // Typing is allowed only into registered INPUT targets. Password and
+    // credential fields are refused one layer down, where the live DOM
+    // exists to inspect (input type, autocomplete, name) — this pure
+    // guard cannot see them, so it refuses nothing here beyond kind.
+    if (!target || target.kind !== "input") {
+      return { allowed: false, reason: `wrong-kind:${target ? target.key : action.target}` };
+    }
+    if (typeof action.text !== "string" || !action.text.trim()) {
+      return { allowed: false, reason: "empty-text" };
+    }
+    return { allowed: true, reason: "registered-input" };
   }
   // point / highlight / scroll-to / showcase never change state.
   return { allowed: true, reason: "read-only-gesture" };

@@ -163,6 +163,7 @@ serve(async (req) => {
     }>);
 
     const ctx: DirectorContext = {
+      ownerId: user_id,
       operators: perOp,
       versions: vers.map((v) => ({
         operator: nameOf(v.receptionist_id),

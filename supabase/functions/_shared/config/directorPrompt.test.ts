@@ -12,6 +12,7 @@ function check(cond: boolean, msg: string): void {
 }
 
 const CTX: DirectorContext = {
+  ownerId: "owner-1",
   operators: [{
     id: "op-1", display: "Pharmacy", kind: "ops", model: "internal",
     active: true, upcomingBookings: 0, openEscalations: 0, stockNeeds: 2, overdueTasks: 1,
@@ -51,6 +52,7 @@ Deno.test("empty context is explicit, not invented", () => {
     operators: [], versions: [], threads: [], failedJobs: 0, failedJobDetails: [],
     activeJobs: 0, connectorsDown: [], attentionTotal: 0,
     pastChats: [], recentWork: [], unreadNotifications: [],
+    ownerId: "owner-1",
   });
   check(p.includes("No operators yet"), "emptiness stated");
   check(!p.includes("Pharmacy"), "nothing invented");

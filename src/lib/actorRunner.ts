@@ -35,6 +35,12 @@ export interface ActorDeps {
   scrollTo: (el: unknown) => Promise<void> | void;
   /** Perform a real click on the resolved element. */
   click: (el: unknown) => Promise<void> | void;
+  /**
+   * Type text into the resolved input, React-compatible (native setter +
+   * input/change events). The host refuses password/credential fields —
+   * see guardCheck for the kind gate, the host for the DOM inspection.
+   */
+  typeInto?: (el: unknown, text: string, pressReturn: boolean) => Promise<void> | void;
   /** Speak a narration line (speech bubble, chat line, aria-live). */
   say: (text: string) => Promise<void> | void;
   /** Open the showcase box beside the resolved element. */
@@ -186,6 +192,20 @@ export async function runActorScript(
           // never the app's own reactions. That boundary is documented,
           // not hidden.
           await deps.click(el);
+        } else if (action.type === "type") {
+          if (silent) {
+            // Typing blind while the owner may be typing is obstruction —
+            // a mistyped field is worse than a deferred one. Ride only.
+            receipts.push({ action, ok: false, detail: "deferred-background", at: at() });
+            if (!opts.continueOnFailure) break;
+            continue;
+          }
+          if (!deps.typeInto) {
+            receipts.push({ action, ok: false, detail: "no-type-handling", at: at() });
+            if (!opts.continueOnFailure) break;
+            continue;
+          }
+          await deps.typeInto(el, action.text, action.press_return === true);
         }
         // point = move only (skipped silently in handle mode).
       }

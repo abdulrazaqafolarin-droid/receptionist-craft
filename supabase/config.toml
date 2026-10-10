@@ -109,6 +109,9 @@ verify_jwt = false
 [functions.vault-revoke]
 verify_jwt = false
 
+[functions.director-tools]
+verify_jwt = false
+
 [functions.request-change]
 verify_jwt = false
 

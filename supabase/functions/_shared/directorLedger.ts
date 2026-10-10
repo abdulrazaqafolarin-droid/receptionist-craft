@@ -12,7 +12,7 @@
  * loosely so edge functions (service role) and tests (fakes) both fit.
  */
 
-export type DirectorActionKind = "bookkeeping" | "operator_draft" | "job_retry" | "report";
+export type DirectorActionKind = "bookkeeping" | "operator_draft" | "job_retry" | "report" | "hands";
 export type DirectorActionStatus = "running" | "done" | "failed" | "skipped";
 
 export interface LedgerEntry {
