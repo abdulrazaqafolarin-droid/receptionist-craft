@@ -12,8 +12,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DirectorChat } from "@/components/DirectorChat";
 import { VaultPanel } from "@/components/VaultPanel";
+import { DevicesPanel } from "@/components/DevicesPanel";
 import { GRANT_SCOPES, useDirectorGrants, type GrantScope } from "@/lib/directorGrants";
-import { ArrowLeft, ChevronUp, KeyRound, Lock, MousePointer2 } from "lucide-react";
+import { ArrowLeft, ChevronUp, KeyRound, Lock, MonitorSmartphone, MousePointer2 } from "lucide-react";
 
 export function DirectorPanel({
   onClose,
@@ -22,7 +23,7 @@ export function DirectorPanel({
   onClose: () => void;
   userId: string | undefined;
 }) {
-  const [view, setView] = useState<"chat" | "grants" | "keys">("chat");
+  const [view, setView] = useState<"chat" | "grants" | "keys" | "devices">("chat");
   const navigate = useNavigate();
   const { grants, available, setGrant, check } = useDirectorGrants(userId, true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export function DirectorPanel({
                 <ArrowLeft className="h-4 w-4" />
               </button>
             )}
-            <p className="text-sm font-semibold">{view === "grants" ? "Standing grants" : view === "keys" ? "Key vault" : "Director"}</p>
+            <p className="text-sm font-semibold">{view === "grants" ? "Standing grants" : view === "keys" ? "Key vault" : view === "devices" ? "Computers" : "Director"}</p>
             {/* Cursor perch: the Director cursor's small home on its own chat. */}
             <span
               data-actor="director-cursor-home"
@@ -61,6 +62,14 @@ export function DirectorPanel({
                   className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                 >
                   <Lock className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setView("devices")}
+                  aria-label="Paired computers"
+                  title="Computers the Director may drive when you ask"
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <MonitorSmartphone className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => setView("grants")}
@@ -86,6 +95,10 @@ export function DirectorPanel({
         {view === "keys" ? (
           <div className="flex min-h-0 flex-1 flex-col" style={{ minHeight: "50vh" }}>
             <VaultPanel />
+          </div>
+        ) : view === "devices" ? (
+          <div className="flex min-h-0 flex-1 flex-col" style={{ minHeight: "50vh" }}>
+            <DevicesPanel />
           </div>
         ) : view === "grants" ? (
           <div className="min-h-0 flex-1 overflow-y-auto">

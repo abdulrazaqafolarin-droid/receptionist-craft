@@ -36,3 +36,7 @@ supabase/.temp/
 supabase/.branches/
 
 .vercel
+
+# .NET companion build outputs (source ships, binaries don't)
+/companion/windows/bin/
+/companion/windows/obj/

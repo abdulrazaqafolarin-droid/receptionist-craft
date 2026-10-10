@@ -19,7 +19,10 @@
  *
  * Phase A tools (in-app, browser-executed): look_at_page, click_target,
  * type_text, goto_page, point_at. Companion tools (Phase B) ride the
- * same endpoint with a device_id arg.
+ * same endpoint with a device_id arg: look_at_screen, click, type_text,
+ * press_keys, scroll, drag, open_app, open_url. The endpoint checks the
+ * device belongs to the user and is enabled; the companion polls and
+ * executes. Either side stops it instantly (enabled flag / row delete).
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -31,6 +34,10 @@ const corsHeaders = {
 };
 
 const INAPP_TOOLS = ["look_at_page", "click_target", "type_text", "goto_page", "point_at"];
+const COMPANION_TOOLS = [
+  "look_at_screen", "click", "type_text", "press_keys",
+  "scroll", "drag", "open_app", "open_url",
+];
 const MAX_WAIT_MS = 90000;
 const POLL_STEP_MS = 1500;
 
@@ -82,13 +89,31 @@ serve(async (req) => {
       const user_id = typeof body.user_id === "string" ? body.user_id : "";
       const tool = typeof body.tool === "string" ? body.tool : "";
       if (!user_id) return jsonRes({ ok: false, error: "user_id required" }, 400);
-      if (!INAPP_TOOLS.includes(tool)) {
+      const device_id = typeof body.device_id === "string" && body.device_id ? body.device_id : null;
+      const allowed = device_id ? COMPANION_TOOLS : INAPP_TOOLS;
+      if (!allowed.includes(tool)) {
         return jsonRes({ ok: false, error: `unknown tool: ${tool.slice(0, 40)}` }, 400);
+      }
+      if (device_id) {
+        // Route to a live, owned, enabled device — never blind.
+        const { data: dev } = await supabase
+          .from("companion_devices")
+          .select("id,user_id,enabled")
+          .eq("id", device_id)
+          .maybeSingle();
+        const owned = dev as { id: string; user_id: string; enabled: boolean } | null;
+        if (!owned || owned.user_id !== user_id) {
+          return jsonRes({ ok: false, error: "unknown device" }, 404);
+        }
+        if (!owned.enabled) {
+          return jsonRes({ ok: false, error: "device paused — enable it first" }, 409);
+        }
       }
       const args = (body.args && typeof body.args === "object" ? body.args : {}) as Record<string, unknown>;
       const { data, error } = await supabase.from("director_commands").insert({
         user_id,
         session_id: typeof body.session_id === "string" ? body.session_id.slice(0, 120) : "",
+        device_id,
         tool,
         args,
         status: "queued",

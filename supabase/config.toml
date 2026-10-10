@@ -112,6 +112,9 @@ verify_jwt = false
 [functions.director-tools]
 verify_jwt = false
 
+[functions.companion-link]
+verify_jwt = false
+
 [functions.request-change]
 verify_jwt = false
 

@@ -184,6 +184,7 @@ export function DirectorHands() {
           .select("id,user_id,session_id,tool,args")
           .eq("user_id", user.id)
           .eq("status", "queued")
+          .is("device_id", null)
           .order("created_at", { ascending: true })
           .limit(1);
         const rows = (Array.isArray(data) ? data : []) as HandsCommand[];

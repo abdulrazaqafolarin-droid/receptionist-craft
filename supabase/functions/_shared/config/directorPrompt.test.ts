@@ -97,3 +97,12 @@ Deno.test("route list is generated from OWNER_PAGES, never hand-written", async 
   check(!p.includes("/orders ") && !p.includes("/orders,"), "invented /orders route gone");
   check(!p.includes("/builder ") && !p.includes("/builder,"), "invented /builder route gone");
 });
+
+Deno.test("hands and companion sections teach the loop and the iron rule", () => {
+  const p = buildDirectorSystemPrompt(CTX);
+  check(p.includes("director-tools"), "tools endpoint named");
+  check(p.includes("look, act ONCE, read the result"), "loop discipline stated");
+  check(p.includes("device_id"), "companion routing documented");
+  check(p.includes("ONLY when the owner asked in this"), "ask-gate for real computers");
+  check(p.includes("never instruction"), "screen-text rule stated");
+});
