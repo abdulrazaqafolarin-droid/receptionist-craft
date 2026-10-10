@@ -131,3 +131,11 @@ Deno.test("one-tap connect and web reading are taught", () => {
   }));
   check(parsed.actions.length === 1, "connect_start survives the contract");
 });
+
+Deno.test("cursor visibility and platform coverage are stated", () => {
+  const p = buildDirectorSystemPrompt(CTX);
+  check(p.includes("visible cursor"), "brain knows its in-app work is watched");
+  check(p.includes("cannot touch browser chrome"), "cursor boundary stated");
+  check(p.includes("NO iOS companion"), "iOS gap stated, never promised");
+  check(p.includes("paired\" is not \"awake"), "paired-vs-awake distinction stated");
+});
