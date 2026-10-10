@@ -73,6 +73,18 @@
       "selector": "[data-actor=\"builder-history\"]",
       "label": "Change history button",
       "kind": "button"
+    },
+    {
+      "key": "director-cursor-home",
+      "selector": "[data-actor=\"director-cursor-home\"]",
+      "label": "Director cursor perch",
+      "kind": "panel"
+    },
+    {
+      "key": "director-history",
+      "selector": "[data-actor=\"director-history\"]",
+      "label": "Director history button",
+      "kind": "button"
     }
   ],
   "tours": {

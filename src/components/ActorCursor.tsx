@@ -250,7 +250,8 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
   const [running, setRunning] = useState(false);
   const [receipts, setReceipts] = useState<ActorReceipt[]>([]);
   // Bluey life: follow mode trails the owner's mouse when idle; the cursor
-  // rests at its dock (bottom-right home) after work and when hidden it
+  // rests at its home (the Director chat perch when open, else the
+  // bottom-right corner dock) after work and when hidden it
   // stays hidden until asked back. Preferences persist locally per user.
   const [follow, setFollow] = useState<boolean>(() => {
     try {
@@ -274,6 +275,20 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
   handlersRef.current = handlers;
 
   const dockPoint = useCallback((): CursorPoint => {
+    // Home is the Director chat perch when it exists (the cursor lives on
+    // its own chat); otherwise the bottom-right corner dock. Queried live
+    // so opening/closing the chat moves home with it.
+    try {
+      const perch = document.querySelector('[data-actor="director-cursor-home"]');
+      if (perch) {
+        const r = perch.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        }
+      }
+    } catch {
+      // no DOM access — corner dock below
+    }
     const w = typeof window !== "undefined" ? window.innerWidth : 1280;
     const h = typeof window !== "undefined" ? window.innerHeight : 800;
     return { x: Math.max(16, w - 96), y: Math.max(16, h - 150) };

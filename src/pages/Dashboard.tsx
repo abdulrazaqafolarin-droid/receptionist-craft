@@ -343,12 +343,15 @@ export default function Dashboard() {
             <section className="mb-6 sm:mb-8" aria-label="Director">
               <Card className="liquid-glass-card">
                 <CardContent className="p-5 sm:p-7">
-                  <button onClick={() => setDirectorOpen(true)} aria-label="Open Director briefing" className="rounded-2xl text-left transition-transform active:scale-95">
+                  <button onClick={() => setDirectorOpen((v) => !v)} aria-label={directorOpen ? "Hide Director chat" : "Open Director chat"} aria-expanded={directorOpen} className="rounded-2xl text-left transition-transform active:scale-95">
                     <DirectorBuddy state={state as "idle" | "working" | "needs-you"} line={line} size="medium" briefingOpen={directorOpen} />
                   </button>
                 </CardContent>
               </Card>
-              <DirectorPanel open={directorOpen} onClose={() => setDirectorOpen(false)} userId={user?.id} />
+              {/* Inline like Manage Operator: expands in the flow, covers nothing. */}
+              {directorOpen && (
+                <DirectorPanel onClose={() => setDirectorOpen(false)} userId={user?.id} />
+              )}
               {/* Presence cursor: invisible until an autonomous run replays. */}
               <ActorCursor point={presenceHost.point} swallow={presenceHost.swallow} arriving={presenceHost.arriving} />
               <ActorOverlay

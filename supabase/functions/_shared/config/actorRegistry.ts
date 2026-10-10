@@ -39,6 +39,9 @@ export const ACTOR_TARGETS: ActorTarget[] = [
   { key: "builder-tab-improve", selector: '[data-actor="builder-tab-improve"]', label: "Improve tab", kind: "tab", why: "Describe changes in words; they go live only on your approval." },
   { key: "builder-tab-live", selector: '[data-actor="builder-tab-live"]', label: "Live tab", kind: "tab", why: "Real customer conversations arriving right now, read-only." },
   { key: "builder-history", selector: '[data-actor="builder-history"]', label: "Change history button", kind: "button", why: "Every past build and change chat for this operator, resumable." },
+  // -- Director chat --
+  { key: "director-cursor-home", selector: '[data-actor="director-cursor-home"]', label: "Director cursor perch", kind: "panel", why: "The Director cursor's resting place on its own chat — it waits here between jobs." },
+  { key: "director-history", selector: '[data-actor="director-history"]', label: "Director history button", kind: "button", why: "Every past Director conversation, resumable with its proposals intact." },
 ];
 
 /**

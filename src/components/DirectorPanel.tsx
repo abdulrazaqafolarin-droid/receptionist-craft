@@ -1,53 +1,57 @@
 /**
  * DirectorPanel — talk to the Director.
  *
- * The morning-brief and build tabs are gone: the chat IS the interface.
- * It welcomes, answers from live rows, proposes actions, and executes the
- * grant-gated ones — drafts link to the Builder, approval stays human.
- * Standing grants collapsed into the corner key button: tap to review
- * what the Director may do solo, tap back to keep talking.
+ * Renders INLINE in the dashboard flow (like Manage Operator), never as
+ * a modal: opening the chat pushes content down instead of covering it.
+ * The chat IS the interface — welcomes, answers from live rows, proposes
+ * actions, executes the grant-gated ones. Standing grants and the key
+ * vault collapse into header buttons; tap back to keep talking.
  */
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DirectorChat } from "@/components/DirectorChat";
 import { VaultPanel } from "@/components/VaultPanel";
 import { GRANT_SCOPES, useDirectorGrants, type GrantScope } from "@/lib/directorGrants";
-import { ArrowLeft, KeyRound, Lock } from "lucide-react";
+import { ArrowLeft, ChevronUp, KeyRound, Lock, MousePointer2 } from "lucide-react";
 
 export function DirectorPanel({
-  open,
   onClose,
   userId,
 }: {
-  open: boolean;
   onClose: () => void;
   userId: string | undefined;
 }) {
   const [view, setView] = useState<"chat" | "grants" | "keys">("chat");
   const navigate = useNavigate();
-  const { grants, available, setGrant, check } = useDirectorGrants(userId, open);
+  const { grants, available, setGrant, check } = useDirectorGrants(userId, true);
   const [saving, setSaving] = useState<string | null>(null);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setView("chat"); } }}>
-      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-lg" aria-label="Director chat">
-        <DialogHeader>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              {view !== "chat" && (
-                <button
-                  onClick={() => setView("chat")}
-                  aria-label="Back to chat"
-                  className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </button>
-              )}
-              <DialogTitle>{view === "grants" ? "Standing grants" : view === "keys" ? "Key vault" : "Director"}</DialogTitle>
-            </div>
-            <div className="flex gap-1">
+    <div className="mt-4 rounded-2xl border border-border bg-card/60 p-4 sm:p-5" aria-label="Director chat">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {view !== "chat" && (
+              <button
+                onClick={() => setView("chat")}
+                aria-label="Back to chat"
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            )}
+            <p className="text-sm font-semibold">{view === "grants" ? "Standing grants" : view === "keys" ? "Key vault" : "Director"}</p>
+            {/* Cursor perch: the Director cursor's small home on its own chat. */}
+            <span
+              data-actor="director-cursor-home"
+              title="The Director cursor rests here between jobs"
+              className="flex h-6 w-6 items-center justify-center rounded-md bg-muted/60 text-muted-foreground"
+              aria-hidden="true"
+            >
+              <MousePointer2 className="h-3.5 w-3.5" />
+            </span>
+          </div>
+          <div className="flex gap-1">
             {view === "chat" && (
               <>
                 <button
@@ -68,9 +72,16 @@ export function DirectorPanel({
                 </button>
               </>
             )}
+            <button
+              onClick={() => { onClose(); setView("chat"); }}
+              aria-label="Hide Director chat"
+              title="Hide chat"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
           </div>
-          </div>
-        </DialogHeader>
+        </div>
 
         {view === "keys" ? (
           <div className="flex min-h-0 flex-1 flex-col" style={{ minHeight: "50vh" }}>
@@ -121,7 +132,7 @@ export function DirectorPanel({
             </button>
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col" style={{ minHeight: "50vh" }}>
+          <div className="flex min-h-0 flex-col" style={{ height: "62vh", maxHeight: "620px", minHeight: "420px" }}>
             <DirectorChat
               userId={userId}
               check={check}
@@ -129,7 +140,6 @@ export function DirectorPanel({
             />
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 }

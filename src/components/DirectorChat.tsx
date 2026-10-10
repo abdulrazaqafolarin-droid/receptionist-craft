@@ -10,13 +10,12 @@
  * Builder.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Send, Loader2, Plus, Trash2, History, Volume2, VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ChatShell } from "@/components/widget/ChatShell";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
 import { useBuildThreads } from "@/hooks/useBuildThreads";
 import { speakDirectorText, stopSpeaking, type DirectorVoiceProvider } from "@/utils/textToSpeech";
@@ -49,7 +48,7 @@ export function DirectorChat({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const [railOpen, setRailOpen] = useState(false);
   const [executing, setExecuting] = useState<string | null>(null);
   // Director voice: off until the owner asks to hear it. Provider cycles
   // auto (cheapest first) -> local (gateway Voicebox, free) -> cloud.
@@ -87,6 +86,12 @@ export function DirectorChat({
       return next;
     });
   };
+
+  // Auto-scroll the message list like the Builder chat does.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, loading]);
   const cycleProvider = () => {
     setVoiceProvider((p) => {
       const next: DirectorVoiceProvider = p === "auto" ? "local" : p === "local" ? "cloud" : "auto";
@@ -249,7 +254,7 @@ export function DirectorChat({
           ...(actions && actions.length > 0 ? { actions } : {}),
         };
       }));
-      setShowHistory(false);
+      setRailOpen(false);
     } catch {
       toast.error("Could not open that conversation");
     }
@@ -258,7 +263,7 @@ export function DirectorChat({
   function newChat() {
     threadIdRef.current = null;
     setMessages([]);
-    setShowHistory(false);
+    setRailOpen(false);
   }
 
   async function deleteThread(id: string) {
@@ -295,7 +300,14 @@ export function DirectorChat({
               {voiceProvider}
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={() => setShowHistory((v) => !v)} aria-label="Conversation history">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setRailOpen((v) => !v)}
+            aria-label="Director history"
+            title="Past Director conversations"
+            data-actor="director-history"
+          >
             <History className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={newChat} aria-label="New conversation">
@@ -304,125 +316,181 @@ export function DirectorChat({
         </div>
       </div>
 
-      {showHistory && (
-        <div className="mb-2 max-h-40 overflow-y-auto rounded-xl border border-border bg-card p-2">
-          {threads.length === 0 && (
-            <p className="px-2 py-3 text-xs text-muted-foreground">No past Director chats yet.</p>
-          )}
-          {threads.map((t) => (
-            <div key={t.id} className="group flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/50">
-              <button className="min-w-0 flex-1 truncate text-left text-sm" onClick={() => { void openThread(t.id); }}>
-                {t.title}
-              </button>
-              <button
-                aria-label={`Delete: ${t.title}`}
-                onClick={() => { void deleteThread(t.id); }}
-                className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-destructive focus:opacity-100 group-hover:opacity-100"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="min-h-0 flex-1">
-        <ChatShell
-          theme="configurator"
-          messages={messages}
-          isUser={(m) => m.role === "owner"}
-          loading={loading}
-          scrollRef={scrollRef}
-          contextLabel="Director · knows every operator"
-          inputValue={input}
-          onInputChange={setInput}
-          onSend={() => { void sendText(input); }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void sendText(input);
-            }
-          }}
-          disabled={loading}
-          placeholder="Ask your Director anything…"
-          multiline
-          sendIcon={<Send className="h-4 w-4" />}
-          emptyState={
-            <div className="py-6 text-center">
-              <p className="text-sm font-medium">Good to see you. I watch every operator you own.</p>
-              <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">
-                Ask what needs you, what to build next, or how any operator is doing — I answer from live records.
-              </p>
-              <div className="mt-3 flex flex-wrap justify-center gap-2">
-                {WELCOME_SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => { void sendText(s); }}
-                    className="rounded-full border border-border px-3 py-1.5 text-xs hover:bg-muted"
-                  >
-                    {s}
-                  </button>
-                ))}
+      <div className="flex min-h-0 min-w-0 flex-1 gap-3">
+        {/* Desktop: history rail beside the chat, like the Builder */}
+        {railOpen && (
+          <aside className="hidden w-52 shrink-0 flex-col gap-1 overflow-y-auto md:flex" aria-label="Director history">
+            <div className="px-2 text-xs font-medium text-muted-foreground">History</div>
+            {threads.length === 0 && (
+              <p className="px-2 py-3 text-xs text-muted-foreground">No past Director chats yet.</p>
+            )}
+            {threads.map((t) => (
+              <div key={t.id} className={`group flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted/50 ${t.id === threadIdRef.current ? "bg-muted" : ""}`}>
+                <button className="min-w-0 flex-1 truncate text-left" onClick={() => { void openThread(t.id); }}>
+                  {t.title}
+                </button>
+                <button
+                  aria-label={`Delete: ${t.title}`}
+                  onClick={() => { void deleteThread(t.id); }}
+                  className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-destructive focus:opacity-100 group-hover:opacity-100"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
-            </div>
-          }
-          renderMessage={({ message }) => (
-            <>
-              <p className="whitespace-pre-wrap text-sm">{message.content}</p>
-              {message.role === "ai" && message.suggestions && message.suggestions.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {message.suggestions.map((s, i) => (
+            ))}
+          </aside>
+        )}
+        {/* Mobile: history drawer */}
+        {railOpen && (
+          <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-label="Director history">
+            <div className="absolute inset-0 bg-background/80" onClick={() => setRailOpen(false)} aria-hidden="true" />
+            <aside className="absolute inset-y-0 left-0 flex w-72 flex-col gap-2 overflow-y-auto bg-background p-4 shadow-xl">
+              <div className="px-2 text-sm font-medium">History</div>
+              {threads.length === 0 && (
+                <p className="px-2 py-3 text-xs text-muted-foreground">No past Director chats yet.</p>
+              )}
+              {threads.map((t) => (
+                <div key={t.id} className="group flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted/50">
+                  <button className="min-w-0 flex-1 truncate text-left" onClick={() => { void openThread(t.id); }}>
+                    {t.title}
+                  </button>
+                  <button
+                    aria-label={`Delete: ${t.title}`}
+                    onClick={() => { void deleteThread(t.id); }}
+                    className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-destructive focus:opacity-100 group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </aside>
+          </div>
+        )}
+
+        {/* Chat column: Builder bubbles, timestamps, Builder input */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto rounded-xl bg-muted/30 p-4">
+            {messages.length === 0 && (
+              <div className="py-8 text-center">
+                <p className="text-sm font-medium">Good to see you. I watch every operator you own.</p>
+                <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">
+                  Ask what needs you, what to build next, or how any operator is doing — I answer from live records.
+                </p>
+                <div className="mt-3 flex flex-wrap justify-center gap-2">
+                  {WELCOME_SUGGESTIONS.map((sug) => (
                     <button
-                      key={i}
-                      onClick={() => { void sendText(s); }}
-                      className="rounded-full border border-border px-2.5 py-1 text-xs hover:bg-muted"
+                      key={sug}
+                      onClick={() => { void sendText(sug); }}
+                      className="rounded-full border border-border bg-card px-3 py-1.5 text-xs shadow-sm hover:bg-muted"
                     >
-                      {s}
+                      {sug}
                     </button>
                   ))}
                 </div>
-              )}
-              {message.role === "ai" && message.actions && message.actions.some((a) => a.type !== "research_need") && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {message.actions.filter((a) => a.type !== "research_need").map((a, i) => (
-                    <button
-                      key={i}
-                      disabled={executing !== null}
-                      onClick={() => { void runAction(a, i); }}
-                      className="rounded-lg bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
-                    >
-                      {executing ? "Working…" : actionLabel(a)}
-                    </button>
-                  ))}
+              </div>
+            )}
+            {messages.map((m, idx) => (
+              <div key={idx} className={`mb-4 max-w-[85%] ${m.role === "owner" ? "ml-auto" : "mr-auto"}`}>
+                <div className={`inline-block whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm ${
+                  m.role === "owner"
+                    ? "bg-primary text-primary-foreground rounded-br-md"
+                    : "bg-card border border-border shadow-sm rounded-bl-md"
+                }`}>
+                  {m.content}
                 </div>
-              )}
-              {message.role === "ai" && message.actions && message.actions.some((a) => a.type === "research_need" && (a as { result?: unknown }).result) && (
-                <div className="mt-2 space-y-2">
-                  {(message.actions.filter((a) => a.type === "research_need") as Array<{ need?: string; result?: {
-                    success: boolean; best_interface: string; fallbacks: string[]; verification: string;
-                    errors: string[]; candidates: Array<{ name: string; url: string; verification: string; evidence: string[] }>;
-                  } }>).map((a, i) => a.result && (
-                    <div key={i} className="rounded-xl border border-border bg-card p-2.5">
-                      <p className="text-xs font-medium">
-                        {a.result.success ? `Connects via ${a.result.best_interface}` : "No verified option yet"}
-                        <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{a.result.verification}</span>
-                      </p>
-                      {a.result.candidates.slice(0, 2).map((c, j) => (
-                        <a key={j} href={c.url} target="_blank" rel="noreferrer" className="mt-1 block truncate text-xs text-primary hover:underline">
-                          {c.name}
-                        </a>
-                      ))}
-                      {a.result.errors.length > 0 && (
-                        <p className="mt-1 text-[11px] text-muted-foreground">{a.result.errors[0]}</p>
-                      )}
-                    </div>
-                  ))}
+                <div className={`mt-1 text-xs text-muted-foreground ${m.role === "owner" ? "text-right" : ""}`}>
+                  {m.role === "owner" ? "You" : "Director"} · {new Date(m.timestamp).toLocaleTimeString()}
                 </div>
-              )}
-            </>
-          )}
-        />
+                {m.role === "ai" && m.suggestions && m.suggestions.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {m.suggestions.map((sug, i) => (
+                      <button
+                        key={i}
+                        onClick={() => { void sendText(sug); }}
+                        className="rounded-full border border-border bg-card px-2.5 py-1 text-xs shadow-sm hover:bg-muted"
+                      >
+                        {sug}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {m.role === "ai" && m.actions && m.actions.some((a) => a.type !== "research_need") && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {m.actions.filter((a) => a.type !== "research_need").map((a, i) => (
+                      <button
+                        key={i}
+                        disabled={executing !== null}
+                        onClick={() => { void runAction(a, i); }}
+                        className="rounded-lg bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                      >
+                        {executing ? "Working…" : actionLabel(a)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {m.role === "ai" && m.actions && m.actions.some((a) => a.type === "research_need" && (a as { result?: unknown }).result) && (
+                  <div className="mt-2 space-y-2">
+                    {(m.actions.filter((a) => a.type === "research_need") as Array<{ need?: string; result?: {
+                      success: boolean; best_interface: string; fallbacks: string[]; verification: string;
+                      errors: string[]; candidates: Array<{ name: string; url: string; verification: string; evidence: string[] }>;
+                    } }>).map((a, i) => a.result && (
+                      <div key={i} className="rounded-xl border border-border bg-card p-2.5 shadow-sm">
+                        <p className="text-xs font-medium">
+                          {a.result.success ? `Connects via ${a.result.best_interface}` : "No verified option yet"}
+                          <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{a.result.verification}</span>
+                        </p>
+                        {a.result.candidates.slice(0, 2).map((c, j) => (
+                          <a key={j} href={c.url} target="_blank" rel="noreferrer" className="mt-1 block truncate text-xs text-primary hover:underline">
+                            {c.name}
+                          </a>
+                        ))}
+                        {a.result.errors.length > 0 && (
+                          <p className="mt-1 text-[11px] text-muted-foreground">{a.result.errors[0]}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {loading && (
+              <div className="mb-4 mr-auto max-w-[85%]">
+                <div className="inline-flex items-center gap-1.5 rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3 shadow-sm" aria-label="Director is thinking">
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "150ms" }} />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: "300ms" }} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void sendText(input);
+                }
+              }}
+              disabled={loading}
+              placeholder="Ask your Director anything…"
+              aria-label="Message the Director"
+              className="flex-1 rounded-xl border border-border bg-background px-4 py-3 text-sm transition-all focus:border-primary focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+            />
+            <Button
+              onClick={() => { void sendText(input); }}
+              disabled={loading || !input.trim()}
+              aria-label="Send message"
+              className="h-[46px] w-[46px] shrink-0 rounded-xl p-0"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
       </div>
+
       <ActorCursor point={ride.point} swallow={ride.swallow} arriving={ride.arriving} size={48} />
       <ActorOverlay
         ring={ride.ring}
