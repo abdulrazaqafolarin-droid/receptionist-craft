@@ -259,6 +259,7 @@ export default function Dashboard() {
             size="lg"
             className="group touch-target w-full sm:w-auto"
             aria-label="Create a new AI operator"
+            data-actor="create-operator"
           >
             <Plus className="mr-2 h-5 w-5 group-hover:rotate-90 transition-transform" aria-hidden="true" /> 
             Create Operator

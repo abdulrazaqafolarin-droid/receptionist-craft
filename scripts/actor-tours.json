@@ -85,6 +85,12 @@
       "selector": "[data-actor=\"director-history\"]",
       "label": "Director history button",
       "kind": "button"
+    },
+    {
+      "key": "create-operator",
+      "selector": "[data-actor=\"create-operator\"]",
+      "label": "Create Operator button",
+      "kind": "button"
     }
   ],
   "tours": {

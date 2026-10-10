@@ -42,6 +42,8 @@ export const ACTOR_TARGETS: ActorTarget[] = [
   // -- Director chat --
   { key: "director-cursor-home", selector: '[data-actor="director-cursor-home"]', label: "Director cursor perch", kind: "panel", why: "The Director cursor's resting place on its own chat — it waits here between jobs." },
   { key: "director-history", selector: '[data-actor="director-history"]', label: "Director history button", kind: "button", why: "Every past Director conversation, resumable with its proposals intact." },
+  // -- Dashboard --
+  { key: "create-operator", selector: '[data-actor="create-operator"]', label: "Create Operator button", kind: "button", why: "Starts a new AI operator through onboarding — describe the business problem and build." },
 ];
 
 /**
