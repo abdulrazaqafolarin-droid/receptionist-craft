@@ -12,13 +12,14 @@
 
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Send, Loader2, Plus, Trash2, History } from "lucide-react";
+import { Send, Loader2, Plus, Trash2, History, Volume2, VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ChatShell } from "@/components/widget/ChatShell";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
 import { useBuildThreads } from "@/hooks/useBuildThreads";
+import { speakDirectorText, stopSpeaking, type DirectorVoiceProvider } from "@/utils/textToSpeech";
 import type { GrantScope } from "@/lib/directorGrantRules";
 import { retryDirectorJob, adjustDirectorOperator, draftDirectorHelper } from "@/lib/directorExecutors";
 import type { DirectorAction } from "../../supabase/functions/_shared/config/directorPrompt";
@@ -50,6 +51,53 @@ export function DirectorChat({
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [executing, setExecuting] = useState<string | null>(null);
+  // Director voice: off until the owner asks to hear it. Provider cycles
+  // auto (cheapest first) -> local (gateway Voicebox, free) -> cloud.
+  const [voiceOn, setVoiceOn] = useState(() => {
+    try {
+      return localStorage.getItem("rutex-director-voice") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [voiceProvider, setVoiceProvider] = useState<DirectorVoiceProvider>(() => {
+    try {
+      const v = localStorage.getItem("rutex-director-voice-provider");
+      return v === "local" || v === "cloud" ? v : "auto";
+    } catch {
+      return "auto";
+    }
+  });
+  const toggleVoice = () => {
+    setVoiceOn((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("rutex-director-voice", next ? "1" : "0");
+      } catch {
+        // preference best-effort
+      }
+      if (!next) {
+        stopSpeaking();
+        try {
+          if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
+        } catch {
+          // already quiet
+        }
+      }
+      return next;
+    });
+  };
+  const cycleProvider = () => {
+    setVoiceProvider((p) => {
+      const next: DirectorVoiceProvider = p === "auto" ? "local" : p === "local" ? "cloud" : "auto";
+      try {
+        localStorage.setItem("rutex-director-voice-provider", next);
+      } catch {
+        // preference best-effort
+      }
+      return next;
+    });
+  };
   const threadIdRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const {
@@ -160,6 +208,11 @@ export function DirectorChat({
       };
       setMessages((prev) => [...prev, aiMsg]);
       if (tid) void saveMsg(tid, "assistant", d.reply || "…");
+      if (voiceOn && d.reply && d.reply !== "…") {
+        void speakDirectorText(d.reply, voiceProvider).catch(() => {
+          // voice is a courtesy — a failed lane never breaks the chat
+        });
+      }
     } catch (e) {
       setMessages((prev) => [...prev, {
         role: "ai",
@@ -205,6 +258,27 @@ export function DirectorChat({
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs text-muted-foreground">Talk to your Director — it knows every operator.</p>
         <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleVoice}
+            aria-label={voiceOn ? "Mute the Director's voice" : "Hear the Director's voice"}
+            title={voiceOn ? "Voice on — tap to mute" : "Voice off — tap to hear replies"}
+          >
+            {voiceOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          </Button>
+          {voiceOn && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={cycleProvider}
+              aria-label={`Voice provider: ${voiceProvider}. Tap to change.`}
+              title="Voice lane: auto tries free local first, then cloud"
+              className="px-2 text-[11px] text-muted-foreground"
+            >
+              {voiceProvider}
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={() => setShowHistory((v) => !v)} aria-label="Conversation history">
             <History className="h-4 w-4" />
           </Button>

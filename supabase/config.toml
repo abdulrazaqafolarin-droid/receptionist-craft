@@ -91,6 +91,9 @@ verify_jwt = false
 [functions.director-sweep]
 verify_jwt = false
 
+[functions.director-voice]
+verify_jwt = false
+
 [functions.request-change]
 verify_jwt = false
 
