@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
-"""Rutex browser lane — Jev's eyes and hands, the Director's goals.
+"""Rutex browser lane — Jev's eyes and hands, the Director's judgment.
 
 Polls your Rutex project for `browse_task` work the brain queued and
-runs the absorbed jev-ultrafast loop toward it: fresh indexed element
-table every observation, one TypeSafe decision per round trip, act,
-re-observe, until DONE, BLOCKED, or the caps below. Results go back
-with the step history so the brain sees what actually happened.
+runs it in a real browser: fresh indexed element table every look
+(absorbed snapshot.js), one brain decision per step (director-decide —
+no model keys anywhere on this machine), act, re-observe, until DONE,
+BLOCKED, or the caps below. Two modes: loop (messy tasks, decide
+every step) and plan (simple flows, one full step list, stop on
+mismatch and ask again).
 
-Needs (local .env beside this file — never the repo):
-  TYPESAFE_API_KEY   per-step decisions (the fast brain)
-  TEXT_MODEL_API_KEY typing values (OpenAI-compatible helper)
-  TEXT_MODEL_BASE_URL + TEXT_MODEL (+ TEXT_MODEL_REASONING=none)
+Needs nothing but Python 3.12 + browser-harness + httpx here, and a
+Chromium to drive. Pairing secret in config.json (never the repo);
+file box in ./filebox for uploads and downloads.
 
 Refusals, checked before the browser even opens: logins, passwords,
-payments, checkouts — those need the owner, never the loop. Anything
-else the loop itself can mark BLOCKED with its reason.
-
-Stdlib here + the vendored jev package + browser-harness/httpx
-(pip install browser-harness httpx). Python 3.12+.
-Ctrl-C stops everything instantly.
+payments, checkouts. Ctrl-C stops everything instantly.
 """
 
 import json
@@ -30,45 +26,37 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+FILEBOX = os.path.join(HERE, "filebox")
 
 CONFIG_PATH = os.path.join(HERE, "config.json")
 POLL_MS = 2500
 WALL_CLOCK_S = 360
 STEP_CAP = 40
+PLAN_STEP_CAP = 20
+PLAN_STEP_CAP = 20
 
 REFUSE_GOAL = re.compile(
-    r"log\s*[\-\s]*in|sign\s*[\-\s]*in|password|passcode|pay(ment|ing)?|checkout|credit\s*card|2fa|otp|verify.*(code|identity)",
+    r"log\s*[\-\s]*in|sign\s*[\-\s]*in|password|passcode|pay(ment|ing)?|checkout|credit\s*card|2fa|\botp\b|verify.*(code|identity)",
     re.I,
 )
 
-from third_party.jev_ultrafast.agent import Agent  # noqa: E402
+from third_party.jev_ultrafast.browser import Browser, StalePage  # noqa: E402
+from third_party.jev_ultrafast.model import action_space  # noqa: E402
 
 
 def fail(msg):
     return False, None, msg[:300]
 
 
-def load_dotenv():
-    path = os.path.join(HERE, ".env")
-    try:
-        with open(path, encoding="utf-8") as f:
-            for line in f.read().splitlines():
-                if "=" in line and not line.startswith("#"):
-                    k, v = line.split("=", 1)
-                    os.environ.setdefault(k.strip(), v.strip())
-    except OSError:
-        pass
-
-
 class Link:
     def __init__(self, base, secret):
-        self.endpoint = base.rstrip("/") + "/functions/v1/companion-link"
+        self.base = base.rstrip("/")
         self.secret = secret
 
-    def call(self, body, timeout=70):
+    def call(self, path, body, timeout=70):
         data = json.dumps(body).encode()
         req = urllib.request.Request(
-            self.endpoint, data=data,
+            self.base + path, data=data,
             headers={"Content-Type": "application/json", "Authorization": "Bearer " + self.secret},
             method="POST",
         )
@@ -82,70 +70,249 @@ class Link:
             return None
 
     def poll(self):
-        res = self.call({"action": "poll"})
+        res = self.call("/functions/v1/companion-link", {"action": "poll"})
         if not res or not isinstance(res.get("command"), dict):
             return None
         return res["command"]
 
     def complete(self, cmd_id, ok, result, error):
-        self.call({"action": "complete", "command_id": cmd_id, "ok": ok,
+        self.call("/functions/v1/companion-link",
+                  {"action": "complete", "command_id": cmd_id, "ok": ok,
                    "result": result, "error": error})
 
     def heartbeat(self):
-        self.call({"action": "heartbeat"})
+        self.call("/functions/v1/companion-link", {"action": "heartbeat"})
+
+    def decide(self, goal, url, table, history, mode):
+        res = self.call("/functions/v1/director-decide",
+                        {"goal": goal, "url": url, "table": table,
+                         "history": history, "mode": mode}, timeout=75)
+        if not res or not res.get("ok"):
+            err = (res or {}).get("error", "brain unreachable")
+            return None, str(err)[:200]
+        return res.get("decision"), None
 
 
-def run_task(args):
+def table_text(elements):
+    lines = []
+    for el in elements:
+        ops = ",".join(el.get("operations", []))
+        lines.append("[%s] %s | %s" % (el.get("index", "?"), ops, el.get("label", "")[:80]))
+        for opt in el.get("options", [])[:8]:
+            lines.append("    %s %s" % (opt.get("index", "?"), str(opt.get("label", ""))[:60]))
+    return "\n".join(lines)[:6000]
+
+
+def index_map(targets):
+    out = {}
+    for group in targets.values():
+        for idx, action in group.items():
+            out[idx] = action
+    return out
+
+
+def box_files():
+    try:
+        return set(os.listdir(FILEBOX))
+    except OSError:
+        return set()
+
+
+def run_task(link, args):
     goal = args.get("goal", "")
     url = args.get("url", "")
+    mode = args.get("mode", "loop")
     if not isinstance(goal, str) or not goal.strip():
         return fail("no goal given")
     if not isinstance(url, str) or not url.strip():
         return fail("no start url given")
+    if mode not in ("loop", "plan"):
+        mode = "loop"
     if REFUSE_GOAL.search(goal):
         return fail("refused (logins and payments need the owner) — never the loop")
-    if not os.environ.get("TYPESAFE_API_KEY"):
-        return fail("no TYPESAFE_API_KEY in the runner .env")
     goal = goal.strip()[:1000]
     url = url.strip()[:2000]
-    started = time.time()
+    os.makedirs(FILEBOX, exist_ok=True)
+
+    trail = []
     steps = 0
     outcome = "blocked"
     final_url = url
-    trail = []
+    downloads = []
+    started = time.time()
+    browser = None
     try:
-        with Agent(url, goal) as agent:
-            for snap in agent.run():
-                steps += 1
-                hist = snap.get("history", [])
-                if hist:
-                    last = hist[-1]
-                    trail.append("%s: %s" % (last.get("kind", "?"), str(last.get("action", ""))[:100]))
-                final_url = snap.get("page", {}).get("url", final_url) if isinstance(snap.get("page"), dict) else final_url
-                if snap.get("status") in ("done", "blocked"):
-                    outcome = snap["status"]
-                    break
-                if steps >= STEP_CAP or time.time() - started > WALL_CLOCK_S:
-                    outcome = "blocked"
-                    trail.append("runner caps: %d steps / %ds wall clock" % (STEP_CAP, WALL_CLOCK_S))
-                    break
+        browser = Browser(url)
     except Exception as e:
+        return fail("browser would not start: %s" % str(e).split("\n")[0][:160])
+
+    def note(s):
+        trail.append(s[:160])
+        print("  " + s[:160], flush=True)
+
+    try:
+        try:
+            browser.call("Page.setDownloadBehavior", behavior="allow", downloadPath=FILEBOX)
+        except Exception:
+            pass
+        seen_files = box_files()
+
+        def snap():
+            pg = browser.observe(screenshot=False)
+            els, tgs, _controls = action_space(pg.get("actions", []))
+            return pg, els, tgs
+
+        def observe():
+            page = browser.observe(screenshot=False)
+            elements, targets, _controls = action_space(page.get("actions", []))
+            return page, elements, targets
+
+        def download_check():
+            now = box_files() - seen_files
+            fresh = sorted(now)
+            for f in fresh:
+                note("downloaded: %s" % f[:80])
+                downloads.append(f[:80])
+            return fresh
+
+        def do_upload(action, filename):
+            if not filename or "/" in filename or "\\" in filename or filename.startswith("."):
+                return fail("upload needs a plain filename from the file box")[1]
+            path = os.path.join(FILEBOX, filename)
+            if not os.path.isfile(path):
+                return "file not in the box: %s" % filename[:60]
+            node = action.get("node")
+            if not isinstance(node, int):
+                return "upload target lost its element"
+            probe = browser.call(
+                "Runtime.evaluate",
+                expression="(n) => { const e = window.__jevFast && window.__jevFast.nodes.get(n);"
+                           " if (!e || !e.isConnected) return null;"
+                           " const r = e.getBoundingClientRect();"
+                           " if (!r.width || !r.height) return null; return true; }",
+                arguments=[{"value": node}],
+                returnByValue=True,
+            )
+            if not probe or not probe.get("result", {}).get("value"):
+                return "upload target not interactable right now"
+            ref = browser.call(
+                "Runtime.evaluate",
+                expression="(n) => window.__jevFast.nodes.get(n)",
+                arguments=[{"value": node}],
+                returnByValue=False,
+            )
+            obj_id = (ref.get("result") or {}).get("objectId")
+            if not obj_id:
+                return "upload target not resolvable"
+            node_id = browser.call("DOM.requestNode", objectId=obj_id).get("nodeId")
+            if not node_id:
+                return "upload target not resolvable"
+            try:
+                browser.call("DOM.setFileInputFiles", nodeId=node_id, files=[path])
+            except Exception as e:
+                return "upload failed: %s" % str(e).split("\n")[0][:120]
+            return None
+
+        def execute(decision, page, by_index):
+            op = decision.get("operation")
+            if op in ("DONE", "BLOCKED"):
+                return ("terminal", decision.get("reason", ""))
+            if op in ("SCROLL_UP", "SCROLL_DOWN"):
+                browser.call("Input.dispatchMouseEvent", type="mouseWheel",
+                             x=550, y=400, deltaX=0, deltaY=-500 if op == "SCROLL_UP" else 500)
+                return ("acted", "scrolled")
+            if op == "WAIT":
+                time.sleep(2)
+                return ("acted", "waited")
+            if op == "UPLOAD":
+                action = by_index.get(str(decision.get("target", "")))
+                if not action:
+                    return ("stale", "upload target gone")
+                err = do_upload(action, str(decision.get("filename", "")))
+                if err:
+                    return ("failed", err)
+                return ("acted", "uploaded")
+            action = by_index.get(str(decision.get("target", "")))
+            if not action:
+                return ("stale", "target gone from the table")
+            text = decision.get("text") if op == "TYPE_TEXT" else None
+            if op == "TYPE_TEXT" and not isinstance(text, str):
+                return ("failed", "no text supplied")
+            try:
+                browser.act(action, page, text=text)
+            except Exception as e:
+                if isinstance(e, StalePage) or "StalePage" in type(e).__name__:
+                    return ("stale", "page changed under us")
+                return ("failed", str(e).split("\n")[0][:160])
+            return ("acted", action.get("label", op)[:100])
+
+        # Observe once up front; the loop below re-observes every step.
+        page, elements, targets = snap()
+        plan_steps = None
+        if mode == "plan":
+            decision, err = link.decide(goal, page.get("url", url), table_text(elements), [], "plan")
+            if err or not decision or not isinstance(decision.get("plan"), list):
+                return True, {
+                    "outcome": "blocked", "url": page.get("url", url), "steps": 0,
+                    "note": err or "plan came back unusable — ask again in loop mode",
+                    "trail": [], "downloads": [],
+                }, None
+            plan_steps = [s for s in decision["plan"] if isinstance(s, dict)][:PLAN_STEP_CAP]
+            note("plan: %d steps" % len(plan_steps))
+
+        while time.time() - started < WALL_CLOCK_S and steps < STEP_CAP:
+            if mode == "plan" and plan_steps is not None and steps < len(plan_steps):
+                decision = plan_steps[steps]
+            else:
+                if mode == "plan":
+                    break
+                decision, err = link.decide(
+                    goal, page.get("url", url), table_text(elements),
+                    ["%d. %s" % (i + 1, t) for i, t in enumerate(trail[-10:])], "loop")
+                if err or not isinstance(decision, dict):
+                    note("brain unreachable (%s), retrying next step" % (err or "?"))
+                    time.sleep(5)
+                    page, elements, targets = snap()
+                    continue
+            op = decision.get("operation")
+            if op == "DONE":
+                outcome = "done"
+                break
+            if op == "BLOCKED":
+                note("blocked: %s" % str(decision.get("reason", ""))[:120])
+                break
+            by_index = index_map(targets)
+            status, info = execute(decision, page, by_index)
+            steps += 1
+            if status == "stale":
+                note("stale (%s) — re-observing" % info)
+                if mode == "plan":
+                    note("plan diverged — stopping, ask again")
+                    break
+            elif status == "failed":
+                note("failed: %s" % info)
+                if mode == "plan":
+                    break
+            else:
+                note("%s" % info)
+            download_check()
+            page, elements, targets = snap()
+            final_url = page.get("url", final_url)
+
+        download_check()
+        ok = outcome == "done"
         return True, {
-            "outcome": "blocked",
+            "outcome": outcome,
             "url": final_url,
             "steps": steps,
-            "note": "loop crashed, nothing executed blind: %s" % str(e).split("\n")[0][:200],
-            "trail": trail[-10:],
-        }, None
-    ok = outcome == "done"
-    # Jev's own rule, kept: a DONE choice is not proof of success.
-    # The trail lets the brain verify the outcome independently.
-    return True, {
-        "outcome": outcome,
-        "url": final_url,
-        "steps": steps,
-        "trail": trail[-15:],
-    }, None if ok else "loop ended blocked — see trail"
+            "trail": trail[-15:],
+            "downloads": downloads,
+        }, None if ok else "loop ended %s — see trail" % outcome
+    finally:
+        try:
+            browser.close()
+        except Exception:
+            pass
 
 
 def load_config():
@@ -173,12 +340,11 @@ def first_run():
         os.chmod(CONFIG_PATH, 0o600)
     except OSError:
         pass
-    print("Saved. Put TYPESAFE_API_KEY (+TEXT keys) in .env beside me, then run again.")
+    print("Saved. Polling for browse_task — Ctrl-C stops everything.")
     return cfg
 
 
 def main():
-    load_dotenv()
     cfg = load_config() or first_run()
     if cfg is None:
         return 1
@@ -197,7 +363,7 @@ def main():
                     tool = cmd.get("tool", "")
                     print("[%s] %s" % (time.strftime("%H:%M:%S"), tool), flush=True)
                     if tool == "browse_task":
-                        ok, result, error = run_task(cmd.get("args") or {})
+                        ok, result, error = run_task(link, cmd.get("args") or {})
                     else:
                         ok, result, error = fail("browser lane only runs browse_task (got %s)" % str(tool)[:40])
                     link.complete(cmd.get("id", ""), ok, result, error)

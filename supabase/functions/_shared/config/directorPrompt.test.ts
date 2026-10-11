@@ -145,4 +145,6 @@ Deno.test("browser lane is taught with verification discipline", () => {
   check(p.includes("browse_task"), "browser task tool named");
   check(p.includes("DONE claim is never"), "done-is-not-proof rule stated");
   check(p.includes("never go to the lane"), "login/payment boundary for lanes");
+  check(p.includes("you return one strict decision"), "brain-decides-every-step stated");
+  check(p.includes("by filename only, never"), "file-box rule stated");
 });
