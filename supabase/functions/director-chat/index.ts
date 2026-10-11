@@ -110,13 +110,23 @@ serve(async (req) => {
     const todayStr = dayStr(new Date());
 
     const perOp = await Promise.all(operators.map(async (op) => {
+      // Each operator's queries are isolated: one flapping table (or a
+      // dropped DB connection mid-batch) degrades that operator to
+      // zeros instead of 500ing the whole brain call.
+      const safe = async <T>(p: PromiseLike<T>): Promise<T | null> => {
+        try {
+          return await p;
+        } catch {
+          return null;
+        }
+      };
       const [apptRes, escRes, stockRes, prodRes] = await Promise.all([
-        supabase.from("appointments").select("*", { count: "exact", head: true }).eq("receptionist_id", op.id).gte("start_time", today.toISOString()),
-        supabase.from("escalations").select("*", { count: "exact", head: true }).eq("receptionist_id", op.id).is("resolved_at", null),
-        supabase.from("services").select("stock_quantity,low_stock_threshold,expiry_date").eq("receptionist_id", op.id).eq("active", true).not("stock_quantity", "is", null).limit(200),
-        supabase.from("services").select("*", { count: "exact", head: true }).eq("receptionist_id", op.id).eq("active", true),
+        safe(supabase.from("appointments").select("*", { count: "exact", head: true }).eq("receptionist_id", op.id).gte("start_time", today.toISOString())),
+        safe(supabase.from("escalations").select("*", { count: "exact", head: true }).eq("receptionist_id", op.id).is("resolved_at", null)),
+        safe(supabase.from("services").select("stock_quantity,low_stock_threshold,expiry_date").eq("receptionist_id", op.id).eq("active", true).not("stock_quantity", "is", null).limit(200)),
+        safe(supabase.from("services").select("*", { count: "exact", head: true }).eq("receptionist_id", op.id).eq("active", true)),
       ]);
-      const rows = (((stockRes as { data?: unknown }).data || []) as unknown) as Array<{
+      const rows = ((((stockRes as { data?: unknown } | null)?.data) || []) as unknown) as Array<{
         stock_quantity: number | null; low_stock_threshold: number | null; expiry_date: string | null;
       }>;
       let stockNeeds = 0;
@@ -135,48 +145,55 @@ serve(async (req) => {
         kind,
         model: op.business_model || "services",
         active: op.active !== false,
-        upcomingBookings: ((apptRes as { count?: number }).count) || 0,
-        openEscalations: ((escRes as { count?: number }).count) || 0,
+        upcomingBookings: ((apptRes as { count?: number } | null)?.count) || 0,
+        openEscalations: ((escRes as { count?: number } | null)?.count) || 0,
         stockNeeds,
         overdueTasks: tasks.filter((t) => !t.done && t.due && t.due <= todayStr).length,
-        productCount: ((prodRes as { count?: number }).count) || 0,
+        productCount: ((prodRes as { count?: number } | null)?.count) || 0,
       };
     }));
 
+    const safeQ = async <T>(p: PromiseLike<T>): Promise<T | null> => {
+      try {
+        return await p;
+      } catch {
+        return null;
+      }
+    };
     const [versRes, threadsRes, jobsRes, connRes, dirThreadsRes, ledgerRes, notifRes, devRes] = await Promise.all([
-      supabase.from("config_versions").select("receptionist_id,version_number,change_source,owner_input,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(15),
-      supabase.from("build_threads").select("title,status,receptionist_id,updated_at").eq("user_id", user_id).order("updated_at", { ascending: false }).limit(12),
-      supabase.from("plan_jobs").select("id,receptionist_id,status,error_text,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(20),
-      supabase.from("connectors").select("display_name,status").eq("user_id", user_id),
-      supabase.from("director_threads").select("id,title,updated_at").eq("user_id", user_id).order("updated_at", { ascending: false }).limit(6),
-      supabase.from("director_actions").select("kind,summary,created_at").eq("user_id", user_id).eq("visible", true).order("created_at", { ascending: false }).limit(5),
-      supabase.from("notifications").select("title,created_at").eq("user_id", user_id).eq("read", false).order("created_at", { ascending: false }).limit(5),
-      supabase.from("companion_devices").select("id,name,platform,enabled,last_seen").eq("user_id", user_id).order("last_seen", { ascending: false, nullsFirst: true }),
+      safeQ(supabase.from("config_versions").select("receptionist_id,version_number,change_source,owner_input,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(15)),
+      safeQ(supabase.from("build_threads").select("title,status,receptionist_id,updated_at").eq("user_id", user_id).order("updated_at", { ascending: false }).limit(12)),
+      safeQ(supabase.from("plan_jobs").select("id,receptionist_id,status,error_text,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(20)),
+      safeQ(supabase.from("connectors").select("display_name,status").eq("user_id", user_id)),
+      safeQ(supabase.from("director_threads").select("id,title,updated_at").eq("user_id", user_id).order("updated_at", { ascending: false }).limit(6)),
+      safeQ(supabase.from("director_actions").select("kind,summary,created_at").eq("user_id", user_id).eq("visible", true).order("created_at", { ascending: false }).limit(5)),
+      safeQ(supabase.from("notifications").select("title,created_at").eq("user_id", user_id).eq("read", false).order("created_at", { ascending: false }).limit(5)),
+      safeQ(supabase.from("companion_devices").select("id,name,platform,enabled,last_seen").eq("user_id", user_id).order("last_seen", { ascending: false, nullsFirst: true })),
     ]);
-    const jobs = (((jobsRes as { data?: unknown }).data || []) as unknown) as Array<{ id: string; receptionist_id: string; status: string; error_text: string | null; created_at: string }>;
+    const jobs = ((((jobsRes as { data?: unknown } | null)?.data) || []) as unknown) as Array<{ id: string; receptionist_id: string; status: string; error_text: string | null; created_at: string }>;
     const failedDetail = jobs.filter((j) => j.status === "failed").slice(0, 8).map((j) => ({
       job_id: j.id,
       operator: nameOf(j.receptionist_id),
       error: j.error_text || "no error recorded",
       created_at: j.created_at,
     }));
-    const conns = (((connRes as { data?: unknown }).data || []) as unknown) as Array<{ display_name: string; status: string }>;
-    const vers = (((versRes as { data?: unknown }).data || []) as unknown) as Array<{
+    const conns = ((((connRes as { data?: unknown } | null)?.data) || []) as unknown) as Array<{ display_name: string; status: string }>;
+    const vers = ((((versRes as { data?: unknown } | null)?.data) || []) as unknown) as Array<{
       receptionist_id: string; version_number: number; change_source: string; owner_input: string | null; created_at: string;
     }>;
-    const threads = (((threadsRes as { data?: unknown }).data || []) as unknown) as Array<{
+    const threads = ((((threadsRes as { data?: unknown } | null)?.data) || []) as unknown) as Array<{
       title: string; status: string; receptionist_id: string | null; updated_at: string;
     }>;
-    const dirThreads = ((((dirThreadsRes as { data?: unknown }).data || []) as unknown) as Array<{
+    const dirThreads = (((((dirThreadsRes as { data?: unknown } | null)?.data) || []) as unknown) as Array<{
       id: string; title: string; updated_at: string;
     }>).filter((t) => t.id !== (typeof body.thread_id === "string" ? body.thread_id : ""));
-    const reports = ((((ledgerRes as { data?: unknown }).data || []) as unknown) as Array<{
+    const reports = (((((ledgerRes as { data?: unknown } | null)?.data) || []) as unknown) as Array<{
       kind: string; summary: string; created_at: string;
     }>);
-    const unread = ((((notifRes as { data?: unknown }).data || []) as unknown) as Array<{
+    const unread = (((((notifRes as { data?: unknown } | null)?.data) || []) as unknown) as Array<{
       title: string; created_at: string;
     }>);
-    const devices = ((((devRes as { data?: unknown }).data || []) as unknown) as Array<{
+    const devices = (((((devRes as { data?: unknown } | null)?.data) || []) as unknown) as Array<{
       id: string; name: string; platform: string; enabled: boolean; last_seen: string | null;
     }>);
 

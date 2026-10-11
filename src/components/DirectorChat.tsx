@@ -269,13 +269,33 @@ export function DirectorChat({
     } catch (e) {
       // Name the failure honestly: an expired session is a re-login, a
       // live function with a dead gateway is a wait-and-retry. A ping
-      // (no gateway call) tells the two apart instead of one mystery.
+      // (no gateway call) tells the two apart instead of one mystery —
+      // and when the edge named the failure, quote its name verbatim so
+      // the next fix targets the right half.
       let detail = "I could not reach my brain just now. Your operators are untouched — try again in a moment.";
       try {
         const status = (e as { context?: { status?: number }; status?: number })?.context?.status
           ?? (e as { status?: number })?.status;
+        let edgeError = "";
+        try {
+          const ctx = (e as { context?: unknown })?.context;
+          const body = ctx && typeof (ctx as { json?: unknown }).json === "function"
+            ? await Promise.race([
+              ((ctx as { json: () => Promise<unknown> }).json()),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+            ])
+            : null;
+          const err = (body as { error?: unknown } | null)?.error;
+          if (typeof err === "string" && err) edgeError = err.slice(0, 60);
+        } catch {
+          // body unreadable — fall through to ping diagnosis
+        }
         if (status === 401) {
           detail = "You look signed out — sign in again and retry. Nothing was touched.";
+        } else if (edgeError.startsWith("gateway_timeout")) {
+          detail = "My brain started answering but ran out of time — likely waking up. Try again in a moment; second attempts usually land.";
+        } else if (edgeError.startsWith("gateway_unreachable") || edgeError.startsWith("gateway_auth") || edgeError.startsWith("gateway_protocol")) {
+          detail = `My brain's line is down from this end (${edgeError}). The chat line works — the thinking service or its tunnel needs a restart on its host.`;
         } else if (status !== undefined && status !== 401) {
           const ping = await Promise.race([
             supabase.functions.invoke("director-chat", { body: { action: "ping" } }),
