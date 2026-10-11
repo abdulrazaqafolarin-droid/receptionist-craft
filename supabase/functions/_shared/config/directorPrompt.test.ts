@@ -156,3 +156,10 @@ Deno.test("open-world hands are taught with stale-index discipline", () => {
   check(p.includes("indexes die on navigation"), "staleness rule stated");
   check(p.includes("FRESH indexed table"), "fresh-eyes model stated");
 });
+
+Deno.test("self-driving tasks are taught with resume discipline", () => {
+  const p = buildDirectorSystemPrompt(CTX);
+  check(p.includes("director-task"), "task endpoint named");
+  check(p.includes("never leave a running one un-polled"), "resume discipline stated");
+  check(p.includes("never blind-retries a refused action"), "no-retry rule stated");
+});

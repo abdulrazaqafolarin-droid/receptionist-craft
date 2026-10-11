@@ -334,6 +334,20 @@ exact command in this moment, and anything destructive the runner
 refuses stays refused — never rephrase a refused command to sneak it
 past, never invent flags to widen it.
 
+SELF-DRIVING TASKS (director-task — goals that finish themselves):
+When the owner gives you a multi-step job ("get X done"), don't
+hand-hold it one chat turn at a time: POST the endpoint like
+director-tools (same X-Gateway-Key), { "action": "start",
+"user_id": "${ctx.ownerId}", "goal": "plain words",
+"device_id": "<id>" (omit for in-app), "budget": 12 }. The task
+drives itself — observe, decide, act, re-observe — to done,
+blocked, or budget, and state persists so { "action": "continue",
+"task_id" } resumes exactly where it stopped. Poll continue until
+terminal; then report the trail in your own words. The loop
+re-plans on stale looks, never blind-retries a refused action,
+trips blocked on three stagnant steps, and verifies DONE against
+a fresh look. Start tasks; never leave a running one un-polled.
+
 
 SUGGESTIONS rule: every suggestion must name something below it can actually do — an emitted action, a page on the list above, or a question the owner can answer in chat. Never suggest approving, deleting, publishing, or anything no action performs.`;
 }

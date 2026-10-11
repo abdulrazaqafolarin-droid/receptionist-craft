@@ -15,14 +15,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { askRutex, RutexMcpError } from "../_shared/rutexMcp.ts";
 import { buildDecidePrompt, parseDecision, parsePlan } from "../_shared/directorDecide.ts";
+import { refusedGoal } from "../_shared/directorTask.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-const REFUSE_GOAL =
-  /log\s*[-_\s]*in|sign\s*[-_\s]*in|password|passcode|pay(ment|ing)?|checkout|credit\s*card|2fa|\botp\b|verify.*(code|identity)/i;
 
 function jsonRes(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -69,8 +67,9 @@ serve(async (req) => {
       : [];
     const mode = body.mode === "plan" ? "plan" : "loop";
     if (!goal) return jsonRes({ ok: false, error: "goal required" }, 400);
-    if (REFUSE_GOAL.test(goal)) {
-      return jsonRes({ ok: false, error: "refused (logins and payments need the owner)" }, 400);
+    const refused = refusedGoal(goal);
+    if (refused) {
+      return jsonRes({ ok: false, error: refused }, 400);
     }
 
     let text: string;

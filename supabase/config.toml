@@ -121,6 +121,9 @@ verify_jwt = false
 [functions.director-ask]
 verify_jwt = false
 
+[functions.director-task]
+verify_jwt = false
+
 [functions.request-change]
 verify_jwt = false
 

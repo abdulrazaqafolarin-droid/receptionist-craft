@@ -62,3 +62,11 @@ Deno.test("plans parse strictly, terminals and overflows rejected", () => {
     check(threw, `rejected: ${bad.slice(0, 30)}`);
   }
 });
+
+Deno.test("lane limits append verbatim, absent by default", () => {
+  const base = { goal: "g", url: "u", table: "[1] button | Go", history: [], mode: "loop" as const };
+  const plain = buildDecidePrompt(base);
+  check(!plain.includes("LANE LIMITS"), "no limits section by default");
+  const limited = buildDecidePrompt({ ...base, limits: "No SELECT here." });
+  check(limited.includes("LANE LIMITS") && limited.includes("No SELECT here."), "limits appended");
+});

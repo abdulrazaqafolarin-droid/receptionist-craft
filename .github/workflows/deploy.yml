@@ -101,6 +101,9 @@ jobs:
       - name: Run ask validation test (formats + dispositions)
         run: deno test supabase/functions/_shared/directorAsk.test.ts
 
+      - name: Run task mechanics test (fingerprint + tripwire + labels)
+        run: deno test supabase/functions/_shared/directorTask.test.ts
+
       - name: Actor tours export is fresh (Jev reads this file)
         run: |
           deno run --allow-read --allow-write scripts/export-actor-tours.ts
