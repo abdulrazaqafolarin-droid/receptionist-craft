@@ -135,15 +135,21 @@ serve(async (req) => {
         // Route to a live, owned, enabled device — never blind.
         const { data: dev } = await supabase
           .from("companion_devices")
-          .select("id,user_id,enabled,platform")
+          .select("id,user_id,enabled,platform,name,last_seen")
           .eq("id", device_id)
           .maybeSingle();
-        const owned = dev as { id: string; user_id: string; enabled: boolean; platform: string } | null;
+        const owned = dev as { id: string; user_id: string; enabled: boolean; platform: string; name: string; last_seen: string | null } | null;
         if (!owned || owned.user_id !== user_id) {
           return jsonRes({ ok: false, error: "unknown device" }, 404);
         }
         if (!owned.enabled) {
           return jsonRes({ ok: false, error: "device paused — enable it first" }, 409);
+        }
+        if (!owned.last_seen) {
+          // Paired but never checked in: nothing is listening on that
+          // machine, so queueing means a guaranteed 90s timeout. Say so
+          // in seconds instead — the owner starts the app, then asks again.
+          return jsonRes({ ok: false, error: `"${owned.name}" never checked in — start the companion app on that machine first, then ask again` }, 409);
         }
         // Tool-to-platform match: hands go to hands, shells to shells,
         // browser tasks to browser lanes. A mismatch is a 400, never a

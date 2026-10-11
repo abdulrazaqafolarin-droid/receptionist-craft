@@ -138,6 +138,7 @@ Deno.test("cursor visibility and platform coverage are stated", () => {
   check(p.includes("cannot touch browser chrome"), "cursor boundary stated");
   check(p.includes("NO iOS companion"), "iOS gap stated, never promised");
   check(p.includes("paired\" is not \"awake"), "paired-vs-awake distinction stated");
+  check(p.includes("never checked in"), "never-seen rule stated");
 });
 
 Deno.test("browser lane is taught with verification discipline", () => {
