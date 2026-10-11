@@ -156,6 +156,32 @@ export function DirectorChat({
       else toast.error("No connector named.");
       return;
     }
+    if (action.type === "hands") {
+      // Reply-embedded cursor work: needs no second call, no extra key —
+      // it rides the moment the owner taps. Same guard, receipts, stop.
+      const steps = (Array.isArray(action.steps) ? action.steps : []).slice(0, 3);
+      const actorSteps = steps.flatMap((s) => {
+        switch (s.op) {
+          case "click": return s.target ? [{ type: "click" as const, target: s.target }] : [];
+          case "point": return s.target ? [{ type: "point" as const, target: s.target }] : [];
+          case "goto": return s.route ? [{ type: "goto" as const, route: s.route }] : [];
+          case "type": return s.target && typeof s.text === "string" ? [{ type: "type" as const, target: s.target, text: s.text.slice(0, 500) }] : [];
+          case "highlight": return s.target ? [{ type: "highlight" as const, target: s.target }] : [];
+          case "drag": return s.from && s.to ? [{ type: "drag" as const, from: s.from, to: s.to }] : [];
+          default: return [];
+        }
+      });
+      if (actorSteps.length === 0) {
+        toast.error("Nothing runnable in that move.");
+        return;
+      }
+      setExecuting(`hands-${msgIdx}`);
+      const receipts = await ride.start(actorSteps, { tour: "director-hands-reply", userId });
+      setExecuting(null);
+      const failed = receipts.find((r) => !r.ok);
+      toast[failed ? "error" : "success"](failed ? `Stopped: ${failed.detail}` : "Done.");
+      return;
+    }
     if (!userId) return;
     if (action.type === "retry_job") {
       if (!gate("fix_small")) return;
@@ -603,6 +629,7 @@ function actionLabel(a: DirectorAction): string {
     case "open_builder": return "Open in Builder";
     case "open_grants": return "Review grants";
     case "connect_start": return "Connect it";
+    case "hands": return "Do it";
     case "research_need": return "Research it";
   }
 }

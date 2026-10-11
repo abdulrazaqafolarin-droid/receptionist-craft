@@ -163,3 +163,31 @@ Deno.test("self-driving tasks are taught with resume discipline", () => {
   check(p.includes("never leave a running one un-polled"), "resume discipline stated");
   check(p.includes("never blind-retries a refused action"), "no-retry rule stated");
 });
+
+Deno.test("hands actions validate steps strictly or drop whole", () => {
+  const good = parseDirectorReply(JSON.stringify({
+    reply: "On it.",
+    suggestions: [],
+    actions: [{ type: "hands", steps: [
+      { op: "click", target: "console-stock-check" },
+      { op: "goto", route: "/console" },
+      { op: "type", target: "console-chat-input", text: "hi" },
+    ] }],
+  }));
+  check(good.actions.length === 1, "well-formed hands survives");
+  const cases: Array<[unknown, string]> = [
+    [{ type: "hands", steps: [] }, "empty steps"],
+    [{ type: "hands", steps: [{ op: "click", target: "a" }, { op: "click", target: "b" }, { op: "click", target: "c" }, { op: "click", target: "d" }] }, "four steps"],
+    [{ type: "hands", steps: [{ op: "teleport", target: "x" }] }, "unknown op"],
+    [{ type: "hands", steps: [{ op: "click" }] }, "click without target"],
+    [{ type: "hands", steps: [{ op: "goto" }] }, "goto without route"],
+    [{ type: "hands", steps: [{ op: "type", target: "x" }] }, "type without text"],
+    [{ type: "hands", steps: [{ op: "drag", from: "a" }] }, "drag without to"],
+    [{ type: "hands", steps: "click" }, "non-array steps"],
+    [{ type: "hands" }, "missing steps"],
+  ];
+  for (const [action, why] of cases) {
+    const parsed = parseDirectorReply(JSON.stringify({ reply: "x", suggestions: [], actions: [action] }));
+    check(parsed.actions.length === 0, `dropped whole: ${why}`);
+  }
+});

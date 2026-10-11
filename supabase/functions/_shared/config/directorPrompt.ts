@@ -123,7 +123,19 @@ export type DirectorAction =
   | { type: "open_builder"; operator_id: string }
   | { type: "open_grants" }
   | { type: "connect_start"; connector_key: string }
+  | { type: "hands"; steps: DirectorHandsStep[] }
   | { type: "research_need"; need: string; result?: unknown }
+
+/** One visible cursor step, executed locally the moment the owner taps it. */
+export interface DirectorHandsStep {
+  op: "click" | "point" | "goto" | "type" | "highlight" | "drag";
+  target?: string;
+  route?: string;
+  text?: string;
+  from?: string;
+  to?: string;
+  ms?: number;
+}
 
 export interface DirectorReply {
   reply: string;
@@ -241,6 +253,7 @@ OUTPUT CONTRACT (STRICT JSON, no markdown fences, nothing else):
     { "type": "open_builder", "operator_id": "uuid" },
     { "type": "open_grants" },
     { "type": "connect_start", "connector_key": "google_reviews" },
+    { "type": "hands", "steps": [{ "op": "click", "target": "console-stock-check" }] },
     { "type": "research_need", "need": "tiktok-auto-post" },
   ]
 Actions run only the operations above with ids/paths from THESE records. An action referencing anything unlisted is void — emit none rather than guess. Omit empty arrays. "speak" is never an action; the reply IS the speech.
@@ -259,6 +272,7 @@ Tools: look_at_page {} (read THIS page as a FRESH indexed table — [n] role | l
 Open-world hands (no registration needed): live_click {index, expect?}, live_type {index, text, expect?}, live_drag {from, to} — indexes from the LATEST table only, with the visible label passed as expect so a changed element refuses instead of misclicking. Credential, lockout, and money labels refuse automatically; everything else runs visibly with full receipts. Re-look after every navigation — a stale index is a failed step, never a guessed click.
 The loop discipline: look, act ONCE, read the result, then decide the next step. Reply to the owner only at the end, in a few warm words, or sooner if you are stuck. Anything the hands refuse, report honestly — never work around a refusal, never invent a target.
 In-app hands move a visible cursor the owner watches on screen — point, click, ride pages, and type while they look on. Say what you are about to do when it matters; the cursor shows the rest. The cursor lives only inside this app's pages: it cannot touch browser chrome, other tabs, or anything outside the app.
+Move it with the hands action (no separate call needed): { "type": "hands", "steps": [{op, target?/route?/text?/from?/to?}] } — up to 3 visible steps (click, point, goto, type, highlight, drag on registered anchors), executed the moment the owner taps the button. Prefer hands for short visible in-app work; the tools endpoint is for longer loops and real computers.
 
 READING THE WEB (browse_url — same endpoint, no device): when you need
 a page's actual content, call it with {url} and you get the title, text,
@@ -366,9 +380,29 @@ export function parseDirectorReply(text: string): DirectorReply {
     ? (parsed.actions as unknown[]).filter((a): a is DirectorAction => {
       if (!a || typeof a !== "object") return false;
       const t = (a as Record<string, unknown>).type;
-      return t === "navigate" || t === "retry_job" || t === "draft_helper" ||
+      const known = t === "navigate" || t === "retry_job" || t === "draft_helper" ||
         t === "adjust_operator" || t === "open_builder" || t === "open_grants" ||
-        t === "connect_start" || t === "research_need";
+        t === "connect_start" || t === "hands" || t === "research_need";
+      if (!known) return false;
+      // hands steps validate strictly: known ops, max 3, required refs.
+      // A malformed hands action is dropped whole — never half-executed.
+      if (t === "hands") {
+        const steps = (a as { steps?: unknown }).steps;
+        if (!Array.isArray(steps) || steps.length === 0 || steps.length > 3) return false;
+        const ops = ["click", "point", "goto", "type", "highlight", "drag"];
+        return steps.every((s): boolean => {
+          if (!s || typeof s !== "object") return false;
+          const o = (s as Record<string, unknown>).op;
+          if (typeof o !== "string" || !ops.includes(o)) return false;
+          const r = s as Record<string, unknown>;
+          if ((o === "click" || o === "point" || o === "highlight") && typeof r.target !== "string") return false;
+          if (o === "goto" && typeof r.route !== "string") return false;
+          if (o === "type" && (typeof r.target !== "string" || typeof r.text !== "string")) return false;
+          if (o === "drag" && (typeof r.from !== "string" || typeof r.to !== "string")) return false;
+          return true;
+        });
+      }
+      return true;
     }).slice(0, 4)
     : [];
   return { reply: parsed.reply.trim().slice(0, 2000), suggestions, actions };
