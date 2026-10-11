@@ -261,12 +261,17 @@ export function DirectorHands() {
           )
           .subscribe() as unknown as { unsubscribe: () => void };
       } catch {
-        // no live channel — the edge's wait loop still gets results late,
-        // or the next navigation pumps. Degraded, not dead.
+        // no live channel — the safety net below still picks rows up late.
       }
     })();
+    // Safety net: a missed INSERT event (dropped socket, background tab)
+    // must never strand a queued command until the brain times out.
+    const safety = setInterval(() => {
+      if (!cancelled) void pump();
+    }, 15000);
     return () => {
       cancelled = true;
+      clearInterval(safety);
       try {
         channel?.unsubscribe();
       } catch {
