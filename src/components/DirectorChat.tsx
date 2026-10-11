@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
 import { useBuildThreads } from "@/hooks/useBuildThreads";
 import { speakDirectorText, stopSpeaking, type DirectorVoiceProvider } from "@/utils/textToSpeech";
+import { parseLocalCommand } from "@/lib/directorLocalCommands";
 import type { GrantScope } from "@/lib/directorGrantRules";
 import { retryDirectorJob, adjustDirectorOperator, draftDirectorHelper } from "@/lib/directorExecutors";
 import type { DirectorAction } from "../../supabase/functions/_shared/config/directorPrompt";
@@ -198,6 +199,42 @@ export function DirectorChat({
     if (tid) {
       threadIdRef.current = tid;
       void saveMsg(tid, "user", content);
+    }
+    // Bluey's lesson: obvious movement never waits on the network. A
+    // strict imperative matching a real anchor or route executes right
+    // here through the local ride — no gateway round-trip, no quota,
+    // and it still works when the brain is unreachable.
+    const local = parseLocalCommand(content);
+    if (local) {
+      try {
+        let reply: string;
+        if (local.kind === "goto") {
+          await runAction({ type: "navigate", path: local.route }, -1);
+          reply = `On ${local.label} now.`;
+        } else {
+          const receipts = await ride.start(
+            [{ type: "click", target: local.target }],
+            { tour: "director-local", userId },
+          );
+          reply = receipts[0]?.ok
+            ? `Done — clicked ${local.label}.`
+            : `I found ${local.label} but the click didn't land (${receipts[0]?.detail || "unknown"}). It's still there if you want to tap it yourself.`;
+        }
+        setMessages((prev) => [...prev, {
+          role: "ai",
+          content: reply,
+          timestamp: new Date().toISOString(),
+        }]);
+        if (tid) void saveMsg(tid, "assistant", reply);
+        if (voiceOn) {
+          void speakDirectorText(reply, voiceProvider).catch(() => {
+            // voice is a courtesy — a failed lane never breaks the chat
+          });
+        }
+      } finally {
+        setLoading(false);
+      }
+      return;
     }
     try {
       const history = [...messages, ownerMsg].slice(-10).map((m) => ({

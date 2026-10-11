@@ -390,3 +390,17 @@ Deno.test("runner: live type and drag flow through host hands", async () => {
   const d = await runActorScript([{ type: "live_drag", from: 1, to: 2 }], ddeps);
   check(d[0].ok && dragged.length === 1, "live drag executes");
 });
+
+Deno.test("local commands: strict imperatives resolve, vagueness falls to brain", async () => {
+  const { parseLocalCommand } = await import("./directorLocalCommands.ts");
+  const click = parseLocalCommand("click the Google Reviews connect button");
+  check(click !== null && click.kind === "click" && click.target === "connect-google_reviews", "anchor click resolves");
+  const goto = parseLocalCommand("go to Analytics");
+  check(goto !== null && goto.kind === "goto" && goto.route === "/analytics", "route goto resolves");
+  const clickPage = parseLocalCommand("click on Analytics");
+  check(clickPage !== null && clickPage.kind === "goto", "click-on-a-page falls through to goto");
+  check(parseLocalCommand("how is stock doing?") === null, "question goes to brain");
+  check(parseLocalCommand("click") === null, "bare verb goes to brain");
+  check(parseLocalCommand("please maybe click something somewhere") === null, "hedged prose goes to brain");
+  check(parseLocalCommand("open the pod bay doors") === null, "fiction goes to brain");
+});

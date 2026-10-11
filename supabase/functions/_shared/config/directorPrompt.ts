@@ -70,6 +70,30 @@ export interface DirectorDevice {
   last_seen: string | null;
 }
 
+/** Rolling per-thread facts: exact values kept, chatter dropped. */
+export interface ThreadMemory {
+  brief: string;
+  briefed_through: number;
+}
+
+/** Long threads (>12 messages) earn a brief; refresh every 6 new ones. */
+export function briefDue(total: number, mem: ThreadMemory | null): boolean {
+  if (total <= 12) return false;
+  if (!mem || !mem.brief) return true;
+  return total - mem.briefed_through >= 6;
+}
+
+/** Prompt asking for an updated brief. Strict JSON back. */
+export function buildBriefUpdatePrompt(oldBrief: string, recent: string[]): string {
+  return `Update this conversation's fact brief. Keep ONLY hard facts with exact values: decisions made, names, numbers, promises, open items. Drop greetings, chit-chat, and anything already superseded. Quote values exactly — never paraphrase numbers or ids. Reply with ONE JSON object and nothing else: {"brief": "..."} (empty string when nothing worth keeping).
+
+CURRENT BRIEF:
+${oldBrief.slice(0, 1500) || "(none yet)"}
+
+RECENT TURNS (oldest first):
+${recent.slice(-30).join("\n").slice(0, 6000)}`;
+}
+
 export interface DirectorContext {
   operators: DirectorOperator[];
   versions: DirectorVersion[];
