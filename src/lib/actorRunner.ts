@@ -15,7 +15,7 @@
  */
 
 import { findTarget } from "./actorMap";
-import { guardCheck, type ActorAction } from "./actorGuard";
+import { guardCheck, LIVE_REFUSE_RE, type ActorAction } from "./actorGuard";
 
 export interface ActorReceipt {
   action: ActorAction;
@@ -53,6 +53,8 @@ export interface ActorDeps {
   showcase: (el: unknown, title: string, lines: string[]) => Promise<void> | void;
   /** Open the connector's real collection dialog for this key. */
   collect: (connectorKey: string) => Promise<void> | void;
+  /** Read a resolved element's label for staleness/refusal checks. */
+  describe?: (el: unknown) => string;
   /** Find a navigation element leading to this route (or null). */
   resolveNav?: (route: string) => unknown;
   /**
@@ -116,8 +118,7 @@ export async function runActorScript(
     }
 
     // drag carries from/to, not a registry target — resolved wholly here.
-    if (action.type === "drag") {
-      if (silent) {
+    if (action.type === "drag") {      if (silent) {
         receipts.push({ action, ok: false, detail: "deferred-background", at: at() });
         if (!opts.continueOnFailure) break;
         continue;
@@ -153,9 +154,88 @@ export async function runActorScript(
       continue;
     }
 
-    // goto carries a route, not a registry key — handled wholly here.
-    if (action.type === "goto") {
+    // Live open-world actions resolve against the FRESH stamped table,
+    // never the registry. Index missing, element gone, label changed, or
+    // label matching a refusal pattern all fail closed with reasons —
+    // the brain re-looks and tries again instead of clicking a ghost.
+    if (action.type === "live_click" || action.type === "live_type" || action.type === "live_drag") {
       if (silent) {
+        receipts.push({ action, ok: false, detail: "deferred-background", at: at() });
+        if (!opts.continueOnFailure) break;
+        continue;
+      }
+      const resolveLive = (index: number, expect?: string): { el: unknown } | { error: string } => {
+        const el = deps.resolve(`[data-live-idx="${index}"]`);
+        if (!el) return { error: `not-on-screen:live-${index}` };
+        try {
+          const rect = (el as Element).getBoundingClientRect();
+          if (!rect || rect.width < 2 || rect.height < 2) return { error: `stale-live:${index}` };
+        } catch {
+          return { error: `stale-live:${index}` };
+        }
+        const label = (deps.describe ? deps.describe(el) : "").slice(0, 120);
+        if (LIVE_REFUSE_RE.test(label)) return { error: `refused-live-label:${label.slice(0, 40)}` };
+        if (expect && expect.trim() && !label.toLowerCase().includes(expect.trim().toLowerCase())) {
+          return { error: `stale-expect:${index}` };
+        }
+        return { el };
+      };
+      try {
+        if (action.type === "live_click") {
+          const r = resolveLive(action.index, action.expect);
+          if ("error" in r) {
+            receipts.push({ action, ok: false, detail: r.error, at: at() });
+          } else {
+            if (action.say && !silent) await deps.say(action.say);
+            await deps.moveCursor(r.el);
+            await deps.click(r.el);
+            receipts.push({ action, ok: true, detail: "done-live", at: at() });
+          }
+        } else if (action.type === "live_type") {
+          if (!deps.typeInto) {
+            receipts.push({ action, ok: false, detail: "no-type-handling", at: at() });
+          } else {
+            const r = resolveLive(action.index, action.expect);
+            if ("error" in r) {
+              receipts.push({ action, ok: false, detail: r.error, at: at() });
+            } else {
+              if (action.say && !silent) await deps.say(action.say);
+              await deps.moveCursor(r.el);
+              await deps.typeInto(r.el, action.text, action.press_return === true);
+              receipts.push({ action, ok: true, detail: "done-live", at: at() });
+            }
+          }
+        } else {
+          if (!deps.dragInto) {
+            receipts.push({ action, ok: false, detail: "no-drag-handling", at: at() });
+          } else {
+            const from = resolveLive(action.from);
+            const to = "error" in from ? from : resolveLive(action.to);
+            if ("error" in to) {
+              receipts.push({ action, ok: false, detail: ("error" in from ? from.error : (to as { error: string }).error), at: at() });
+            } else {
+              const fromEl = (from as { el: unknown }).el;
+              if (action.say && !silent) await deps.say(action.say);
+              await deps.moveCursor(fromEl);
+              await deps.dragInto(fromEl, (to as { el: unknown }).el);
+              receipts.push({ action, ok: true, detail: "done-live", at: at() });
+            }
+          }
+        }
+      } catch (e) {
+        receipts.push({
+          action, ok: false,
+          detail: `execution-failed:${e instanceof Error ? e.message : "unknown"}`.slice(0, 160),
+          at: at(),
+        });
+      }
+      if (!receipts[receipts.length - 1]?.ok && !opts.continueOnFailure) break;
+      if (deps.stepDelayMs) await delay(deps.stepDelayMs);
+      continue;
+    }
+
+    // goto carries a route, not a registry key — handled wholly here.
+    if (action.type === "goto") {      if (silent) {
         receipts.push({ action, ok: false, detail: "deferred-background", at: at() });
         if (!opts.continueOnFailure) break;
         continue;

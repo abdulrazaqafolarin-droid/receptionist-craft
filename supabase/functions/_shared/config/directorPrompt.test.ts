@@ -148,3 +148,10 @@ Deno.test("browser lane is taught with verification discipline", () => {
   check(p.includes("you return one strict decision"), "brain-decides-every-step stated");
   check(p.includes("by filename only, never"), "file-box rule stated");
 });
+
+Deno.test("open-world hands are taught with stale-index discipline", () => {
+  const p = buildDirectorSystemPrompt(CTX);
+  check(p.includes("live_click"), "live actions documented");
+  check(p.includes("indexes die on navigation"), "staleness rule stated");
+  check(p.includes("FRESH indexed table"), "fresh-eyes model stated");
+});

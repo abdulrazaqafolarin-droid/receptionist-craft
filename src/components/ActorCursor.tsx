@@ -20,6 +20,7 @@ import { useNavigate } from "react-router-dom";
 import { Square } from "lucide-react";
 import { runActorScript, type ActorReceipt, type ActorMode } from "@/lib/actorRunner";
 import type { ActorAction } from "@/lib/actorGuard";
+import { describeLiveLabel } from "@/lib/actorGuard";
 import { useDirectorPresence } from "@/hooks/useDirectorPresence";
 
 /**
@@ -462,6 +463,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       click: async (el) => {
         (el as HTMLElement).click();
       },
+      describe: (el) => describeLiveLabel(el as Element),
       dragInto: async (fromEl, toEl) => {
         // Real drag: pointer presses at the source center, travels in
         // steps so sortable lists and sliders track it, releases at the

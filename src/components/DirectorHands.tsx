@@ -8,12 +8,12 @@
  * a run starts; the cursor ride itself is the visibility.
  *
  * Tools executed here:
- * - look_at_page: serialize this page as a text grid (route, title,
- *   on-screen registered anchors, headings, buttons, input labels —
- *   never input values). Read-only, always allowed.
- * - click_target / point_at / goto_page: straight through runActorScript.
- * - type_text: through runActorScript; the guard allows registered
- *   inputs only and the host refuses credential fields at the live DOM.
+ * - look_at_page: this page as a FRESH indexed table ([n] role |
+ *   label) plus curated anchors. Indexes die on navigation.
+ * - click_target / point_at / goto_page / drag_target: registry path.
+ * - type_text: registry inputs only; host refuses credentials live.
+ * - live_click / live_type / live_drag: open-world path — indexes
+ *   from the latest table, verified + refusal-checked at resolve.
  *
  * Every execution lands in director_actions (kind 'hands') with the
  * command id and receipts — the audit trail covers hands too.
@@ -23,7 +23,11 @@ import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
 import { findTarget, describeTarget } from "@/lib/actorMap";
+import { LIVE_REFUSE_RE, describeLiveLabel } from "@/lib/actorGuard";
 import type { ActorAction } from "@/lib/actorGuard";
+
+/** Stamp attribute: live-table indexes live on the elements themselves. */
+const LIVE_ATTR = "data-live-idx";
 
 interface HandsCommand {
   id: string;
@@ -38,12 +42,29 @@ function str(v: unknown): string {
 }
 
 /** This page as a text grid for the brain. Values never included. */
+/** Stamp attribute: live-table indexes live on the elements themselves. */
+
+function liveRole(el: Element): string {
+  const tag = el.tagName.toLowerCase();
+  if (tag === "input") return `input[${(el.getAttribute("type") || "text").toLowerCase()}]`;
+  if (tag === "button" || tag === "a" || tag === "select" || tag === "textarea") return tag;
+  return el.getAttribute("role") || tag;
+}
+
+/**
+ * This page as a FRESH indexed table (JEV model, not a registry).
+ * Every actionable element gets [n]; the brain acts only on indexes
+ * from the latest table, and indexes die on navigation or re-render
+ * (resolve misses → re-look, never a stale click). Anchors stay as
+ * the curated layer with plain-words descriptions.
+ */
 function lookAtPage(): Record<string, unknown> {
   const out: Record<string, unknown> = {
     route: window.location.pathname,
     title: document.title.slice(0, 120),
   };
   try {
+    document.querySelectorAll(`[${LIVE_ATTR}]`).forEach((el) => el.removeAttribute(LIVE_ATTR));
     const anchors: string[] = [];
     document.querySelectorAll("[data-actor]").forEach((el) => {
       const key = el.getAttribute("data-actor") || "";
@@ -54,21 +75,35 @@ function lookAtPage(): Record<string, unknown> {
       }
     });
     out.anchors = anchors.slice(0, 30);
-    const text = (sel: string, n: number) =>
+    const table: string[] = [];
+    let n = 0;
+    const seen = new Set<string>();
+    const cands = document.querySelectorAll(
+      "button, a[href], input, select, textarea, [role='button'], [role='link'], [role='tab'], [role='menuitem'], [role='checkbox'], [role='switch']",
+    );
+    cands.forEach((el) => {
+      if (n >= 60) return;
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) return;
+      if (rect.bottom < 0 || rect.top > window.innerHeight + 200) return;
+      const role = liveRole(el);
+      const label = describeLiveLabel(el);
+      if (!label) return;
+      const key = `${role}|${label}|${Math.round(rect.left)}|${Math.round(rect.top)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      n += 1;
+      el.setAttribute(LIVE_ATTR, String(n));
+      table.push(`[${n}] ${role} | ${label}`);
+    });
+    out.elements = table;
+    out.elements_live = true;
+    const text = (sel: string, m: number) =>
       Array.from(document.querySelectorAll(sel))
         .map((el) => (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80))
         .filter(Boolean)
-        .slice(0, n);
-    out.headings = text("h1,h2,h3", 12);
-    out.buttons = text("button", 20);
-    const inputs: string[] = [];
-    document.querySelectorAll("input,textarea,select").forEach((el) => {
-      if (inputs.length >= 10) return;
-      const input = el as HTMLInputElement;
-      const label = input.getAttribute("placeholder") || input.getAttribute("aria-label") || input.name || input.type || input.tagName;
-      inputs.push(`${input.tagName.toLowerCase()}[${(input.getAttribute("type") || "").toLowerCase()}]: ${label}`.slice(0, 100));
-    });
-    out.inputs = inputs;
+        .slice(0, m);
+    out.headings = text("h1,h2,h3", 8);
     void describeTarget;
   } catch {
     out.degraded = true;
@@ -136,6 +171,18 @@ export function DirectorHands() {
         case "drag_target":
           return str(a.from) && str(a.to)
             ? [{ type: "drag", from: str(a.from), to: str(a.to), say: str(a.say) || undefined }]
+            : null;
+        case "live_click":
+          return typeof a.index === "number"
+            ? [{ type: "live_click", index: a.index, expect: str(a.expect) || undefined, say: str(a.say) || undefined }]
+            : null;
+        case "live_type":
+          return typeof a.index === "number" && typeof a.text === "string"
+            ? [{ type: "live_type", index: a.index, text: (a.text as string).slice(0, 500), expect: str(a.expect) || undefined, press_return: a.press_return === true }]
+            : null;
+        case "live_drag":
+          return typeof a.from === "number" && typeof a.to === "number"
+            ? [{ type: "live_drag", from: a.from, to: a.to, say: str(a.say) || undefined }]
             : null;
         default:
           return null;

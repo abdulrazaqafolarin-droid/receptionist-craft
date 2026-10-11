@@ -322,3 +322,71 @@ Deno.test("runner: drag moves through the host, defers headless", async () => {
     ACTOR_TARGETS.pop();
   }
 });
+
+Deno.test("guard: live actions check shape only, resolution is runtime", () => {
+  const ok = guardCheck({ type: "live_click", index: 3 });
+  check(ok.allowed && ok.reason === "live-action", "positive index passes shape");
+  for (const bad of [0, -2, 2.5]) {
+    const r = guardCheck({ type: "live_click", index: bad });
+    check(!r.allowed && r.reason === "bad-live-index", `index ${bad} refused`);
+  }
+  const empty = guardCheck({ type: "live_type", index: 1, text: "  " });
+  check(!empty.allowed && empty.reason === "empty-text", "empty live text refused");
+  const drag = guardCheck({ type: "live_drag", from: 1, to: 2 });
+  check(drag.allowed, "live drag shape passes");
+});
+
+const liveEl = (label: string) => ({
+  getBoundingClientRect: () => ({ width: 40, height: 20, left: 0, top: 0 }),
+  __label: label,
+});
+
+Deno.test("runner: live click verifies label and refuses honestly", async () => {
+  const clicked: string[] = [];
+  const deps = stubDeps({
+    resolve: () => liveEl("Save changes"),
+    describe: (el) => (el as { __label: string }).__label,
+    click: async () => { clicked.push("x"); },
+  });
+  const done = await runActorScript([{ type: "live_click", index: 4 }], deps);
+  check(done[0].ok && done[0].detail === "done-live" && clicked.length === 1, "live click executes");
+  const ghost = await runActorScript(
+    [{ type: "live_click", index: 9 }],
+    stubDeps({ resolve: () => null, describe: () => "" }),
+  );
+  check(!ghost[0].ok && ghost[0].detail === "not-on-screen:live-9", "missing element fails closed");
+  const changed = await runActorScript(
+    [{ type: "live_click", index: 4, expect: "Save changes" }],
+    stubDeps({ resolve: () => liveEl("Cancel order"), describe: (el) => (el as { __label: string }).__label }),
+  );
+  check(!changed[0].ok && changed[0].detail === "stale-expect:4", "changed label refuses instead of misclicking");
+  const money = await runActorScript(
+    [{ type: "live_click", index: 2 }],
+    stubDeps({ resolve: () => liveEl("Pay now"), describe: (el) => (el as { __label: string }).__label }),
+  );
+  check(!money[0].ok && money[0].detail.startsWith("refused-live-label"), "money label refused");
+  const locked = await runActorScript(
+    [{ type: "live_click", index: 2 }],
+    stubDeps({ resolve: () => liveEl("Log out"), describe: (el) => (el as { __label: string }).__label }),
+  );
+  check(!locked[0].ok && locked[0].detail.startsWith("refused-live-label"), "logout refused");
+});
+
+Deno.test("runner: live type and drag flow through host hands", async () => {
+  const typed: string[] = [];
+  const tdeps = stubDeps({
+    resolve: () => liveEl("Notes"),
+    describe: () => "Notes",
+    typeInto: async (_el, text) => { typed.push(text); },
+  });
+  const t = await runActorScript([{ type: "live_type", index: 6, text: "hello" }], tdeps);
+  check(t[0].ok && typed[0] === "hello", "live type writes");
+  const dragged: string[] = [];
+  const ddeps = stubDeps({
+    resolve: () => liveEl("item"),
+    describe: () => "item",
+    dragInto: async () => { dragged.push("x"); },
+  });
+  const d = await runActorScript([{ type: "live_drag", from: 1, to: 2 }], ddeps);
+  check(d[0].ok && dragged.length === 1, "live drag executes");
+});

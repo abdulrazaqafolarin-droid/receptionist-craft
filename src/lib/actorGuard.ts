@@ -17,10 +17,35 @@ export type ActorAction =
   | { type: "scroll-to"; target: string; say?: string }
   | { type: "type"; target: string; text: string; press_return?: boolean; say?: string }
   | { type: "drag"; from: string; to: string; say?: string }
+  | { type: "live_click"; index: number; expect?: string; say?: string }
+  | { type: "live_type"; index: number; text: string; expect?: string; press_return?: boolean; say?: string }
+  | { type: "live_drag"; from: number; to: number; say?: string }
   | { type: "say"; text: string }
   | { type: "showcase"; target: string; title: string; lines: string[]; say?: string }
   | { type: "collect"; target: string; connector_key: string; say?: string }
   | { type: "goto"; route: string; say?: string };
+
+/**
+ * Live-label refusals, checked at resolve time against the element's
+ * CURRENT label. Credentials strand or lock the owner; money moves
+ * irreversibly. The registry path keeps its own curated rules — this
+ * is the open-world counterpart for unregistered UI.
+ */
+export const LIVE_REFUSE_RE =
+  /passw|credential|secret|api[-_ ]?key|logout|log[-_ ]?out|sign[-_ ]?out|delete[-_ ]?account|lock[-_ ]?(screen|computer)?|\bpay\b|buy\b|checkout|submit/i;
+
+/** Plain-words label for a live element (aria → text → placeholder). */
+export function describeLiveLabel(el: Element): string {
+  const input = el as HTMLInputElement;
+  const label =
+    el.getAttribute("aria-label") ||
+    ((el.textContent || "").trim().replace(/\s+/g, " ")) ||
+    input.getAttribute?.("placeholder") ||
+    input.name ||
+    input.value ||
+    el.tagName;
+  return label.slice(0, 80);
+}
 
 export interface GuardVerdict {
   allowed: boolean;
@@ -74,6 +99,20 @@ export function guardCheck(action: ActorAction): GuardVerdict {
     if (isForbiddenKey(from.key)) return { allowed: false, reason: `forbidden-target:${from.key}` };
     if (isForbiddenKey(to.key)) return { allowed: false, reason: `forbidden-target:${to.key}` };
     return { allowed: true, reason: "registered-drag" };
+  }
+  if (action.type === "live_click" || action.type === "live_type" || action.type === "live_drag") {
+    // Open-world actions resolve at runtime against the FRESH live
+    // table (stamped indexes, verified labels). The guard checks shape
+    // only: positive indexes, non-empty text. Refusals happen at resolve
+    // time against live labels — this pure function cannot see them.
+    const idx = action.type === "live_drag" ? [action.from, action.to] : [action.index];
+    if (!idx.every((i) => typeof i === "number" && Number.isInteger(i) && i > 0)) {
+      return { allowed: false, reason: "bad-live-index" };
+    }
+    if (action.type === "live_type" && (typeof action.text !== "string" || !action.text.trim())) {
+      return { allowed: false, reason: "empty-text" };
+    }
+    return { allowed: true, reason: "live-action" };
   }
   const target = findTarget(action.target);
   if (!target) {
