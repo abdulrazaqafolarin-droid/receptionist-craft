@@ -98,6 +98,9 @@ jobs:
       - name: Run decide contract test (one decision per call)
         run: deno test supabase/functions/_shared/directorDecide.test.ts
 
+      - name: Run ask validation test (formats + dispositions)
+        run: deno test supabase/functions/_shared/directorAsk.test.ts
+
       - name: Actor tours export is fresh (Jev reads this file)
         run: |
           deno run --allow-read --allow-write scripts/export-actor-tours.ts

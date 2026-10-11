@@ -14,6 +14,7 @@ import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcutsProvide
 import { CommandPalette } from "@/components/CommandPalette";
 import { ActorRunIndicator } from "@/components/ActorCursor";
 import { DirectorHands } from "@/components/DirectorHands";
+import { DirectorAskHost } from "@/components/DirectorAskHost";
 import { SurfaceGate } from "@/components/SurfaceGate";
 
 import Landing from "./pages/Landing";
@@ -220,6 +221,7 @@ const App = () => {
                           <CommandPalette />
                           <ActorRunIndicator />
                           <DirectorHands />
+                          <DirectorAskHost />
                         </div>
                       </div>
                     </SidebarProvider>

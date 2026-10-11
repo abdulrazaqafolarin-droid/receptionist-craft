@@ -118,6 +118,9 @@ verify_jwt = false
 [functions.director-decide]
 verify_jwt = false
 
+[functions.director-ask]
+verify_jwt = false
+
 [functions.request-change]
 verify_jwt = false
 
