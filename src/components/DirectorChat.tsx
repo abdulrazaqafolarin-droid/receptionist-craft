@@ -252,12 +252,18 @@ export function DirectorChat({
     if (!candidate) return null;
     setExecuting("hands-transient");
     try {
+      // Point first, then click: the owner watches the cursor glide onto
+      // the target (a beat between steps) before it lands the click.
       const receipts = await ride.start(
-        [{ type: "live_click" as const, index: candidate.index, expect: candidate.label }],
+        [
+          { type: "live_point" as const, index: candidate.index, expect: candidate.label },
+          { type: "live_click" as const, index: candidate.index, expect: candidate.label },
+        ],
         { tour: "director-transient-click", userId },
       );
-      const detail = receipts[0]?.detail || "unknown";
-      if (receipts[0]?.ok) return `Done — clicked ${candidate.label}.`;
+      const failed = receipts.find((r) => !r.ok);
+      const detail = failed?.detail || "unknown";
+      if (!failed) return `Done — clicked ${candidate.label}.`;
       if (detail.startsWith("refused-live-label") || detail.startsWith("stale-expect")) {
         return `I found ${candidate.label}, but I won't touch it (${detail}).`;
       }

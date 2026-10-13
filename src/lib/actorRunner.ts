@@ -158,7 +158,7 @@ export async function runActorScript(
     // never the registry. Index missing, element gone, label changed, or
     // label matching a refusal pattern all fail closed with reasons —
     // the brain re-looks and tries again instead of clicking a ghost.
-    if (action.type === "live_click" || action.type === "live_type" || action.type === "live_drag") {
+    if (action.type === "live_click" || action.type === "live_point" || action.type === "live_type" || action.type === "live_drag") {
       if (silent) {
         receipts.push({ action, ok: false, detail: "deferred-background", at: at() });
         if (!opts.continueOnFailure) break;
@@ -181,7 +181,18 @@ export async function runActorScript(
         return { el };
       };
       try {
-        if (action.type === "live_click") {
+        if (action.type === "live_point") {
+          // Point = glide the visible cursor onto the target and stop.
+          // The move-cursor test: the owner watches the Director aim.
+          const r = resolveLive(action.index, action.expect);
+          if ("error" in r) {
+            receipts.push({ action, ok: false, detail: r.error, at: at() });
+          } else {
+            if (action.say && !silent) await deps.say(action.say);
+            await deps.moveCursor(r.el);
+            receipts.push({ action, ok: true, detail: "done-live-point", at: at() });
+          }
+        } else if (action.type === "live_click") {
           const r = resolveLive(action.index, action.expect);
           if ("error" in r) {
             receipts.push({ action, ok: false, detail: r.error, at: at() });

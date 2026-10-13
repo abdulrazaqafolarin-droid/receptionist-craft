@@ -18,6 +18,7 @@ export type ActorAction =
   | { type: "type"; target: string; text: string; press_return?: boolean; say?: string }
   | { type: "drag"; from: string; to: string; say?: string }
   | { type: "live_click"; index: number; expect?: string; say?: string }
+  | { type: "live_point"; index: number; expect?: string; say?: string }
   | { type: "live_type"; index: number; text: string; expect?: string; press_return?: boolean; say?: string }
   | { type: "live_drag"; from: number; to: number; say?: string }
   | { type: "say"; text: string }
@@ -171,7 +172,7 @@ export function guardCheck(action: ActorAction): GuardVerdict {
     if (isForbiddenKey(to.key)) return { allowed: false, reason: `forbidden-target:${to.key}` };
     return { allowed: true, reason: "registered-drag" };
   }
-  if (action.type === "live_click" || action.type === "live_type" || action.type === "live_drag") {
+  if (action.type === "live_click" || action.type === "live_point" || action.type === "live_type" || action.type === "live_drag") {
     // Open-world actions resolve at runtime against the FRESH live
     // table (stamped indexes, verified labels). The guard checks shape
     // only: positive indexes, non-empty text. Refusals happen at resolve

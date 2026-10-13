@@ -12,7 +12,7 @@
  *   label) plus curated anchors. Indexes die on navigation.
  * - click_target / point_at / goto_page / drag_target: registry path.
  * - type_text: registry inputs only; host refuses credentials live.
- * - live_click / live_type / live_drag: open-world path — indexes
+  * - live_point / live_click / live_type / live_drag: open-world path — indexes
  *   from the latest table, verified + refusal-checked at resolve.
  *
  * Every execution lands in director_actions (kind 'hands') with the
@@ -183,6 +183,10 @@ export function DirectorHands() {
         case "drag_target":
           return str(a.from) && str(a.to)
             ? [{ type: "drag", from: str(a.from), to: str(a.to), say: str(a.say) || undefined }]
+            : null;
+        case "live_point":
+          return typeof a.index === "number"
+            ? [{ type: "live_point", index: a.index, expect: str(a.expect) || undefined, say: str(a.say) || undefined }]
             : null;
         case "live_click":
           return typeof a.index === "number"

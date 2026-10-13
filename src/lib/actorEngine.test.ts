@@ -372,6 +372,22 @@ Deno.test("runner: live click verifies label and refuses honestly", async () => 
   check(!locked[0].ok && locked[0].detail.startsWith("refused-live-label"), "logout refused");
 });
 
+Deno.test("runner: live point glides without clicking", async () => {
+  const moved: string[] = [];
+  const clicked: string[] = [];
+  const deps = stubDeps({
+    resolve: () => liveEl("Staff"),
+    describe: (el) => (el as { __label: string }).__label,
+    moveCursor: async () => { moved.push("x"); },
+    click: async () => { clicked.push("x"); },
+  });
+  const done = await runActorScript([{ type: "live_point", index: 2 }], deps);
+  check(done[0].ok && done[0].detail === "done-live-point", "point receipt");
+  check(moved.length === 1 && clicked.length === 0, "cursor moved, nothing clicked");
+  const shape = guardCheck({ type: "live_point", index: 2 });
+  check(shape.allowed && shape.reason === "live-action", "point shape passes guard");
+});
+
 Deno.test("runner: live type and drag flow through host hands", async () => {
   const typed: string[] = [];
   const tdeps = stubDeps({
