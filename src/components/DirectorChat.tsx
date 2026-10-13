@@ -95,6 +95,24 @@ export function DirectorChat({
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, loading]);
+
+  // Park the cursor on its perch when the Director chat opens, so the
+  // owner sees where it lives before the first job runs.
+  useEffect(() => {
+    if (homedRef.current) return;
+    homedRef.current = true;
+    try {
+      ride.setVisible(true);
+    } catch {
+      // visibility preference best-effort
+    }
+    try {
+      ride.goHome();
+    } catch {
+      // home positioning best-effort
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const cycleProvider = () => {
     setVoiceProvider((p) => {
       const next: DirectorVoiceProvider = p === "auto" ? "local" : p === "local" ? "cloud" : "auto";
@@ -107,7 +125,8 @@ export function DirectorChat({
     });
   };
   const threadIdRef = useRef<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const homedRef = useRef(false);
   const {
     threads, ensureThread, saveMsg, remove,
     loadMessages,
