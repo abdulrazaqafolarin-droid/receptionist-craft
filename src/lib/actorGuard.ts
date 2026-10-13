@@ -52,6 +52,8 @@ export interface LiveCandidate {
   index: number;
   label: string;
   role?: string;
+  /** Extra row segments (e.g. href=/staff) — context only, never values. */
+  meta?: string;
 }
 
 function liveWords(s: string): string[] {
@@ -73,11 +75,12 @@ export function parseLiveTable(rows: unknown): LiveCandidate[] {
     const index = Number(m[1]);
     if (!Number.isInteger(index) || index <= 0) continue;
     const rest = m[2];
-    const pipe = rest.indexOf("|");
-    const role = (pipe >= 0 ? rest.slice(0, pipe) : "").trim();
-    const label = (pipe >= 0 ? rest.slice(pipe + 1) : rest).trim().slice(0, 80);
+    const segs = rest.split("|").map((s) => s.trim());
+    const role = (segs[0] || "").slice(0, 40);
+    const label = (segs[1] || "").slice(0, 80);
+    const meta = segs.slice(2).join(" | ").slice(0, 120);
     if (!label) continue;
-    out.push({ index, label, role: role || undefined });
+    out.push({ index, label, role: role || undefined, meta: meta || undefined });
   }
   return out;
 }
@@ -97,14 +100,14 @@ export function pickLiveCandidate(phrase: string, candidates: LiveCandidate[]): 
     if (!c || !Number.isInteger(c.index) || c.index <= 0) continue;
     const label = (c.label || "").slice(0, 80);
     if (!label || LIVE_REFUSE_RE.test(label)) continue;
-    const hay = ` ${label.toLowerCase()} `;
+    const hay = ` ${label.toLowerCase()} ${(c.meta || "").toLowerCase()} `;
     let score = 0;
     for (const w of words) {
       if (hay.includes(w)) score += 1;
     }
     if (score <= 0) continue;
     if (score > bestScore) {
-      best = { index: c.index, label, role: c.role };
+      best = { index: c.index, label, role: c.role, meta: c.meta };
       bestScore = score;
       tied = false;
     } else if (score === bestScore) {

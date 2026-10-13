@@ -414,6 +414,14 @@ Deno.test("transient perception: fresh table picks one unambiguous label", () =>
   check(pickLiveCandidate("the", parseLiveTable(rows)) === null, "no significant words, no click");
 });
 
+Deno.test("transient perception: href context breaks near-ties", () => {
+  const rows = ["[1] link | Hours | href=/availability", "[2] link | Hours | href=/settings"];
+  const picked = pickLiveCandidate("availability hours", parseLiveTable(rows));
+  check(picked !== null && picked.index === 1, "destination context favors the true nav link");
+  const parsed = parseLiveTable(rows)[0];
+  check(parsed.label === "Hours" && (parsed.meta || "").includes("/availability"), "label stays clean, href kept as meta");
+});
+
 Deno.test("local commands: click phrase extraction preserves intent", async () => {
   const { extractClickPhrase } = await import("./directorLocalCommands.ts");
   check(extractClickPhrase("click on the staff page for me") === "on the staff page for me", "click phrase preserved for perception");

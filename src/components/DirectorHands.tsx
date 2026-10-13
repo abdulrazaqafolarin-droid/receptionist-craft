@@ -94,7 +94,19 @@ export function lookAtPage(): Record<string, unknown> {
       seen.add(key);
       n += 1;
       el.setAttribute(LIVE_ATTR, String(n));
-      table.push(`[${n}] ${role} | ${label}`);
+      // Deeper view, values never included: link destinations ride along as
+      // extra segments so the brain can tell same-named targets apart.
+      // The label (segment 2) stays clean for expect-verification.
+      let extra = "";
+      try {
+        if (el.tagName.toLowerCase() === "a") {
+          const href = (el.getAttribute("href") || "").slice(0, 80);
+          if (href) extra = ` | href=${href}`;
+        }
+      } catch {
+        // destination hint best-effort
+      }
+      table.push(`[${n}] ${role} | ${label}${extra}`);
     });
     out.elements = table;
     out.elements_live = true;
