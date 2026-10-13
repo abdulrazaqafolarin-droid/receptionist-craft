@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
 import { useBuildThreads } from "@/hooks/useBuildThreads";
 import { speakDirectorText, stopSpeaking, type DirectorVoiceProvider } from "@/utils/textToSpeech";
-import { parseLocalCommand, extractClickPhrase } from "@/lib/directorLocalCommands";
+import { parseLocalCommand, extractClickPhrase, extractMovementTarget, matchAnchorOrRoute } from "@/lib/directorLocalCommands";
 import { lookAtPage } from "@/components/DirectorHands";
 import { parseLiveTable, pickLiveCandidate } from "@/lib/actorGuard";
 import type { GrantScope } from "@/lib/directorGrantRules";
@@ -240,6 +240,11 @@ export function DirectorChat({
   // then discard the snapshot. No registry entry is added or needed.
   async function tryTransientClick(content: string): Promise<string | null> {
     const phrase = extractClickPhrase(content);
+    if (!phrase) return null;
+    return executeTransientPhrase(phrase);
+  }
+
+  async function executeTransientPhrase(phrase: string): Promise<string | null> {
     if (!phrase || !userId) return null;
     let rows: unknown = null;
     try {
@@ -292,10 +297,18 @@ export function DirectorChat({
       threadIdRef.current = tid;
       void saveMsg(tid, "user", content);
     }
-    // Transient perception first for click verbs: a confident visible match
-    // clicks through the live path with no registry. Anything ambiguous or
-    // missing falls through to registry, route, or the brain below.
-    const transient = await tryTransientClick(content);
+    // Strict lanes first (fed commands), then the understanding lane:
+    // a movement verb ANYWHERE resolves through the same snapshot,
+    // anchors, and routes — natural phrasing moves the cursor too.
+    let transient = await tryTransientClick(content);
+    let local = parseLocalCommand(content);
+    if (!transient && !local) {
+      const target = extractMovementTarget(content);
+      if (target) {
+        transient = await executeTransientPhrase(target);
+        if (!transient) local = matchAnchorOrRoute(target, true);
+      }
+    }
     if (transient) {
       setMessages((prev) => [...prev, {
         role: "ai",
@@ -315,7 +328,6 @@ export function DirectorChat({
     // strict imperative matching a real anchor or route executes right
     // here through the local ride — no gateway round-trip, no quota,
     // and it still works when the brain is unreachable.
-    const local = parseLocalCommand(content);
     if (local) {
       try {
         let reply: string;

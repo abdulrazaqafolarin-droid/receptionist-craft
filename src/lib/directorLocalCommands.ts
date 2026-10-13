@@ -49,6 +49,62 @@ export function extractClickPhrase(text: string): string | null {
   return phrase || null;
 }
 
+// Non-strict movement verbs: found ANYWHERE for natural phrasing ("please
+// click the availability page"). Strict leading-verb matching stays above;
+// this is the understanding lane, not the feeding lane.
+const MOVEMENT_RES = /(click|tap|press|hit|select|go to|goto|open|show|take me to|navigate to|bring me to)\b/i;
+const LEAD_FILLER_RES = /^(on|the|a|an|to|me|that|this|please|for|you|now|it|my)\b\s*/i;
+const TRAIL_FILLER_RES = /\s*\b(for me|for you|please|now|right now|thanks|thank you)\s*$/i;
+const NEGATION_RES = /(n'?t|never|stop|not)\b/i;
+
+/**
+ * Find a movement target in natural phrasing. Returns the cleaned noun
+ * phrase after the first movement verb, or null when there is no verb, no
+ * phrase, or the verb is negated ("don't click cancel" never acts).
+ */
+export function extractMovementTarget(text: string): string | null {
+  const m = MOVEMENT_RES.exec(text);
+  if (!m || m.index === undefined) return null;
+  if (NEGATION_RES.test(text.slice(0, m.index))) return null;
+  let phrase = text.slice(m.index + m[0].length).trim();
+  if (!phrase) return null;
+  let prev = "";
+  while (prev !== phrase) {
+    prev = phrase;
+    phrase = phrase.replace(LEAD_FILLER_RES, "").trim();
+  }
+  phrase = phrase.replace(TRAIL_FILLER_RES, "").trim();
+  phrase = phrase.split(/\s+/).filter(Boolean).slice(0, 8).join(" ");
+  return phrase || null;
+}
+
+/**
+ * Match a raw phrase against anchors first, then routes. No verb needed —
+ * the caller already knows this is movement intent.
+ */
+export function matchAnchorOrRoute(phrase: string, includeAnchors = true): LocalCommand | null {
+  if (!phrase) return null;
+  if (includeAnchors) {
+    let best: { key: string; label: string; score: number } | null = null;
+    for (const t of ACTOR_TARGETS) {
+      const hay = `${t.key.replace(/[-_]/g, " ")} ${t.label}`;
+      if (!covers(hay, phrase)) continue;
+      const score = words(phrase).filter((w) => w.length > 3).length;
+      if (!best || score > best.score) best = { key: t.key, label: t.label, score };
+    }
+    if (best) return { kind: "click", target: best.key, label: best.label };
+  }
+  let bestRoute: { route: string; label: string; score: number } | null = null;
+  for (const p of OWNER_PAGES) {
+    const hay = `${p.key.replace(/[-_]/g, " ")} ${p.label} ${p.route}`;
+    if (!covers(hay, phrase)) continue;
+    const score = words(phrase).filter((w) => w.length > 3).length;
+    if (!bestRoute || score > bestRoute.score) bestRoute = { route: p.route, label: p.label, score };
+  }
+  if (bestRoute) return { kind: "goto", route: bestRoute.route, label: bestRoute.label };
+  return null;
+}
+
 /**
  * Try to resolve an imperative instruction locally. Anchors first for
  * click verbs (with route fallback — "click on Analytics" means go),
@@ -64,26 +120,13 @@ export function parseLocalCommand(text: string): LocalCommand | null {
   if (isClick) {
     const phrase = stripVerb(clean, CLICK_RES);
     if (phrase) {
-      let best: { key: string; label: string; score: number } | null = null;
-      for (const t of ACTOR_TARGETS) {
-        const hay = `${t.key.replace(/[-_]/g, " ")} ${t.label}`;
-        if (!covers(hay, phrase)) continue;
-        const score = words(phrase).filter((w) => w.length > 3).length;
-        if (!best || score > best.score) best = { key: t.key, label: t.label, score };
-      }
-      if (best) return { kind: "click", target: best.key, label: best.label };
+      // Anchors first, route fallback ("click on Analytics" means go).
+      const hit = matchAnchorOrRoute(phrase, true);
+      if (hit) return hit;
     }
-    // Fall through to route match: "click on X" usually means go to X.
+    // Fall through to route match below.
   }
   const phrase = isGoto ? stripVerb(clean, GOTO_RES) : stripVerb(clean, CLICK_RES);
   if (!phrase) return null;
-  let bestRoute: { route: string; label: string; score: number } | null = null;
-  for (const p of OWNER_PAGES) {
-    const hay = `${p.key.replace(/[-_]/g, " ")} ${p.label} ${p.route}`;
-    if (!covers(hay, phrase)) continue;
-    const score = words(phrase).filter((w) => w.length > 3).length;
-    if (!bestRoute || score > bestRoute.score) bestRoute = { route: p.route, label: p.label, score };
-  }
-  if (bestRoute) return { kind: "goto", route: bestRoute.route, label: bestRoute.label };
-  return null;
+  return matchAnchorOrRoute(phrase, false);
 }

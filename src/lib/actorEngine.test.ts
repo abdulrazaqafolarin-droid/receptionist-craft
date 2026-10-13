@@ -443,3 +443,15 @@ Deno.test("local commands: click phrase extraction preserves intent", async () =
   check(extractClickPhrase("click on the staff page for me") === "on the staff page for me", "click phrase preserved for perception");
   check(extractClickPhrase("how is stock doing?") === null, "non-click goes elsewhere");
 });
+
+Deno.test("understanding lane: movement verbs found anywhere, negations never act", async () => {
+  const { extractMovementTarget, matchAnchorOrRoute } = await import("./directorLocalCommands.ts");
+  check(extractMovementTarget("please click on the availability page for me") === "availability page", "polite phrasing understood");
+  check(extractMovementTarget("can you open the staff roster now") === "staff roster", "mid-sentence verb understood");
+  check(extractMovementTarget("how is stock doing?") === null, "no verb, no target");
+  check(extractMovementTarget("don't click cancel") === null, "negated verb never acts");
+  check(extractMovementTarget("never open settings") === null, "never-guard holds");
+  const anchor = matchAnchorOrRoute("Google Reviews connect button");
+  check(anchor !== null && anchor.kind === "click", "raw phrase matches anchor");
+  check(matchAnchorOrRoute("pod bay doors") === null, "fiction matches nothing");
+});
