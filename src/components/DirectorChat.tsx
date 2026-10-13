@@ -19,7 +19,9 @@ import { toast } from "sonner";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
 import { useBuildThreads } from "@/hooks/useBuildThreads";
 import { speakDirectorText, stopSpeaking, type DirectorVoiceProvider } from "@/utils/textToSpeech";
-import { parseLocalCommand } from "@/lib/directorLocalCommands";
+import { parseLocalCommand, extractClickPhrase } from "@/lib/directorLocalCommands";
+import { lookAtPage } from "@/components/DirectorHands";
+import { parseLiveTable, pickLiveCandidate } from "@/lib/actorGuard";
 import type { GrantScope } from "@/lib/directorGrantRules";
 import { retryDirectorJob, adjustDirectorOperator, draftDirectorHelper } from "@/lib/directorExecutors";
 import type { DirectorAction } from "../../supabase/functions/_shared/config/directorPrompt";
@@ -214,6 +216,45 @@ export function DirectorChat({
     }
   }
 
+  // Transient open-world click: observe the current page, decide on one
+  // unambiguous visible label at runtime, act through the normal live path,
+  // then discard the snapshot. No registry entry is added or needed.
+  async function tryTransientClick(content: string): Promise<string | null> {
+    const phrase = extractClickPhrase(content);
+    if (!phrase || !userId) return null;
+    let rows: unknown = null;
+    try {
+      const snapshot = lookAtPage();
+      rows = (snapshot as { elements?: unknown }).elements;
+    } catch {
+      return null;
+    }
+    const candidate = pickLiveCandidate(phrase, parseLiveTable(rows));
+    if (!candidate) return null;
+    setExecuting("hands-transient");
+    try {
+      const receipts = await ride.start(
+        [{ type: "live_click" as const, index: candidate.index, expect: candidate.label }],
+        { tour: "director-transient-click", userId },
+      );
+      const detail = receipts[0]?.detail || "unknown";
+      if (receipts[0]?.ok) return `Done — clicked ${candidate.label}.`;
+      if (detail.startsWith("refused-live-label") || detail.startsWith("stale-expect")) {
+        return `I found ${candidate.label}, but I won't touch it (${detail}).`;
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      setExecuting(null);
+      try {
+        document.querySelectorAll("[data-live-idx]").forEach((el) => el.removeAttribute("data-live-idx"));
+      } catch {
+        // snapshot cleanup best-effort
+      }
+    }
+  }
+
   async function sendText(text: string) {
     const content = text.trim();
     if (!content || loading || !userId) return;
@@ -225,6 +266,25 @@ export function DirectorChat({
     if (tid) {
       threadIdRef.current = tid;
       void saveMsg(tid, "user", content);
+    }
+    // Transient perception first for click verbs: a confident visible match
+    // clicks through the live path with no registry. Anything ambiguous or
+    // missing falls through to registry, route, or the brain below.
+    const transient = await tryTransientClick(content);
+    if (transient) {
+      setMessages((prev) => [...prev, {
+        role: "ai",
+        content: transient,
+        timestamp: new Date().toISOString(),
+      }]);
+      if (tid) void saveMsg(tid, "assistant", transient);
+      if (voiceOn) {
+        void speakDirectorText(transient, voiceProvider).catch(() => {
+          // voice is a courtesy — a failed lane never breaks the chat
+        });
+      }
+      setLoading(false);
+      return;
     }
     // Bluey's lesson: obvious movement never waits on the network. A
     // strict imperative matching a real anchor or route executes right

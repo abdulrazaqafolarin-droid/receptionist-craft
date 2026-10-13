@@ -47,6 +47,74 @@ export function describeLiveLabel(el: Element): string {
   return label.slice(0, 80);
 }
 
+/** One transient open-world candidate from a fresh live table. */
+export interface LiveCandidate {
+  index: number;
+  label: string;
+  role?: string;
+}
+
+function liveWords(s: string): string[] {
+  return s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Parse a fresh live table (`[n] role | label`) into candidates. The table
+ * itself is transient: callers stamp it, pick one index, act, then discard
+ * it. Nothing here registers UI.
+ */
+export function parseLiveTable(rows: unknown): LiveCandidate[] {
+  if (!Array.isArray(rows)) return [];
+  const out: LiveCandidate[] = [];
+  for (const row of rows) {
+    if (typeof row !== "string") continue;
+    const m = /^\s*\[(\d+)\]\s*(.*)$/.exec(row);
+    if (!m) continue;
+    const index = Number(m[1]);
+    if (!Number.isInteger(index) || index <= 0) continue;
+    const rest = m[2];
+    const pipe = rest.indexOf("|");
+    const role = (pipe >= 0 ? rest.slice(0, pipe) : "").trim();
+    const label = (pipe >= 0 ? rest.slice(pipe + 1) : rest).trim().slice(0, 80);
+    if (!label) continue;
+    out.push({ index, label, role: role || undefined });
+  }
+  return out;
+}
+
+/**
+ * Pick one unambiguous visible label for a click phrase. Refused labels are
+ * never considered; equal-strength matches refuse by ambiguity. Null means
+ * do not click: fall back to registry, route, or the brain.
+ */
+export function pickLiveCandidate(phrase: string, candidates: LiveCandidate[]): LiveCandidate | null {
+  const words = liveWords(phrase).filter((w) => w.length > 3);
+  if (words.length === 0 || candidates.length === 0) return null;
+  let best: LiveCandidate | null = null;
+  let bestScore = -1;
+  let tied = false;
+  for (const c of candidates) {
+    if (!c || !Number.isInteger(c.index) || c.index <= 0) continue;
+    const label = (c.label || "").slice(0, 80);
+    if (!label || LIVE_REFUSE_RE.test(label)) continue;
+    const hay = ` ${label.toLowerCase()} `;
+    let score = 0;
+    for (const w of words) {
+      if (hay.includes(w)) score += 1;
+    }
+    if (score <= 0) continue;
+    if (score > bestScore) {
+      best = { index: c.index, label, role: c.role };
+      bestScore = score;
+      tied = false;
+    } else if (score === bestScore) {
+      tied = true;
+    }
+  }
+  if (!best || tied) return null;
+  return best;
+}
+
 export interface GuardVerdict {
   allowed: boolean;
   /** Machine-readable reason for the receipt (and the trace). */

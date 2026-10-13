@@ -38,6 +38,18 @@ function stripVerb(text: string, re: RegExp): string {
 }
 
 /**
+ * Extract the raw click phrase for transient perception. This does not match
+ * a registry anchor or route; it only preserves what the owner asked to
+ * click so the current page can be observed and decided at runtime.
+ */
+export function extractClickPhrase(text: string): string | null {
+  const clean = text.trim();
+  if (!clean || !CLICK_RES.test(clean)) return null;
+  const phrase = stripVerb(clean, CLICK_RES);
+  return phrase || null;
+}
+
+/**
  * Try to resolve an imperative instruction locally. Anchors first for
  * click verbs (with route fallback — "click on Analytics" means go),
  * routes for goto verbs. Null = ask the brain.

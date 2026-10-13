@@ -58,7 +58,7 @@ function liveRole(el: Element): string {
  * (resolve misses → re-look, never a stale click). Anchors stay as
  * the curated layer with plain-words descriptions.
  */
-function lookAtPage(): Record<string, unknown> {
+export function lookAtPage(): Record<string, unknown> {
   const out: Record<string, unknown> = {
     route: window.location.pathname,
     title: document.title.slice(0, 120),

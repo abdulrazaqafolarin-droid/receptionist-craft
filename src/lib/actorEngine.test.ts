@@ -6,7 +6,7 @@
  */
 
 import { ACTOR_TARGETS, ACTOR_TEMPLATE_PREFIXES, findTarget } from "./actorMap.ts";
-import { guardCheck, isForbiddenKey } from "./actorGuard.ts";
+import { guardCheck, isForbiddenKey, parseLiveTable, pickLiveCandidate } from "./actorGuard.ts";
 import { runActorScript, type ActorDeps } from "./actorRunner.ts";
 
 // Minimal ambient so tsc (which typechecks src/) accepts the Deno runner.
@@ -403,4 +403,19 @@ Deno.test("local commands: strict imperatives resolve, vagueness falls to brain"
   check(parseLocalCommand("click") === null, "bare verb goes to brain");
   check(parseLocalCommand("please maybe click something somewhere") === null, "hedged prose goes to brain");
   check(parseLocalCommand("open the pod bay doors") === null, "fiction goes to brain");
+});
+
+Deno.test("transient perception: fresh table picks one unambiguous label", () => {
+  const rows = ["[1] link | Staff", "[2] link | Conversations", "[3] button | Log out"];
+  const picked = pickLiveCandidate("staff page", parseLiveTable(rows));
+  check(picked !== null && picked.index === 1 && picked.label === "Staff", "unique staff label wins; refused logout ignored");
+  const tie = pickLiveCandidate("staff page", parseLiveTable(["[1] link | Staff", "[2] button | Add Staff Member"]));
+  check(tie === null, "equal-strength matches stay unclicked");
+  check(pickLiveCandidate("the", parseLiveTable(rows)) === null, "no significant words, no click");
+});
+
+Deno.test("local commands: click phrase extraction preserves intent", async () => {
+  const { extractClickPhrase } = await import("./directorLocalCommands.ts");
+  check(extractClickPhrase("click on the staff page for me") === "on the staff page for me", "click phrase preserved for perception");
+  check(extractClickPhrase("how is stock doing?") === null, "non-click goes elsewhere");
 });
