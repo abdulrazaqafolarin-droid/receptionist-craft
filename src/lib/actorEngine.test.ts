@@ -444,6 +444,20 @@ Deno.test("local commands: click phrase extraction preserves intent", async () =
   check(extractClickPhrase("how is stock doing?") === null, "non-click goes elsewhere");
 });
 
+Deno.test("local commands: inflections and page-filler resolve", async () => {
+  const { parseLocalCommand, matchAnchorOrRoute, extractMovementTarget } = await import("./directorLocalCommands.ts");
+  const manage = parseLocalCommand("clicks on the manage operators page");
+  check(manage !== null && manage.kind === "goto" && manage.route === "/operator-management", "plural verb + plural noun + page filler routes");
+  const staff = parseLocalCommand("click on the staff page");
+  check(staff !== null && staff.kind === "goto" && staff.route === "/staff", "page filler routes to staff");
+  check(parseLocalCommand("click the page") === null, "bare page filler matches nothing");
+  check(parseLocalCommand("open the pod bay doors") === null, "fiction still goes to brain");
+  check(parseLocalCommand("go to Analytics") !== null, "uninflected goto intact");
+  check(extractMovementTarget("clicks the staff link") === "staff link", "plural verb understood mid-lane");
+  const anchor = matchAnchorOrRoute("manage operators");
+  check(anchor !== null && anchor.kind === "goto" && anchor.route === "/operator-management", "plural noun stems match");
+});
+
 Deno.test("understanding lane: movement verbs found anywhere, negations never act", async () => {
   const { extractMovementTarget, matchAnchorOrRoute } = await import("./directorLocalCommands.ts");
   check(extractMovementTarget("please click on the availability page for me") === "availability page", "polite phrasing understood");

@@ -18,19 +18,45 @@ export type LocalCommand =
   | { kind: "click"; target: string; label: string }
   | { kind: "goto"; route: string; label: string };
 
-const CLICK_RES = /^(click|tap|press|hit|select)\b/i;
-const GOTO_RES = /^(go to|goto|open|show|take me to|navigate to|bring me to)\b/i;
+const CLICK_RES = /^(clicks|click|taps|tap|presses|press|hits|hit|selects|select)\b/i;
+const GOTO_RES = /^(goes to|go to|goto|opens|open|shows|show|take me to|navigate to|bring me to)\b/i;
 
 function words(s: string): string[] {
   return s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
 }
 
-/** Every significant word (>3 chars) of `need` appears in `hay`. */
+/**
+ * Singular stems for forgiving matching ("operators" → "operator",
+ * "services" → "service"). Guarded endings (ss/us/is/ics) so real words
+ * like "analytics" or "settings" never get mangled — the original word
+ * is always tried first.
+ */
+function stems(w: string): string[] {
+  const out = [w];
+  if (w.length > 4) {
+    if (w.endsWith("ies")) out.push(`${w.slice(0, -3)}y`);
+    else if (w.endsWith("ses") || w.endsWith("xes") || w.endsWith("zes")) out.push(w.slice(0, -2));
+    else if (w.endsWith("s") && !w.endsWith("ss") && !w.endsWith("us") && !w.endsWith("is")) {
+      out.push(w.slice(0, -1));
+    }
+  }
+  return out;
+}
+
+/** Every significant word (>3 chars) of `need` appears in `hay` (stems allowed). */
 function covers(hay: string, need: string): boolean {
   const h = ` ${hay.toLowerCase()} `;
   const sig = words(need).filter((w) => w.length > 3);
   if (sig.length === 0) return false;
-  return sig.every((w) => h.includes(w));
+  return sig.every((w) => stems(w).some((s) => h.includes(s)));
+}
+
+/** Route matching ignores the filler word "page" ("the X page" means the X route). */
+function coversRoute(hay: string, need: string): boolean {
+  const h = ` ${hay.toLowerCase()} `;
+  const sig = words(need).filter((w) => w.length > 3 && w !== "page" && w !== "pages");
+  if (sig.length === 0) return false;
+  return sig.every((w) => stems(w).some((s) => h.includes(s)));
 }
 
 function stripVerb(text: string, re: RegExp): string {
@@ -52,7 +78,7 @@ export function extractClickPhrase(text: string): string | null {
 // Non-strict movement verbs: found ANYWHERE for natural phrasing ("please
 // click the availability page"). Strict leading-verb matching stays above;
 // this is the understanding lane, not the feeding lane.
-const MOVEMENT_RES = /(click|tap|press|hit|select|go to|goto|open|show|take me to|navigate to|bring me to)\b/i;
+const MOVEMENT_RES = /(clicks|click|taps|tap|presses|press|hits|hit|selects|select|goes to|go to|goto|opens|open|shows|show|take me to|navigate to|bring me to)\b/i;
 const LEAD_FILLER_RES = /^(on|the|a|an|to|me|that|this|please|for|you|now|it|my)\b\s*/i;
 const TRAIL_FILLER_RES = /\s*\b(for me|for you|please|now|right now|thanks|thank you)\s*$/i;
 const NEGATION_RES = /(n'?t|never|stop|not)\b/i;
@@ -97,7 +123,7 @@ export function matchAnchorOrRoute(phrase: string, includeAnchors = true): Local
   let bestRoute: { route: string; label: string; score: number } | null = null;
   for (const p of OWNER_PAGES) {
     const hay = `${p.key.replace(/[-_]/g, " ")} ${p.label} ${p.route}`;
-    if (!covers(hay, phrase)) continue;
+    if (!coversRoute(hay, phrase)) continue;
     const score = words(phrase).filter((w) => w.length > 3).length;
     if (!bestRoute || score > bestRoute.score) bestRoute = { route: p.route, label: p.label, score };
   }
