@@ -458,6 +458,22 @@ Deno.test("local commands: inflections and page-filler resolve", async () => {
   check(anchor !== null && anchor.kind === "goto" && anchor.route === "/operator-management", "plural noun stems match");
 });
 
+Deno.test("understanding lane: toggle verbs and multi-target split", async () => {
+  const { extractMovementTarget, splitTargets } = await import("./directorLocalCommands.ts");
+  check(extractMovementTarget("close the overview and the your operator dropdowns") === "overview and the your operator dropdowns", "close verb understood");
+  check(extractMovementTarget("collapse all menus") === "all menus", "collapse verb understood");
+  check(splitTargets("overview and the your operator dropdowns").length === 2, "conjunction splits in two");
+  check(splitTargets("overview, operator, staff").length === 3, "commas split, capped at three");
+  check(splitTargets("overview and a and b and c").length === 3, "cap is three");
+  check(splitTargets("availability").length === 1, "plain target untouched");
+  const rows = ["[1] button | Overview", "[2] button | Your Operator", "[3] link | Conversations"];
+  const [a, b] = splitTargets("overview and the your operator dropdowns");
+  const pa = pickLiveCandidate(a, parseLiveTable(rows));
+  const pb = pickLiveCandidate(b, parseLiveTable(rows));
+  check(pa !== null && pa.label === "Overview", "first dropdown resolves");
+  check(pb !== null && pb.label === "Your Operator", "second dropdown resolves");
+});
+
 Deno.test("understanding lane: movement verbs found anywhere, negations never act", async () => {
   const { extractMovementTarget, matchAnchorOrRoute } = await import("./directorLocalCommands.ts");
   check(extractMovementTarget("please click on the availability page for me") === "availability page", "polite phrasing understood");

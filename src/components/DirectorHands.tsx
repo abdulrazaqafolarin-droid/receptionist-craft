@@ -79,7 +79,7 @@ export function lookAtPage(): Record<string, unknown> {
     let n = 0;
     const seen = new Set<string>();
     const cands = document.querySelectorAll(
-      "button, a[href], input, select, textarea, [role='button'], [role='link'], [role='tab'], [role='menuitem'], [role='checkbox'], [role='switch']",
+      "button, a[href], input, select, textarea, [role='button'], [role='link'], [role='tab'], [role='menuitem'], [role='checkbox'], [role='switch'], [aria-expanded]",
     );
     cands.forEach((el) => {
       if (n >= 60) return;

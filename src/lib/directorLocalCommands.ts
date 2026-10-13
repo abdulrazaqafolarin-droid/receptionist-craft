@@ -78,7 +78,7 @@ export function extractClickPhrase(text: string): string | null {
 // Non-strict movement verbs: found ANYWHERE for natural phrasing ("please
 // click the availability page"). Strict leading-verb matching stays above;
 // this is the understanding lane, not the feeding lane.
-const MOVEMENT_RES = /(clicks|click|taps|tap|presses|press|hits|hit|selects|select|goes to|go to|goto|opens|open|shows|show|take me to|navigate to|bring me to)\b/i;
+const MOVEMENT_RES = /(clicks|click|taps|tap|presses|press|hits|hit|selects|select|closes|close|collapses|collapse|expands|expand|toggles|toggle|goes to|go to|goto|opens|open|shows|show|take me to|navigate to|bring me to)\b/i;
 const LEAD_FILLER_RES = /^(on|the|a|an|to|me|that|this|please|for|you|now|it|my)\b\s*/i;
 const TRAIL_FILLER_RES = /\s*\b(for me|for you|please|now|right now|thanks|thank you)\s*$/i;
 const NEGATION_RES = /(n'?t|never|stop|not)\b/i;
@@ -102,6 +102,19 @@ export function extractMovementTarget(text: string): string | null {
   phrase = phrase.replace(TRAIL_FILLER_RES, "").trim();
   phrase = phrase.split(/\s+/).filter(Boolean).slice(0, 8).join(" ");
   return phrase || null;
+}
+
+/**
+ * Split a movement target on conjunctions ("A and B", "A, B") so one
+ * message can drive several targets. Capped at 3 — more is a plan,
+ * not an instruction. Returns single-element for plain targets.
+ */
+export function splitTargets(phrase: string): string[] {
+  return phrase
+    .split(/\s+and\s+|\s*&\s*|,\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 3);
 }
 
 /**

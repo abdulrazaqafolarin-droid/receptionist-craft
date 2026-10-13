@@ -19,9 +19,9 @@ import { toast } from "sonner";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
 import { useBuildThreads } from "@/hooks/useBuildThreads";
 import { speakDirectorText, stopSpeaking, type DirectorVoiceProvider } from "@/utils/textToSpeech";
-import { parseLocalCommand, extractClickPhrase, extractMovementTarget, matchAnchorOrRoute } from "@/lib/directorLocalCommands";
+import { parseLocalCommand, extractClickPhrase, extractMovementTarget, matchAnchorOrRoute, splitTargets } from "@/lib/directorLocalCommands";
 import { lookAtPage } from "@/components/DirectorHands";
-import { parseLiveTable, pickLiveCandidate } from "@/lib/actorGuard";
+import { parseLiveTable, pickLiveCandidate, type LiveCandidate } from "@/lib/actorGuard";
 import type { GrantScope } from "@/lib/directorGrantRules";
 import { retryDirectorJob, adjustDirectorOperator, draftDirectorHelper } from "@/lib/directorExecutors";
 import type { DirectorAction } from "../../supabase/functions/_shared/config/directorPrompt";
@@ -256,44 +256,91 @@ export function DirectorChat({
   }
 
   async function executeTransientPhrase(phrase: string): Promise<string | null> {
-    if (!phrase || !userId) return null;
-    let rows: unknown = null;
+    const cands = snapshotCandidates();
+    if (!cands || !userId) return null;
+    const candidate = pickLiveCandidate(phrase, cands);
+    if (!candidate) return null;
+    return runTransientSteps([{ phrase, cand: candidate }]);
+  }
+
+  // One fresh snapshot shared by every target in the message — observe
+  // once, decide per target, act as one visible script, then discard.
+  function snapshotCandidates(): LiveCandidate[] | null {
     try {
       const snapshot = lookAtPage();
-      rows = (snapshot as { elements?: unknown }).elements;
+      return parseLiveTable((snapshot as { elements?: unknown }).elements);
     } catch {
       return null;
     }
-    const candidate = pickLiveCandidate(phrase, parseLiveTable(rows));
-    if (!candidate) return null;
+  }
+
+  function clearLiveStamps(): void {
+    try {
+      document.querySelectorAll("[data-live-idx]").forEach((el) => el.removeAttribute("data-live-idx"));
+    } catch {
+      // snapshot cleanup best-effort
+    }
+  }
+
+  async function runTransientSteps(
+    hits: Array<{ phrase: string; cand: LiveCandidate }>,
+  ): Promise<string | null> {
+    if (hits.length === 0 || !userId) return null;
     setExecuting("hands-transient");
     try {
-      // Point first, then click: the owner watches the cursor glide onto
-      // the target (a beat between steps) before it lands the click.
-      const receipts = await ride.start(
-        [
-          { type: "live_point" as const, index: candidate.index, expect: candidate.label },
-          { type: "live_click" as const, index: candidate.index, expect: candidate.label },
-        ],
-        { tour: "director-transient-click", userId },
-      );
-      const failed = receipts.find((r) => !r.ok);
-      const detail = failed?.detail || "unknown";
-      if (!failed) return `Done — clicked ${candidate.label}.`;
+      // Point first, then click per target: the owner watches the cursor
+      // travel from one control to the next instead of teleporting.
+      const steps = hits.flatMap((h) => ([
+        { type: "live_point" as const, index: h.cand.index, expect: h.cand.label },
+        { type: "live_click" as const, index: h.cand.index, expect: h.cand.label },
+      ]));
+      const receipts = await ride.start(steps, { tour: "director-transient-click", userId });
+      const failedIdx = receipts.findIndex((r) => !r.ok);
+      const detail = failedIdx >= 0 ? receipts[failedIdx]?.detail || "unknown" : "";
+      const doneNames = hits.slice(0, failedIdx >= 0 ? Math.floor(failedIdx / 2) : hits.length)
+        .map((h) => h.cand.label);
+      if (failedIdx < 0) {
+        return hits.length === 1
+          ? `Done — clicked ${hits[0].cand.label}.`
+          : `Done: ${hits.map((h) => h.cand.label).join(", ")}.`;
+      }
       if (detail.startsWith("refused-live-label") || detail.startsWith("stale-expect")) {
-        return `I found ${candidate.label}, but I won't touch it (${detail}).`;
+        const which = hits[Math.floor(failedIdx / 2)]?.cand.label || "it";
+        const prefix = doneNames.length > 0 ? `Did ${doneNames.join(", ")}; ` : "";
+        return `${prefix}I found ${which}, but I won't touch it (${detail}).`;
+      }
+      if (doneNames.length > 0) {
+        return `Did ${doneNames.join(", ")}; the next one didn't land (${detail}) — left it untouched.`;
       }
       return null;
     } catch {
       return null;
     } finally {
       setExecuting(null);
-      try {
-        document.querySelectorAll("[data-live-idx]").forEach((el) => el.removeAttribute("data-live-idx"));
-      } catch {
-        // snapshot cleanup best-effort
-      }
+      clearLiveStamps();
     }
+  }
+
+  // Multi-target: "close A and B" resolves each part against ONE snapshot
+  // and runs the hits as one script. Stops at the first unresolvable part
+  // with an honest partial receipt; zero hits falls through to the
+  // registry/route/brain lanes below.
+  async function executeTransientTargets(phrases: string[]): Promise<string | null> {
+    const cands = snapshotCandidates();
+    if (!cands || !userId) return null;
+    const hits: Array<{ phrase: string; cand: LiveCandidate }> = [];
+    let missing: string | null = null;
+    for (const phrase of phrases) {
+      const cand = pickLiveCandidate(phrase, cands);
+      if (!cand) { missing = phrase; break; }
+      if (!hits.some((h) => h.cand.index === cand.index)) hits.push({ phrase, cand });
+    }
+    if (hits.length === 0) return null;
+    const reply = await runTransientSteps(hits);
+    if (reply) {
+      return missing ? `${reply} Couldn't find ${missing} — left it alone.` : reply;
+    }
+    return missing ? `Did nothing I could stand behind; couldn't find ${missing}.` : null;
   }
 
   async function sendText(text: string) {
@@ -316,7 +363,10 @@ export function DirectorChat({
     if (!transient && !local) {
       const target = extractMovementTarget(content);
       if (target) {
-        transient = await executeTransientPhrase(target);
+        const parts = splitTargets(target);
+        transient = parts.length > 1
+          ? await executeTransientTargets(parts)
+          : await executeTransientPhrase(target);
         if (!transient) local = matchAnchorOrRoute(target, true);
       }
     }
