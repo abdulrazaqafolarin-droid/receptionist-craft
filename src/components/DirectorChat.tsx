@@ -395,6 +395,14 @@ export function DirectorChat({
           actions: aiMsg.actions || [],
         });
       }
+      // Auto-run safe navigation: a navigate action only rides manifest
+      // routes (validated + refusal-toasted inside runAction) and is
+      // trivially reversible, so waiting for a tap just strands the
+      // cursor while the words promise movement. Hands actions that can
+      // click or type stay behind their tap buttons by design.
+      // Fresh replies only — never re-fire stored actions on thread open.
+      const autoNav = (aiMsg.actions || []).find((a) => a.type === "navigate");
+      if (autoNav) void runAction(autoNav, messages.length + 1);
       if (voiceOn && d.reply && d.reply !== "…") {
         void speakDirectorText(d.reply, voiceProvider).catch(() => {
           // voice is a courtesy — a failed lane never breaks the chat
