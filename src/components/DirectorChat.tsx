@@ -189,6 +189,17 @@ export function DirectorChat({
           case "type": return s.target && typeof s.text === "string" ? [{ type: "type" as const, target: s.target, text: s.text.slice(0, 500) }] : [];
           case "highlight": return s.target ? [{ type: "highlight" as const, target: s.target }] : [];
           case "drag": return s.from && s.to ? [{ type: "drag" as const, from: s.from, to: s.to }] : [];
+          case "gesture": return s.kind ? [{
+            type: "gesture" as const,
+            // Server parse already restricted kind to the four; the guard
+            // re-validates bounds at execution time regardless.
+            kind: s.kind as "move" | "oscillate" | "circle" | "pause",
+            ...(typeof s.target === "string" ? { target: s.target } : {}),
+            ...(typeof s.amplitude === "number" ? { amplitude: s.amplitude } : {}),
+            ...(typeof s.cycles === "number" ? { cycles: s.cycles } : {}),
+            ...(typeof s.radius === "number" ? { radius: s.radius } : {}),
+            ...(typeof s.ms === "number" ? { ms: s.ms } : {}),
+          }] : [];
           default: return [];
         }
       });

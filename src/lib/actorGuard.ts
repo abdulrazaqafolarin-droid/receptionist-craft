@@ -9,6 +9,7 @@
 
 import { findTarget } from "./actorMap";
 import { OWNER_PAGES } from "../../supabase/functions/_shared/config/surfaceManifest";
+import { checkGestureBounds, type GestureStep } from "../../supabase/functions/_shared/config/actorCapabilities";
 
 export type ActorAction =
   | { type: "point"; target: string; say?: string }
@@ -21,6 +22,7 @@ export type ActorAction =
   | { type: "live_point"; index: number; expect?: string; say?: string }
   | { type: "live_type"; index: number; text: string; expect?: string; press_return?: boolean; say?: string }
   | { type: "live_drag"; from: number; to: number; say?: string }
+  | { type: "gesture"; kind: GestureStep["kind"]; target?: string; index?: number; expect?: string; amplitude?: number; cycles?: number; radius?: number; ms?: number; say?: string }
   | { type: "say"; text: string }
   | { type: "showcase"; target: string; title: string; lines: string[]; say?: string }
   | { type: "collect"; target: string; connector_key: string; say?: string }
@@ -185,6 +187,18 @@ export function guardCheck(action: ActorAction): GuardVerdict {
       return { allowed: false, reason: "empty-text" };
     }
     return { allowed: true, reason: "live-action" };
+  }
+  if (action.type === "gesture") {
+    // Expressive movement only: bounds come from the single capability
+    // contract (checkGestureBounds). Anchor-key screening below still
+    // applies for target-anchored gestures; index resolution (with
+    // label + refusal checks) happens in the runner at resolve time.
+    const bad = checkGestureBounds(action);
+    if (bad) return { allowed: false, reason: `bad-gesture:${bad}` };
+    if (typeof action.target === "string" && action.target && isForbiddenKey(action.target)) {
+      return { allowed: false, reason: `forbidden-target:${action.target}` };
+    }
+    return { allowed: true, reason: "expressive-gesture" };
   }
   const target = findTarget(action.target);
   if (!target) {

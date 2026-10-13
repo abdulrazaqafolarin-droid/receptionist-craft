@@ -7,7 +7,7 @@
 
 import { ACTOR_TARGETS, ACTOR_TEMPLATE_PREFIXES, findTarget } from "./actorMap.ts";
 import { guardCheck, isForbiddenKey, parseLiveTable, pickLiveCandidate } from "./actorGuard.ts";
-import { runActorScript, type ActorDeps } from "./actorRunner.ts";
+import { runActorScript, claimActorRun, type ActorDeps } from "./actorRunner.ts";
 
 // Minimal ambient so tsc (which typechecks src/) accepts the Deno runner.
 declare const Deno: { test(name: string, fn: () => void | Promise<void>): void };
@@ -454,4 +454,109 @@ Deno.test("understanding lane: movement verbs found anywhere, negations never ac
   const anchor = matchAnchorOrRoute("Google Reviews connect button");
   check(anchor !== null && anchor.kind === "click", "raw phrase matches anchor");
   check(matchAnchorOrRoute("pod bay doors") === null, "fiction matches nothing");
+});
+
+const gestureDeps = (over: Partial<ActorDeps> = {}): ActorDeps & { points: Array<{ x: number; y: number }>; clicks: string[]; types: string[] } => {
+  const points: Array<{ x: number; y: number }> = [];
+  const clicks: string[] = [];
+  const types: string[] = [];
+  const deps: ActorDeps = {
+    resolve: () => ({ el: true }),
+    moveCursor: async () => {},
+    highlight: async () => {},
+    scrollTo: async () => {},
+    click: async () => { clicks.push("x"); },
+    typeInto: async () => { types.push("x"); },
+    say: async () => {},
+    showcase: async () => {},
+    collect: async () => {},
+    isStopped: () => false,
+    stepDelayMs: 0,
+    locate: () => ({ x: 100, y: 100 }),
+    moveTo: async (x, y) => { points.push({ x, y }); },
+    viewport: () => ({ w: 800, h: 600 }),
+    ...over,
+  };
+  return Object.assign(deps, { points, clicks, types });
+};
+
+Deno.test("gesture: oscillate produces the expected cursor-state sequence, never clicks", async () => {
+  const deps = gestureDeps();
+  const done = await runActorScript(
+    [{ type: "gesture", kind: "oscillate", target: "console-stock-check" }],
+    deps,
+  );
+  check(done.length === 1 && done[0].ok && done[0].detail === "done-gesture:oscillate", "oscillate receipt");
+  const seq = deps.points.map((p) => `${p.x},${p.y}`).join(" ");
+  check(seq === "100,100 124,100 76,100 124,100 76,100 100,100", `swing sequence exact (got ${seq})`);
+  check(deps.clicks.length === 0 && deps.types.length === 0, "no click or type during expressive movement");
+});
+
+Deno.test("gesture: compound primitives sequence in order", async () => {
+  const deps = gestureDeps();
+  const done = await runActorScript([
+    { type: "gesture", kind: "move", target: "console-stock-check" },
+    { type: "gesture", kind: "pause", ms: 100 },
+    { type: "gesture", kind: "circle", target: "console-stock-check", radius: 10 },
+  ], deps);
+  check(done.length === 3 && done.every((r) => r.ok), "all three primitives succeed");
+  check(done[0].detail === "done-gesture:move", "move receipt");
+  check(done[1].detail === "done-gesture:pause", "pause receipt");
+  check(done[2].detail === "done-gesture:circle", "circle receipt");
+  check(deps.points.length === 1 + 13, `1 move point + 13 circle points (got ${deps.points.length})`);
+});
+
+Deno.test("gesture: invalid parameters rejected before execution", async () => {
+  const bad: Array<[unknown, string]> = [
+    [{ type: "gesture", kind: "teleport", target: "a" }, "bad-gesture:unknown-kind"],
+    [{ type: "gesture", kind: "oscillate", target: "a", amplitude: 999 }, "bad-gesture:amplitude-out-of-range"],
+    [{ type: "gesture", kind: "oscillate", target: "a", cycles: 0 }, "bad-gesture:cycles-out-of-range"],
+    [{ type: "gesture", kind: "oscillate", target: "a", index: 3 }, "bad-gesture:need-exactly-one-anchor"],
+    [{ type: "gesture", kind: "oscillate" }, "bad-gesture:need-exactly-one-anchor"],
+    [{ type: "gesture", kind: "circle", target: "a", radius: -5 }, "bad-gesture:radius-out-of-range"],
+    [{ type: "gesture", kind: "pause", target: "a" }, "bad-gesture:pause-takes-no-target"],
+    [{ type: "gesture", kind: "pause", ms: 99999 }, "bad-gesture:pause-ms-out-of-range"],
+  ];
+  for (const [a, reason] of bad) {
+    const v = guardCheck(a as ActorAction);
+    check(!v.allowed && v.reason === reason, `guard refuses: ${reason}`);
+  }
+  const deps = gestureDeps();
+  const run = await runActorScript(
+    [{ type: "gesture", kind: "oscillate", target: "console-stock-check", amplitude: 999 } as ActorAction],
+    deps,
+  );
+  check(!run[0].ok && run[0].detail === "bad-gesture:amplitude-out-of-range", "runner refuses before moving");
+  check(deps.points.length === 0, "no movement on refused gesture");
+});
+
+Deno.test("gesture: STOP cancels mid-sequence at a sub-step boundary", async () => {
+  let stopped = false;
+  let moves = 0;
+  const deps = gestureDeps({
+    isStopped: () => stopped,
+    moveTo: async (_x: number, _y: number) => {
+      moves += 1;
+      if (moves === 2) stopped = true;
+    },
+  });
+  const done = await runActorScript(
+    [{ type: "gesture", kind: "oscillate", target: "console-stock-check", cycles: 4 }],
+    deps,
+  );
+  check(!done[0].ok && done[0].detail === "stopped-by-owner", "mid-gesture stop receipt");
+  check(moves === 2, `halted at the boundary (got ${moves} moves)`);
+});
+
+Deno.test("runs: newer claim preempts the older run", async () => {
+  const deps = gestureDeps();
+  const token = claimActorRun();
+  const run = runActorScript(
+    [{ type: "gesture", kind: "pause", ms: 2000 }],
+    deps,
+    { runToken: token },
+  );
+  claimActorRun(); // a newer run starts elsewhere
+  const done = await run;
+  check(!done[0].ok && done[0].detail === "preempted-by-newer-run", "older run stands down");
 });

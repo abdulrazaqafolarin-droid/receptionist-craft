@@ -8,6 +8,8 @@
  */
 
 import { OWNER_PAGES } from "./surfaceManifest.ts";
+import { formatMemorySection } from "../ownerMemory.ts";
+import { describeCapabilities } from "./actorCapabilities.ts";
 
 
 export interface DirectorOperator {
@@ -111,6 +113,8 @@ export interface DirectorContext {
   unreadNotifications: DirectorNotification[];
   /** Paired computers/phones/runners — the only hands that exist. */
   devices: DirectorDevice[];
+  /** Facts other brains agreed with the owner (onboarding, builder). */
+  sharedMemory: Array<{ source: string; content: string; created_at: string }>;
   /** The owner's id, so hands calls carry the right user_id. */
   ownerId: string;
 }
@@ -128,13 +132,21 @@ export type DirectorAction =
 
 /** One visible cursor step, executed locally the moment the owner taps it. */
 export interface DirectorHandsStep {
-  op: "click" | "point" | "goto" | "type" | "highlight" | "drag";
+  op: "click" | "point" | "goto" | "type" | "highlight" | "drag" | "gesture";
   target?: string;
   route?: string;
   text?: string;
   from?: string;
   to?: string;
   ms?: number;
+  /** Gesture only: move | oscillate | circle | pause (anchors only, never coordinates). */
+  kind?: string;
+  /** Gesture only: oscillate swing px each side (default 24, max 120). */
+  amplitude?: number;
+  /** Gesture only: oscillate full cycles (default 2, max 4). */
+  cycles?: number;
+  /** Gesture only: circle radius px (default 32, max 120). */
+  radius?: number;
 }
 
 export interface DirectorReply {
@@ -183,6 +195,9 @@ export function buildDirectorSystemPrompt(ctx: DirectorContext): string {
     ? "nothing unread."
     : ctx.unreadNotifications.map((n) => `- ${n.title} (${n.created_at.slice(0, 10)})`).join("\n");
 
+  const sharedSection = formatMemorySection(ctx.sharedMemory);
+  const sharedBlock = sharedSection ? `\n${sharedSection}\n` : "";
+
   const deviceLines = ctx.devices.length === 0
     ? "none paired — say so honestly when computer work is asked; never claim one."
     : ctx.devices.map((d) =>
@@ -209,7 +224,7 @@ ATTENTION: ${ctx.attentionTotal} thing${ctx.attentionTotal === 1 ? "" : "s"} nee
 
 OUR EARLIER CHATS (what we talked about before — remember it):
 ${pastChatLines}
-
+${sharedBlock}
 WHAT I'VE DONE ON MY OWN LATELY (your own recent autonomous work — when asked "what did you do", answer from here, never from memory):
 ${workLines}
 
@@ -273,6 +288,9 @@ Open-world hands (no registration needed): live_click {index, expect?}, live_typ
 The loop discipline: look, act ONCE, read the result, then decide the next step. Reply to the owner only at the end, in a few warm words, or sooner if you are stuck. Anything the hands refuse, report honestly — never work around a refusal, never invent a target.
 In-app hands move a visible cursor the owner watches on screen — point, click, ride pages, and type while they look on. Say what you are about to do when it matters; the cursor shows the rest. The cursor lives only inside this app's pages: it cannot touch browser chrome, other tabs, or anything outside the app.
 Move it with the hands action (no separate call needed): { "type": "hands", "steps": [{op, target?/route?/text?/from?/to?}] } — up to 3 visible steps (click, point, goto, type, highlight, drag on registered anchors), executed the moment the owner taps the button. Prefer hands for short visible in-app work; the tools endpoint is for longer loops and real computers.
+Expressive movement rides the same action: { "type": "hands", "steps": [{ "op": "gesture", "kind": "oscillate", "target": "director-cursor-home" }] } — kind is move | oscillate | circle | pause, anchored to a registered target (never coordinates: you cannot see the screen, so a blind coordinate is a misclick). Compose primitives instead of inventing moves: a wiggle is oscillate (amplitude default 24, max 120; cycles default 2, max 4); a loop is circle (radius default 32, max 120); a beat is pause (ms default 600, max 2000). Gestures move only — they can never click, type, or navigate.
+
+${describeCapabilities()}
 
 READING THE WEB (browse_url — same endpoint, no device): when you need
 a page's actual content, call it with {url} and you get the title, text,
@@ -389,7 +407,7 @@ export function parseDirectorReply(text: string): DirectorReply {
       if (t === "hands") {
         const steps = (a as { steps?: unknown }).steps;
         if (!Array.isArray(steps) || steps.length === 0 || steps.length > 3) return false;
-        const ops = ["click", "point", "goto", "type", "highlight", "drag"];
+        const ops = ["click", "point", "goto", "type", "highlight", "drag", "gesture"];
         return steps.every((s): boolean => {
           if (!s || typeof s !== "object") return false;
           const o = (s as Record<string, unknown>).op;
@@ -399,6 +417,14 @@ export function parseDirectorReply(text: string): DirectorReply {
           if (o === "goto" && typeof r.route !== "string") return false;
           if (o === "type" && (typeof r.target !== "string" || typeof r.text !== "string")) return false;
           if (o === "drag" && (typeof r.from !== "string" || typeof r.to !== "string")) return false;
+          if (o === "gesture") {
+            // Structural only — numeric bounds re-checked by the guard at
+            // execution time. Pause takes no anchor; others need one.
+            const kinds = ["move", "oscillate", "circle", "pause"];
+            if (typeof r.kind !== "string" || !kinds.includes(r.kind)) return false;
+            const hasTarget = typeof r.target === "string" && !!r.target;
+            if (r.kind === "pause" ? hasTarget : !hasTarget) return false;
+          }
           return true;
         });
       }

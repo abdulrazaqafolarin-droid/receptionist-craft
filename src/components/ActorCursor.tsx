@@ -18,7 +18,7 @@ import type { SVGProps } from "react";
 import { BlueySpeechBubble } from "@/components/BlueySpeechBubble";
 import { useNavigate } from "react-router-dom";
 import { Square } from "lucide-react";
-import { runActorScript, type ActorReceipt, type ActorMode } from "@/lib/actorRunner";
+import { runActorScript, claimActorRun, type ActorReceipt, type ActorMode } from "@/lib/actorRunner";
 import type { ActorAction } from "@/lib/actorGuard";
 import { describeLiveLabel } from "@/lib/actorGuard";
 import { useDirectorPresence } from "@/hooks/useDirectorPresence";
@@ -414,7 +414,21 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     const mySeq = ++runSeqRef.current;
     setRunning(true);
     setReceipts([]);
+    // Ownership: the newest run wins. Claim the token first, then stop any
+    // OTHER active run so two hosts can never fight over one cursor — the
+    // older run observes the token mismatch (or its stop flag) and stands
+    // down with an honest receipt instead of interleaving moves.
+    const token = claimActorRun();
     const runId = ++runSeq;
+    activeRuns.forEach((r, id) => {
+      if (id !== runId) {
+        try {
+          r.stop();
+        } catch {
+          // a dead run entry stops nothing; the token check still holds
+        }
+      }
+    });
     activeRuns.set(runId, { stop: () => { stopRef.current = true; setRunning(false); }, mode });
     publishRuns();
     const out = await runActorScript(actions, {
@@ -449,6 +463,27 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       },
       moveCursor: (el) => {
         setPoint(centerOf(el as Element));
+      },
+      locate: (el) => {
+        try {
+          return centerOf(el as Element);
+        } catch {
+          return null;
+        }
+      },
+      moveTo: (x, y) => {
+        // Viewport clamp lives here, with the screen knowledge: the
+        // runner's plan is advisory, this is the enforced boundary.
+        const w = typeof window !== "undefined" ? window.innerWidth : 1280;
+        const h = typeof window !== "undefined" ? window.innerHeight : 800;
+        setPoint({
+          x: Math.max(8, Math.min(w - 8, x)),
+          y: Math.max(8, Math.min(h - 8, y)),
+        });
+      },
+      viewport: () => {
+        if (typeof window === "undefined") return null;
+        return { w: window.innerWidth, h: window.innerHeight };
       },
       highlight: async (el, ms) => {
         setRing(rectOf(el as Element));
@@ -538,7 +573,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       },
       isStopped: () => stopRef.current,
       stepDelayMs: 500,
-    }, { mode });
+    }, { mode, runToken: token });
     setReceipts(out);
     setRunning(false);
     runningRef.current = false;

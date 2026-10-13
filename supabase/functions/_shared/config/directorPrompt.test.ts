@@ -175,6 +175,15 @@ Deno.test("hands actions validate steps strictly or drop whole", () => {
     ] }],
   }));
   check(good.actions.length === 1, "well-formed hands survives");
+  const goodGesture = parseDirectorReply(JSON.stringify({
+    reply: "Watch this.",
+    suggestions: [],
+    actions: [{ type: "hands", steps: [
+      { op: "gesture", kind: "oscillate", target: "director-cursor-home", amplitude: 24, cycles: 2 },
+      { op: "gesture", kind: "pause", ms: 600 },
+    ] }],
+  }));
+  check(goodGesture.actions.length === 1, "well-formed gesture steps survive");
   const cases: Array<[unknown, string]> = [
     [{ type: "hands", steps: [] }, "empty steps"],
     [{ type: "hands", steps: [{ op: "click", target: "a" }, { op: "click", target: "b" }, { op: "click", target: "c" }, { op: "click", target: "d" }] }, "four steps"],
@@ -183,6 +192,10 @@ Deno.test("hands actions validate steps strictly or drop whole", () => {
     [{ type: "hands", steps: [{ op: "goto" }] }, "goto without route"],
     [{ type: "hands", steps: [{ op: "type", target: "x" }] }, "type without text"],
     [{ type: "hands", steps: [{ op: "drag", from: "a" }] }, "drag without to"],
+    [{ type: "hands", steps: [{ op: "gesture", target: "a" }] }, "gesture without kind"],
+    [{ type: "hands", steps: [{ op: "gesture", kind: "teleport", target: "a" }] }, "gesture unknown kind"],
+    [{ type: "hands", steps: [{ op: "gesture", kind: "oscillate" }] }, "gesture without anchor"],
+    [{ type: "hands", steps: [{ op: "gesture", kind: "pause", target: "a" }] }, "pause with anchor"],
     [{ type: "hands", steps: "click" }, "non-array steps"],
     [{ type: "hands" }, "missing steps"],
   ];

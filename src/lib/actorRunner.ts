@@ -11,11 +11,18 @@
  *   half-done tours are worse than stopped ones. Callers opt into
  *   continue-on-failure explicitly.
  * - The stop flag is checked before every step, never mid-gesture.
+ *   (Expressive gesture SUB-movements are the exception: each
+ *   sub-movement is an interruption boundary for STOP and preemption,
+ *   so a wiggle always stays cancellable.)
+ * - Run ownership: the newest claimed run preempts older ones. A run
+ *   whose token no longer matches aborts with "preempted-by-newer-run"
+ *   instead of fighting over one cursor.
  * - The runner performs zero network calls and starts zero timers.
  */
 
 import { findTarget } from "./actorMap";
 import { guardCheck, LIVE_REFUSE_RE, type ActorAction } from "./actorGuard";
+import { GESTURE_BOUNDS } from "../../supabase/functions/_shared/config/actorCapabilities";
 
 export interface ActorReceipt {
   action: ActorAction;
@@ -69,6 +76,16 @@ export interface ActorDeps {
   isStopped: () => boolean;
   /** Pause between steps so the owner can follow along. */
   stepDelayMs?: number;
+  /**
+   * Expressive-movement hands (gesture steps only). locate maps a
+   * resolved element to viewport coordinates; moveTo glides the cursor
+   * to absolute coordinates (the host clamps to the viewport);
+   * viewport reports the clamp bounds. Absent = gestures fail closed
+   * with "no-gesture-handling" — never approximated.
+   */
+  locate?: (el: unknown) => { x: number; y: number } | null;
+  moveTo?: (x: number, y: number) => Promise<void> | void;
+  viewport?: () => { w: number; h: number } | null;
 }
 
 export interface RunOptions {
@@ -79,11 +96,58 @@ export interface RunOptions {
    * owner keeps working undisturbed.
    */
   mode?: ActorMode;
+  /**
+   * Ownership token from claimActorRun(). When set and no longer the
+   * newest claim, this run aborts at the next boundary with
+   * "preempted-by-newer-run" instead of fighting over one cursor.
+   * Omitted = no arbitration (legacy callers, unit stubs).
+   */
+  runToken?: number;
 }
 
 export type ActorMode = "ride" | "handle";
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Run ownership: hosts claim before starting. Newest claim wins; older
+ * runs observe the mismatch at their next boundary and stand down.
+ */
+let liveRunToken = 0;
+export function claimActorRun(): number {
+  liveRunToken += 1;
+  return liveRunToken;
+}
+function tokenStale(token: number | undefined): boolean {
+  return token !== undefined && token !== liveRunToken;
+}
+
+/**
+ * Resolve a stamped live-table index against the CURRENT page: element
+ * present, rect alive, label verified against expect, refusal patterns
+ * enforced. Shared by live_* actions and index-anchored gestures —
+ * one resolve path, one set of fail-closed reasons.
+ */
+function resolveLive(
+  deps: ActorDeps,
+  index: number,
+  expect?: string,
+): { el: unknown } | { error: string } {
+  const el = deps.resolve(`[data-live-idx="${index}"]`);
+  if (!el) return { error: `not-on-screen:live-${index}` };
+  try {
+    const rect = (el as Element).getBoundingClientRect();
+    if (!rect || rect.width < 2 || rect.height < 2) return { error: `stale-live:${index}` };
+  } catch {
+    return { error: `stale-live:${index}` };
+  }
+  const label = (deps.describe ? deps.describe(el) : "").slice(0, 120);
+  if (LIVE_REFUSE_RE.test(label)) return { error: `refused-live-label:${label.slice(0, 40)}` };
+  if (expect && expect.trim() && !label.toLowerCase().includes(expect.trim().toLowerCase())) {
+    return { error: `stale-expect:${index}` };
+  }
+  return { el };
+}
 
 export async function runActorScript(
   actions: ActorAction[],
@@ -101,6 +165,10 @@ export async function runActorScript(
     const silent = opts.mode === "handle";
     if (deps.isStopped()) {
       receipts.push({ action, ok: false, detail: "stopped-by-owner", at: at() });
+      break;
+    }
+    if (tokenStale(opts.runToken)) {
+      receipts.push({ action, ok: false, detail: "preempted-by-newer-run", at: at() });
       break;
     }
 
@@ -164,27 +232,11 @@ export async function runActorScript(
         if (!opts.continueOnFailure) break;
         continue;
       }
-      const resolveLive = (index: number, expect?: string): { el: unknown } | { error: string } => {
-        const el = deps.resolve(`[data-live-idx="${index}"]`);
-        if (!el) return { error: `not-on-screen:live-${index}` };
-        try {
-          const rect = (el as Element).getBoundingClientRect();
-          if (!rect || rect.width < 2 || rect.height < 2) return { error: `stale-live:${index}` };
-        } catch {
-          return { error: `stale-live:${index}` };
-        }
-        const label = (deps.describe ? deps.describe(el) : "").slice(0, 120);
-        if (LIVE_REFUSE_RE.test(label)) return { error: `refused-live-label:${label.slice(0, 40)}` };
-        if (expect && expect.trim() && !label.toLowerCase().includes(expect.trim().toLowerCase())) {
-          return { error: `stale-expect:${index}` };
-        }
-        return { el };
-      };
       try {
         if (action.type === "live_point") {
           // Point = glide the visible cursor onto the target and stop.
           // The move-cursor test: the owner watches the Director aim.
-          const r = resolveLive(action.index, action.expect);
+          const r = resolveLive(deps, action.index, action.expect);
           if ("error" in r) {
             receipts.push({ action, ok: false, detail: r.error, at: at() });
           } else {
@@ -193,7 +245,7 @@ export async function runActorScript(
             receipts.push({ action, ok: true, detail: "done-live-point", at: at() });
           }
         } else if (action.type === "live_click") {
-          const r = resolveLive(action.index, action.expect);
+          const r = resolveLive(deps, action.index, action.expect);
           if ("error" in r) {
             receipts.push({ action, ok: false, detail: r.error, at: at() });
           } else {
@@ -206,7 +258,7 @@ export async function runActorScript(
           if (!deps.typeInto) {
             receipts.push({ action, ok: false, detail: "no-type-handling", at: at() });
           } else {
-            const r = resolveLive(action.index, action.expect);
+            const r = resolveLive(deps, action.index, action.expect);
             if ("error" in r) {
               receipts.push({ action, ok: false, detail: r.error, at: at() });
             } else {
@@ -220,8 +272,8 @@ export async function runActorScript(
           if (!deps.dragInto) {
             receipts.push({ action, ok: false, detail: "no-drag-handling", at: at() });
           } else {
-            const from = resolveLive(action.from);
-            const to = "error" in from ? from : resolveLive(action.to);
+            const from = resolveLive(deps, action.from);
+            const to = "error" in from ? from : resolveLive(deps, action.to);
             if ("error" in to) {
               receipts.push({ action, ok: false, detail: ("error" in from ? from.error : (to as { error: string }).error), at: at() });
             } else {
@@ -233,6 +285,130 @@ export async function runActorScript(
             }
           }
         }
+      } catch (e) {
+        receipts.push({
+          action, ok: false,
+          detail: `execution-failed:${e instanceof Error ? e.message : "unknown"}`.slice(0, 160),
+          at: at(),
+        });
+      }
+      if (!receipts[receipts.length - 1]?.ok && !opts.continueOnFailure) break;
+      if (deps.stepDelayMs) await delay(deps.stepDelayMs);
+      continue;
+    }
+
+    // Expressive gestures: movement ONLY around a resolved anchor. There
+    // is no code path here to click, type, drag, or navigate — a gesture
+    // step physically cannot change app state. Points derive from the
+    // anchor center, clamp to the viewport when the host reports one, and
+    // every sub-movement is a STOP/preempt boundary.
+    if (action.type === "gesture") {
+      if (silent) {
+        receipts.push({ action, ok: false, detail: "skipped-background", at: at() });
+        if (!opts.continueOnFailure) break;
+        continue;
+      }
+      const fail = (detail: string) => {
+        receipts.push({ action, ok: false, detail, at: at() });
+      };
+      try {
+        if (action.kind === "pause") {
+          let remaining = action.ms ?? 600;
+          let aborted: string | null = null;
+          while (remaining > 0 && !aborted) {
+            if (deps.isStopped()) aborted = "stopped-by-owner";
+            else if (tokenStale(opts.runToken)) aborted = "preempted-by-newer-run";
+            else { await delay(Math.min(100, remaining)); remaining -= 100; }
+          }
+          if (aborted) {
+            fail(aborted);
+            if (!opts.continueOnFailure) break;
+            continue;
+          }
+          receipts.push({ action, ok: true, detail: "done-gesture:pause", at: at() });
+          if (deps.stepDelayMs) await delay(deps.stepDelayMs);
+          continue;
+        }
+        if (!deps.locate || !deps.moveTo) {
+          fail("no-gesture-handling");
+          if (!opts.continueOnFailure) break;
+          continue;
+        }
+        let anchorEl: unknown = null;
+        if (typeof action.target === "string" && action.target) {
+          const t = findTarget(action.target);
+          anchorEl = t ? deps.resolve(t.selector) : null;
+          if (!anchorEl) {
+            fail(`not-on-screen:${action.target}`);
+            if (!opts.continueOnFailure) break;
+            continue;
+          }
+        } else if (typeof action.index === "number") {
+          const r = resolveLive(deps, action.index, action.expect);
+          if ("error" in r) {
+            fail(r.error);
+            if (!opts.continueOnFailure) break;
+            continue;
+          }
+          anchorEl = r.el;
+        } else {
+          fail("bad-gesture:need-exactly-one-anchor");
+          if (!opts.continueOnFailure) break;
+          continue;
+        }
+        const center = deps.locate(anchorEl);
+        if (!center) {
+          fail("unlocatable-anchor");
+          if (!opts.continueOnFailure) break;
+          continue;
+        }
+        const vp = deps.viewport ? deps.viewport() : null;
+        let clamped = false;
+        const at2 = (x: number, y: number) => {
+          const cx = vp ? Math.max(8, Math.min(vp.w - 8, x)) : x;
+          const cy = vp ? Math.max(8, Math.min(vp.h - 8, y)) : y;
+          if (cx !== x || cy !== y) clamped = true;
+          return { x: cx, y: cy };
+        };
+        let points: Array<{ x: number; y: number }>;
+        if (action.kind === "move") {
+          points = [at2(center.x, center.y)];
+        } else if (action.kind === "oscillate") {
+          const amp = action.amplitude ?? 24;
+          const cycles = action.cycles ?? 2;
+          points = [at2(center.x, center.y)];
+          for (let c = 0; c < cycles; c++) {
+            points.push(at2(center.x + amp, center.y));
+            points.push(at2(center.x - amp, center.y));
+          }
+          points.push(at2(center.x, center.y));
+        } else {
+          const radius = action.radius ?? 32;
+          points = [];
+          for (let i = 0; i < GESTURE_BOUNDS.circleSteps; i++) {
+            const a = (i / GESTURE_BOUNDS.circleSteps) * Math.PI * 2 - Math.PI / 2;
+            points.push(at2(center.x + radius * Math.cos(a), center.y + radius * Math.sin(a)));
+          }
+          points.push(at2(center.x, center.y));
+        }
+        if (action.say) await deps.say(action.say);
+        let aborted: string | null = null;
+        for (const p of points) {
+          if (deps.isStopped()) { aborted = "stopped-by-owner"; break; }
+          if (tokenStale(opts.runToken)) { aborted = "preempted-by-newer-run"; break; }
+          await deps.moveTo(p.x, p.y);
+          await delay(GESTURE_BOUNDS.subStepMs);
+        }
+        if (aborted) {
+          fail(aborted);
+          if (!opts.continueOnFailure) break;
+          continue;
+        }
+        receipts.push({
+          action, ok: true,
+          detail: `done-gesture:${action.kind}${clamped ? ":clamped" : ""}`,
+          at: at(),
+        });
       } catch (e) {
         receipts.push({
           action, ok: false,
