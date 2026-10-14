@@ -9,16 +9,16 @@
 
 import { findTarget } from "./actorMap";
 import { OWNER_PAGES } from "../../supabase/functions/_shared/config/surfaceManifest";
-import { checkGestureBounds, type GestureStep } from "../../supabase/functions/_shared/config/actorCapabilities";
+import { checkGestureBounds, MOTION_BOUNDS, type GestureStep } from "../../supabase/functions/_shared/config/actorCapabilities";
 
 export type ActorAction =
   | { type: "point"; target: string; say?: string }
-  | { type: "click"; target: string; say?: string }
+  | { type: "click"; target: string; say?: string; dwellMs?: number }
   | { type: "highlight"; target: string; ms?: number; say?: string }
   | { type: "scroll-to"; target: string; say?: string }
   | { type: "type"; target: string; text: string; press_return?: boolean; say?: string }
   | { type: "drag"; from: string; to: string; say?: string }
-  | { type: "live_click"; index: number; expect?: string; say?: string }
+  | { type: "live_click"; index: number; expect?: string; say?: string; dwellMs?: number }
   | { type: "live_point"; index: number; expect?: string; say?: string }
   | { type: "live_type"; index: number; text: string; expect?: string; press_return?: boolean; say?: string }
   | { type: "live_drag"; from: number; to: number; say?: string }
@@ -148,9 +148,26 @@ export function isForbiddenKey(key: string): boolean {
   return FORBIDDEN_KEY_PATTERNS.some((pattern) => pattern.test(key));
 }
 
+/**
+ * Pre-click dwell bounds (single source: MOTION_BOUNDS). Absent is
+ * always fine; present must be a finite 0..max number. Dwell applies
+ * to click-then-act steps only — carrying it elsewhere is refused.
+ */
+export function validDwell(ms: unknown): boolean {
+  if (ms === undefined) return true;
+  return typeof ms === "number" && Number.isFinite(ms) && ms >= 0 && ms <= MOTION_BOUNDS.maxDwellMs;
+}
+
 export function guardCheck(action: ActorAction): GuardVerdict {
   if (action.type === "say") {
     return { allowed: true, reason: "narration-only" };
+  }
+  // Dwell belongs to click-then-act steps only — carrying it anywhere
+  // else is a malformed plan, refused before execution.
+  if (action.type !== "click" && action.type !== "live_click") {
+    if ((action as { dwellMs?: unknown }).dwellMs !== undefined) {
+      return { allowed: false, reason: "bad-dwell" };
+    }
   }
   if (action.type === "goto") {
     // Black-hole navigation: the destination MUST exist in the manifest.
@@ -186,6 +203,9 @@ export function guardCheck(action: ActorAction): GuardVerdict {
     if (action.type === "live_type" && (typeof action.text !== "string" || !action.text.trim())) {
       return { allowed: false, reason: "empty-text" };
     }
+    if (!validDwell((action as { dwellMs?: unknown }).dwellMs)) {
+      return { allowed: false, reason: "bad-dwell" };
+    }
     return { allowed: true, reason: "live-action" };
   }
   if (action.type === "gesture") {
@@ -211,6 +231,9 @@ export function guardCheck(action: ActorAction): GuardVerdict {
   if (action.type === "click" || action.type === "collect") {
     // collect opens the connector's REAL dialog — no state changes until
     // the owner submits there through its own buttons. Same bar as click.
+    if (!validDwell((action as { dwellMs?: unknown }).dwellMs)) {
+      return { allowed: false, reason: "bad-dwell" };
+    }
     return { allowed: true, reason: "owner-visible-action" };
   }
   if (action.type === "type") {

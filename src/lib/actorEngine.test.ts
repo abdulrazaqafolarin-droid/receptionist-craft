@@ -590,3 +590,163 @@ Deno.test("runs: newer claim preempts the older run", async () => {
   const done = await run;
   check(!done[0].ok && done[0].detail === "preempted-by-newer-run", "older run stands down");
 });
+
+Deno.test("motion: curved path reaches the exact target, deterministically", async () => {
+  const { planHumanPath, easeInOut, mulberry32 } = await import("./actorRunner.ts");
+  const from = { x: 0, y: 0 };
+  const to = { x: 400, y: 300 };
+  const a = planHumanPath(from, to, 7);
+  const b = planHumanPath(from, to, 7);
+  check(JSON.stringify(a) === JSON.stringify(b), "same seed = identical waypoints");
+  const last = a[a.length - 1];
+  check(last.x === 400 && last.y === 300, "path lands exactly on target");
+  check(a.length >= 6 && a.length <= 16, `distance-scaled waypoint count (got ${a.length})`);
+  const curved = a.some((p) => Math.abs(p.y - (p.x * 0.75)) > 2);
+  check(curved, "path deviates from the straight line (it curves)");
+  const near = planHumanPath({ x: 10, y: 10 }, { x: 11, y: 11 }, 7);
+  check(near.length === 1, "near-zero hop collapses to one point");
+  check(easeInOut(0) === 0 && easeInOut(1) === 1 && easeInOut(0.5) === 0.5, "easing endpoints exact");
+  const r1 = mulberry32(7)();
+  const r2 = mulberry32(7)();
+  check(r1 === r2, "seeded PRNG reproducible");
+});
+
+Deno.test("motion: human pace glides through waypoints before clicking", async () => {
+  const moves: Array<{ x: number; y: number }> = [];
+  const clicked: string[] = [];
+  const deps = stubDeps({
+    resolve: () => ({ el: true }),
+    locate: () => ({ x: 400, y: 0 }),
+    cursorPos: () => ({ x: 0, y: 0 }),
+    moveTo: async (x: number, y: number) => { moves.push({ x, y }); },
+    viewport: () => ({ w: 800, h: 600 }),
+    click: async () => { clicked.push("x"); },
+  });
+  const done = await runActorScript(
+    [{ type: "click", target: "console-stock-check" }],
+    deps,
+    { pace: "human" },
+  );
+  check(done[0].ok, "human-paced click succeeds");
+  check(moves.length >= 6, `glide played waypoints (got ${moves.length})`);
+  const last = moves[moves.length - 1];
+  check(last.x === 400 && last.y === 0, "glide lands on target center");
+  check(clicked.length === 1, "the real click still lands once");
+});
+
+Deno.test("motion: brisk pace preserves legacy single-set positioning", async () => {
+  const moved: string[] = [];
+  const clicked: string[] = [];
+  const deps = stubDeps({
+    resolve: () => ({ el: true }),
+    moveCursor: async () => { moved.push("x"); },
+    click: async () => { clicked.push("x"); },
+  });
+  const done = await runActorScript([{ type: "click", target: "console-stock-check" }], deps);
+  check(done[0].ok, "brisk click succeeds");
+  check(moved.length === 1 && clicked.length === 1, "one move, one click — today's behavior exactly");
+});
+
+Deno.test("motion: STOP aborts a glide mid-waypoint", async () => {
+  let stopped = false;
+  let moves = 0;
+  const deps = stubDeps({
+    resolve: () => ({ el: true }),
+    locate: () => ({ x: 600, y: 0 }),
+    cursorPos: () => ({ x: 0, y: 0 }),
+    moveTo: async () => {
+      moves += 1;
+      if (moves === 2) stopped = true;
+    },
+    viewport: () => ({ w: 800, h: 600 }),
+    isStopped: () => stopped,
+  });
+  const done = await runActorScript(
+    [{ type: "click", target: "console-stock-check" }],
+    deps,
+    { pace: "human" },
+  );
+  check(!done[0].ok && done[0].detail === "stopped-by-owner", "mid-glide stop receipt");
+  check(moves === 2, `halted at the waypoint boundary (got ${moves})`);
+});
+
+Deno.test("motion: reduced-motion collapses the curve to one jump", async () => {
+  const moves: Array<{ x: number; y: number }> = [];
+  const deps = stubDeps({
+    resolve: () => ({ el: true }),
+    locate: () => ({ x: 400, y: 300 }),
+    cursorPos: () => ({ x: 0, y: 0 }),
+    moveTo: async (x: number, y: number) => { moves.push({ x, y }); },
+    viewport: () => ({ w: 800, h: 600, reducedMotion: true }),
+    click: async () => {},
+  });
+  const done = await runActorScript(
+    [{ type: "click", target: "console-stock-check" }],
+    deps,
+    { pace: "human" },
+  );
+  check(done[0].ok, "reduced-motion click succeeds");
+  check(moves.length === 1 && moves[0].x === 400 && moves[0].y === 300, "one instant jump, no animation");
+});
+
+Deno.test("motion: pre-click dwell hesitates, over-cap dwell refused", async () => {
+  const ok = guardCheck({ type: "click", target: "console-stock-check", dwellMs: 500 });
+  check(ok.allowed, "in-cap dwell passes guard");
+  const over = guardCheck({ type: "click", target: "console-stock-check", dwellMs: 99999 });
+  check(!over.allowed && over.reason === "bad-dwell", "over-cap dwell refused");
+  const stray = guardCheck({ type: "point", target: "console-stock-check", dwellMs: 100 } as unknown as ActorAction);
+  check(!stray.allowed && stray.reason === "bad-dwell", "dwell on non-click refused");
+  const deps = stubDeps({ resolve: () => ({ el: true }), moveCursor: async () => {}, click: async () => {} });
+  const t0 = Date.now();
+  const done = await runActorScript(
+    [{ type: "live_click", index: 1, dwellMs: 120 }],
+    { ...deps, resolve: () => ({ getBoundingClientRect: () => ({ width: 40, height: 20 }), __l: "Save" }), describe: () => "Save" },
+  );
+  check(done[0].ok && Date.now() - t0 >= 100, "dwell delays the click");
+});
+
+Deno.test("motion: human pace types in watched chunks, brisk in one call", async () => {
+  const seen: string[] = [];
+  const el = { getBoundingClientRect: () => ({ width: 60, height: 20 }) };
+  const human = stubDeps({
+    resolve: () => el,
+    describe: () => "Search",
+    typeInto: async (_e, text: string) => { seen.push(text); },
+  });
+  const done = await runActorScript(
+    [{ type: "live_type", index: 1, text: "Tess Anderson" }],
+    human,
+    { pace: "human" },
+  );
+  check(done[0].ok, "human-paced type succeeds");
+  check(seen.length > 1, `typed progressively (got ${seen.length} chunks)`);
+  check(seen[seen.length - 1] === "Tess Anderson", "final chunk holds the full text");
+  for (let i = 1; i < seen.length; i++) {
+    check(seen[i].startsWith(seen[i - 1]), "chunks are progressive prefixes");
+  }
+  const once: string[] = [];
+  const brisk = stubDeps({
+    resolve: () => el,
+    describe: () => "Search",
+    typeInto: async (_e, text: string) => { once.push(text); },
+  });
+  const done2 = await runActorScript(
+    [{ type: "live_type", index: 1, text: "Tess Anderson" }],
+    brisk,
+  );
+  check(done2[0].ok && once.length === 1 && once[0] === "Tess Anderson", "brisk types once, unchanged");
+});
+
+Deno.test("poc: customers task resolves through local lanes, rows are perceivable", async () => {
+  const { parseLocalCommand, extractMovementTarget, matchAnchorOrRoute } = await import("./directorLocalCommands.ts");
+  const open = parseLocalCommand("open the customers page");
+  check(open !== null && open.kind === "goto" && open.route === "/customers", "open customers routes");
+  const find = extractMovementTarget("find the customer Tess");
+  check(find === null, "find is a search task, not a movement verb — task loop owns it, not a hardcoded phrase");
+  const rows = ["[1] input[text] | Search by name, email, or phone...", "[2] button | Tess Anderson"];
+  const search = pickLiveCandidate("search", parseLiveTable(rows));
+  check(search !== null && search.index === 1, "search input resolves from its placeholder label");
+  const tess = pickLiveCandidate("Tess Anderson", parseLiveTable(rows));
+  check(tess !== null && tess.index === 2, "customer row resolves by name");
+  void matchAnchorOrRoute;
+});

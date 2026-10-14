@@ -154,6 +154,15 @@ export default function Customers() {
               key={customer.id}
               className="cursor-pointer hover:bg-accent/50 transition-colors"
               onClick={() => loadCustomerDetail(customer)}
+              role="button"
+              tabIndex={0}
+              aria-label={`Open record for ${customer.name}`}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  loadCustomerDetail(customer);
+                }
+              }}
             >
               <CardContent className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">

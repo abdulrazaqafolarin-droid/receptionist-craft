@@ -24,6 +24,22 @@
 
 export type GestureKind = "move" | "oscillate" | "circle" | "pause";
 
+/** Hard caps for human-paced playback. Guard-enforced, receipt-proven. */
+export const MOTION_BOUNDS = {
+  /** Max pre-click dwell a single action may request, ms. */
+  maxDwellMs: 1200,
+  /** Default pre-click dwell in human pace, ms. */
+  humanDwellMs: 250,
+  /** Waypoint playback slice; also the STOP/preempt boundary. */
+  glideSliceMs: 45,
+  /** Typed characters per chunk in human pace. */
+  typeChunk: 4,
+  /** Delay between typed chunks, ms. */
+  typeChunkMs: 50,
+  /** Deterministic motion seed when the caller provides none. */
+  defaultSeed: 7,
+} as const;
+
 /** Hard caps for expressive movement. Guard-enforced, receipt-proven. */
 export const GESTURE_BOUNDS = {
   /** Max horizontal swing from the anchor center, px. */

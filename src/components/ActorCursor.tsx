@@ -272,6 +272,9 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
   const stopRef = useRef(false);
   const runningRef = useRef(false);
   const runSeqRef = useRef(0);
+  // Synchronous mirror of the cursor point for humanized path planning
+  // (state updates are async; the planner needs the origin NOW).
+  const pointRef = useRef<CursorPoint | null>(null);
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
 
@@ -406,9 +409,10 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
 
   const start = useCallback(async (
     actions: ActorAction[],
-    opts?: { tour?: string; userId?: string; receptionistId?: string; mode?: ActorMode },
+    opts?: { tour?: string; userId?: string; receptionistId?: string; mode?: ActorMode; pace?: "brisk" | "human" },
   ) => {
     const mode = opts?.mode ?? "ride";
+    const pace = opts?.pace ?? "brisk";
     stopRef.current = false;
     runningRef.current = true;
     const mySeq = ++runSeqRef.current;
@@ -462,7 +466,9 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
         navigate(route);
       },
       moveCursor: (el) => {
-        setPoint(centerOf(el as Element));
+        const p = centerOf(el as Element);
+        pointRef.current = p;
+        setPoint(p);
       },
       locate: (el) => {
         try {
@@ -476,14 +482,23 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
         // runner's plan is advisory, this is the enforced boundary.
         const w = typeof window !== "undefined" ? window.innerWidth : 1280;
         const h = typeof window !== "undefined" ? window.innerHeight : 800;
-        setPoint({
+        const p = {
           x: Math.max(8, Math.min(w - 8, x)),
           y: Math.max(8, Math.min(h - 8, y)),
-        });
+        };
+        pointRef.current = p;
+        setPoint(p);
       },
+      cursorPos: () => pointRef.current,
       viewport: () => {
         if (typeof window === "undefined") return null;
-        return { w: window.innerWidth, h: window.innerHeight };
+        let reducedMotion = false;
+        try {
+          reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+        } catch {
+          // media query unavailable — assume full motion
+        }
+        return { w: window.innerWidth, h: window.innerHeight, reducedMotion };
       },
       highlight: async (el, ms) => {
         setRing(rectOf(el as Element));
@@ -493,7 +508,9 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       scrollTo: async (el) => {
         (el as Element).scrollIntoView({ behavior: "smooth", block: "center" });
         await new Promise<void>((r) => setTimeout(r, 650));
-        setPoint(centerOf(el as Element));
+        const p = centerOf(el as Element);
+        pointRef.current = p;
+        setPoint(p);
       },
       click: async (el) => {
         (el as HTMLElement).click();
@@ -573,7 +590,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       },
       isStopped: () => stopRef.current,
       stepDelayMs: 500,
-    }, { mode, runToken: token });
+    }, { mode, pace, runToken: token });
     setReceipts(out);
     setRunning(false);
     runningRef.current = false;

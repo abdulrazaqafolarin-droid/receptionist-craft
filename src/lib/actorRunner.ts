@@ -22,7 +22,7 @@
 
 import { findTarget } from "./actorMap";
 import { guardCheck, LIVE_REFUSE_RE, type ActorAction } from "./actorGuard";
-import { GESTURE_BOUNDS } from "../../supabase/functions/_shared/config/actorCapabilities";
+import { GESTURE_BOUNDS, MOTION_BOUNDS } from "../../supabase/functions/_shared/config/actorCapabilities";
 
 export interface ActorReceipt {
   action: ActorAction;
@@ -85,7 +85,12 @@ export interface ActorDeps {
    */
   locate?: (el: unknown) => { x: number; y: number } | null;
   moveTo?: (x: number, y: number) => Promise<void> | void;
-  viewport?: () => { w: number; h: number } | null;
+  viewport?: () => { w: number; h: number; reducedMotion?: boolean } | null;
+  /**
+   * Current cursor position for humanized path planning. Absent = moves
+   * fall back to single-set positioning (today's behavior exactly).
+   */
+  cursorPos?: () => { x: number; y: number } | null;
 }
 
 export interface RunOptions {
@@ -96,6 +101,12 @@ export interface RunOptions {
    * owner keeps working undisturbed.
    */
   mode?: ActorMode;
+  /**
+   * Playback pace. brisk (default) preserves today's timing exactly.
+   * human adds curved waypoint glides, pre-click dwell, and paced
+   * typing for watched runs — same targets, same receipts, slower.
+   */
+  pace?: "brisk" | "human";
   /**
    * Ownership token from claimActorRun(). When set and no longer the
    * newest claim, this run aborts at the next boundary with
@@ -147,6 +158,210 @@ function resolveLive(
     return { error: `stale-expect:${index}` };
   }
   return { el };
+}
+
+/* ------------------------------------------------------------------ */
+/* Human motion layer (pure — no DOM, no timers, fully unit-tested).    */
+/* A cubic Bezier from the cursor to the target, control points offset  */
+/* perpendicular by a seeded amount, sampled with ease-in-out timing.   */
+/* Same seed + same endpoints = identical waypoints, every run.         */
+/* ------------------------------------------------------------------ */
+
+export interface Waypoint {
+  x: number;
+  y: number;
+}
+
+/** Deterministic PRNG so motion is reproducible in tests and replays. */
+export function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function easeInOut(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
+function cubicAt(
+  p0: Waypoint, p1: Waypoint, p2: Waypoint, p3: Waypoint, t: number,
+): Waypoint {
+  const u = 1 - t;
+  return {
+    x: u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
+    y: u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y,
+  };
+}
+
+/**
+ * Plan a curved waypoint path. First point is `from` exactly, last is
+ * `to` exactly; near-zero hops collapse to a single point. Waypoint
+ * count scales with distance (6–16) so short hops stay snappy.
+ */
+export function planHumanPath(from: Waypoint, to: Waypoint, seed: number = MOTION_BOUNDS.defaultSeed): Waypoint[] {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 4) return [{ x: to.x, y: to.y }];
+  const rand = mulberry32(seed);
+  const steps = Math.max(6, Math.min(16, Math.round(dist / 40)));
+  const nx = dist > 0 ? -dy / dist : 0;
+  const ny = dist > 0 ? dx / dist : 0;
+  const mag = dist * (0.08 + rand() * 0.14) * (rand() < 0.5 ? -1 : 1);
+  const c1 = { x: from.x + dx * 0.33 + nx * mag, y: from.y + dy * 0.33 + ny * mag };
+  const c2 = { x: from.x + dx * 0.66 - nx * mag * 0.6, y: from.y + dy * 0.66 - ny * mag * 0.6 };
+  const out: Waypoint[] = [];
+  for (let i = 1; i <= steps; i++) {
+    out.push(cubicAt(from, c1, c2, to, easeInOut(i / steps)));
+  }
+  out[out.length - 1] = { x: to.x, y: to.y };
+  return out;
+}
+
+export type GlideOutcome = "moved" | "fallback" | "stopped-by-owner" | "preempted-by-newer-run";
+
+/**
+ * Play a humanized glide to `to`. Falls back (caller uses legacy
+ * single-set positioning) when the host lacks motion hands or origin.
+ * Reduced-motion collapses the curve to one instant jump — same call,
+ * same receipt shape, no animation. Every slice is a STOP/preempt
+ * boundary; slices also pace the travel (no separate timer needed).
+ */
+export async function glideThrough(
+  deps: ActorDeps,
+  to: Waypoint,
+  runToken?: number,
+  seed: number = MOTION_BOUNDS.defaultSeed,
+): Promise<GlideOutcome> {
+  if (!deps.moveTo || !deps.cursorPos) return "fallback";
+  const from = deps.cursorPos() ?? to;
+  let path: Waypoint[];
+  try {
+    const rm = deps.viewport ? deps.viewport()?.reducedMotion === true : false;
+    path = rm ? [{ x: to.x, y: to.y }] : planHumanPath(from, to, seed);
+  } catch {
+    return "fallback";
+  }
+  for (const p of path) {
+    if (deps.isStopped()) return "stopped-by-owner";
+    if (tokenStale(runToken)) return "preempted-by-newer-run";
+    try {
+      await deps.moveTo(p.x, p.y);
+    } catch {
+      return "fallback";
+    }
+    await delay(MOTION_BOUNDS.glideSliceMs);
+  }
+  return "moved";
+}
+
+/** Bounded interruptible dwell (pre-click hesitation, pauses). */
+export async function dwellFor(
+  deps: ActorDeps,
+  ms: number,
+  runToken?: number,
+): Promise<"done" | "stopped-by-owner" | "preempted-by-newer-run"> {
+  let remaining = Math.max(0, ms);
+  while (remaining > 0) {
+    if (deps.isStopped()) return "stopped-by-owner";
+    if (tokenStale(runToken)) return "preempted-by-newer-run";
+    const slice = Math.min(100, remaining);
+    await delay(slice);
+    remaining -= slice;
+  }
+  return "done";
+}
+
+/**
+ * Approach an element the human way in human pace: curved glide when
+ * the host reports origin + motion hands, legacy single-set otherwise.
+ * Returns a terminal receipt when the approach itself aborts; null =
+ * arrived, caller proceeds with the real work (click/type/...).
+ */
+async function approachEl(
+  deps: ActorDeps,
+  opts: RunOptions,
+  silent: boolean,
+  el: unknown,
+  action: ActorAction,
+  at: () => string,
+): Promise<ActorReceipt | null> {
+  if (silent || opts.pace !== "human" || !deps.locate) {
+    if (!silent) await deps.moveCursor(el);
+    return null;
+  }
+  let center: Waypoint | null = null;
+  try {
+    center = deps.locate(el);
+  } catch {
+    center = null;
+  }
+  if (!center) {
+    if (!silent) await deps.moveCursor(el);
+    return null;
+  }
+  const g = await glideThrough(deps, center, opts.runToken);
+  if (g === "moved" || g === "fallback") {
+    if (g === "fallback") await deps.moveCursor(el);
+    return null;
+  }
+  return { action, ok: false, detail: g, at: at() };
+}
+
+/**
+ * Pre-click hesitation: explicit per-action dwellMs wins, else the human
+ * pace default. Returns a terminal receipt when interrupted, else null.
+ */
+async function clickDwell(
+  deps: ActorDeps,
+  opts: RunOptions,
+  action: ActorAction,
+  explicitMs: number | undefined,
+  at: () => string,
+): Promise<ActorReceipt | null> {
+  const ms = explicitMs ?? (opts.pace === "human" ? MOTION_BOUNDS.humanDwellMs : 0);
+  if (!ms) return null;
+  const d = await dwellFor(deps, ms, opts.runToken);
+  return d === "done" ? null : { action, ok: false, detail: d, at: at() };
+}
+
+/**
+ * Type with human pacing: progressive prefixes in small chunks so the
+ * owner watches the text land, STOP-checked per chunk. Brisk pace keeps
+ * today's single native-setter call exactly. Returns a terminal receipt
+ * on abort or missing hands, else null (fully typed).
+ */
+async function performType(
+  deps: ActorDeps,
+  opts: RunOptions,
+  el: unknown,
+  text: string,
+  pressReturn: boolean,
+  action: ActorAction,
+  at: () => string,
+): Promise<ActorReceipt | null> {
+  if (!deps.typeInto) return { action, ok: false, detail: "no-type-handling", at: at() };
+  if (opts.pace !== "human") {
+    await deps.typeInto(el, text, pressReturn);
+    return null;
+  }
+  const chunk = MOTION_BOUNDS.typeChunk;
+  const total = Math.max(1, Math.ceil(text.length / chunk));
+  for (let i = 1; i <= total; i++) {
+    if (deps.isStopped()) return { action, ok: false, detail: "stopped-by-owner", at: at() };
+    if (tokenStale(opts.runToken)) return { action, ok: false, detail: "preempted-by-newer-run", at: at() };
+    await deps.typeInto(el, text.slice(0, i * chunk), pressReturn && i === total);
+    if (i < total) {
+      const d = await dwellFor(deps, MOTION_BOUNDS.typeChunkMs, opts.runToken);
+      if (d !== "done") return { action, ok: false, detail: d, at: at() };
+    }
+  }
+  return null;
 }
 
 export async function runActorScript(
@@ -241,8 +456,12 @@ export async function runActorScript(
             receipts.push({ action, ok: false, detail: r.error, at: at() });
           } else {
             if (action.say && !silent) await deps.say(action.say);
-            await deps.moveCursor(r.el);
-            receipts.push({ action, ok: true, detail: "done-live-point", at: at() });
+            const arr = await approachEl(deps, opts, silent, r.el, action, at);
+            if (arr) {
+              receipts.push(arr);
+            } else {
+              receipts.push({ action, ok: true, detail: "done-live-point", at: at() });
+            }
           }
         } else if (action.type === "live_click") {
           const r = resolveLive(deps, action.index, action.expect);
@@ -250,9 +469,15 @@ export async function runActorScript(
             receipts.push({ action, ok: false, detail: r.error, at: at() });
           } else {
             if (action.say && !silent) await deps.say(action.say);
-            await deps.moveCursor(r.el);
-            await deps.click(r.el);
-            receipts.push({ action, ok: true, detail: "done-live", at: at() });
+            const arr = await approachEl(deps, opts, silent, r.el, action, at);
+            const dw = arr ? null : await clickDwell(deps, opts, action, action.dwellMs, at);
+            const stop = arr ?? dw;
+            if (stop) {
+              receipts.push(stop);
+            } else {
+              await deps.click(r.el);
+              receipts.push({ action, ok: true, detail: "done-live", at: at() });
+            }
           }
         } else if (action.type === "live_type") {
           if (!deps.typeInto) {
@@ -263,9 +488,13 @@ export async function runActorScript(
               receipts.push({ action, ok: false, detail: r.error, at: at() });
             } else {
               if (action.say && !silent) await deps.say(action.say);
-              await deps.moveCursor(r.el);
-              await deps.typeInto(r.el, action.text, action.press_return === true);
-              receipts.push({ action, ok: true, detail: "done-live", at: at() });
+              const arr = await approachEl(deps, opts, silent, r.el, action, at);
+              if (arr) {
+                receipts.push(arr);
+              } else {
+                const t = await performType(deps, opts, r.el, action.text, action.press_return === true, action, at);
+                receipts.push(t ?? { action, ok: true, detail: "done-live", at: at() });
+              }
             }
           }
         } else {
@@ -279,9 +508,13 @@ export async function runActorScript(
             } else {
               const fromEl = (from as { el: unknown }).el;
               if (action.say && !silent) await deps.say(action.say);
-              await deps.moveCursor(fromEl);
-              await deps.dragInto(fromEl, (to as { el: unknown }).el);
-              receipts.push({ action, ok: true, detail: "done-live", at: at() });
+              const arr = await approachEl(deps, opts, silent, fromEl, action, at);
+              if (arr) {
+                receipts.push(arr);
+              } else {
+                await deps.dragInto(fromEl, (to as { el: unknown }).el);
+                receipts.push({ action, ok: true, detail: "done-live", at: at() });
+              }
             }
           }
         }
@@ -435,7 +668,14 @@ export async function runActorScript(
       try {
         if (action.say && !silent) await deps.say(action.say);
         const navEl = deps.resolveNav ? deps.resolveNav(action.route) : null;
-        if (navEl) await deps.moveCursor(navEl);
+        if (navEl) {
+          const arr = await approachEl(deps, opts, silent, navEl, action, at);
+          if (arr) {
+            receipts.push(arr);
+            if (!opts.continueOnFailure) break;
+            continue;
+          }
+        }
         await deps.traverse(action.route, navEl);
         receipts.push({ action, ok: true, detail: "done", at: at() });
       } catch (e) {
@@ -476,7 +716,12 @@ export async function runActorScript(
           if (!opts.continueOnFailure) break;
           continue;
         }
-        await deps.moveCursor(el);
+        const arr = await approachEl(deps, opts, silent, el, action, at);
+        if (arr) {
+          receipts.push(arr);
+          if (!opts.continueOnFailure) break;
+          continue;
+        }
         await deps.showcase(el, action.title, action.lines);
       } else if (action.type === "collect") {
         if (silent) {
@@ -486,10 +731,20 @@ export async function runActorScript(
           if (!opts.continueOnFailure) break;
           continue;
         }
-        await deps.moveCursor(el);
+        const arr = await approachEl(deps, opts, silent, el, action, at);
+        if (arr) {
+          receipts.push(arr);
+          if (!opts.continueOnFailure) break;
+          continue;
+        }
         await deps.collect(action.connector_key);
       } else {
-        if (!silent) await deps.moveCursor(el);
+        const arr = await approachEl(deps, opts, silent, el, action, at);
+        if (arr) {
+          receipts.push(arr);
+          if (!opts.continueOnFailure) break;
+          continue;
+        }
         if (action.type === "highlight") {
           if (silent) {
             receipts.push({ action, ok: true, detail: "noted-background", at: at() });
@@ -502,6 +757,12 @@ export async function runActorScript(
           // eliminates the theater it controls (cursor, scrolls, popups),
           // never the app's own reactions. That boundary is documented,
           // not hidden.
+          const dw = await clickDwell(deps, opts, action, action.dwellMs, at);
+          if (dw) {
+            receipts.push(dw);
+            if (!opts.continueOnFailure) break;
+            continue;
+          }
           await deps.click(el);
         } else if (action.type === "type") {
           if (silent) {
@@ -511,12 +772,12 @@ export async function runActorScript(
             if (!opts.continueOnFailure) break;
             continue;
           }
-          if (!deps.typeInto) {
-            receipts.push({ action, ok: false, detail: "no-type-handling", at: at() });
+          const t = await performType(deps, opts, el, action.text, action.press_return === true, action, at);
+          if (t) {
+            receipts.push(t);
             if (!opts.continueOnFailure) break;
             continue;
           }
-          await deps.typeInto(el, action.text, action.press_return === true);
         }
         // point = move only (skipped silently in handle mode).
       }

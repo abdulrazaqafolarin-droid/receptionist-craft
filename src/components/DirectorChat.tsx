@@ -294,7 +294,7 @@ export function DirectorChat({
         { type: "live_point" as const, index: h.cand.index, expect: h.cand.label },
         { type: "live_click" as const, index: h.cand.index, expect: h.cand.label },
       ]));
-      const receipts = await ride.start(steps, { tour: "director-transient-click", userId });
+      const receipts = await ride.start(steps, { tour: "director-transient-click", userId, pace: "human" });
       const failedIdx = receipts.findIndex((r) => !r.ok);
       const detail = failedIdx >= 0 ? receipts[failedIdx]?.detail || "unknown" : "";
       const doneNames = hits.slice(0, failedIdx >= 0 ? Math.floor(failedIdx / 2) : hits.length)
