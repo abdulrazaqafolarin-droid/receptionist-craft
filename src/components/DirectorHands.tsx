@@ -207,9 +207,19 @@ export function DirectorHands() {
 
     const execute = async (cmd: HandsCommand) => {
       if (cancelled) return;
+      // Claim atomically. Realtime can be delivered to more than one tab,
+      // and a SELECT followed by an unconditional UPDATE is not a lock.
+      // Only the executor that changes queued -> running may perform the work.
       try {
-        await table.update({ status: "running" }).eq("id", cmd.id);
+        const { data: claimed, error: claimError } = await table
+          .update({ status: "running" })
+          .eq("id", cmd.id)
+          .eq("status", "queued")
+          .select("id")
+          .maybeSingle();
+        if (claimError || !claimed) return;
       } catch {
+        // Never execute a command unless its claim was confirmed.
         return;
       }
       try {

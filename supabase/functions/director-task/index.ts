@@ -94,14 +94,17 @@ serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
 
-    // Identity: gateway key first, session JWT second. Body never decides.
+    // Read the request body exactly once: Fetch request bodies are streams.
+    // The gateway-authenticated path also needs user_id from this same body.
+    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+
+    // Identity: gateway key first, session JWT second. Body never decides
+    // identity for the owner-JWT path; the gateway key is the trusted brain lane.
     let user_id = "";
     const gwPresented = req.headers.get("X-Gateway-Key") || "";
     const gwExpected = Deno.env.get("RUTEX_GATEWAY_KEY") || "";
     if (gwPresented && keysEqual(gwPresented, gwExpected)) {
-      const b = await req.json().catch(() => ({}));
-      user_id = typeof (b as Record<string, unknown>).user_id === "string"
-        ? ((b as Record<string, unknown>).user_id as string) : "";
+      user_id = typeof body.user_id === "string" ? body.user_id : "";
       if (!user_id) return jsonRes({ ok: false, error: "user_id required" }, 400);
     } else {
       const authHeader = req.headers.get("Authorization") || "";
@@ -110,7 +113,6 @@ serve(async (req) => {
       if (authError || !user) return jsonRes({ ok: false, error: "invalid token" }, 401);
       user_id = user.id;
     }
-    const body = await req.json().catch(() => ({}));
     const action = typeof body.action === "string" ? body.action : "start";
 
     const loadTask = async (id: string): Promise<TaskRow | null> => {
