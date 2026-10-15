@@ -91,7 +91,7 @@ export function lookAtPage(): Record<string, unknown> {
       // The brain only sees candidates that the click host can plausibly hit.
       if (
         el.matches(":disabled") ||
-        el.getAttribute("aria-disabled") === "true" ||
+        el.closest('[aria-disabled="true"]') ||
         el.closest("[inert]") ||
         el.closest('[aria-hidden="true"]')
       ) return;

@@ -239,7 +239,7 @@ function clickDomTarget(value: unknown): void {
   const el = value;
   if (
     el.matches(":disabled") ||
-    el.getAttribute("aria-disabled") === "true" ||
+    el.closest('[aria-disabled="true"]') ||
     el.closest("[inert]") ||
     el.closest('[aria-hidden="true"]')
   ) {
