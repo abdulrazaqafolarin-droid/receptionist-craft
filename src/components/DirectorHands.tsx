@@ -86,6 +86,27 @@ export function lookAtPage(): Record<string, unknown> {
       const rect = el.getBoundingClientRect();
       if (rect.width < 2 || rect.height < 2) return;
       if (rect.bottom < 0 || rect.top > window.innerHeight + 200) return;
+
+      // Do not offer controls that cannot currently receive an interaction.
+      // The brain only sees candidates that the click host can plausibly hit.
+      if (
+        el.matches(":disabled") ||
+        el.getAttribute("aria-disabled") === "true" ||
+        el.closest("[inert]") ||
+        el.closest('[aria-hidden="true"]')
+      ) return;
+      const style = window.getComputedStyle(el);
+      if (
+        style.display === "none" ||
+        style.visibility === "hidden" ||
+        style.pointerEvents === "none" ||
+        Number(style.opacity) === 0
+      ) return;
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const hit = document.elementFromPoint(cx, cy);
+      if (!hit || !(hit === el || el.contains(hit))) return;
+
       const role = liveRole(el);
       const label = describeLiveLabel(el);
       if (!label) return;
@@ -235,7 +256,7 @@ export function DirectorHands() {
           await ledger(cmd, `Refused unknown hands tool: ${cmd.tool}`, false, null);
           return;
         }
-        const receipts = await hostRef.current.start(actions, { tour: "director-hands", mode: "ride" });
+        const receipts = await hostRef.current.start(actions, { tour: "director-hands", mode: "ride", pace: "human" });
         const failed = receipts.find((r) => !r.ok);
         if (failed) {
           await finish(cmd.id, false, { receipts }, failed.detail);

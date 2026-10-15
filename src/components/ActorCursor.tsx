@@ -159,7 +159,7 @@ export function ActorCursor({
   const g2 = `actor-glow2-${uid}`;
   return (
     <div
-      className={`pointer-events-none fixed left-0 top-0 z-[90] motion-reduce:transition-none ${arriving && !point ? "actor-arrive" : "transition-transform duration-500 ease-out"} ${bouncing ? "bluey-bounce" : ""}`}
+      className={`pointer-events-none fixed left-0 top-0 z-[90] motion-reduce:transition-none ${arriving && !point ? "actor-arrive" : "transition-transform duration-[45ms] ease-linear"} ${bouncing ? "bluey-bounce" : ""}`}
       style={
         arriving && !point
           ? { left: "50%", top: "96px" }
