@@ -18,7 +18,7 @@ import type { SVGProps } from "react";
 import { BlueySpeechBubble } from "@/components/BlueySpeechBubble";
 import { useNavigate } from "react-router-dom";
 import { Square } from "lucide-react";
-import { runActorScript, claimActorRun, type ActorReceipt, type ActorMode } from "@/lib/actorRunner";
+import { runActorScript, claimActorRun, isActorRunCurrent, type ActorReceipt, type ActorMode } from "@/lib/actorRunner";
 import type { ActorAction } from "@/lib/actorGuard";
 import { describeLiveLabel } from "@/lib/actorGuard";
 import { useDirectorPresence } from "@/hooks/useDirectorPresence";
@@ -501,7 +501,18 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
         }
       }
     });
-    activeRuns.set(runId, { stop: () => { stopRef.current = true; setRunning(false); }, mode });
+    activeRuns.set(runId, {
+      stop: () => {
+        stopRef.current = true;
+        setRunning(false);
+        // A preempted host must not leave a second cursor parked on screen.
+        setPoint(null);
+        setRing(null);
+        setSwallow(false);
+        setArriving(false);
+      },
+      mode,
+    });
     publishRuns();
     const out = await runActorScript(actions, {
       resolve: (selector) => {
@@ -666,10 +677,14 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     publishRuns();
     // Resting place: when no follow mode is waiting to take over, glide
     // home after a beat so the cursor visibly finishes its work.
-    if (!follow) {
+    if (!follow && isActorRunCurrent(token)) {
       const seq = mySeq;
       setTimeout(() => {
-        if (runSeqRef.current === seq && !runningRef.current) goHome();
+        if (
+          runSeqRef.current === seq &&
+          !runningRef.current &&
+          isActorRunCurrent(token)
+        ) goHome();
       }, 2200);
     }
     return out;
