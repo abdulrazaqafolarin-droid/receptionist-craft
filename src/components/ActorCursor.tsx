@@ -226,6 +226,74 @@ function centerOf(el: Element): CursorPoint {
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 
+/**
+ * Dispatch the browser-like event sequence used by pointer-driven controls.
+ * HTMLElement.click() alone skips pointerdown/up, which breaks many menus,
+ * popovers and custom controls. This still runs inside the page (not OS input)
+ * and must fail closed when the target is disabled, hidden or covered.
+ */
+function clickDomTarget(value: unknown): void {
+  if (!(value instanceof HTMLElement) || !value.isConnected) {
+    throw new Error("click-target-detached");
+  }
+  const el = value;
+  if (
+    el.matches(":disabled") ||
+    el.getAttribute("aria-disabled") === "true" ||
+    el.closest("[inert]") ||
+    el.closest('[aria-hidden="true"]')
+  ) {
+    throw new Error("click-target-disabled-or-inert");
+  }
+
+  const style = window.getComputedStyle(el);
+  if (
+    style.display === "none" ||
+    style.visibility === "hidden" ||
+    style.pointerEvents === "none" ||
+    Number(style.opacity) === 0
+  ) {
+    throw new Error("click-target-not-interactive");
+  }
+
+  const rect = el.getBoundingClientRect();
+  if (rect.width < 2 || rect.height < 2) throw new Error("click-target-no-rect");
+  const x = Math.max(rect.left + 1, Math.min(rect.right - 1, rect.left + rect.width / 2));
+  const y = Math.max(rect.top + 1, Math.min(rect.bottom - 1, rect.top + rect.height / 2));
+  const hit = document.elementFromPoint(x, y);
+  if (!hit || !(hit === el || el.contains(hit))) {
+    throw new Error("click-target-obscured");
+  }
+
+  const init = {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    view: window,
+    clientX: x,
+    clientY: y,
+    button: 0,
+    buttons: 1,
+  };
+  const pointerInit = { ...init, pointerId: 1, isPrimary: true, pointerType: "mouse" };
+  el.focus({ preventScroll: true });
+  if (typeof PointerEvent !== "undefined") {
+    hit.dispatchEvent(new PointerEvent("pointerdown", pointerInit));
+  }
+  hit.dispatchEvent(new MouseEvent("mousedown", init));
+
+  const upInit = { ...init, buttons: 0 };
+  if (typeof PointerEvent !== "undefined") {
+    hit.dispatchEvent(new PointerEvent("pointerup", { ...pointerInit, buttons: 0 }));
+  }
+  hit.dispatchEvent(new MouseEvent("mouseup", upInit));
+
+  // Use the native DOM click for the single click event/default action;
+  // do not manually dispatch a second click event.
+  if (!el.isConnected) return;
+  el.click();
+}
+
 function rectOf(el: Element): RingRect {
   const r = el.getBoundingClientRect();
   return { x: r.left, y: r.top, w: r.width, h: r.height };
@@ -513,7 +581,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
         setPoint(p);
       },
       click: async (el) => {
-        (el as HTMLElement).click();
+        clickDomTarget(el);
       },
       describe: (el) => describeLiveLabel(el as Element),
       dragInto: async (fromEl, toEl) => {
