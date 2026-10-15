@@ -214,7 +214,9 @@ export function DirectorChat({
       const before = needsOutcomeCheck ? pageSignature() : "";
       const receipts = await ride.start(actorSteps, { tour: "director-hands-reply", userId });
       if (needsOutcomeCheck) await new Promise<void>((resolve) => setTimeout(resolve, 450));
-      const visibleChange = needsOutcomeCheck && before !== pageSignature();
+      const after = needsOutcomeCheck ? pageSignature() : "";
+      if (needsOutcomeCheck) clearLiveStamps();
+      const visibleChange = needsOutcomeCheck && before !== after;
       setExecuting(null);
       const failed = receipts.find((r) => !r.ok);
       toast[failed ? "error" : "success"](
@@ -432,7 +434,9 @@ export function DirectorChat({
             { tour: "director-local", userId },
           );
           await new Promise<void>((resolve) => setTimeout(resolve, 450));
-          const visibleChange = before !== pageSignature();
+          const after = pageSignature();
+          clearLiveStamps();
+          const visibleChange = before !== after;
           reply = !receipts[0]?.ok
             ? `I found ${local.label} but the click didn't land (${receipts[0]?.detail || "unknown"}). It's still there if you want to tap it yourself.`
             : visibleChange
