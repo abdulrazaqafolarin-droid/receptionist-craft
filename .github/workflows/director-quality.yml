@@ -27,14 +27,18 @@ jobs:
           node-version: 22
           cache: npm
       - name: Install dependencies
+        id: install
         run: npm ci
       - name: Typecheck
         run: npm run typecheck
       - name: Build
+        if: always() && steps.install.outcome == 'success'
         run: npm run build
       - name: Lint
+        if: always() && steps.install.outcome == 'success'
         run: npm run lint
       - name: Verify actor map
+        if: always() && steps.install.outcome == 'success'
         run: npm run verify:actor-map
 
   edge-contracts:
