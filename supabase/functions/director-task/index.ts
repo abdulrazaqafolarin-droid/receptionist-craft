@@ -137,13 +137,15 @@ serve(async (req) => {
       return t && t.user_id === user_id ? t : null;
     };
     const saveTask = async (t: TaskRow) => {
-      await supabase.from("director_tasks").update({
+      const { error } = await supabase.from("director_tasks").update({
         history: t.history,
         status: t.status,
         pending_command: t.pending_command ?? null,
         result: (t as { result?: string }).result ?? null,
         updated_at: new Date().toISOString(),
       }).eq("id", t.id);
+      // Never tell the caller a resumable task was saved when its checkpoint failed.
+      if (error) throw new Error("task state save failed");
     };
 
     // Poll a known command id. A timeout is not treated as completion:
