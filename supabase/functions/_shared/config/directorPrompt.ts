@@ -114,7 +114,7 @@ export interface DirectorContext {
   unreadNotifications: DirectorNotification[];
   /** Paired computers/phones/runners — the only hands that exist. */
   devices: DirectorDevice[];
-  /** Facts other brains agreed with the owner (onboarding, builder). */
+  /** Compact fact briefs from earlier Director conversations; live rows override them. */
   sharedMemory: Array<{ source: string; content: string; created_at: string }>;
   /** The owner's id, so hands calls carry the right user_id. */
   ownerId: string;
