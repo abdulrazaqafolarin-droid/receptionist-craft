@@ -56,6 +56,8 @@ jobs:
           deno-version: v2.x
       - name: Type-check changed edge functions
         run: deno check supabase/functions/director-task/index.ts supabase/functions/director-chat/index.ts supabase/functions/companion-link/index.ts
+      - name: Test browser actor engine and guardrails
+        run: deno test --no-check --unstable-sloppy-imports src/lib/actorEngine.test.ts
       - name: Test decision contract
         run: deno test supabase/functions/_shared/directorDecide.test.ts
       - name: Test task-loop mechanics
