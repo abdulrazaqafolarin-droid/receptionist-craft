@@ -650,7 +650,8 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
           ? HTMLTextAreaElement.prototype
           : HTMLInputElement.prototype;
         const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-        setter ? setter.call(input, text) : (input.value = text);
+        if (setter) setter.call(input, text);
+        else input.value = text;
         input.dispatchEvent(new Event("input", { bubbles: true }));
         input.dispatchEvent(new Event("change", { bubbles: true }));
         if (pressReturn) {

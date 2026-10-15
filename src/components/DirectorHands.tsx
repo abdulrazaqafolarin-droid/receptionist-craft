@@ -144,6 +144,15 @@ export function lookAtPage(): Record<string, unknown> {
   return out;
 }
 
+type DynamicTable = {
+  update(values: Record<string, unknown>): { eq(column: string, value: unknown): PromiseLike<unknown> };
+  insert(values: Record<string, unknown>): PromiseLike<unknown>;
+};
+
+function fromDynamicTable(name: string): DynamicTable {
+  return (supabase as unknown as { from: (table: string) => DynamicTable }).from(name);
+}
+
 export function DirectorHands() {
   const host = useActorHost();
   const busyRef = useRef(false);
@@ -154,7 +163,7 @@ export function DirectorHands() {
     let cancelled = false;
     let channel: { unsubscribe: () => void } | null = null;
 
-    const table = (supabase.from as unknown as (t: string) => any)("director_commands");
+    const table = fromDynamicTable("director_commands");
 
     const finish = async (id: string, ok: boolean, result: unknown, error: string | null) => {
       try {
@@ -173,7 +182,7 @@ export function DirectorHands() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        await (supabase.from as unknown as (t: string) => any)("director_actions").insert({
+        await fromDynamicTable("director_actions").insert({
           user_id: user.id,
           kind: "hands",
           status: ok ? "done" : "failed",
