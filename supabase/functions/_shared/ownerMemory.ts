@@ -17,7 +17,7 @@ export function formatMemorySection(rows: MemoryBrief[]): string {
   if (items.length === 0) return "";
 
   const lines = items.map((row) => {
-    const source = String(row.source || "Earlier Director conversation").replace(/\s+/g, " ").slice(0, 100);
+    const source = String(row.source || "Earlier Director conversation").replace(/\s+/g, " ").trim().slice(0, 100);
     const date = String(row.created_at || "").slice(0, 10);
     const content = row.content.replace(/\s+/g, " ").slice(0, 1200);
     return `- [${source}${date ? ` · ${date}` : ""}] ${content}`;
