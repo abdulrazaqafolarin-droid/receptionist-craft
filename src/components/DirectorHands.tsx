@@ -154,9 +154,21 @@ export function lookAtPage(): Record<string, unknown> {
   return out;
 }
 
+type DynamicResult = { data: unknown; error: unknown };
+
+type DynamicQuery = PromiseLike<DynamicResult> & {
+  eq(column: string, value: unknown): DynamicQuery;
+  is(column: string, value: unknown): DynamicQuery;
+  order(column: string, options: { ascending: boolean }): DynamicQuery;
+  limit(count: number): DynamicQuery;
+  select(columns?: string): DynamicQuery;
+  maybeSingle(): PromiseLike<DynamicResult>;
+};
+
 type DynamicTable = {
-  update(values: Record<string, unknown>): { eq(column: string, value: unknown): PromiseLike<unknown> };
-  insert(values: Record<string, unknown>): PromiseLike<unknown>;
+  update(values: Record<string, unknown>): DynamicQuery;
+  insert(values: Record<string, unknown>): PromiseLike<DynamicResult>;
+  select(columns?: string): DynamicQuery;
 };
 
 function fromDynamicTable(name: string): DynamicTable {
