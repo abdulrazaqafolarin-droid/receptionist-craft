@@ -47,6 +47,8 @@ jobs:
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - name: Type-check changed edge functions
+        run: deno check supabase/functions/director-task/index.ts supabase/functions/director-chat/index.ts supabase/functions/companion-link/index.ts
       - name: Test decision contract
         run: deno test supabase/functions/_shared/directorDecide.test.ts
       - name: Test task-loop mechanics
