@@ -98,6 +98,7 @@ interface TaskRow {
   history: TaskStep[];
   status: string;
   pending_command: PendingCommand | null;
+  updated_at?: string;
 }
 
 serve(async (req) => {
@@ -171,11 +172,11 @@ serve(async (req) => {
     };
 
     const runCommand = async (
-      tool: string, args: Record<string, unknown>, device_id: string | null, waitMs: number,
+      tool: string, args: Record<string, unknown>, device_id: string | null, waitMs: number, sessionId: string,
     ): Promise<CommandOutcome> => {
       const { data, error } = await supabase.from("director_commands").insert({
         user_id,
-        session_id: `task`,
+        session_id: sessionId,
         device_id,
         tool,
         args,
@@ -297,7 +298,7 @@ serve(async (req) => {
           return value;
         }
         const tool = device_id ? "look_at_screen" : "look_at_page";
-        const out = await runCommand(tool, {}, device_id, OBSERVE_WAIT_MS);
+        const out = await runCommand(tool, {}, device_id, OBSERVE_WAIT_MS, `task:${task.id}`);
         if (out.pending && out.command_id) {
           task.pending_command = { id: out.command_id, kind: "observe" };
           return null;
@@ -337,7 +338,7 @@ serve(async (req) => {
           else if (decided.op === "SCROLL_UP" || decided.op === "SCROLL_DOWN") { tool = "scroll"; args = { direction: decided.op === "SCROLL_UP" ? "up" : "down", amount: 4 }; }
           else return null;
         }
-        const out = await runCommand(tool, args, device_id, ACT_WAIT_MS);
+        const out = await runCommand(tool, args, device_id, ACT_WAIT_MS, `task:${task.id}`);
         if (out.pending && out.command_id) {
           task.pending_command = {
             id: out.command_id,
@@ -353,6 +354,36 @@ serve(async (req) => {
           kind: decided.op.toLowerCase(),
         };
       };
+
+      // If a prior checkpoint write failed after a command was queued, the
+      // task row may lack pending_command. Find commands created since the
+      // last saved task state and stop rather than guessing whether they ran.
+      if (!task.pending_command && task.updated_at) {
+        const { data: orphan } = await supabase
+          .from("director_commands")
+          .select("id,status,created_at")
+          .eq("user_id", user_id)
+          .eq("session_id", `task:${task.id}`)
+          .gt("created_at", task.updated_at)
+          .in("status", ["queued", "running", "done", "failed"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (orphan) {
+          await finishTask(
+            task,
+            "blocked",
+            "a command exists after the last saved checkpoint; its relationship to the task is uncertain, stopped to avoid a duplicate action",
+          );
+          return jsonRes({
+            ok: true,
+            status: "blocked",
+            task_id: task.id,
+            result: "command found without a matching checkpoint; stopped rather than risking a duplicate",
+            trail: task.history,
+          });
+        }
+      }
 
       // Resume the exact command that timed out. Never enqueue a replacement
       // while an earlier observation/action may still complete.
