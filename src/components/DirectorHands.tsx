@@ -118,15 +118,25 @@ export function lookAtPage(): Record<string, unknown> {
       // Deeper view, values never included: link destinations ride along as
       // extra segments so the brain can tell same-named targets apart.
       // The label (segment 2) stays clean for expect-verification.
-      let extra = "";
+      const extras: string[] = [];
       try {
         if (el.tagName.toLowerCase() === "a") {
           const href = (el.getAttribute("href") || "").slice(0, 80);
-          if (href) extra = ` | href=${href}`;
+          if (href) extras.push(`href=${href}`);
+        }
+        // Expose control state, never entered values, so the brain can
+        // distinguish toggled/expanded controls and verify visible changes.
+        for (const attr of ["aria-expanded", "aria-pressed", "aria-selected", "aria-checked"]) {
+          const value = el.getAttribute(attr);
+          if (value !== null) extras.push(`${attr.slice(5)}=${value}`);
+        }
+        if (el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio")) {
+          extras.push(`checked=${el.checked}`);
         }
       } catch {
-        // destination hint best-effort
+        // state/destination hints are best-effort
       }
+      const extra = extras.length > 0 ? ` | ${extras.join(" | ")}` : "";
       table.push(`[${n}] ${role} | ${label}${extra}`);
     });
     out.elements = table;

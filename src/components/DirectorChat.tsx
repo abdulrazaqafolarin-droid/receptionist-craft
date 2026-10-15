@@ -208,10 +208,24 @@ export function DirectorChat({
         return;
       }
       setExecuting(`hands-${msgIdx}`);
+      const needsOutcomeCheck = actorSteps.some((step) =>
+        step.type === "click" || step.type === "type" || step.type === "goto" || step.type === "drag"
+      );
+      const before = needsOutcomeCheck ? pageSignature() : "";
       const receipts = await ride.start(actorSteps, { tour: "director-hands-reply", userId });
+      if (needsOutcomeCheck) await new Promise<void>((resolve) => setTimeout(resolve, 450));
+      const visibleChange = needsOutcomeCheck && before !== pageSignature();
       setExecuting(null);
       const failed = receipts.find((r) => !r.ok);
-      toast[failed ? "error" : "success"](failed ? `Stopped: ${failed.detail}` : "Done.");
+      toast[failed ? "error" : "success"](
+        failed
+          ? `Stopped: ${failed.detail}`
+          : needsOutcomeCheck
+            ? visibleChange
+              ? "Action dispatched; a visible page change was detected. Confirm the intended result."
+              : "Action dispatched, but I couldn't verify a visible result. I won't repeat it automatically."
+            : "Guide action finished.",
+      );
       return;
     }
     if (!userId) return;
@@ -282,6 +296,17 @@ export function DirectorChat({
     }
   }
 
+  function pageSignature(): string {
+    const snapshot = lookAtPage() as Record<string, unknown>;
+    return JSON.stringify({
+      route: snapshot.route,
+      title: snapshot.title,
+      elements: snapshot.elements,
+      headings: snapshot.headings,
+      anchors: snapshot.anchors,
+    });
+  }
+
   async function runTransientSteps(
     hits: Array<{ phrase: string; cand: LiveCandidate }>,
   ): Promise<string | null> {
@@ -294,15 +319,20 @@ export function DirectorChat({
         { type: "live_point" as const, index: h.cand.index, expect: h.cand.label },
         { type: "live_click" as const, index: h.cand.index, expect: h.cand.label },
       ]));
+      const before = pageSignature();
       const receipts = await ride.start(steps, { tour: "director-transient-click", userId, pace: "human" });
+      await new Promise<void>((resolve) => setTimeout(resolve, 450));
+      const after = pageSignature();
+      const visibleChange = before !== after;
       const failedIdx = receipts.findIndex((r) => !r.ok);
       const detail = failedIdx >= 0 ? receipts[failedIdx]?.detail || "unknown" : "";
       const doneNames = hits.slice(0, failedIdx >= 0 ? Math.floor(failedIdx / 2) : hits.length)
         .map((h) => h.cand.label);
       if (failedIdx < 0) {
-        return hits.length === 1
-          ? `Done — clicked ${hits[0].cand.label}.`
-          : `Done: ${hits.map((h) => h.cand.label).join(", ")}.`;
+        const names = hits.map((h) => h.cand.label).join(", ");
+        return visibleChange
+          ? `I sent the click to ${names}; the page changed. Please confirm it did what you wanted.`
+          : `I sent the click to ${names}, but couldn't verify a visible result. I won't repeat it automatically.`;
       }
       if (detail.startsWith("refused-live-label") || detail.startsWith("stale-expect")) {
         const which = hits[Math.floor(failedIdx / 2)]?.cand.label || "it";
@@ -396,13 +426,18 @@ export function DirectorChat({
           await runAction({ type: "navigate", path: local.route }, -1);
           reply = `On ${local.label} now.`;
         } else {
+          const before = pageSignature();
           const receipts = await ride.start(
             [{ type: "click", target: local.target }],
             { tour: "director-local", userId },
           );
-          reply = receipts[0]?.ok
-            ? `Done — clicked ${local.label}.`
-            : `I found ${local.label} but the click didn't land (${receipts[0]?.detail || "unknown"}). It's still there if you want to tap it yourself.`;
+          await new Promise<void>((resolve) => setTimeout(resolve, 450));
+          const visibleChange = before !== pageSignature();
+          reply = !receipts[0]?.ok
+            ? `I found ${local.label} but the click didn't land (${receipts[0]?.detail || "unknown"}). It's still there if you want to tap it yourself.`
+            : visibleChange
+              ? `I sent the click to ${local.label}; the page changed. Please confirm the intended result.`
+              : `I sent the click to ${local.label}, but couldn't verify a visible result. I won't repeat it automatically.`;
         }
         setMessages((prev) => [...prev, {
           role: "ai",
