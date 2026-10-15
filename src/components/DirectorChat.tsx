@@ -209,8 +209,9 @@ export function DirectorChat({
       }
       setExecuting(`hands-${msgIdx}`);
       const needsOutcomeCheck = actorSteps.some((step) =>
-        step.type === "click" || step.type === "type" || step.type === "goto" || step.type === "drag"
+        step.type === "click" || step.type === "goto" || step.type === "drag"
       );
+      const hasType = actorSteps.some((step) => step.type === "type");
       const before = needsOutcomeCheck ? pageSignature() : "";
       const receipts = await ride.start(actorSteps, { tour: "director-hands-reply", userId });
       if (needsOutcomeCheck) await new Promise<void>((resolve) => setTimeout(resolve, 450));
@@ -226,7 +227,9 @@ export function DirectorChat({
             ? visibleChange
               ? "Action dispatched; a visible page change was detected. Confirm the intended result."
               : "Action dispatched, but I couldn't verify a visible result. I won't repeat it automatically."
-            : "Guide action finished.",
+            : hasType
+              ? "Text entry dispatched. I did not read the field contents to verify it."
+              : "Guide action finished.",
       );
       return;
     }
