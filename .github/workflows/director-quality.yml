@@ -37,6 +37,9 @@ jobs:
       - name: Lint
         if: always() && steps.install.outcome == 'success'
         run: npm run lint
+      - name: Lint changed Director UI files
+        if: always() && steps.install.outcome == 'success'
+        run: npx eslint src/components/ActorCursor.tsx src/components/DirectorHands.tsx src/components/DirectorChat.tsx src/lib/actorRunner.ts
       - name: Verify actor map
         if: always() && steps.install.outcome == 'success'
         run: npm run verify:actor-map
