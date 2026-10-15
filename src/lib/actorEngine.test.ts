@@ -6,7 +6,7 @@
  */
 
 import { ACTOR_TARGETS, ACTOR_TEMPLATE_PREFIXES, findTarget } from "./actorMap.ts";
-import { guardCheck, isForbiddenKey, parseLiveTable, pickLiveCandidate } from "./actorGuard.ts";
+import { guardCheck, isForbiddenKey, parseLiveTable, pickLiveCandidate, type ActorAction } from "./actorGuard.ts";
 import { runActorScript, claimActorRun, type ActorDeps } from "./actorRunner.ts";
 
 // Minimal ambient so tsc (which typechecks src/) accepts the Deno runner.
