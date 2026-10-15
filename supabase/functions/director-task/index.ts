@@ -371,6 +371,20 @@ serve(async (req) => {
           });
         }
         task.pending_command = null;
+        if (pending.kind === "action" && out.error === "command vanished") {
+          await finishTask(
+            task,
+            "blocked",
+            "pending command record vanished; outcome is unknown, stopped to avoid a duplicate action",
+          );
+          return jsonRes({
+            ok: true,
+            status: "blocked",
+            task_id: task.id,
+            result: "pending command outcome unknown; stopped to avoid repeating it",
+            trail: task.history,
+          });
+        }
         if (pending.kind === "observe") {
           resumedObservation = observationFromResult(out);
         } else {
