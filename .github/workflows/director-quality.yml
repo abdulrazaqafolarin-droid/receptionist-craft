@@ -3,6 +3,8 @@ name: Director quality gates
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [audit/director-entry-and-command-claims]
   workflow_dispatch:
 
 permissions:
