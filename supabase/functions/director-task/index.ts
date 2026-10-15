@@ -73,6 +73,21 @@ function keysEqual(a: string, b: string): boolean {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+interface PendingCommand {
+  id: string;
+  kind: "observe" | "action";
+  decided?: { op: string; target?: string; text?: string };
+  fingerprint?: string;
+}
+
+interface CommandOutcome {
+  ok: boolean;
+  result: unknown;
+  error: string | null;
+  pending?: boolean;
+  command_id?: string;
+}
+
 interface TaskRow {
   id: string;
   user_id: string;
@@ -82,6 +97,7 @@ interface TaskRow {
   budget: number;
   history: TaskStep[];
   status: string;
+  pending_command: PendingCommand | null;
 }
 
 serve(async (req) => {
@@ -124,26 +140,15 @@ serve(async (req) => {
       await supabase.from("director_tasks").update({
         history: t.history,
         status: t.status,
+        pending_command: t.pending_command ?? null,
         result: (t as { result?: string }).result ?? null,
         updated_at: new Date().toISOString(),
       }).eq("id", t.id);
     };
 
-    // Run one command through the queue and wait for its outcome.
-    // Returns null on timeout (caller resumes later).
-    const runCommand = async (
-      tool: string, args: Record<string, unknown>, device_id: string | null, waitMs: number,
-    ): Promise<{ ok: boolean; result: unknown; error: string | null } | null> => {
-      const { data, error } = await supabase.from("director_commands").insert({
-        user_id,
-        session_id: `task`,
-        device_id,
-        tool,
-        args,
-        status: "queued",
-      }).select("id").single();
-      if (error || !data) return { ok: false, result: null, error: "queue failed" };
-      const cid = (data as { id: string }).id;
+    // Poll a known command id. A timeout is not treated as completion:
+    // the caller persists the id and resumes polling instead of reissuing work.
+    const waitForCommand = async (cid: string, waitMs: number): Promise<CommandOutcome> => {
       const deadline = Date.now() + waitMs;
       for (;;) {
         const { data: row } = await supabase
@@ -156,9 +161,27 @@ serve(async (req) => {
         if (r.status === "done" || r.status === "failed") {
           return { ok: r.status === "done", result: r.result, error: r.error };
         }
-        if (Date.now() >= deadline) return null;
+        if (Date.now() >= deadline) {
+          return { ok: false, result: null, error: null, pending: true, command_id: cid };
+        }
         await sleep(POLL_STEP_MS);
       }
+    };
+
+    const runCommand = async (
+      tool: string, args: Record<string, unknown>, device_id: string | null, waitMs: number,
+    ): Promise<CommandOutcome> => {
+      const { data, error } = await supabase.from("director_commands").insert({
+        user_id,
+        session_id: `task`,
+        device_id,
+        tool,
+        args,
+        status: "queued",
+      }).select("id").single();
+      if (error || !data) return { ok: false, result: null, error: "queue failed" };
+      const cid = (data as { id: string }).id;
+      return await waitForCommand(cid, waitMs);
     };
 
     const askBrain = async (
@@ -222,6 +245,7 @@ serve(async (req) => {
         budget,
         history: [],
         status: "running",
+        pending_command: null,
       }).select("*").single();
       if (error || !data) return jsonRes({ ok: false, error: "task queue failed" }, 500);
       const task = data as TaskRow;
@@ -249,10 +273,9 @@ serve(async (req) => {
       let unmappable = 0;
       let lastFailedSig = "";
 
-      const observe = async (): Promise<{ table: string; url: string } | null> => {
-        const tool = device_id ? "look_at_screen" : "look_at_page";
-        const out = await runCommand(tool, {}, device_id, OBSERVE_WAIT_MS);
-        if (!out || !out.ok) return null;
+      let resumedObservation: { table: string; url: string } | null = null;
+      const observationFromResult = (out: CommandOutcome): { table: string; url: string } | null => {
+        if (!out.ok) return null;
         const res = (out.result || {}) as Record<string, unknown>;
         if (device_id) {
           const screen = typeof res.screen === "string" ? res.screen : "";
@@ -265,12 +288,27 @@ serve(async (req) => {
         return table ? { table, url: String(page.route || "/") } : null;
       };
 
+      const observe = async (): Promise<{ table: string; url: string } | null> => {
+        if (resumedObservation) {
+          const value = resumedObservation;
+          resumedObservation = null;
+          return value;
+        }
+        const tool = device_id ? "look_at_screen" : "look_at_page";
+        const out = await runCommand(tool, {}, device_id, OBSERVE_WAIT_MS);
+        if (out.pending && out.command_id) {
+          task.pending_command = { id: out.command_id, kind: "observe" };
+          return null;
+        }
+        return observationFromResult(out);
+      };
+
       // Execute one decided step. Null = silent mid-step (timeout) or
       // unmappable op — caller resumes, never blind-retries.
       const executeStep = async (
         decided: { op: string; target?: string; text?: string },
         table: string,
-      ): Promise<{ ok: boolean; detail: string; kind: string } | null> => {
+      ): Promise<{ ok: boolean; detail: string; kind: string; pending?: boolean } | null> => {
         if (decided.op === "WAIT") {
           await sleep(2500);
           return { ok: true, detail: "waited", kind: "wait" };
@@ -298,13 +336,74 @@ serve(async (req) => {
           else return null;
         }
         const out = await runCommand(tool, args, device_id, ACT_WAIT_MS);
-        if (!out) return null;
+        if (out.pending && out.command_id) {
+          task.pending_command = {
+            id: out.command_id,
+            kind: "action",
+            decided: { op: decided.op, target: decided.target, text: decided.text },
+            fingerprint: fingerprintTable(table),
+          };
+          return { ok: false, detail: "command pending", kind: decided.op.toLowerCase(), pending: true };
+        }
         return {
           ok: out.ok,
           detail: out.ok ? "done" : String(out.error || "refused").slice(0, 160),
           kind: decided.op.toLowerCase(),
         };
       };
+
+      // Resume the exact command that timed out. Never enqueue a replacement
+      // while an earlier observation/action may still complete.
+      if (task.pending_command) {
+        const pending = task.pending_command;
+        const out = await waitForCommand(
+          pending.id,
+          pending.kind === "observe" ? OBSERVE_WAIT_MS : ACT_WAIT_MS,
+        );
+        if (out.pending) {
+          await saveTask(task);
+          return jsonRes({
+            ok: true,
+            status: "running",
+            task_id: task.id,
+            steps_done: task.history.length,
+            waiting: "previous command is still running; continue to resume the same command",
+          });
+        }
+        task.pending_command = null;
+        if (pending.kind === "observe") {
+          resumedObservation = observationFromResult(out);
+        } else {
+          if (!pending.decided || !pending.fingerprint) {
+            await finishTask(task, "blocked", "pending action metadata missing; stopped rather than retrying");
+            return jsonRes({ ok: true, status: "blocked", task_id: task.id, result: "pending action metadata missing", trail: task.history });
+          }
+          const d = pending.decided;
+          const sig = `${d.op}:${d.target || ""}`;
+          const res = {
+            ok: out.ok,
+            detail: out.ok ? "done" : String(out.error || "refused").slice(0, 160),
+          };
+          const previous = task.history[task.history.length - 1];
+          const repeatedFailure = !res.ok && previous &&
+            `${previous.op}:${previous.target || ""}` === sig &&
+            previous.detail !== "done";
+          task.history.push({
+            n: task.history.length + 1,
+            op: d.op,
+            target: d.target,
+            detail: res.detail,
+            fingerprint: pending.fingerprint,
+            at: new Date().toISOString(),
+          });
+          trail.push(`${d.op}${d.target ? ` [${d.target}]` : ""}: ${res.detail}`.slice(0, 160));
+          await saveTask(task);
+          if (repeatedFailure) {
+            await finishTask(task, "blocked", `stuck on refused action ${sig} — stopped instead of retrying`);
+            return jsonRes({ ok: true, status: "blocked", task_id: task.id, result: `stuck on ${sig}`, trail: task.history });
+          }
+        }
+      }
 
       while (task.history.length < task.budget && Date.now() - startedAt < WALL_BUDGET_MS) {
         const seen = await observe();
@@ -348,6 +447,16 @@ serve(async (req) => {
           return jsonRes({ ok: true, status: "blocked", task_id: task.id, result: decided.reason || "blocked", trail: task.history });
         }
         const res = await executeStep(decided, seen.table);
+        if (res?.pending) {
+          await saveTask(task);
+          return jsonRes({
+            ok: true,
+            status: "running",
+            task_id: task.id,
+            steps_done: task.history.length,
+            waiting: "action command is still running; continue to resume without repeating it",
+          });
+        }
         if (res === null) {
           unmappable += 1;
           if (unmappable >= 2) {
