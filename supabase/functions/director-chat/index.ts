@@ -14,10 +14,13 @@ import { askRutex, RutexMcpError } from "../_shared/rutexMcp.ts";
 import { researchNeed } from "../_shared/config/solutionResearch.ts";
 import { resolveNeed } from "../_shared/config/capabilityRegistry.ts";
 import {
+  briefDue,
+  buildBriefUpdatePrompt,
   buildDirectorSystemPrompt,
   parseDirectorReply,
   type DirectorContext,
 } from "../_shared/config/directorPrompt.ts";
+import { parseMemoryBrief } from "../_shared/ownerMemory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -271,6 +274,61 @@ serve(async (req) => {
       }
       // Contract broken but words exist: show the words, invent no actions.
       return jsonRes({ ok: true, reply: "I could not shape that into a clean answer — try asking once more, simply.", suggestions: [], actions: [] });
+    }
+
+    // Keep a compact fact brief for long Director conversations. Memory is
+    // best-effort: a failure must never turn a good chat answer into an error.
+    try {
+      const memoryThreadId = typeof body.thread_id === "string" ? body.thread_id : "";
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(memoryThreadId);
+      if (isUuid) {
+        const { data: threadOwner } = await supabase
+          .from("director_threads")
+          .select("id,user_id")
+          .eq("id", memoryThreadId)
+          .maybeSingle();
+        // Service-role queries must verify ownership explicitly before an upsert.
+        if (threadOwner && (threadOwner as { user_id: string }).user_id === user_id) {
+          const [memoryRes, countRes] = await Promise.all([
+            supabase.from("director_memory")
+              .select("brief,briefed_through")
+              .eq("thread_id", memoryThreadId)
+              .maybeSingle(),
+            supabase.from("director_messages")
+              .select("id", { count: "exact", head: true })
+              .eq("thread_id", memoryThreadId),
+          ]);
+          const currentMemory = (memoryRes.data || null) as { brief: string; briefed_through: number } | null;
+          const persistedCount = typeof countRes.count === "number" ? countRes.count : 0;
+          // The user message is saved asynchronously by the client; include the
+          // current user/Director pair even if one of those writes is not visible yet.
+          const totalMessages = Math.max(persistedCount + 1, history.length + 2);
+          if (briefDue(totalMessages, currentMemory)) {
+            const recent = [
+              ...history.map((m) => `${m.role === "assistant" ? "Director" : "Owner"}: ${m.content}`),
+              `Owner: ${message}`,
+              `Director: ${reply.reply}`,
+            ].slice(-30);
+            const memoryReply = await askRutex(
+              `director-memory-${memoryThreadId.slice(0, 8)}`,
+              buildBriefUpdatePrompt(currentMemory?.brief || "", recent),
+              { timeoutMs: 20000 },
+            );
+            const brief = parseMemoryBrief(memoryReply.text || "");
+            if (brief !== null) {
+              await supabase.from("director_memory").upsert({
+                user_id,
+                thread_id: memoryThreadId,
+                brief,
+                briefed_through: totalMessages,
+                updated_at: new Date().toISOString(),
+              }, { onConflict: "thread_id" });
+            }
+          }
+        }
+      }
+    } catch {
+      // Memory is an enhancement; preserve the actual Director answer.
     }
 
     return jsonRes({ ok: true, ...reply });

@@ -421,7 +421,9 @@ export function DirectorChat({
       return;
     }
     try {
-      const history = [...messages, ownerMsg].slice(-10).map((m) => ({
+      // The current message is sent separately below; history contains prior
+      // turns only, otherwise the edge prompt repeats the owner's message.
+      const history = messages.slice(-9).map((m) => ({
         role: m.role === "ai" ? "assistant" : "user",
         content: m.content,
       }));

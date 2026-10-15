@@ -29,3 +29,17 @@ export function formatMemorySection(rows: MemoryBrief[]): string {
     ...lines,
   ].join("\n");
 }
+
+/** Parse the memory updater's strict JSON response; invalid output is ignored. */
+export function parseMemoryBrief(raw: string): string | null {
+  let source = raw.trim();
+  const fenced = source.match(/^\`\`\`(?:json)?\s*([\s\S]*?)\s*\`\`\`$/i);
+  if (fenced) source = fenced[1].trim();
+  try {
+    const parsed = JSON.parse(source) as { brief?: unknown };
+    if (typeof parsed.brief !== "string") return null;
+    return parsed.brief.trim().slice(0, 1500);
+  } catch {
+    return null;
+  }
+}

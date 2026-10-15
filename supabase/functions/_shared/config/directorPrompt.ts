@@ -81,7 +81,8 @@ export interface ThreadMemory {
 /** Long threads (>12 messages) earn a brief; refresh every 6 new ones. */
 export function briefDue(total: number, mem: ThreadMemory | null): boolean {
   if (total <= 12) return false;
-  if (!mem || !mem.brief) return true;
+  if (!mem) return true;
+  // An intentionally empty brief still records that this range was reviewed.
   return total - mem.briefed_through >= 6;
 }
 
