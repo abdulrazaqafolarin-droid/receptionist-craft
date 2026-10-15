@@ -51,3 +51,5 @@ jobs:
         run: deno test supabase/functions/_shared/directorDecide.test.ts
       - name: Test task-loop mechanics
         run: deno test supabase/functions/_shared/directorTask.test.ts
+      - name: Test Director memory formatting
+        run: deno test supabase/functions/_shared/ownerMemory.test.ts

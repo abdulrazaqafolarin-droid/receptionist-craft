@@ -21,7 +21,7 @@ import { useBuildThreads } from "@/hooks/useBuildThreads";
 import { speakDirectorText, stopSpeaking, type DirectorVoiceProvider } from "@/utils/textToSpeech";
 import { parseLocalCommand, extractClickPhrase, extractMovementTarget, matchAnchorOrRoute, splitTargets } from "@/lib/directorLocalCommands";
 import { lookAtPage } from "@/components/DirectorHands";
-import { parseLiveTable, pickLiveCandidate, type LiveCandidate } from "@/lib/actorGuard";
+import { parseLiveTable, pickLiveCandidate, type ActorAction, type LiveCandidate } from "@/lib/actorGuard";
 import type { GrantScope } from "@/lib/directorGrantRules";
 import { retryDirectorJob, adjustDirectorOperator, draftDirectorHelper } from "@/lib/directorExecutors";
 import type { DirectorAction } from "../../supabase/functions/_shared/config/directorPrompt";
@@ -181,7 +181,7 @@ export function DirectorChat({
       // Reply-embedded cursor work: needs no second call, no extra key —
       // it rides the moment the owner taps. Same guard, receipts, stop.
       const steps = (Array.isArray(action.steps) ? action.steps : []).slice(0, 3);
-      const actorSteps = steps.flatMap((s) => {
+      const actorSteps = steps.flatMap<ActorAction>((s): ActorAction[] => {
         switch (s.op) {
           case "click": return s.target ? [{ type: "click" as const, target: s.target }] : [];
           case "point": return s.target ? [{ type: "point" as const, target: s.target }] : [];
