@@ -111,3 +111,48 @@ This is a filename/ledger comparison, not proof that all 29 migrations were or w
 ### Required reconciliation output
 
 For every row above, record one of: (a) verified already applied exactly, (b) partially applied / schema drift, or (c) not applied. Include evidence for each table, column, index, constraint, policy, grant, function, trigger and scheduled job. Only after this comparison should the team prepare a reconciliation migration or repair the ledger in an isolated environment. Never bulk-mark the 29 migrations as applied and never run `db push` against production while the classification is incomplete.
+
+
+## First-pass live-object reconciliation matrix (16 October 2026)
+
+This matrix records object-presence evidence from read-only catalog queries. **“Present” is not the same as “migration verified/applied”:** it only means the named object/feature was observed. Exact definitions, grants, trigger bodies, data backfills and dependency order still require migration-by-migration comparison before any ledger repair.
+
+| Migration | Live evidence observed | Preliminary classification | Remaining verification |
+|---|---|---|---|
+| `20260828000001` connector catalog read policy | `connector_definitions` exists and policy `Authenticated users can view connector catalog` exists for authenticated SELECT | Present, definition not fully compared | Compare policy predicate, grants and table schema to file |
+| `20260828000002` reasoning history column | `config_versions.reasoning_notes` exists | Present, definition not fully compared | Compare column type/default/comment and migration order |
+| `20260828000003` success signals | Table, both named indexes, RLS and owner policy observed | Present, definition not fully compared | Compare full columns, index predicates and policy expression |
+| `20260830000001` module action log | Table, named indexes and three named policies observed | Present, definition not fully compared | Compare columns, unique index and all policy expressions |
+| `20260830000002` owner-agent tables | All six tables (`owner_chat_messages`, `owner_proposals`, `config_reasoning_history`, `owner_autonomous_rules`, `owner_insights_log`, `explanation_cache`) and their RLS policies/indexes observed | Present, definition not fully compared | Compare all columns, constraints, grants and policies; verify migration dependency on the prior reasoning-history migration |
+| `20260924000001` organization RLS fix | Expected organization-aware receptionist/staff policy names observed | Present, definition not fully compared | Compare each USING/WITH CHECK expression and confirm obsolete policies were removed |
+| `20261002000001` widget surface RPC | `get_public_receptionist(uuid)` exists and returns `widget_surface` | Present, definition not fully compared | Compare full SQL body, grants and view/data exposure |
+| `20261006000001` async plan jobs | `plan_jobs`, queue/receptionist indexes, RLS policies, `claim_plan_job(text)` and `schedule_plan_worker_cron(text,text)` observed | Present, definition not fully compared | Compare function bodies, scheduler permissions, queue semantics and cron target |
+| `20261006000002` plan job lanes | `plan_jobs.lane`, lane constraint/index and `claim_plan_job(p_lane text)` observed | Present, definition not fully compared | Compare defaults, lane ordering/fallback behavior and function ACL |
+| `20261007000001` internal operator support | `services.expiry_date` and `receptionists_business_model_check` observed | Present, definition not fully compared | Compare constraint values and column defaults |
+| `20261007000002` build threads | `build_threads`, `build_messages`, indexes, trigger and owner RLS policies observed | Present, definition not fully compared | Compare FK definitions, trigger body, grants and policies |
+| `20261007000003` versioned manual saves | `revert_config_version(uuid,integer)` and `record_manual_version(uuid,text)` exist | Present, definition not fully compared; security issue tracked | Compare full function definitions and ACLs. The current rollback function lacks an explicit owner check; see [PR #56](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/56) |
+| `20261007000005` Director grants | `director_grants`, owner policy and scope constraint observed | Present, definition not fully compared | Compare policy, uniqueness and grants |
+| `20261007000006` Director threads | `director_threads`, `director_messages`, indexes, trigger and owner policies observed | Present, definition not fully compared | Compare FKs, trigger body and policies |
+| `20261007000007` Director actions | `director_actions`, index, owner policy and status/kind constraints observed | Present, definition not fully compared | Compare full columns, constraint values, policy and grants |
+| `20261007000008` bookkeeping scope | `director_grants.scope`, `allowed`, `note` and scope constraint observed | Present, definition not fully compared | Compare the exact ALTER statements and default/backfill behavior |
+| `20261007000009` Director sweep schedule | Scheduler function exists; active `director-sweep` cron job is present at `*/15 * * * *` | Present, runtime schedule observed | Compare job command/headers to migration intent; do not print bearer values into audit logs |
+| `20261007000010` Director activity | `director_activity`, index and owner read policy observed | Present, definition not fully compared | Compare column/FK definitions and policy |
+| `20261007000011` API-key vault | `api_keys`, `vault_audit_logs`, indexes and `vault_keys_safe` view observed; RLS is enabled and the base tables have no policies | Present, definition not fully compared | Compare view definition/owner semantics, effective grants and the intended single-account restriction |
+| `20261007000012` Director message metadata | `director_messages.metadata` exists | Present, definition not fully compared | Compare type/default and dependent client code |
+| `20261007000013` Director commands | `director_commands`, queue/user indexes, RLS and read/finish policies observed | Present, definition not fully compared | Compare table shape, claim/update policy expressions and grants |
+| `20261007000014` Director hands kind | `director_actions.kind` check constraint includes `hands` | Present, definition not fully compared | Compare all allowed values and any related code assumptions |
+| `20261007000015` companion devices | `companion_devices`, safe view, user/secret indexes, and `director_commands.device_id` plus its index observed | Present, definition not fully compared | Compare safe-view filtering/semantics, device grants, FKs and RLS |
+| `20261007000016` runner platform | `companion_devices_platform_check` includes `runner` | Present, constraint evidence observed | Compare exact platform list and migration precondition behavior |
+| `20261007000017` browser platform | `companion_devices_platform_check` includes `browser` as well as `runner` | Present, constraint evidence observed | Compare exact platform list and migration precondition behavior |
+| `20261007000018` Director requests | `director_requests`, user/status index, RLS and read/answer policies observed | Present, definition not fully compared | Compare all columns, expiry semantics and policy predicates |
+| `20261007000019` commands realtime | `director_commands` is a member of `supabase_realtime` publication | Present, publication evidence observed | Compare publication membership against the exact intended set |
+| `20261007000020` Director memory | No `public.director_memory` table was returned by the live catalog query | **Missing or renamed; likely not applied** | Verify no alternate table name/branch-specific replacement exists; inspect function dependencies before deciding whether to apply or repair |
+| `20261007000021` Director tasks | `director_tasks`, user index, RLS-enabled table observed; no client policies found | Present, server-only access appears intentional | Compare exact columns/FKs/ACLs. `pending_command` is absent and belongs to the separate PR #50 rollout, not this migration |
+
+### Reconciliation conclusion from this pass
+
+- Twenty-eight migrations have at least one expected object/feature observed, but **none is marked “verified already applied exactly”** from presence-only evidence.
+- `20261007000020_director_memory.sql` is the clear missing-object candidate in this pass; confirm there is no alternate/renamed implementation before classifying it as unapplied.
+- The active Director sweep cron job and realtime publication membership are runtime state, not proof that the corresponding migration ledger rows were recorded.
+- The table/function presence of the other Director migrations suggests manual or out-of-band schema changes may have occurred. Do not mark them applied until full DDL, policy, grants, triggers, indexes and backfills match.
+- This is still read-only evidence. No production DDL, data writes, ledger repair or deployment was performed.
