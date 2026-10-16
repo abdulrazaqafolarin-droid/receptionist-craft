@@ -521,7 +521,7 @@ export default function Widget() {
     }
 
     if (items) {
-      const serviceItems = items.filter((item) => item.duration_minutes > 0);
+      const serviceItems = items.filter((item) => typeof item.duration_minutes === "number" && item.duration_minutes > 0);
       const productItems = items.filter((item) => item.duration_minutes === 0 || item.is_product === true);
       setServices(serviceItems);
       setProducts(productItems);
@@ -612,7 +612,7 @@ export default function Widget() {
       setMessages(prev => [...prev, botMessage]);
     } catch (err) {
       console.error("Chat error:", err);
-      toast({ title: "Error", description: err.message || "Failed to send message", variant: "destructive" });
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to send message", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -679,8 +679,12 @@ export default function Widget() {
     }
   }
 
-  async function handleTimeSlotSelect(slot: { startTime?: string; start?: string; end: string; display: string; score?: number; reason?: string }) {
+  async function handleTimeSlotSelect(slot: { startTime?: string; start?: string; endTime?: string; end?: string; display?: string; score?: number; reason?: string }) {
     const startTime = slot.startTime || slot.start;
+    if (!startTime) {
+      toast({ title: "Time unavailable", description: "Please choose another available time.", variant: "destructive" });
+      return;
+    }
     setBookingState(prev => ({ 
       ...prev, 
       timeSlot: { ...slot, startTime }
@@ -849,7 +853,7 @@ export default function Widget() {
           hasExistingSession={showSessionOverlay}
           onContinue={handleContinueChat}
           onNewChat={handleNewChat}
-          businessName={receptionist.business_name}
+          businessName={receptionist?.business_name || undefined}
         />
         {/* Header */}
         <div 
