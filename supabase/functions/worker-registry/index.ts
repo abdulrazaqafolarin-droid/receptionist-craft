@@ -191,7 +191,7 @@ Deno.serve(async (req: Request) => {
         definition: parsed.value,
         version: Number(worker.version) + 1,
         updated_at: new Date().toISOString(),
-      }).eq("id", worker.id).eq("status", "draft")
+      }).eq("id", worker.id).eq("status", "draft").eq("version", worker.version)
         .select("id, organization_id, created_by, name, description, status, version, definition, created_at, updated_at").maybeSingle();
 
       if (error) return jsonRes({ ok: false, error: "worker_update_failed" }, 500, cors);
