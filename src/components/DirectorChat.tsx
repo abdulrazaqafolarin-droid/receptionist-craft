@@ -406,7 +406,9 @@ export function DirectorChat({
           : `Moved the cursor in a ${gesture.kind === "circle" ? "circle" : "wiggle"} around ${gesture.label}. No click or page action was performed.`;
         setMessages((prev) => [...prev, { role: "ai", content: reply, timestamp: new Date().toISOString() }]);
         if (tid) void saveMsg(tid, "assistant", reply);
-        if (voiceOn) void speakDirectorText(reply, voiceProvider).catch(() => {});
+        if (voiceOn) void speakDirectorText(reply, voiceProvider).catch(() => {
+          // Voice is best-effort; it must not change the action receipt.
+        });
       } catch {
         const reply = "I couldn't complete that cursor gesture. Nothing else was attempted.";
         setMessages((prev) => [...prev, { role: "ai", content: reply, timestamp: new Date().toISOString() }]);
