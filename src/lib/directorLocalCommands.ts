@@ -169,3 +169,40 @@ export function parseLocalCommand(text: string): LocalCommand | null {
   if (!phrase) return null;
   return matchAnchorOrRoute(phrase, false);
 }
+
+export type LocalGestureCommand = {
+  kind: "oscillate" | "circle";
+  target: string;
+  label: string;
+};
+
+/**
+ * Resolve explicit, anchored cursor gestures locally. The target must match
+ * a registered UI anchor; unanchored requests fall through to the Director
+ * so it can clarify rather than guessing where to move the cursor.
+ */
+export function parseLocalGestureCommand(text: string): LocalGestureCommand | null {
+  const clean = text.trim();
+  if (!clean || !/\b(cursor|mouse|pointer)\b/i.test(clean)) return null;
+
+  const verb = /\b(wiggle|wriggle|oscillate|circle)\b/i.exec(clean);
+  if (!verb || verb.index === undefined) return null;
+  if (NEGATION_RES.test(clean.slice(0, verb.index))) return null;
+
+  const kind = /^circle$/i.test(verb[0]) ? "circle" : "oscillate";
+  const remainder = clean.slice(verb.index + verb[0].length);
+  const targetMatch = /\b(?:at|around|over|on|near)\s+(?:the\s+)?(.+?)\s*$/i.exec(remainder);
+  if (!targetMatch) return null;
+
+  const targetPhrase = targetMatch[1]
+    .replace(TRAIL_FILLER_RES, "")
+    .replace(/[.!?]+$/, "")
+    .trim();
+  if (!targetPhrase) return null;
+
+  const target = matchAnchorOrRoute(targetPhrase, true);
+  // Gestures are anchored movement only. Never translate a route into a
+  // guessed DOM target, and never allow this parser to perform a click.
+  if (!target || target.kind !== "click") return null;
+  return { kind, target: target.target, label: target.label };
+}
