@@ -8,7 +8,7 @@ on:
       - "supabase/functions/_shared/directorTaskRequest.test.ts"
       - ".github/workflows/director-task-request.yml"
   push:
-    branches: [main]
+    branches: [main, fix/director-task-request-body]
     paths:
       - "supabase/functions/director-task/index.ts"
       - "supabase/functions/_shared/directorTaskRequest.ts"
