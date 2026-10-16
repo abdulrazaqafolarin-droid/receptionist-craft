@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BarChart, Home, Calendar, CalendarDays, MessageSquare, Settings, HelpCircle, ClipboardCheck, Lightbulb, Activity, Bell, Radio, Briefcase, MessageCircleQuestion, Building2, Plug, DollarSign, Users, UserCog, AlertTriangle, CreditCard, GitBranch, ChevronDown, Puzzle, Clock, Terminal } from "lucide-react";
+import { BarChart, Home, Calendar, CalendarDays, MessageSquare, Settings, HelpCircle, ClipboardCheck, Lightbulb, Activity, Bell, Radio, Briefcase, MessageCircleQuestion, Building2, Plug, DollarSign, Users, UserCog, AlertTriangle, CreditCard, GitBranch, ChevronDown, Puzzle, Clock, Terminal, Bot } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import rutexLogo from "@/assets/rutex-logo.jpg";
