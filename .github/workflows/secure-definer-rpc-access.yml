@@ -74,8 +74,8 @@ jobs:
           CREATE FUNCTION public.cleanup_old_chat_messages(integer) RETURNS integer LANGUAGE sql AS $$ SELECT 0 $$;
           CREATE FUNCTION public.cleanup_old_conversation_state(integer) RETURNS integer LANGUAGE sql AS $$ SELECT 0 $$;
           CREATE FUNCTION public.cleanup_old_conversations(integer) RETURNS integer LANGUAGE sql AS $$ SELECT 0 $$;
-          CREATE FUNCTION public.deduct_stock(uuid, integer) RETURNS jsonb LANGUAGE sql AS $$ SELECT '{}'::jsonb $$;
-          CREATE FUNCTION public.revert_config_version(uuid, integer) RETURNS jsonb LANGUAGE sql AS $$ SELECT '{}'::jsonb $$;
+          CREATE FUNCTION public.deduct_stock(p_product_id uuid, p_quantity integer) RETURNS jsonb LANGUAGE sql AS $ SELECT '{}'::jsonb $;
+          CREATE FUNCTION public.revert_config_version(p_receptionist_id uuid, p_target_version integer) RETURNS jsonb LANGUAGE sql AS $ SELECT '{}'::jsonb $;
           CREATE FUNCTION public.record_manual_version(uuid, text) RETURNS jsonb LANGUAGE sql AS $$ SELECT '{}'::jsonb $$;
           GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO PUBLIC;
           GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
