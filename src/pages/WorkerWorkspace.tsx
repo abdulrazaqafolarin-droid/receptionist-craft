@@ -38,6 +38,7 @@ interface WorkerDetails {
   updated_at: string;
   published_at: string | null;
   archived_at: string | null;
+  permissions?: { can_edit: boolean; can_archive: boolean };
 }
 
 export default function WorkerWorkspace() {
@@ -68,7 +69,7 @@ export default function WorkerWorkspace() {
       if (error || !data?.ok || !data.worker) {
         throw new Error(data?.error || error?.message || "Unable to load this worker.");
       }
-      const record = data.worker as WorkerDetails;
+      const record = { ...(data.worker as WorkerDetails), permissions: data.permissions };
       setWorker(record);
       setName(record.name);
       setDescription(record.description || "");
@@ -104,7 +105,9 @@ export default function WorkerWorkspace() {
       if (error || !data?.ok || !data.worker) {
         throw new Error(data?.error || error?.message || "Unable to save worker draft.");
       }
-      setWorker(data.worker as WorkerDetails);
+      setWorker((current) => current
+        ? { ...(data.worker as WorkerDetails), permissions: current.permissions }
+        : data.worker as WorkerDetails);
       toast.success("Worker draft saved.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save worker draft.");
@@ -178,7 +181,7 @@ export default function WorkerWorkspace() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {worker.status === "draft" ? (
+            {worker.status === "draft" && worker.permissions?.can_edit ? (
               <form className="space-y-4" onSubmit={saveDraft}>
                 <div className="space-y-2">
                   <Label htmlFor="workspace-worker-name">Worker name</Label>
@@ -200,7 +203,7 @@ export default function WorkerWorkspace() {
             ) : (
               <div className="space-y-4">
                 <p className="text-sm">{definition.purpose || "No purpose recorded."}</p>
-                <p className="text-sm text-muted-foreground">This worker is not editable in place because it is no longer a draft. Versioned active-worker updates will be added with the verification pipeline.</p>
+                <p className="text-sm text-muted-foreground">{worker.status !== "draft" ? "This worker is not editable in place because it is no longer a draft. Versioned updates will be added with the verification pipeline." : "You have read-only access to this organization's worker. Ask its creator or an organization administrator to make changes."}</p>
               </div>
             )}
           </CardContent>
@@ -257,7 +260,7 @@ export default function WorkerWorkspace() {
           <p className="text-sm text-muted-foreground">
             This worker is a persistent, validated draft. It will not run tasks yet. The next implementation stage connects the Director to the durable task queue, approvals, checkpoints and evidence-based completion.
           </p>
-          {worker.status !== "archived" && (
+          {worker.status !== "archived" && worker.permissions?.can_archive && (
             <Button variant="outline" onClick={archiveWorker} disabled={archiving}>
               {archiving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
               Archive worker
