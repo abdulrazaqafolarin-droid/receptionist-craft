@@ -115,6 +115,8 @@ export default function WorkerWorkspace() {
 
   async function archiveWorker() {
     if (!worker) return;
+    const confirmed = window.confirm(`Archive "${worker.name}"? This hides it from the active worker list and cannot be undone in this draft version.`);
+    if (!confirmed) return;
     setArchiving(true);
     try {
       const { data, error } = await supabase.functions.invoke("worker-registry", {
