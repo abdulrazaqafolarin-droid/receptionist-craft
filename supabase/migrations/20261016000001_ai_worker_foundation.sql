@@ -40,7 +40,7 @@ ALTER TABLE public.ai_workers ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "ai workers visible to creator or joined org members" ON public.ai_workers;
 CREATE POLICY "ai workers visible to creator or joined org members"
-  ON public.ai_workers FOR SELECT
+  ON public.ai_workers FOR SELECT TO authenticated
   USING (
     (organization_id IS NULL AND created_by = auth.uid())
     OR (
@@ -57,7 +57,7 @@ CREATE POLICY "ai workers visible to creator or joined org members"
 
 DROP POLICY IF EXISTS "users create own workers in permitted scope" ON public.ai_workers;
 CREATE POLICY "users create own workers in permitted scope"
-  ON public.ai_workers FOR INSERT
+  ON public.ai_workers FOR INSERT TO authenticated
   WITH CHECK (
     created_by = auth.uid()
     AND (
@@ -75,7 +75,7 @@ CREATE POLICY "users create own workers in permitted scope"
 
 DROP POLICY IF EXISTS "creators or org admins update workers" ON public.ai_workers;
 CREATE POLICY "creators or org admins update workers"
-  ON public.ai_workers FOR UPDATE
+  ON public.ai_workers FOR UPDATE TO authenticated
   USING (
     (organization_id IS NULL AND created_by = auth.uid())
     OR (
@@ -107,7 +107,7 @@ CREATE POLICY "creators or org admins update workers"
 
 DROP POLICY IF EXISTS "creators or org admins delete workers" ON public.ai_workers;
 CREATE POLICY "creators or org admins delete workers"
-  ON public.ai_workers FOR DELETE
+  ON public.ai_workers FOR DELETE TO authenticated
   USING (
     (created_by = auth.uid() AND organization_id IS NULL)
     OR (
@@ -128,7 +128,6 @@ CREATE POLICY "creators or org admins delete workers"
 CREATE TABLE IF NOT EXISTS public.ai_worker_tasks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   worker_id uuid NOT NULL REFERENCES public.ai_workers(id) ON DELETE CASCADE,
-  organization_id uuid REFERENCES public.organizations(id) ON DELETE CASCADE,
   created_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   title text NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 200),
   goal text NOT NULL,
@@ -149,9 +148,6 @@ CREATE INDEX IF NOT EXISTS idx_ai_worker_tasks_creator_updated
   ON public.ai_worker_tasks(created_by, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_worker_tasks_worker_status
   ON public.ai_worker_tasks(worker_id, status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_ai_worker_tasks_org_updated
-  ON public.ai_worker_tasks(organization_id, updated_at DESC)
-  WHERE organization_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_ai_worker_tasks_queue
   ON public.ai_worker_tasks(status, created_at)
   WHERE status IN ('queued', 'waiting_approval');
@@ -159,24 +155,37 @@ CREATE INDEX IF NOT EXISTS idx_ai_worker_tasks_queue
 ALTER TABLE public.ai_worker_tasks ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "worker tasks visible to creator or joined org members" ON public.ai_worker_tasks;
-CREATE POLICY "worker tasks visible to creator or joined org members"
-  ON public.ai_worker_tasks FOR SELECT
+CREATE POLICY "worker tasks visible through worker access"
+  ON public.ai_worker_tasks FOR SELECT TO authenticated
   USING (
-    created_by = auth.uid()
-    OR (
-      organization_id IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM public.organization_members om
-        WHERE om.organization_id = ai_worker_tasks.organization_id
-          AND om.user_id = auth.uid()
-          AND om.joined_at IS NOT NULL
-      )
+    EXISTS (
+      SELECT 1
+      FROM public.ai_workers w
+      WHERE w.id = ai_worker_tasks.worker_id
+        AND (
+          (w.organization_id IS NULL AND w.created_by = (select auth.uid()))
+          OR (
+            w.organization_id IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM public.organization_members om
+              WHERE om.organization_id = w.organization_id
+                AND om.user_id = (select auth.uid())
+                AND om.joined_at IS NOT NULL
+            )
+          )
+        )
     )
   );
 
 -- No INSERT/UPDATE/DELETE policies on ai_worker_tasks by design.
 -- Trusted service-role Edge Functions own state transitions and outputs.
+
+-- Explicit API grants are still required even when RLS policies exist.
+-- No anon grants are made; RLS controls which authenticated rows are visible.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.ai_workers TO authenticated;
+GRANT SELECT ON public.ai_worker_tasks TO authenticated;
+GRANT ALL ON public.ai_workers, public.ai_worker_tasks TO service_role;
 
 COMMENT ON TABLE public.ai_workers IS
   'Persistent general-purpose AI Worker definitions; distinct from customer-facing receptionists.';
