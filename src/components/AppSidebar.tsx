@@ -42,6 +42,10 @@ const groups = [
     ],
   },
   {
+    label: "AI Workers",
+    items: [{ title: "AI Workers", url: "/workers", icon: Bot }],
+  },
+  {
     label: "Conversations",
     items: [
       { title: "Conversations", url: "/conversations", icon: MessageSquare },
