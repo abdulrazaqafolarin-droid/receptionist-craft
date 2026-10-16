@@ -1,0 +1,57 @@
+name: Widget appointment RPC access
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/*widget_appointment_rpc_access.sql"
+      - "supabase/tests/widget_appointment_rpc_access.sql"
+      - ".github/workflows/widget-appointment-rpc-access.yml"
+  push:
+    branches: [main, fix/widget-appointment-rpc-access]
+    paths:
+      - "supabase/migrations/*widget_appointment_rpc_access.sql"
+      - "supabase/tests/widget_appointment_rpc_access.sql"
+      - ".github/workflows/widget-appointment-rpc-access.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  appointment-rpc-access:
+    runs-on: ubuntu-latest
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: rutex_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and start PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql postgresql-client
+          sudo service postgresql start
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          sudo -u postgres createdb rutex_test
+      - name: Create representative RPC schema
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          CREATE FUNCTION public.create_widget_appointment(
+            p_receptionist_id uuid, p_customer_name text, p_service text,
+            p_start_time timestamptz, p_end_time timestamptz,
+            p_customer_email text DEFAULT NULL, p_customer_phone text DEFAULT NULL,
+            p_service_id uuid DEFAULT NULL, p_notes text DEFAULT NULL,
+            p_booking_source text DEFAULT 'ai_receptionist',
+            p_idempotency_key text DEFAULT NULL, p_metadata jsonb DEFAULT '{}'::jsonb
+          ) RETURNS TABLE(id uuid, cancellation_token text, confirmation_token text)
+          LANGUAGE sql AS $$ SELECT gen_random_uuid(), 'cancel', 'confirm' $$;
+          GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO PUBLIC;
+          SQL
+      - name: Apply appointment RPC access migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261016000005_widget_appointment_rpc_access.sql
+      - name: Assert client roles cannot bypass server booking flow
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/widget_appointment_rpc_access.sql
