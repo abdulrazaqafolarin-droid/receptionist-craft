@@ -381,6 +381,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
           setTimeout(() => {
             if (alive) {
               setArriving(false);
+              pointRef.current = null;
               setPoint(null);
             }
           }, 1600);
@@ -617,6 +618,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
   }, [navigate, follow, goHome]);
 
   const clear = useCallback(() => {
+    pointRef.current = null;
     setPoint(null);
     setSwallow(false);
     setArriving(false);
