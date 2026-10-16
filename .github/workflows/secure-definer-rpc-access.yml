@@ -19,20 +19,6 @@ permissions:
 jobs:
   security-definer-rpc-access:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: rutex_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d rutex_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --retries 10
     env:
       PGHOST: localhost
       PGPORT: 5432
@@ -41,8 +27,13 @@ jobs:
       PGDATABASE: rutex_test
     steps:
       - uses: actions/checkout@v4
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+      - name: Install and start PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql postgresql-client
+          sudo service postgresql start
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          sudo -u postgres createdb rutex_test
       - name: Create minimal representative schema
         run: |
           psql -v ON_ERROR_STOP=1 <<'SQL'
