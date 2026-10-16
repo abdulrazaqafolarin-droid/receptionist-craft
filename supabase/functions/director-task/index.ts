@@ -33,6 +33,7 @@ import {
   type TaskStep,
 } from "../_shared/directorTask.ts";
 import { ledgerStart, ledgerFinish } from "../_shared/directorLedger.ts";
+import { parseDirectorTaskBody } from "../_shared/directorTaskRequest.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -94,14 +95,16 @@ serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
 
+    // Parse the body once. Request bodies are streams and cannot be
+    // consumed twice; gateway identity and task action share this object.
+    const body = await parseDirectorTaskBody(req);
+
     // Identity: gateway key first, session JWT second. Body never decides.
     let user_id = "";
     const gwPresented = req.headers.get("X-Gateway-Key") || "";
     const gwExpected = Deno.env.get("RUTEX_GATEWAY_KEY") || "";
     if (gwPresented && keysEqual(gwPresented, gwExpected)) {
-      const b = await req.json().catch(() => ({}));
-      user_id = typeof (b as Record<string, unknown>).user_id === "string"
-        ? ((b as Record<string, unknown>).user_id as string) : "";
+      user_id = typeof body.user_id === "string" ? body.user_id : "";
       if (!user_id) return jsonRes({ ok: false, error: "user_id required" }, 400);
     } else {
       const authHeader = req.headers.get("Authorization") || "";
@@ -110,7 +113,6 @@ serve(async (req) => {
       if (authError || !user) return jsonRes({ ok: false, error: "invalid token" }, 401);
       user_id = user.id;
     }
-    const body = await req.json().catch(() => ({}));
     const action = typeof body.action === "string" ? body.action : "start";
 
     const loadTask = async (id: string): Promise<TaskRow | null> => {

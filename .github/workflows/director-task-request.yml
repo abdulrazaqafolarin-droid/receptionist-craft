@@ -1,0 +1,34 @@
+name: Director task request parsing
+
+on:
+  pull_request:
+    paths:
+      - "supabase/functions/director-task/index.ts"
+      - "supabase/functions/_shared/directorTaskRequest.ts"
+      - "supabase/functions/_shared/directorTaskRequest.test.ts"
+      - ".github/workflows/director-task-request.yml"
+  push:
+    branches: [main, fix/director-task-request-body]
+    paths:
+      - "supabase/functions/director-task/index.ts"
+      - "supabase/functions/_shared/directorTaskRequest.ts"
+      - "supabase/functions/_shared/directorTaskRequest.test.ts"
+      - ".github/workflows/director-task-request.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  request-parser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check request parser and tests
+        run: deno check supabase/functions/_shared/directorTaskRequest.ts supabase/functions/_shared/directorTaskRequest.test.ts
+      - name: Run request parsing regression tests
+        run: deno test supabase/functions/_shared/directorTaskRequest.test.ts
+      - name: Type-check Director task Edge Function
+        run: deno check supabase/functions/director-task/index.ts
