@@ -9,7 +9,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseWorkerDefinition } from "../_shared/workerContract.ts";
-import { canArchiveWorker, canCreateOrganizationWorker, canEditWorker } from "../_shared/workerAccess.ts";
+import { canArchiveWorker, canCreateOrganizationWorker, canEditWorker, canReadWorker } from "../_shared/workerAccess.ts";
 
 type JsonRecord = Record<string, unknown>;
 type ServiceClient = any;
@@ -75,6 +75,11 @@ interface WorkerRow {
   description: string;
   status: string;
   version: number;
+  definition: unknown;
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+  archived_at: string | null;
 }
 
 async function workerForUser(
@@ -83,7 +88,7 @@ async function workerForUser(
 ): Promise<WorkerRow | null> {
   const { data, error } = await service
     .from("ai_workers")
-    .select("id, organization_id, created_by, name, description, status, version")
+    .select("id, organization_id, created_by, name, description, status, version, definition, created_at, updated_at, published_at, archived_at")
     .eq("id", workerId)
     .maybeSingle();
   if (error) throw new Error("worker_lookup_failed");
