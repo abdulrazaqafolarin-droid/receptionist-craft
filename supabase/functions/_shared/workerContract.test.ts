@@ -88,3 +88,15 @@ Deno.test("rejects unsupported actions instead of trusting model output", () => 
     assert(result.errors.some((e) => e.code === "unsupported_action"), "unsupported action is reported");
   }
 });
+
+Deno.test("rejects secret-like values in worker definitions", () => {
+  const definition = validDefinition();
+  const providerPrefix = ["sk", "live"].join("_") + "_";
+  const credentialLike = providerPrefix + ["abcdefghijkl", "mnopqrstuvwx"].join("");
+  definition.purpose = `Use this provider key ${credentialLike} for the task`;
+  const result = parseWorkerDefinition(definition);
+  assert(!result.ok, "credentials must not be stored in a worker definition");
+  if (!result.ok) {
+    assert(result.errors.some((e) => e.code === "secret_like_value"), "secret-like value is rejected");
+  }
+});
