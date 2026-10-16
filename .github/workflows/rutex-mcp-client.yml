@@ -1,0 +1,30 @@
+name: Rutex Gateway MCP client regression
+
+on:
+  pull_request:
+    paths:
+      - "supabase/functions/_shared/rutexMcp.ts"
+      - "supabase/functions/_shared/rutexMcp.test.ts"
+      - ".github/workflows/rutex-mcp-client.yml"
+  push:
+    branches: [main, fix/rutex-mcp-response-timeout]
+    paths:
+      - "supabase/functions/_shared/rutexMcp.ts"
+      - "supabase/functions/_shared/rutexMcp.test.ts"
+      - ".github/workflows/rutex-mcp-client.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  rutex-mcp-client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check Rutex Gateway MCP client and tests
+        run: deno check supabase/functions/_shared/rutexMcp.ts supabase/functions/_shared/rutexMcp.test.ts
+      - name: Test gateway response parsing, stable conversation ID, auth header, and response-body timeout
+        run: deno test --allow-env supabase/functions/_shared/rutexMcp.test.ts
