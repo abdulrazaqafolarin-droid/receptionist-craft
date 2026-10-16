@@ -130,7 +130,7 @@ Deno.serve(async (req: Request) => {
         }
         organizationId = body.organization_id;
         const membership = await activeMembership(service, organizationId, user.id);
-        if (!membership || !["owner", "admin", "member"].includes(membership.role)) {
+        if (!canCreateOrganizationWorker(membership)) {
           return jsonRes({ ok: false, error: "organization_access_denied" }, 403, cors);
         }
       }
