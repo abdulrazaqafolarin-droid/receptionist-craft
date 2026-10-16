@@ -7,7 +7,7 @@ on:
       - "supabase/tests/secure_definer_rpc_access.sql"
       - ".github/workflows/secure-definer-rpc-access.yml"
   push:
-    branches: [main]
+    branches: [main, fix/security-definer-rpc-access]
     paths:
       - "supabase/migrations/*secure_definer_rpc_access.sql"
       - "supabase/tests/secure_definer_rpc_access.sql"
