@@ -13,8 +13,8 @@ VALUES
 
 DO $$
 DECLARE
-  order_id uuid;
-  second_order_id uuid;
+  v_order_id uuid;
+  second_v_order_id uuid;
   total numeric;
   item_name text;
   item_price numeric;
@@ -25,26 +25,26 @@ BEGIN
     RAISE EXCEPTION 'widget order RPC must remain available to public widget roles';
   END IF;
 
-  order_id := public.create_widget_order(
+  v_order_id := public.create_widget_order(
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     'Customer',
     '[{"product_id":"11111111-1111-4111-8111-111111111111","product_name":"FAKE NAME","quantity":2,"unit_price":0.01}]'::jsonb,
     NULL, NULL, NULL, '{}'::jsonb, 'order-key-a'
   );
 
-  SELECT total_amount INTO total FROM public.orders WHERE id = order_id;
-  SELECT product_name, unit_price INTO item_name, item_price FROM public.order_items WHERE order_id = order_id;
+  SELECT total_amount INTO total FROM public.orders WHERE id = v_order_id;
+  SELECT product_name, unit_price INTO item_name, item_price FROM public.order_items WHERE public.order_items.order_id = v_order_id;
   IF total <> 25.00 OR item_name <> 'Owner A Product' OR item_price <> 12.50 THEN
     RAISE EXCEPTION 'server catalog name and price must override client values';
   END IF;
 
-  second_order_id := public.create_widget_order(
+  second_v_order_id := public.create_widget_order(
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     'Customer',
     '[{"product_id":"11111111-1111-4111-8111-111111111111","quantity":2,"unit_price":999}]'::jsonb,
     NULL, NULL, NULL, '{}'::jsonb, 'order-key-a'
   );
-  IF second_order_id <> order_id THEN
+  IF v_second_order_id <> v_order_id THEN
     RAISE EXCEPTION 'same receptionist idempotency key must return existing order';
   END IF;
 
