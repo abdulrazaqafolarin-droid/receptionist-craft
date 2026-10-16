@@ -176,5 +176,6 @@ GRANT EXECUTE ON FUNCTION public.revert_config_version(uuid, integer) TO authent
 
 -- This helper already checks auth.uid() against the receptionist owner. Keep
 -- it callable only by signed-in users rather than exposing it as a public RPC.
+ALTER FUNCTION public.record_manual_version(uuid, text) SET search_path = public;
 REVOKE ALL ON FUNCTION public.record_manual_version(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.record_manual_version(uuid, text) TO authenticated;
