@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Bot, Loader2, Save, Archive, ShieldCheck, Plug, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { starterWorkerDefinition } from "@/lib/workerDefinition";
+import { updateWorkerPurpose } from "@/lib/workerDefinition";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -98,7 +98,7 @@ export default function WorkerWorkspace() {
           worker_id: worker.id,
           name: name.trim(),
           description: description.trim(),
-          definition: starterWorkerDefinition(purpose.trim()),
+          definition: updateWorkerPurpose(worker.definition, purpose.trim()),
         },
       });
       if (error || !data?.ok || !data.worker) {
