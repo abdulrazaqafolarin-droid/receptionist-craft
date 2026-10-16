@@ -12,7 +12,9 @@ This document describes the first persistence slice for the general-purpose AI W
 - **Director browser/device tasks** remain in `director_tasks` until the existing lane is deliberately adapted through a shared execution contract.
 - **Receptionist planning jobs** remain in `plan_jobs`; they are not general worker runs.
 
-## First persistence slice
+## First implementation slice
+
+The `worker-registry` Edge Function now provides authenticated `create_draft`, `update_draft`, and `archive` actions. It validates worker definitions, derives the actor from a verified bearer token, checks active organization membership, uses optimistic version checks for draft edits, and deliberately does not expose a publish/activate action before a test-and-verification pipeline exists. Browser reads remain governed by RLS.
 
 Migration `20261016000001_ai_worker_foundation.sql` adds:
 
@@ -54,13 +56,12 @@ The service layer must still validate that a task's `worker_id` belongs to the s
 
 ## Next implementation stages
 
-1. Generate/update Supabase TypeScript types from the migration and validate the migration against a disposable development database.
-2. Add a server-side worker service with organization-scope validation and explicit lifecycle transitions.
-3. Implement worker creation from a validated specification; initially support draft/configuration workers before arbitrary code execution.
-4. Add a dedicated worker registry and workspace with task queue, task detail, approvals, outputs, history and settings.
-5. Connect Director planning/building to this lifecycle using durable jobs and checkpoint/resume.
-6. Add tests for personal and organization isolation, role permissions, task transitions, approval enforcement, idempotency and recovery.
-7. Only after those checks, evaluate deployment targets beyond the initial Rutex-managed runtime.
+1. Generate/update Supabase TypeScript types from the validated migration and compare the repository schema against the live project.
+2. Extend lifecycle validation with action audit records, rate limits and explicit worker-version semantics.
+3. Add a dedicated worker registry and workspace with task queue, task detail, approvals, outputs, history and settings.
+4. Connect Director planning/building to this lifecycle using durable jobs and checkpoint/resume.
+5. Add integration tests for the live Edge Function's authorization paths, rate limits, task transitions, approval enforcement, idempotency and recovery.
+6. Only after those checks, evaluate deployment targets beyond the initial Rutex-managed runtime.
 
 ## Deliberately out of scope for this slice
 
