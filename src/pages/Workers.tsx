@@ -71,11 +71,11 @@ export default function Workers() {
       if (!user) return;
       const { data: memberships, error: membershipError } = await supabase
         .from("organization_members")
-        .select("organization_id")
+        .select("organization_id, role")
         .eq("user_id", user.id)
         .not("joined_at", "is", null);
       if (membershipError || !memberships?.length) return;
-      const ids = [...new Set(memberships.map((membership) => membership.organization_id))];
+      const ids = [...new Set(memberships.filter((membership) => ["owner", "admin", "member"].includes(membership.role)).map((membership) => membership.organization_id))];
       const { data, error } = await supabase.from("organizations").select("id, name").in("id", ids);
       if (error) throw error;
       setOrganizations((data || []) as OrganizationOption[]);
