@@ -61,8 +61,9 @@ async function activeMembership(
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw new Error("membership_lookup_failed");
-  if (!data || !data.joined_at) return null;
-  return { role: String(data.role) };
+  const membership = data as { role: string; joined_at: string | null } | null;
+  if (!membership || !membership.joined_at) return null;
+  return { role: String(membership.role) };
 }
 
 async function workerForUser(
