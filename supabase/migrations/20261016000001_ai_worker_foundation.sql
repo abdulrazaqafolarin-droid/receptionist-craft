@@ -42,7 +42,7 @@ DROP POLICY IF EXISTS "ai workers visible to creator or joined org members" ON p
 CREATE POLICY "ai workers visible to creator or joined org members"
   ON public.ai_workers FOR SELECT
   USING (
-    created_by = auth.uid()
+    (organization_id IS NULL AND created_by = auth.uid())
     OR (
       organization_id IS NOT NULL
       AND EXISTS (
@@ -77,7 +77,7 @@ DROP POLICY IF EXISTS "creators or org admins update workers" ON public.ai_worke
 CREATE POLICY "creators or org admins update workers"
   ON public.ai_workers FOR UPDATE
   USING (
-    created_by = auth.uid()
+    (organization_id IS NULL AND created_by = auth.uid())
     OR (
       organization_id IS NOT NULL
       AND EXISTS (
@@ -86,22 +86,12 @@ CREATE POLICY "creators or org admins update workers"
         WHERE om.organization_id = ai_workers.organization_id
           AND om.user_id = auth.uid()
           AND om.joined_at IS NOT NULL
-          AND om.role IN ('owner', 'admin')
+          AND (om.role IN ('owner', 'admin') OR ai_workers.created_by = auth.uid())
       )
     )
   )
   WITH CHECK (
-    created_by = auth.uid()
-    AND (
-      organization_id IS NULL
-      OR EXISTS (
-        SELECT 1
-        FROM public.organization_members om
-        WHERE om.organization_id = ai_workers.organization_id
-          AND om.user_id = auth.uid()
-          AND om.joined_at IS NOT NULL
-      )
-    )
+    (organization_id IS NULL AND created_by = auth.uid())
     OR (
       organization_id IS NOT NULL
       AND EXISTS (
@@ -110,7 +100,7 @@ CREATE POLICY "creators or org admins update workers"
         WHERE om.organization_id = ai_workers.organization_id
           AND om.user_id = auth.uid()
           AND om.joined_at IS NOT NULL
-          AND om.role IN ('owner', 'admin')
+          AND (om.role IN ('owner', 'admin') OR ai_workers.created_by = auth.uid())
       )
     )
   );
