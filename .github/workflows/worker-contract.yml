@@ -66,3 +66,21 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/ai_worker_foundation_rls.sql
+
+  frontend-worker-ui:
+    name: Build worker registry UI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build application
+        run: npm run build
+      - name: Lint worker UI
+        run: npx eslint src/pages/Workers.tsx src/pages/WorkerWorkspace.tsx src/lib/workerDefinition.ts
