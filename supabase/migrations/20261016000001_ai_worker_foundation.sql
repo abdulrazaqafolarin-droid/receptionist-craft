@@ -55,73 +55,9 @@ CREATE POLICY "ai workers visible to creator or joined org members"
     )
   );
 
-DROP POLICY IF EXISTS "users create own workers in permitted scope" ON public.ai_workers;
-CREATE POLICY "users create own workers in permitted scope"
-  ON public.ai_workers FOR INSERT TO authenticated
-  WITH CHECK (
-    created_by = auth.uid()
-    AND (
-      organization_id IS NULL
-      OR EXISTS (
-        SELECT 1
-        FROM public.organization_members om
-        WHERE om.organization_id = ai_workers.organization_id
-          AND om.user_id = auth.uid()
-          AND om.joined_at IS NOT NULL
-          AND om.role IN ('owner', 'admin', 'member')
-      )
-    )
-  );
-
-DROP POLICY IF EXISTS "creators or org admins update workers" ON public.ai_workers;
-CREATE POLICY "creators or org admins update workers"
-  ON public.ai_workers FOR UPDATE TO authenticated
-  USING (
-    (organization_id IS NULL AND created_by = auth.uid())
-    OR (
-      organization_id IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM public.organization_members om
-        WHERE om.organization_id = ai_workers.organization_id
-          AND om.user_id = auth.uid()
-          AND om.joined_at IS NOT NULL
-          AND (om.role IN ('owner', 'admin') OR ai_workers.created_by = auth.uid())
-      )
-    )
-  )
-  WITH CHECK (
-    (organization_id IS NULL AND created_by = auth.uid())
-    OR (
-      organization_id IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM public.organization_members om
-        WHERE om.organization_id = ai_workers.organization_id
-          AND om.user_id = auth.uid()
-          AND om.joined_at IS NOT NULL
-          AND (om.role IN ('owner', 'admin') OR ai_workers.created_by = auth.uid())
-      )
-    )
-  );
-
-DROP POLICY IF EXISTS "creators or org admins delete workers" ON public.ai_workers;
-CREATE POLICY "creators or org admins delete workers"
-  ON public.ai_workers FOR DELETE TO authenticated
-  USING (
-    (created_by = auth.uid() AND organization_id IS NULL)
-    OR (
-      organization_id IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM public.organization_members om
-        WHERE om.organization_id = ai_workers.organization_id
-          AND om.user_id = auth.uid()
-          AND om.joined_at IS NOT NULL
-          AND om.role IN ('owner', 'admin')
-      )
-    )
-  );
+-- No direct INSERT/UPDATE/DELETE policies on ai_workers by design.
+-- Worker creation, definition edits, publishing and lifecycle transitions must
+-- pass through trusted Edge Functions that validate the worker contract.
 
 -- Execution records are server-managed so browser clients cannot mark work done,
 -- change outputs, or bypass approvals by writing task status directly.
@@ -183,7 +119,7 @@ CREATE POLICY "worker tasks visible through worker access"
 
 -- Explicit API grants are still required even when RLS policies exist.
 -- No anon grants are made; RLS controls which authenticated rows are visible.
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.ai_workers TO authenticated;
+GRANT SELECT ON public.ai_workers TO authenticated;
 GRANT SELECT ON public.ai_worker_tasks TO authenticated;
 GRANT ALL ON public.ai_workers, public.ai_worker_tasks TO service_role;
 
