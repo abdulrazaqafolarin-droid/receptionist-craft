@@ -31,7 +31,7 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres -d rutex_test"
           --health-interval 5s
-          --timeout 5s
+          --health-timeout 5s
           --retries 10
     env:
       PGHOST: localhost
