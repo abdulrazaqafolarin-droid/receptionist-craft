@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
 import { useBuildThreads } from "@/hooks/useBuildThreads";
 import { speakDirectorText, stopSpeaking, type DirectorVoiceProvider } from "@/utils/textToSpeech";
-import { parseLocalCommand, extractClickPhrase, extractMovementTarget, matchAnchorOrRoute, splitTargets } from "@/lib/directorLocalCommands";
+import { parseLocalCommand, parseLocalGestureCommand, extractClickPhrase, extractMovementTarget, matchAnchorOrRoute, splitTargets } from "@/lib/directorLocalCommands";
 import { lookAtPage } from "@/components/DirectorHands";
 import { parseLiveTable, pickLiveCandidate, type ActorAction, type LiveCandidate } from "@/lib/actorGuard";
 import type { GrantScope } from "@/lib/directorGrantRules";
@@ -390,6 +390,33 @@ export function DirectorChat({
       threadIdRef.current = tid;
       void saveMsg(tid, "user", content);
     }
+    // Explicit anchored cursor gestures are safe local actions: the shared
+    // parser resolves only registered anchors and the runner re-checks all
+    // gesture bounds. Unanchored requests go to the Director for clarification.
+    const gesture = parseLocalGestureCommand(content);
+    if (gesture) {
+      try {
+        const receipts = await ride.start(
+          [{ type: "gesture", kind: gesture.kind, target: gesture.target }],
+          { tour: "director-local-gesture", userId, pace: "human" },
+        );
+        const receipt = receipts.find((item) => !item.ok);
+        const reply = receipt
+          ? `I couldn't complete that cursor gesture on ${gesture.label}: ${receipt.detail}.`
+          : `Moved the cursor in a ${gesture.kind === "circle" ? "circle" : "wiggle"} around ${gesture.label}. No click or page action was performed.`;
+        setMessages((prev) => [...prev, { role: "ai", content: reply, timestamp: new Date().toISOString() }]);
+        if (tid) void saveMsg(tid, "assistant", reply);
+        if (voiceOn) void speakDirectorText(reply, voiceProvider).catch(() => {});
+      } catch {
+        const reply = "I couldn't complete that cursor gesture. Nothing else was attempted.";
+        setMessages((prev) => [...prev, { role: "ai", content: reply, timestamp: new Date().toISOString() }]);
+        if (tid) void saveMsg(tid, "assistant", reply);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     // Strict lanes first (fed commands), then the understanding lane:
     // a movement verb ANYWHERE resolves through the same snapshot,
     // anchors, and routes — natural phrasing moves the cursor too.
