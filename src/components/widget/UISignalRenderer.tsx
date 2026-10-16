@@ -56,8 +56,8 @@ export interface UISignal {
 
 interface Props {
   signal: UISignal | null;
-  services: Array<{ id: string; name: string; duration_minutes?: number; price?: number }>;
-  products: Array<{ id: string; name: string; price?: number; stock_quantity?: number }>;
+  services: Array<{ id: string; name: string; duration_minutes?: number | null; price?: number | null }>;
+  products: Array<{ id: string; name: string; price?: number | null; stock_quantity?: number | null }>;
   loading: boolean;
   onServiceSelect: (serviceId: string, serviceName: string) => void;
   onProductsConfirm: (selectedProducts: Array<{ productId: string; productName: string; quantity: number; price?: number }>) => void;
