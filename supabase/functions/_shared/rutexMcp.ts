@@ -48,12 +48,12 @@ async function rpc<T = Record<string, unknown>>(
     // Keep the abort timer active through response-body consumption and JSON
     // parsing. Clearing it as soon as fetch() returned headers meant a stalled
     // MCP/SSE body could hang the caller forever despite the configured timeout.
-    const res = await fetch(\`\${url}/mcp\`, {
+    const res = await fetch(`${url}/mcp`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json, text/event-stream",
-        Authorization: \`Bearer \${key}\`,
+        Authorization: `Bearer ${key}`,
       },
       body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method, params: params ?? {} }),
       signal: ctrl.signal,
@@ -63,7 +63,7 @@ async function rpc<T = Record<string, unknown>>(
     // Include a body preview: tunnel error pages come back as non-JSON HTML.
     if (!res.ok) {
       const preview = (await res.text()).slice(0, 120).replace(/\s+/g, " ");
-      throw new RutexMcpError(\`gateway http_\${res.status} :: \${preview}\`, "protocol");
+      throw new RutexMcpError(`gateway http_${res.status} :: ${preview}`, "protocol");
     }
 
     // Response may be plain JSON or SSE-framed; normalize to text then parse.
@@ -74,14 +74,14 @@ async function rpc<T = Record<string, unknown>>(
     try {
       msg = JSON.parse(payload);
     } catch {
-      throw new RutexMcpError(\`unparseable gateway response: \${payload.slice(0, 200)}\`, "protocol");
+      throw new RutexMcpError(`unparseable gateway response: ${payload.slice(0, 200)}`, "protocol");
     }
     if (msg.error) throw new RutexMcpError(msg.error.message ?? "jsonrpc error", "protocol");
     return (msg.result ?? {}) as T;
   } catch (e) {
     if (e instanceof RutexMcpError) throw e;
     throw new RutexMcpError(
-      ctrl.signal.aborted ? \`gateway timed out after \${timeoutMs}ms\` : \`gateway unreachable: \${String(e)}\`,
+      ctrl.signal.aborted ? `gateway timed out after ${timeoutMs}ms` : `gateway unreachable: ${String(e)}`,
       ctrl.signal.aborted ? "timeout" : "unreachable",
     );
   } finally {
