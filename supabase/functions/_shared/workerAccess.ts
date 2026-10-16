@@ -14,6 +14,15 @@ export interface ActiveWorkerMembership {
   role: string;
 }
 
+export function canReadWorker(
+  actorId: string,
+  worker: WorkerScope,
+  membership: ActiveWorkerMembership | null,
+): boolean {
+  if (!worker.organization_id) return worker.created_by === actorId;
+  return membership !== null;
+}
+
 export function canCreateOrganizationWorker(membership: ActiveWorkerMembership | null): boolean {
   return !!membership && ["owner", "admin", "member"].includes(membership.role);
 }
