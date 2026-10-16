@@ -14,7 +14,7 @@ VALUES
 DO $$
 DECLARE
   v_order_id uuid;
-  second_v_order_id uuid;
+  v_second_order_id uuid;
   total numeric;
   item_name text;
   item_price numeric;
@@ -38,7 +38,7 @@ BEGIN
     RAISE EXCEPTION 'server catalog name and price must override client values';
   END IF;
 
-  second_v_order_id := public.create_widget_order(
+  v_second_order_id := public.create_widget_order(
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     'Customer',
     '[{"product_id":"11111111-1111-4111-8111-111111111111","quantity":2,"unit_price":999}]'::jsonb,
