@@ -14,6 +14,8 @@ export interface ActiveWorkerMembership {
   role: string;
 }
 
+const CAN_CREATE_OR_EDIT_ROLES = new Set(["owner", "admin", "member"]);
+
 export function canReadWorker(
   actorId: string,
   worker: WorkerScope,
@@ -24,7 +26,7 @@ export function canReadWorker(
 }
 
 export function canCreateOrganizationWorker(membership: ActiveWorkerMembership | null): boolean {
-  return !!membership && ["owner", "admin", "member"].includes(membership.role);
+  return !!membership && CAN_CREATE_OR_EDIT_ROLES.has(membership.role);
 }
 
 export function canEditWorker(
@@ -34,7 +36,10 @@ export function canEditWorker(
 ): boolean {
   if (!worker.organization_id) return worker.created_by === actorId;
   if (!membership) return false;
-  return membership.role === "owner" || membership.role === "admin" || worker.created_by === actorId;
+  if (membership.role === "owner" || membership.role === "admin") return true;
+  // A creator's authorship does not override a later role downgrade to viewer
+  // or an unexpected role value.
+  return membership.role === "member" && worker.created_by === actorId;
 }
 
 export function canArchiveWorker(
