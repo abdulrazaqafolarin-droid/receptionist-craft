@@ -120,6 +120,59 @@ Deno.serve(async (req: Request) => {
     if (!body) return jsonRes({ ok: false, error: "invalid_body" }, 400, cors);
     const action = typeof body.action === "string" ? body.action : "";
 
+    if (action === "list") {
+      const { data: memberships, error: membershipError } = await service
+        .from("organization_members")
+        .select("organization_id")
+        .eq("user_id", user.id)
+        .not("joined_at", "is", null);
+      if (membershipError) return jsonRes({ ok: false, error: "membership_lookup_failed" }, 500, cors);
+      const organizationIds = (Array.isArray(memberships) ? memberships : [])
+        .map((row: { organization_id?: unknown }) => row.organization_id)
+        .filter((id: unknown): id is string => isUuid(id));
+
+      const columns = "id, organization_id, created_by, name, description, status, version, created_at, updated_at, published_at, archived_at";
+      const { data: personal, error: personalError } = await service
+        .from("ai_workers")
+        .select(columns)
+        .is("organization_id", null)
+        .eq("created_by", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(100);
+      if (personalError) return jsonRes({ ok: false, error: "worker_list_failed" }, 500, cors);
+
+      let organizationWorkers: WorkerRow[] = [];
+      if (organizationIds.length > 0) {
+        const { data, error } = await service
+          .from("ai_workers")
+          .select(columns)
+          .in("organization_id", organizationIds)
+          .order("updated_at", { ascending: false })
+          .limit(100);
+        if (error) return jsonRes({ ok: false, error: "worker_list_failed" }, 500, cors);
+        organizationWorkers = (Array.isArray(data) ? data : []) as WorkerRow[];
+      }
+
+      const combined = [...(Array.isArray(personal) ? personal : []), ...organizationWorkers] as WorkerRow[];
+      const unique = Array.from(new Map(combined.map((worker) => [worker.id, worker])).values())
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+        .slice(0, 100);
+      return jsonRes({ ok: true, workers: unique }, 200, cors);
+    }
+
+    if (action === "get") {
+      if (!isUuid(body.worker_id)) return jsonRes({ ok: false, error: "invalid_worker_id" }, 400, cors);
+      const worker = await workerForUser(service, body.worker_id);
+      if (!worker) return jsonRes({ ok: false, error: "worker_not_found" }, 404, cors);
+      const membership = worker.organization_id
+        ? await activeMembership(service, worker.organization_id, user.id)
+        : null;
+      if (!canReadWorker(user.id, worker, membership)) {
+        return jsonRes({ ok: false, error: "worker_access_denied" }, 403, cors);
+      }
+      return jsonRes({ ok: true, worker }, 200, cors);
+    }
+
     if (action === "create_draft") {
       const name = boundedString(body.name, 120);
       if (!name) return jsonRes({ ok: false, error: "invalid_name" }, 400, cors);
