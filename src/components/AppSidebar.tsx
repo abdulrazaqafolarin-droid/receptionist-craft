@@ -95,7 +95,7 @@ export function AppSidebar() {
   const isActive = (path: string) => currentPath === path || (path === "/workers" && currentPath.startsWith("/workers/"));
 
   const isGroupActive = (items: Array<{ url: string }>) =>
-    items.some((item) => item.url === currentPath);
+    items.some((item) => isActive(item.url));
 
   // Operator surface: hide nav items the active operator's approved plan
   // excluded. No surface (older operators) -> show everything. Empty
