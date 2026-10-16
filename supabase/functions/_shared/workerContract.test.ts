@@ -80,8 +80,8 @@ Deno.test("rejects duplicate field and capability keys", () => {
 });
 
 Deno.test("rejects unsupported actions instead of trusting model output", () => {
-  const definition = validDefinition() as WorkerDefinition & { allowed_actions: string[] };
-  definition.allowed_actions.push("shell_as_root");
+  const definition = validDefinition() as unknown as Record<string, unknown>;
+  (definition.allowed_actions as string[]).push("shell_as_root");
   const result = parseWorkerDefinition(definition);
   assert(!result.ok, "unknown action must fail closed");
   if (!result.ok) {
