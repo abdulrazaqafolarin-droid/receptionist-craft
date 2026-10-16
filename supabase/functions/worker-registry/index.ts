@@ -90,26 +90,6 @@ async function workerForUser(
   return data as WorkerRow | null;
 }
 
-async function canEditWorker(
-  service: ServiceClient,
-  worker: { organization_id: string | null; created_by: string },
-  userId: string,
-): Promise<boolean> {
-  if (!worker.organization_id) return worker.created_by === userId;
-  const membership = await activeMembership(service, worker.organization_id, userId);
-  return !!membership && (membership.role === "owner" || membership.role === "admin" || worker.created_by === userId);
-}
-
-async function canArchiveWorker(
-  service: ServiceClient,
-  worker: { organization_id: string | null; created_by: string },
-  userId: string,
-): Promise<boolean> {
-  if (!worker.organization_id) return worker.created_by === userId;
-  const membership = await activeMembership(service, worker.organization_id, userId);
-  return !!membership && (membership.role === "owner" || membership.role === "admin");
-}
-
 Deno.serve(async (req: Request) => {
   const cors = corsFor(req);
   if (!cors) return new Response("forbidden origin", { status: 403 });
