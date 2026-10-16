@@ -99,6 +99,6 @@ jobs:
             TO anon, authenticated, service_role;
           SQL
       - name: Apply least-privilege migration
-        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261016000002_secure_safe_view_grants.sql
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261016000000_secure_safe_view_grants.sql
       - name: Assert client roles can read but cannot mutate safe views
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/safe_view_grants.sql
