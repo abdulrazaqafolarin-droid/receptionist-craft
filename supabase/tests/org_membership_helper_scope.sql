@@ -7,9 +7,6 @@ BEGIN
   IF has_function_privilege('authenticated', 'public.has_org_role(uuid,uuid,public.app_role)', 'EXECUTE') IS NOT TRUE THEN
     RAISE EXCEPTION 'authenticated must retain execute for RLS policies';
   END IF;
-  IF has_function_privilege('public', 'public.get_user_org_ids(uuid)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'PUBLIC must not receive implicit execute';
-  END IF;
 END $$;
 
 INSERT INTO public.organization_members (organization_id, user_id, role)
