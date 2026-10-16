@@ -206,8 +206,8 @@ export function parseWorkerDefinition(input: unknown): WorkerDefinitionParseResu
     }
   }
 
-  if (!Array.isArray(input.allowed_actions) || input.allowed_actions.length === 0 || input.allowed_actions.length > WORKER_ACTIONS.length) {
-    addIssue(errors, "allowed_actions", "invalid_count", "Select at least one supported action.");
+  if (!Array.isArray(input.allowed_actions) || input.allowed_actions.length === 0 || input.allowed_actions.length > 20) {
+    addIssue(errors, "allowed_actions", "invalid_count", "Select between 1 and 20 actions.");
   } else {
     input.allowed_actions.forEach((action, index) => {
       if (typeof action !== "string" || !ACTIONS.has(action)) {
