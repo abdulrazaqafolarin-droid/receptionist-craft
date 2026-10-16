@@ -29,3 +29,38 @@ jobs:
         run: deno check supabase/functions/_shared/workerContract.ts supabase/functions/_shared/workerContract.test.ts
       - name: Test worker contract and safety invariants
         run: deno test supabase/functions/_shared/workerContract.test.ts
+
+  migration-rls:
+    name: Validate worker migration and RLS
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Bootstrap isolated test schema
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/worker_foundation_bootstrap.sql
+      - name: Apply worker migration to disposable database
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20261016000001_ai_worker_foundation.sql
+      - name: Verify tenant isolation and server-managed writes
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/ai_worker_foundation_rls.sql
