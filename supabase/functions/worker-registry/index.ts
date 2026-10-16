@@ -66,17 +66,27 @@ async function activeMembership(
   return { role: String(membership.role) };
 }
 
+interface WorkerRow {
+  id: string;
+  organization_id: string | null;
+  created_by: string;
+  name: string;
+  description: string;
+  status: string;
+  version: number;
+}
+
 async function workerForUser(
   service: ServiceClient,
   workerId: string,
-) {
+): Promise<WorkerRow | null> {
   const { data, error } = await service
     .from("ai_workers")
     .select("id, organization_id, created_by, name, description, status, version")
     .eq("id", workerId)
     .maybeSingle();
   if (error) throw new Error("worker_lookup_failed");
-  return data;
+  return data as WorkerRow | null;
 }
 
 async function canEditWorker(
