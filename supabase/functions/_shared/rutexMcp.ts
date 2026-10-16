@@ -15,9 +15,6 @@
  *   - conversationId is REQUIRED and stable per end-user thread.
  */
 
-const GATEWAY_URL = (globalThis.Deno?.env.get("RUTEX_GATEWAY_URL") ?? process.env?.RUTEX_GATEWAY_URL ?? "").replace(/\/$/, "");
-const GATEWAY_KEY = globalThis.Deno?.env.get("RUTEX_GATEWAY_KEY") ?? process.env?.RUTEX_GATEWAY_KEY ?? "";
-
 let rpcId = 0;
 
 export class RutexMcpError extends Error {
@@ -28,10 +25,14 @@ export class RutexMcpError extends Error {
 }
 
 function requireConfig(): { url: string; key: string } {
-  if (!GATEWAY_URL || !GATEWAY_KEY) {
+  // Read configuration at call time so long-lived runtimes and tests don't
+  // retain stale environment values from module initialization.
+  const url = (globalThis.Deno?.env.get("RUTEX_GATEWAY_URL") ?? process.env?.RUTEX_GATEWAY_URL ?? "").replace(/\/$/, "");
+  const key = globalThis.Deno?.env.get("RUTEX_GATEWAY_KEY") ?? process.env?.RUTEX_GATEWAY_KEY ?? "";
+  if (!url || !key) {
     throw new RutexMcpError("Set RUTEX_GATEWAY_URL and RUTEX_GATEWAY_KEY", "not_configured");
   }
-  return { url: GATEWAY_URL, key: GATEWAY_KEY };
+  return { url, key };
 }
 
 /** One stateless JSON-RPC round trip against /mcp. Returns the result object. */
@@ -43,48 +44,49 @@ async function rpc<T = Record<string, unknown>>(
   const { url, key } = requireConfig();
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  let res: Response;
   try {
-    res = await fetch(`${url}/mcp`, {
+    // Keep the abort timer active through response-body consumption and JSON
+    // parsing. Clearing it as soon as fetch() returned headers meant a stalled
+    // MCP/SSE body could hang the caller forever despite the configured timeout.
+    const res = await fetch(\`\${url}/mcp\`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json, text/event-stream",
-        Authorization: `Bearer ${key}`,
+        Authorization: \`Bearer \${key}\`,
       },
       body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method, params: params ?? {} }),
       signal: ctrl.signal,
     });
+
+    if (res.status === 401) throw new RutexMcpError("gateway rejected the bearer key", "auth");
+    // Include a body preview: tunnel error pages come back as non-JSON HTML.
+    if (!res.ok) {
+      const preview = (await res.text()).slice(0, 120).replace(/\s+/g, " ");
+      throw new RutexMcpError(\`gateway http_\${res.status} :: \${preview}\`, "protocol");
+    }
+
+    // Response may be plain JSON or SSE-framed; normalize to text then parse.
+    const raw = await res.text();
+    const dataLine = raw.split("\n").find((l) => l.startsWith("data:"));
+    const payload = dataLine ? dataLine.slice(5).trim() : raw;
+    let msg: { result?: T & { isError?: boolean }; error?: { message?: string } };
+    try {
+      msg = JSON.parse(payload);
+    } catch {
+      throw new RutexMcpError(\`unparseable gateway response: \${payload.slice(0, 200)}\`, "protocol");
+    }
+    if (msg.error) throw new RutexMcpError(msg.error.message ?? "jsonrpc error", "protocol");
+    return (msg.result ?? {}) as T;
   } catch (e) {
+    if (e instanceof RutexMcpError) throw e;
     throw new RutexMcpError(
-      ctrl.signal.aborted ? `gateway timed out after ${timeoutMs}ms` : `gateway unreachable: ${String(e)}`,
+      ctrl.signal.aborted ? \`gateway timed out after \${timeoutMs}ms\` : \`gateway unreachable: \${String(e)}\`,
       ctrl.signal.aborted ? "timeout" : "unreachable",
     );
   } finally {
     clearTimeout(timer);
   }
-
-  if (res.status === 401) throw new RutexMcpError("gateway rejected the bearer key", "auth");
-  // Include a body preview: ngrok tunnel error pages come back as non-JSON
-  // HTML with 4xx/5xx statuses, and without the preview a tunnel flap looks
-  // identical to a gateway route miss. This tells them apart instantly.
-  if (!res.ok) {
-    const preview = (await res.text()).slice(0, 120).replace(/\s+/g, " ");
-    throw new RutexMcpError(`gateway http_${res.status} :: ${preview}`, "protocol");
-  }
-
-  // Response may be plain JSON or SSE-framed; normalize to text then parse.
-  const raw = await res.text();
-  const dataLine = raw.split("\n").find((l) => l.startsWith("data:"));
-  const payload = dataLine ? dataLine.slice(5).trim() : raw;
-  let msg: { result?: T & { isError?: boolean }; error?: { message?: string } };
-  try {
-    msg = JSON.parse(payload);
-  } catch {
-    throw new RutexMcpError(`unparseable gateway response: ${payload.slice(0, 200)}`, "protocol");
-  }
-  if (msg.error) throw new RutexMcpError(msg.error.message ?? "jsonrpc error", "protocol");
-  return (msg.result ?? {}) as T;
 }
 
 function firstText(result: { content?: Array<{ type: string; text?: string }> }): string {
