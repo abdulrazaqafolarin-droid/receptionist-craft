@@ -48,3 +48,17 @@ Deno.test("missing membership denies organization access", () => {
   assert(!canEditWorker("user-a", organizationWorker, null), "former member cannot edit org worker");
   assert(!canArchiveWorker("user-a", organizationWorker, null), "former member cannot archive org worker");
 });
+
+Deno.test("viewer cannot edit a worker they originally created after role downgrade", () => {
+  assert(canReadWorker("user-a", organizationWorker, viewer), "viewer retains read access");
+  assert(!canEditWorker("user-a", organizationWorker, viewer), "authorship does not override viewer role");
+  assert(!canArchiveWorker("user-a", organizationWorker, viewer), "viewer cannot archive own org worker");
+});
+
+Deno.test("unknown organization roles fail closed for write actions", () => {
+  const unknown = { role: "custom_role" };
+  assert(!canCreateOrganizationWorker(unknown), "unknown role cannot create org worker");
+  assert(canReadWorker("user-b", organizationWorker, unknown), "active unknown role can still read");
+  assert(!canEditWorker("user-a", organizationWorker, unknown), "unknown role cannot edit");
+  assert(!canArchiveWorker("user-a", organizationWorker, unknown), "unknown role cannot archive");
+});
