@@ -66,7 +66,7 @@ async function activeMembership(
 }
 
 async function workerForUser(
-  service: ReturnType<typeof createClient>,
+  service: ServiceClient,
   workerId: string,
 ) {
   const { data, error } = await service
@@ -79,7 +79,7 @@ async function workerForUser(
 }
 
 async function canEditWorker(
-  service: ReturnType<typeof createClient>,
+  service: ServiceClient,
   worker: { organization_id: string | null; created_by: string },
   userId: string,
 ): Promise<boolean> {
@@ -89,7 +89,7 @@ async function canEditWorker(
 }
 
 async function canArchiveWorker(
-  service: ReturnType<typeof createClient>,
+  service: ServiceClient,
   worker: { organization_id: string | null; created_by: string },
   userId: string,
 ): Promise<boolean> {
