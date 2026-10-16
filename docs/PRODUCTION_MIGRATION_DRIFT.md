@@ -62,3 +62,5 @@ A tracking issue was opened: [#53 — triage live Supabase security-advisor find
 5. Implement any changes as reviewed migrations and test them on an isolated database first.
 6. Re-run security advisors and targeted RLS/RPC tests.
 7. Do not apply security changes to production until migration-history drift is reconciled and the rollout is explicitly approved.
+
+A further read-only privilege check confirmed that both `anon` and `authenticated` currently have `SELECT`, `INSERT`, `UPDATE`, and `DELETE` privileges on all three views, and the views have no visible `security_invoker` reloption. This makes the view access model a higher-priority investigation: `companion_devices_safe` and `vault_keys_safe` are simple single-table views, while `plan_limits` uses `UNION ALL` and has different updateability characteristics. Combined with the no-policy findings for underlying tables, this is a **potential access-control risk, not yet a confirmed exploit**. No production write was attempted. Reproduce behavior on an isolated database, test anonymous and cross-user DML, and prepare least-privilege grants/view semantics before any production change.
