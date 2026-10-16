@@ -67,6 +67,7 @@ REVOKE ALL ON FUNCTION public.deduct_stock(uuid, integer) FROM PUBLIC, anon, aut
 GRANT EXECUTE ON FUNCTION public.deduct_stock(uuid, integer) TO service_role;
 
 -- Revert must be owner-scoped because SECURITY DEFINER bypasses table RLS.
+-- Preserve the live business-model recomputation and complete config mapping.
 CREATE OR REPLACE FUNCTION public.revert_config_version(
   p_receptionist_id uuid,
   p_target_version integer
@@ -85,6 +86,7 @@ DECLARE
   v_booking boolean;
   v_ordering boolean;
   v_new_version integer;
+  v_result jsonb;
 BEGIN
   IF auth.uid() IS NULL OR NOT EXISTS (
     SELECT 1
@@ -109,6 +111,8 @@ BEGIN
   v_capabilities := COALESCE(v_target.config_json -> 'capabilities', '{}'::jsonb);
   v_contact := v_target.config_json -> 'contact';
 
+  -- Keep the live business_model derivation: bare true, {enabled}, and {steps}
+  -- workflow shapes have established behavior and must not regress on rollback.
   v_booking := COALESCE((v_capabilities ->> 'books_appointments')::boolean, false)
     OR (v_target.config_json -> 'workflows' ? 'appointment_booking'
         AND COALESCE((((v_target.config_json -> 'workflows') -> 'appointment_booking') ->> 'enabled')::boolean, true));
