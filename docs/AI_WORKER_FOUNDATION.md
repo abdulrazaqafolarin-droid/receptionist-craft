@@ -54,13 +54,19 @@ The service layer must still validate that a task's `worker_id` belongs to the s
 6. Every capability must declare its permissions, risk, setup requirements, cost/usage considerations where known, and verification method.
 7. Research results are candidates, not proof of safety or readiness. Evaluate license, provenance, maintenance, dependencies, security and deployment requirements before adopting a repository.
 
+## Current UI and runtime boundary
+
+The first UI slice now includes a separate AI Workers navigation group, a registry page, personal/organization scope selection, draft creation, and a dedicated worker workspace for editing the draft specification and reviewing its current permissions. The UI explicitly states that workers do not execute tasks yet.
+
+The `worker-registry` Edge Function supports scoped list/detail reads plus draft creation, draft updates and archive. It deliberately has no publish/activate or task-run action.
+
 ## Next implementation stages
 
 1. Generate/update Supabase TypeScript types from the validated migration and compare the repository schema against the live project.
 2. Extend lifecycle validation with action audit records, rate limits and explicit worker-version semantics.
-3. Add a dedicated worker registry and workspace with task queue, task detail, approvals, outputs, history and settings.
-4. Connect Director planning/building to this lifecycle using durable jobs and checkpoint/resume.
-5. Add integration tests for the live Edge Function's authorization paths, rate limits, task transitions, approval enforcement, idempotency and recovery.
+3. Connect Director planning/building to this lifecycle using durable jobs and checkpoint/resume.
+4. Implement generic task execution, approval handling, evidence-based completion and resumable checkpoints.
+5. Add integration tests for authorization, rate limits, task transitions, approval enforcement, idempotency and recovery.
 6. Only after those checks, evaluate deployment targets beyond the initial Rutex-managed runtime.
 
 ## Deliberately out of scope for this slice
