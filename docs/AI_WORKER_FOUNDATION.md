@@ -36,10 +36,9 @@ A durable task record associated with a worker, including status, input/output p
 
 - A personal worker has `organization_id IS NULL` and is visible to its creator.
 - An organization worker is visible only to members with a completed membership (`joined_at IS NOT NULL`).
-- Creating an organization worker requires an active owner/admin/member membership; viewers are read-only.
-- Worker creators may update their organization worker while they remain active members; organization owners/admins may manage organization workers.
-- Only organization owners/admins may delete organization workers; personal creators may delete their own personal workers.
-- Task rows are readable by their creator or active organization members, and have no direct authenticated insert/update/delete policies.
+- The authenticated client has read access only. Worker creation, definition edits, publishing and lifecycle transitions must go through trusted Edge Functions so clients cannot bypass validation by setting `status = 'active'`.
+- Task visibility is derived from the linked worker's access scope rather than trusting a duplicated organization ID on each task.
+- Task rows have no direct authenticated insert/update/delete policies; trusted Edge Functions own task creation and state transitions.
 
 The service layer must still validate that a task's `worker_id` belongs to the same organization scope as the task. RLS is a boundary, not a substitute for validating relationships in trusted code.
 
