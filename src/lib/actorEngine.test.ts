@@ -428,6 +428,7 @@ Deno.test("local cursor gestures: anchored wiggle/circle resolve safely", async 
   const circle = parseLocalGestureCommand("make the mouse circle around the Google Reviews connect button");
   check(circle !== null && circle.kind === "circle" && circle.target === "connect-google_reviews", "circle resolves to registered anchor");
   check(parseLocalGestureCommand("wiggle the cursor") === null, "unanchored gesture does not guess a target");
+  check(parseLocalGestureCommand("I saw the cursor wiggle around the Google Reviews connect button") === null, "descriptive text is not executed as a command");
   check(parseLocalGestureCommand("wiggle the cursor around the button") === null, "ambiguous generic target does not choose first anchor");
   check(parseLocalGestureCommand("wiggle the cursor around Google Reviews") === null, "ambiguous connector name does not choose card or button");
   check(parseLocalGestureCommand("don't wiggle the cursor around the Google Reviews connect button") === null, "negated gesture never runs");
