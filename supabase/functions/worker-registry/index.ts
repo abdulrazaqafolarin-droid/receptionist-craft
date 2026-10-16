@@ -11,6 +11,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseWorkerDefinition } from "../_shared/workerContract.ts";
 
 type JsonRecord = Record<string, unknown>;
+type ServiceClient = any;
 
 function corsFor(req: Request): Record<string, string> | null {
   const origin = req.headers.get("origin") || "";
@@ -49,7 +50,7 @@ function isUuid(value: unknown): value is string {
 }
 
 async function activeMembership(
-  service: ReturnType<typeof createClient>,
+  service: ServiceClient,
   organizationId: string,
   userId: string,
 ): Promise<{ role: string } | null> {
@@ -112,7 +113,7 @@ Deno.serve(async (req: Request) => {
     const serviceKey = Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     if (!url || !serviceKey) return jsonRes({ ok: false, error: "service_not_configured" }, 500, cors);
 
-    const service = createClient(url, serviceKey, {
+    const service: ServiceClient = createClient(url, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data: { user }, error: authError } = await service.auth.getUser(token);
