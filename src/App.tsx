@@ -59,6 +59,8 @@ import ConversationalManagementPage from "./pages/ConversationalManagementPage";
 import TestConversations from "./pages/TestConversations";
 import MEODashboard from "./pages/MEODashboard";
 import NotFound from "./pages/NotFound";
+import Workers from "./pages/Workers";
+import WorkerWorkspace from "./pages/WorkerWorkspace";
 
 const queryClient = new QueryClient();
 
