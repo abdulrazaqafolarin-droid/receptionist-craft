@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Bot, Loader2, Save, Archive, ShieldCheck, Plug, ListChecks, ClipboardList } from "lucide-react";
+import { ArrowLeft, Bot, Loader2, Save, Archive, ShieldCheck, Plug, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { starterWorkerDefinition } from "@/lib/workerDefinition";
