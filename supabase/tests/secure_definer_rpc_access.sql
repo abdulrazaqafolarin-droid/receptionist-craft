@@ -27,6 +27,29 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'record_manual_version must have a fixed search_path';
   END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid IN (
+      'public.handle_new_user()'::regprocedure,
+      'public.touch_build_thread()'::regprocedure,
+      'public.touch_director_thread()'::regprocedure,
+      'public.update_business_modules_updated_at()'::regprocedure
+    )
+    AND NOT (p.proconfig @> ARRAY['search_path=public'])
+  ) THEN
+    RAISE EXCEPTION 'trigger SECURITY DEFINER functions must have a fixed search_path';
+  END IF;
+  IF has_function_privilege('anon', 'public.handle_new_user()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.handle_new_user()', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.touch_build_thread()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.touch_build_thread()', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.touch_director_thread()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.touch_director_thread()', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.update_business_modules_updated_at()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.update_business_modules_updated_at()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'client roles must not directly execute trigger routines';
+  END IF;
 END $$;
 
 INSERT INTO public.services (id, stock_quantity)
