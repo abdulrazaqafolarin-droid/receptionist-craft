@@ -174,7 +174,18 @@ export function UISignalRenderer({
       return safeServices.length > 0 ? <ServiceSelector services={safeServices} onSelect={onServiceSelect} disabled={loading} /> : null;
     }
     if (visible.activeComponent === "product_selector") {
-      return products.length > 0 ? <ProductSelectorEnhanced products={products} onConfirm={onProductsConfirm} disabled={loading} /> : null;
+      // The selector expects an absent price to be undefined, not null.
+      // Normalize at this UI boundary rather than leaking database nulls
+      // into a stricter presentation-component contract.
+      const safeProducts = products.map((product) => ({
+        id: product.id,
+        name: product.name,
+        price: typeof product.price === "number" ? product.price : undefined,
+        stock_quantity: product.stock_quantity ?? null,
+      }));
+      return safeProducts.length > 0
+        ? <ProductSelectorEnhanced products={safeProducts} onConfirm={onProductsConfirm} disabled={loading} />
+        : null;
     }
     if (visible.activeComponent === "date_picker") {
       return <DateSelector onSelect={onDateSelect} disabled={loading} minDate={new Date()} />;
