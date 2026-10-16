@@ -177,5 +177,19 @@ GRANT EXECUTE ON FUNCTION public.revert_config_version(uuid, integer) TO authent
 -- This helper already checks auth.uid() against the receptionist owner. Keep
 -- it callable only by signed-in users rather than exposing it as a public RPC.
 ALTER FUNCTION public.record_manual_version(uuid, text) SET search_path = public;
+
+-- Trigger-only SECURITY DEFINER functions use fully-qualified application tables,
+-- but still need an explicit search_path. Their existing triggers continue to
+-- fire without granting clients direct EXECUTE access to these trigger routines.
+ALTER FUNCTION public.handle_new_user() SET search_path = public;
+ALTER FUNCTION public.touch_build_thread() SET search_path = public;
+ALTER FUNCTION public.touch_director_thread() SET search_path = public;
+ALTER FUNCTION public.update_business_modules_updated_at() SET search_path = public;
+
+REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.touch_build_thread() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.touch_director_thread() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.update_business_modules_updated_at() FROM PUBLIC, anon, authenticated;
+
 REVOKE ALL ON FUNCTION public.record_manual_version(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.record_manual_version(uuid, text) TO authenticated;
