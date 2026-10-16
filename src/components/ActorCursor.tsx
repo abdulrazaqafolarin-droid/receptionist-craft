@@ -367,7 +367,9 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
   }, []);
 
   const goHome = useCallback(() => {
-    setPoint(dockPoint());
+    const p = dockPoint();
+    pointRef.current = p;
+    setPoint(p);
   }, [dockPoint]);
 
   const toggleFollow = useCallback((on?: boolean) => {
@@ -390,6 +392,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     }
     setCursorHidden(!visible);
     if (!visible) {
+      pointRef.current = null;
       setPoint(null);
       publishCursorPoint(null);
     }
@@ -413,7 +416,11 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       if (!raf) {
         raf = requestAnimationFrame(() => {
           raf = 0;
-          if (pending && !runningRef.current) setPoint(pending);
+          if (pending && !runningRef.current) {
+            // Keep the synchronous planner origin aligned with follow-mode position.
+            pointRef.current = pending;
+            setPoint(pending);
+          }
           pending = null;
         });
       }
@@ -441,6 +448,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
           setTimeout(() => {
             if (alive) {
               setArriving(false);
+              pointRef.current = null;
               setPoint(null);
             }
           }, 1600);
@@ -506,6 +514,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
         stopRef.current = true;
         setRunning(false);
         // A preempted host must not leave a second cursor parked on screen.
+        pointRef.current = null;
         setPoint(null);
         setRing(null);
         setSwallow(false);
@@ -536,6 +545,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
         setSwallow(true);
         await new Promise<void>((r) => setTimeout(r, 480));
         setSwallow(false);
+        pointRef.current = null;
         setPoint(null);
         try {
           sessionStorage.setItem("rutex-actor-arrival", JSON.stringify({ at: Date.now() }));
@@ -692,6 +702,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
   }, [navigate, follow, goHome]);
 
   const clear = useCallback(() => {
+    pointRef.current = null;
     setPoint(null);
     setSwallow(false);
     setArriving(false);
