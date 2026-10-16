@@ -20,6 +20,13 @@ BEGIN
   IF NOT has_function_privilege('authenticated', 'public.revert_config_version(uuid,integer)', 'EXECUTE') THEN
     RAISE EXCEPTION 'authenticated owner flow must retain config revert';
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid = 'public.record_manual_version(uuid,text)'::regprocedure
+      AND p.proconfig @> ARRAY['search_path=public']
+  ) THEN
+    RAISE EXCEPTION 'record_manual_version must have a fixed search_path';
+  END IF;
 END $$;
 
 INSERT INTO public.services (id, stock_quantity)
@@ -36,7 +43,15 @@ BEGIN
   IF (SELECT stock_quantity FROM public.services WHERE id = '11111111-1111-4111-8111-111111111111') <> 5 THEN
     RAISE EXCEPTION 'invalid quantity must not mutate inventory';
   END IF;
-END $$;
+
+  result := public.deduct_stock('11111111-1111-4111-8111-111111111111', 2);
+  IF COALESCE((result->>'success')::boolean, false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'valid positive stock deduction should succeed';
+  END IF;
+  IF (SELECT stock_quantity FROM public.services WHERE id = '11111111-1111-4111-8111-111111111111') <> 3 THEN
+    RAISE EXCEPTION 'valid stock deduction should reduce stock by requested quantity';
+  END IF;
+END $;
 
 INSERT INTO public.receptionists (id, user_id, name, business_name, tone)
 VALUES
