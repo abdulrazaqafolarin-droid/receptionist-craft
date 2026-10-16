@@ -170,7 +170,14 @@ Deno.serve(async (req: Request) => {
       if (!canReadWorker(user.id, worker, membership)) {
         return jsonRes({ ok: false, error: "worker_access_denied" }, 403, cors);
       }
-      return jsonRes({ ok: true, worker }, 200, cors);
+      return jsonRes({
+        ok: true,
+        worker,
+        permissions: {
+          can_edit: canEditWorker(user.id, worker, membership),
+          can_archive: canArchiveWorker(user.id, worker, membership),
+        },
+      }, 200, cors);
     }
 
     if (action === "create_draft") {
