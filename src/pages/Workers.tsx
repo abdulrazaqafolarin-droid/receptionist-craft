@@ -76,6 +76,7 @@ export default function Workers() {
         .not("joined_at", "is", null);
       if (membershipError || !memberships?.length) return;
       const ids = [...new Set(memberships.filter((membership) => ["owner", "admin", "member"].includes(membership.role)).map((membership) => membership.organization_id))];
+      if (!ids.length) return;
       const { data, error } = await supabase.from("organizations").select("id, name").in("id", ids);
       if (error) throw error;
       setOrganizations((data || []) as OrganizationOption[]);
