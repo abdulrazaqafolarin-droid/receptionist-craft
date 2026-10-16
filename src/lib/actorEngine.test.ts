@@ -421,6 +421,17 @@ Deno.test("local commands: strict imperatives resolve, vagueness falls to brain"
   check(parseLocalCommand("open the pod bay doors") === null, "fiction goes to brain");
 });
 
+Deno.test("local cursor gestures: anchored wiggle/circle resolve safely", async () => {
+  const { parseLocalGestureCommand } = await import("./directorLocalCommands.ts");
+  const wiggle = parseLocalGestureCommand("please wiggle the cursor around the Google Reviews connect button for me");
+  check(wiggle !== null && wiggle.kind === "oscillate" && wiggle.target === "connect-google_reviews", "wiggle resolves to registered anchor");
+  const circle = parseLocalGestureCommand("make the mouse circle around the Google Reviews connect button");
+  check(circle !== null && circle.kind === "circle" && circle.target === "connect-google_reviews", "circle resolves to registered anchor");
+  check(parseLocalGestureCommand("wiggle the cursor") === null, "unanchored gesture does not guess a target");
+  check(parseLocalGestureCommand("don't wiggle the cursor around the Google Reviews connect button") === null, "negated gesture never runs");
+  check(parseLocalGestureCommand("wiggle the cursor around the pod bay doors") === null, "unknown target falls through to Director");
+});
+
 Deno.test("transient perception: fresh table picks one unambiguous label", () => {
   const rows = ["[1] link | Staff", "[2] link | Conversations", "[3] button | Log out"];
   const picked = pickLiveCandidate("staff page", parseLiveTable(rows));
