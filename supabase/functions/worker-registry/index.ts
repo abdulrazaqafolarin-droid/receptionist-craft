@@ -9,6 +9,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseWorkerDefinition } from "../_shared/workerContract.ts";
+import { canArchiveWorker, canCreateOrganizationWorker, canEditWorker } from "../_shared/workerAccess.ts";
 
 type JsonRecord = Record<string, unknown>;
 type ServiceClient = any;
