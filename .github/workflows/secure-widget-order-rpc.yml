@@ -1,0 +1,73 @@
+name: Secure widget order RPC
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/*secure_widget_order_rpc.sql"
+      - "supabase/tests/secure_widget_order_rpc.sql"
+      - ".github/workflows/secure-widget-order-rpc.yml"
+  push:
+    branches: [main, fix/widget-order-canonical-pricing]
+    paths:
+      - "supabase/migrations/*secure_widget_order_rpc.sql"
+      - "supabase/tests/secure_widget_order_rpc.sql"
+      - ".github/workflows/secure-widget-order-rpc.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  widget-order-rpc:
+    runs-on: ubuntu-latest
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: rutex_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and start PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql postgresql-client
+          sudo service postgresql start
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          sudo -u postgres createdb rutex_test
+      - name: Create representative widget-order schema
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          CREATE TABLE public.receptionists (id uuid PRIMARY KEY, active boolean NOT NULL DEFAULT true);
+          CREATE TABLE public.services (
+            id uuid PRIMARY KEY, receptionist_id uuid NOT NULL, name text NOT NULL,
+            price numeric, active boolean DEFAULT true, is_product boolean DEFAULT false
+          );
+          CREATE TABLE public.orders (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            receptionist_id uuid NOT NULL, customer_name text NOT NULL,
+            customer_email text, customer_phone text, notes text, total_amount numeric,
+            metadata jsonb DEFAULT '{}'::jsonb, status text NOT NULL DEFAULT 'pending',
+            idempotency_key text
+          );
+          CREATE UNIQUE INDEX orders_idempotency_key_unique ON public.orders(idempotency_key) WHERE idempotency_key IS NOT NULL;
+          CREATE TABLE public.order_items (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(), order_id uuid NOT NULL,
+            product_id uuid, product_name text NOT NULL, quantity integer NOT NULL DEFAULT 1,
+            unit_price numeric
+          );
+          CREATE FUNCTION public.create_widget_order(
+            p_receptionist_id uuid, p_customer_name text, p_items jsonb,
+            p_customer_email text DEFAULT NULL, p_customer_phone text DEFAULT NULL,
+            p_notes text DEFAULT NULL, p_metadata jsonb DEFAULT '{}'::jsonb,
+            p_idempotency_key text DEFAULT NULL
+          ) RETURNS uuid LANGUAGE sql AS $$ SELECT gen_random_uuid() $$;
+          GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO PUBLIC;
+          GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+          SQL
+      - name: Apply secure widget order migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261016000004_secure_widget_order_rpc.sql
+      - name: Verify server-owned pricing and tenant-safe idempotency
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/secure_widget_order_rpc.sql
