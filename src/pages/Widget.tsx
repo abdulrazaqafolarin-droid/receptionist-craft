@@ -65,12 +65,17 @@ type ReceptionistData = {
 type ServiceItem = {
   id: string;
   name: string;
-  description: string | null;
-  price: number | null;
-  duration_minutes: number | null;
-  is_product: boolean | null;
-  active: boolean;
-  receptionist_id: string;
+  description?: string | null;
+  price?: number | null;
+  duration_minutes?: number | null;
+  is_product?: boolean | null;
+  active?: boolean | null;
+  receptionist_id?: string;
+  stock_quantity?: number | null;
+  user_id?: string | null;
+  created_at?: string;
+  buffer_before_minutes?: number;
+  buffer_after_minutes?: number;
 };
 
 type BookingState = {
