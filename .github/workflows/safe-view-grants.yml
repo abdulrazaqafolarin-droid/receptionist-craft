@@ -1,0 +1,104 @@
+name: Safe view privilege regression
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/*secure_safe_view_grants.sql"
+      - "supabase/tests/safe_view_grants.sql"
+      - ".github/workflows/safe-view-grants.yml"
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/*secure_safe_view_grants.sql"
+      - "supabase/tests/safe_view_grants.sql"
+      - ".github/workflows/safe-view-grants.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  safe-view-grants:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rutex_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rutex_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: rutex_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+      - name: Create representative pre-migration schema
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          CREATE SCHEMA auth;
+          CREATE FUNCTION auth.uid() RETURNS uuid
+            LANGUAGE sql STABLE
+            AS $$ SELECT NULL::uuid $$;
+
+          CREATE TABLE public.companion_devices (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id uuid NOT NULL,
+            name text,
+            platform text,
+            enabled boolean,
+            last_seen timestamptz,
+            created_at timestamptz DEFAULT now()
+          );
+          CREATE TABLE public.api_keys (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id uuid NOT NULL,
+            name text,
+            provider text,
+            key_last4 text,
+            status text,
+            created_at timestamptz DEFAULT now(),
+            last_used_at timestamptz,
+            expires_at timestamptz
+          );
+
+          CREATE VIEW public.companion_devices_safe AS
+            SELECT id, user_id, name, platform, enabled, last_seen, created_at
+            FROM public.companion_devices WHERE user_id = auth.uid();
+          CREATE VIEW public.plan_limits AS
+            SELECT 'free'::text AS plan, 1 AS max_receptionists,
+              50 AS max_customers, 500 AS max_messages_monthly
+            UNION ALL
+            SELECT 'pro'::text, 5, 500, 5000
+            UNION ALL
+            SELECT 'enterprise'::text, 9999, 999999, 9999999;
+          CREATE VIEW public.vault_keys_safe AS
+            SELECT id, user_id, name, provider, key_last4, status, created_at,
+              last_used_at, expires_at
+            FROM public.api_keys
+            WHERE user_id = auth.uid()
+              AND user_id = '0a249488-e3aa-4fbc-80be-93cc3e2d2fca'::uuid;
+
+          GRANT ALL PRIVILEGES ON public.companion_devices_safe,
+            public.plan_limits, public.vault_keys_safe
+            TO anon, authenticated, service_role;
+          SQL
+      - name: Apply least-privilege migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261016000000_secure_safe_view_grants.sql
+      - name: Assert client roles can read but cannot mutate safe views
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/safe_view_grants.sql
