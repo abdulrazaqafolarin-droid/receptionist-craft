@@ -1,7 +1,7 @@
 import { askRutex, RutexMcpError } from "./rutexMcp.ts";
 
 function check(condition: boolean, message: string): void {
-  if (!condition) throw new Error(\`FAIL: \${message}\`);
+  if (!condition) throw new Error(`FAIL: ${message}`);
 }
 
 Deno.test("Rutex Gateway response parsing and body timeout", async () => {
