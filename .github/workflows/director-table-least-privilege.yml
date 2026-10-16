@@ -1,0 +1,63 @@
+name: Director table least-privilege regression
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/*director_table_least_privilege.sql"
+      - "supabase/tests/director_table_least_privilege.sql"
+      - ".github/workflows/director-table-least-privilege.yml"
+  push:
+    branches: [main, fix/director-table-least-privilege]
+    paths:
+      - "supabase/migrations/*director_table_least_privilege.sql"
+      - "supabase/tests/director_table_least_privilege.sql"
+      - ".github/workflows/director-table-least-privilege.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  director-table-grants:
+    runs-on: ubuntu-latest
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: rutex_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and start PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql postgresql-client
+          sudo service postgresql start
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          sudo -u postgres createdb rutex_test
+      - name: Create representative Director schema
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          CREATE SCHEMA auth;
+          CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $uid$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $uid$;
+          CREATE TABLE public.director_tasks (id uuid primary key, user_id uuid not null);
+          CREATE TABLE public.director_commands (id uuid primary key, user_id uuid not null);
+          CREATE TABLE public.director_requests (id uuid primary key, user_id uuid not null);
+          CREATE TABLE public.director_actions (id uuid primary key, user_id uuid not null);
+          ALTER TABLE public.director_tasks ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE public.director_commands ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE public.director_requests ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE public.director_actions ENABLE ROW LEVEL SECURITY;
+          CREATE POLICY "owners read own commands" ON public.director_commands FOR SELECT USING (auth.uid() = user_id);
+          CREATE POLICY "owners finish own commands" ON public.director_commands FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+          CREATE POLICY "owners read own requests" ON public.director_requests FOR SELECT USING (auth.uid() = user_id);
+          CREATE POLICY "owners answer own requests" ON public.director_requests FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+          CREATE POLICY "owners manage own director actions" ON public.director_actions FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+          GRANT ALL ON TABLE public.director_tasks, public.director_commands, public.director_requests, public.director_actions TO anon, authenticated, service_role;
+          SQL
+      - name: Apply least-privilege migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261016000003_director_table_least_privilege.sql
+      - name: Assert grants
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/director_table_least_privilege.sql
