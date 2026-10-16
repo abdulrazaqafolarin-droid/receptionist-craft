@@ -40,3 +40,25 @@ Do not deploy the PR #50 Director task-loop change until its `pending_command` m
 ## Current AI Worker PR
 
 PR #52 validates its new worker migration against an isolated PostgreSQL 17 fixture, including RLS behavior. That is useful evidence for the migration itself, but it does not reconcile the live Rutex Supabase migration history and is not permission to apply the migration to production.
+
+## Additional read-only security-advisor snapshot (16 October 2026)
+
+A read-only Supabase security-advisor check also reported the following. These are **triage findings, not proof that every item is exploitable**.
+
+- Three views were flagged as using SECURITY DEFINER semantics: `public.companion_devices_safe`, `public.plan_limits`, and `public.vault_keys_safe`.
+- Four RLS-enabled tables were reported as having no policies: `public.api_keys`, `public.companion_devices`, `public.director_tasks`, and `public.vault_audit_logs`. Confirm their effective grants and intended server-only access model before deciding whether policies are missing.
+- The advisor reported functions with mutable search paths and SECURITY DEFINER functions executable by `anon`. Some RPCs may intentionally be public; trigger-only and internal functions should not be assumed to need public execution.
+
+Read-only view-definition inspection found that `companion_devices_safe` filters on `user_id = auth.uid()`; `plan_limits` returns static plan-limit rows; and `vault_keys_safe` filters on both `auth.uid()` and a hard-coded user UUID. The latter may be an unintended restriction and needs comparison with the intended vault access model. Do not infer exploitability or change grants/views from advisor labels alone.
+
+A tracking issue was opened: [#53 — triage live Supabase security-advisor findings](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/issues/53).
+
+### Security-audit acceptance gate
+
+1. Inspect view ownership, PostgreSQL/Supabase view security semantics, underlying table RLS and effective grants.
+2. Test anonymous and authenticated access for each view and each table flagged as RLS-enabled without policies.
+3. Classify every anon-executable SECURITY DEFINER function as intentionally public, trigger-only, or internal; restrict execution where public access is not required.
+4. Set safe function search paths where appropriate.
+5. Implement any changes as reviewed migrations and test them on an isolated database first.
+6. Re-run security advisors and targeted RLS/RPC tests.
+7. Do not apply security changes to production until migration-history drift is reconciled and the rollout is explicitly approved.
