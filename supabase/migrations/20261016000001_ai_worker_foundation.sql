@@ -117,8 +117,9 @@ CREATE POLICY "worker tasks visible through worker access"
 -- No INSERT/UPDATE/DELETE policies on ai_worker_tasks by design.
 -- Trusted service-role Edge Functions own state transitions and outputs.
 
--- Explicit API grants are still required even when RLS policies exist.
--- No anon grants are made; RLS controls which authenticated rows are visible.
+-- Remove any broad default privileges before granting the intended access.
+-- RLS controls rows; SQL grants control which operations a role can attempt.
+REVOKE ALL ON public.ai_workers, public.ai_worker_tasks FROM anon, authenticated;
 GRANT SELECT ON public.ai_workers TO authenticated;
 GRANT SELECT ON public.ai_worker_tasks TO authenticated;
 GRANT ALL ON public.ai_workers, public.ai_worker_tasks TO service_role;
