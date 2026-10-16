@@ -86,6 +86,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const SECRET_LIKE_PATTERNS = [
+  /sk_(?:live|test)_[A-Za-z0-9]{12,}/,
+  /sk-(?:proj-)?[A-Za-z0-9_-]{24,}/,
+  /AIza[0-9A-Za-z_-]{30,}/,
+  /gh[pousr]_[A-Za-z0-9]{30,}/,
+  /xox[baprs]-[A-Za-z0-9-]{10,}/,
+  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+  /Bearer\s+[A-Za-z0-9._~+/-]{24,}/i,
+];
+
+function containsSecretLikeValue(value: unknown): boolean {
+  if (typeof value === "string") return SECRET_LIKE_PATTERNS.some((pattern) => pattern.test(value));
+  if (Array.isArray(value)) return value.some(containsSecretLikeValue);
+  if (isRecord(value)) return Object.values(value).some(containsSecretLikeValue);
+  return false;
+}
+
 function addIssue(errors: WorkerDefinitionIssue[], path: string, code: string, message: string): void {
   errors.push({ path, code, message });
 }
@@ -179,6 +196,10 @@ export function parseWorkerDefinition(input: unknown): WorkerDefinitionParseResu
   const errors: WorkerDefinitionIssue[] = [];
   if (!isRecord(input)) {
     return { ok: false, errors: [{ path: "", code: "invalid_type", message: "Worker definition must be an object." }] };
+  }
+
+  if (containsSecretLikeValue(input)) {
+    addIssue(errors, "", "secret_like_value", "Do not store API keys, access tokens or private keys in a worker definition. Use the secure integration vault.");
   }
 
   checkKeys(input, [
