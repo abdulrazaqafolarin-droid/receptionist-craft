@@ -1,4 +1,4 @@
--- Run after secure_definer_rpc_access.sql on an isolated PostgreSQL 17 database.
+-- Run after secure_definer_rpc_access.sql on an isolated PostgreSQL database.
 DO $$
 BEGIN
   IF has_function_privilege('anon', 'public.cleanup_old_conversations(integer)', 'EXECUTE') THEN
@@ -51,7 +51,7 @@ BEGIN
   IF (SELECT stock_quantity FROM public.services WHERE id = '11111111-1111-4111-8111-111111111111') <> 3 THEN
     RAISE EXCEPTION 'valid stock deduction should reduce stock by requested quantity';
   END IF;
-END $;
+END $$;
 
 INSERT INTO public.receptionists (id, user_id, name, business_name, tone)
 VALUES
