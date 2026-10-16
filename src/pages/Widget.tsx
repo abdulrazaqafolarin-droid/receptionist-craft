@@ -53,7 +53,16 @@ type ReceptionistData = {
   tone: string | null;
   business_model: 'services' | 'products' | 'both' | 'internal' | null;
   widget_surface?: WidgetPieces | null;
-  business_info: {
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  website?: string | null;
+  currency?: string | null;
+  business_info?: {
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    website?: string | null;
     widget_customization?: {
       primaryColor?: string;
       secondaryColor?: string;
@@ -82,7 +91,15 @@ type BookingState = {
   serviceId: string | null;
   serviceName: string | null;
   date: Date | null;
-  timeSlot: { start: string; end: string; display: string } | null;
+  timeSlot: {
+    startTime?: string;
+    start?: string;
+    endTime?: string;
+    end?: string;
+    display?: string;
+    score?: number;
+    reason?: string;
+  } | null;
 };
 
 const defaultBookingState: BookingState = {
@@ -153,7 +170,7 @@ export default function Widget() {
   const [greetingStored, setGreetingStored] = useState(false);
   const [hasExistingSession, setHasExistingSession] = useState(false);
   const [showSessionOverlay, setShowSessionOverlay] = useState(false);
-  const [existingMessages, setExistingMessages] = useState<ServiceItem[]>([]);
+  const [existingMessages, setExistingMessages] = useState<Array<{ message: string; sender: string; created_at: string }>>([]);
   const [sessionCheckComplete, setSessionCheckComplete] = useState(false);
   const [voiceChatOpen, setVoiceChatOpen] = useState(false);
   const [activeUISignal, setActiveUISignal] = useState<UISignal | null>(null);
