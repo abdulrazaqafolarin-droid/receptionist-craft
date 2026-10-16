@@ -160,7 +160,10 @@ Deno.serve(async (req: Request) => {
       if (!isUuid(body.worker_id)) return jsonRes({ ok: false, error: "invalid_worker_id" }, 400, cors);
       const worker = await workerForUser(service, body.worker_id);
       if (!worker) return jsonRes({ ok: false, error: "worker_not_found" }, 404, cors);
-      if (!(await canEditWorker(service, worker, user.id))) {
+      const editMembership = worker.organization_id
+        ? await activeMembership(service, worker.organization_id, user.id)
+        : null;
+      if (!canEditWorker(user.id, worker, editMembership)) {
         return jsonRes({ ok: false, error: "worker_access_denied" }, 403, cors);
       }
       if (worker.status !== "draft") {
