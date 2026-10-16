@@ -92,7 +92,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const currentPath = location.pathname;
 
-  const isActive = (path: string) => currentPath === path;
+  const isActive = (path: string) => currentPath === path || (path === "/workers" && currentPath.startsWith("/workers/"));
 
   const isGroupActive = (items: Array<{ url: string }>) =>
     items.some((item) => item.url === currentPath);
