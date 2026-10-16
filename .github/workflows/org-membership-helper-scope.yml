@@ -1,0 +1,67 @@
+name: Organization membership helper scope
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/*org_membership_helper_scope.sql"
+      - "supabase/tests/org_membership_helper_scope.sql"
+      - ".github/workflows/org-membership-helper-scope.yml"
+  push:
+    branches: [main, fix/org-membership-helper-scope]
+    paths:
+      - "supabase/migrations/*org_membership_helper_scope.sql"
+      - "supabase/tests/org_membership_helper_scope.sql"
+      - ".github/workflows/org-membership-helper-scope.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  helper-scope:
+    runs-on: ubuntu-latest
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: rutex_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and start PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql postgresql-client
+          sudo service postgresql start
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          sudo -u postgres createdb rutex_test
+      - name: Create minimal representative schema
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          CREATE SCHEMA auth;
+          CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
+            $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+          CREATE TYPE public.app_role AS ENUM ('owner', 'admin', 'member', 'viewer');
+          CREATE TABLE public.organization_members (
+            organization_id uuid NOT NULL,
+            user_id uuid NOT NULL,
+            role public.app_role NOT NULL
+          );
+          CREATE FUNCTION public.get_user_org_ids(_user_id uuid) RETURNS SETOF uuid
+            LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public
+            AS $$ SELECT organization_id FROM public.organization_members WHERE user_id = _user_id $$;
+          CREATE FUNCTION public.has_org_role(_user_id uuid, _org_id uuid, _role public.app_role) RETURNS boolean
+            LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public
+            AS $$ SELECT EXISTS (SELECT 1 FROM public.organization_members WHERE user_id = _user_id AND organization_id = _org_id AND role = _role) $$;
+          CREATE FUNCTION public.is_org_member(_user_id uuid, _org_id uuid) RETURNS boolean
+            LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public
+            AS $$ SELECT EXISTS (SELECT 1 FROM public.organization_members WHERE user_id = _user_id AND organization_id = _org_id) $$;
+          GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO PUBLIC;
+          GRANT SELECT, INSERT, UPDATE, DELETE ON public.organization_members TO anon, authenticated, service_role;
+          SQL
+      - name: Apply membership-helper security migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261016000003_org_membership_helper_scope.sql
+      - name: Assert no cross-user membership enumeration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/org_membership_helper_scope.sql
