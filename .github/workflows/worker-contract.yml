@@ -25,12 +25,12 @@ jobs:
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Type-check worker contract
-        run: deno check supabase/functions/_shared/workerContract.ts supabase/functions/_shared/workerContract.test.ts
+      - name: Type-check worker contracts and access rules
+        run: deno check supabase/functions/_shared/workerContract.ts supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.ts supabase/functions/_shared/workerAccess.test.ts
       - name: Type-check worker registry Edge Function
         run: deno check supabase/functions/worker-registry/index.ts
       - name: Test worker contract and safety invariants
-        run: deno test supabase/functions/_shared/workerContract.test.ts
+        run: deno test supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.test.ts
 
   migration-rls:
     name: Validate worker migration and RLS
