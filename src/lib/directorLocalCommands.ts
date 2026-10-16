@@ -200,9 +200,18 @@ export function parseLocalGestureCommand(text: string): LocalGestureCommand | nu
     .trim();
   if (!targetPhrase) return null;
 
-  const target = matchAnchorOrRoute(targetPhrase, true);
+  // Require enough identifying words and exactly one registered anchor.
+  // The general navigation matcher intentionally picks a best effort match;
+  // gestures must not wiggle around the first of several plausible targets.
+  const identifyingWords = words(targetPhrase).filter((word) => word.length > 3);
+  if (identifyingWords.length < 2) return null;
+  const candidates = ACTOR_TARGETS.filter((entry) =>
+    covers(`${entry.key.replace(/[-_]/g, " ")} ${entry.label}`, targetPhrase)
+  );
+  if (candidates.length !== 1) return null;
+
   // Gestures are anchored movement only. Never translate a route into a
   // guessed DOM target, and never allow this parser to perform a click.
-  if (!target || target.kind !== "click") return null;
-  return { kind, target: target.target, label: target.label };
+  const target = candidates[0];
+  return { kind, target: target.key, label: target.label };
 }
