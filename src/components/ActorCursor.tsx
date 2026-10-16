@@ -299,7 +299,9 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
   }, []);
 
   const goHome = useCallback(() => {
-    setPoint(dockPoint());
+    const p = dockPoint();
+    pointRef.current = p;
+    setPoint(p);
   }, [dockPoint]);
 
   const toggleFollow = useCallback((on?: boolean) => {
@@ -322,6 +324,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     }
     setCursorHidden(!visible);
     if (!visible) {
+      pointRef.current = null;
       setPoint(null);
       publishCursorPoint(null);
     }
@@ -345,7 +348,12 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       if (!raf) {
         raf = requestAnimationFrame(() => {
           raf = 0;
-          if (pending && !runningRef.current) setPoint(pending);
+          if (pending && !runningRef.current) {
+            // Keep the synchronous planner origin aligned with the visible cursor,
+            // including follow mode; React state alone can lag behind a new run.
+            pointRef.current = pending;
+            setPoint(pending);
+          }
           pending = null;
         });
       }
@@ -457,6 +465,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
         setSwallow(true);
         await new Promise<void>((r) => setTimeout(r, 480));
         setSwallow(false);
+        pointRef.current = null;
         setPoint(null);
         try {
           sessionStorage.setItem("rutex-actor-arrival", JSON.stringify({ at: Date.now() }));
