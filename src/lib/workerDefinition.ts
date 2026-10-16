@@ -44,3 +44,17 @@ export function starterWorkerDefinition(purpose: string): StarterWorkerDefinitio
     workspace: { layout: "task_board", panels: ["tasks", "outputs", "activity"] },
   };
 }
+
+/** Update the editable description fields without discarding future worker settings. */
+export function updateWorkerPurpose(current: unknown, purpose: string): Record<string, unknown> {
+  const normalizedPurpose = purpose.trim();
+  if (typeof current === "object" && current !== null && !Array.isArray(current)) {
+    return {
+      ...(current as Record<string, unknown>),
+      schema_version: 1,
+      purpose: normalizedPurpose,
+      responsibilities: [normalizedPurpose],
+    };
+  }
+  return starterWorkerDefinition(normalizedPurpose);
+}
