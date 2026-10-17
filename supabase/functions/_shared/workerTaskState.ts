@@ -41,6 +41,8 @@ export type WorkerTaskTransitionResult =
   | { ok: true }
   | { ok: false; reason: string };
 
+const STATUS_SET = new Set<string>(WORKER_TASK_STATUSES);
+
 const ALLOWED: Record<WorkerTaskStatus, readonly WorkerTaskStatus[]> = {
   queued: ["running", "blocked", "cancelled"],
   running: ["waiting_approval", "done", "blocked", "failed", "queued", "cancelled"],
@@ -59,8 +61,7 @@ function validEvidence(value: unknown): value is CompletionEvidence[] {
     const record = item as Record<string, unknown>;
     if (!kinds.has(record.kind as CompletionEvidenceKind)) return false;
     if (typeof record.summary !== "string" || record.summary.trim().length === 0 || record.summary.length > 1000) return false;
-    if (record.reference !== undefined &&
-        (typeof record.reference !== "string" || record.reference.trim().length === 0 || record.reference.length > 500)) return false;
+    if (typeof record.reference !== "string" || record.reference.trim().length === 0 || record.reference.length > 500) return false;
     return true;
   });
 }
@@ -70,6 +71,7 @@ export function canTransitionWorkerTask(
   next: WorkerTaskStatus,
   context: WorkerTaskTransitionContext = {},
 ): WorkerTaskTransitionResult {
+  if (!STATUS_SET.has(current) || !STATUS_SET.has(next)) return { ok: false, reason: "invalid_status" };
   if (current === next) return { ok: false, reason: "same_state" };
   if (!ALLOWED[current].includes(next)) return { ok: false, reason: "transition_not_allowed" };
 
@@ -86,8 +88,12 @@ export function canTransitionWorkerTask(
   }
 
   if ((current === "running" || current === "failed") && next === "queued") {
-    const attempts = Number.isInteger(context.attemptCount) ? context.attemptCount as number : 0;
-    const maxRetries = Number.isInteger(context.maxRetries) ? context.maxRetries as number : 0;
+    if (!Number.isInteger(context.attemptCount) || (context.attemptCount as number) < 1 ||
+        !Number.isInteger(context.maxRetries) || (context.maxRetries as number) < 0) {
+      return { ok: false, reason: "retry_budget_unknown" };
+    }
+    const attempts = context.attemptCount as number;
+    const maxRetries = context.maxRetries as number;
     if (context.retryable !== true) return { ok: false, reason: "outcome_not_safe_to_retry" };
     if (attempts >= maxRetries + 1) return { ok: false, reason: "retry_budget_exhausted" };
   }
