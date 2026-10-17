@@ -61,7 +61,7 @@ jobs:
             change_source text, owner_input text, approved_by uuid, approved_at timestamptz,
             created_at timestamptz DEFAULT now()
           );
-          CREATE TABLE public.services (id uuid PRIMARY KEY, stock_quantity integer);
+          CREATE TABLE public.services (id uuid PRIMARY KEY, name text NOT NULL, stock_quantity integer);
           CREATE TABLE public.ai_booking_suggestions (created_at timestamptz);
           CREATE TABLE public.chat_messages (created_at timestamptz);
           CREATE TABLE public.conversation_state (last_message_at timestamptz);
