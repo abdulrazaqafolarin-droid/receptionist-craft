@@ -240,6 +240,52 @@ GRANT EXECUTE ON FUNCTION public.is_org_member(uuid, uuid) TO anon, authenticate
 -- it callable only by signed-in users rather than exposing it as a public RPC.
 ALTER FUNCTION public.record_manual_version(uuid, text) SET search_path = public;
 
+-- Membership helpers must remain executable for RLS policies, but their
+-- SECURITY DEFINER privilege must not let a caller probe another user's orgs/roles.
+CREATE OR REPLACE FUNCTION public.get_user_org_ids(_user_id uuid)
+RETURNS SETOF uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $function$
+  SELECT organization_id
+  FROM public.organization_members
+  WHERE user_id = _user_id
+    AND _user_id = auth.uid();
+$function$;
+
+CREATE OR REPLACE FUNCTION public.has_org_role(_user_id uuid, _org_id uuid, _role public.app_role)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $function$
+  SELECT EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE user_id = _user_id
+      AND organization_id = _org_id
+      AND role = _role
+      AND _user_id = auth.uid()
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION public.is_org_member(_user_id uuid, _org_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $function$
+  SELECT EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE user_id = _user_id
+      AND organization_id = _org_id
+      AND _user_id = auth.uid()
+  );
+$function$;
+
 -- Trigger-only SECURITY DEFINER functions use fully-qualified application tables,
 -- but still need an explicit search_path. Their existing triggers continue to
 -- fire without granting clients direct EXECUTE access to these trigger routines.
