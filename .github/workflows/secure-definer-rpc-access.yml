@@ -42,8 +42,12 @@ jobs:
           CREATE ROLE authenticated NOLOGIN;
           CREATE ROLE service_role NOLOGIN;
           CREATE SCHEMA auth;
+          CREATE SCHEMA extensions;
           CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
-            $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+            $ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $;
+          CREATE FUNCTION extensions.gen_random_bytes(integer) RETURNS bytea
+            LANGUAGE sql IMMUTABLE AS
+            $ SELECT decode(repeat('ab', $1), 'hex') $;
           CREATE TYPE public.receptionist_tone AS ENUM ('friendly', 'professional', 'playful');
           CREATE TYPE public.app_role AS ENUM ('owner', 'admin', 'member', 'viewer');
           CREATE TABLE public.organization_members (
@@ -75,7 +79,7 @@ jobs:
           CREATE FUNCTION public.cleanup_old_conversations(integer) RETURNS integer LANGUAGE sql AS $$ SELECT 0 $$;
           CREATE FUNCTION public.deduct_stock(p_product_id uuid, p_quantity integer) RETURNS jsonb LANGUAGE sql AS $fn$ SELECT '{}'::jsonb $fn$;
           CREATE FUNCTION public.create_widget_order(p_receptionist_id uuid, p_customer_name text, p_items jsonb, p_customer_email text, p_customer_phone text, p_notes text, p_metadata jsonb, p_idempotency_key text) RETURNS uuid LANGUAGE sql AS $fn$ SELECT gen_random_uuid() $fn$;
-          CREATE FUNCTION public.create_widget_appointment(p_receptionist_id uuid, p_customer_name text, p_service text, p_start_time timestamptz, p_end_time timestamptz, p_customer_email text, p_customer_phone text, p_service_id uuid, p_notes text, p_booking_source text, p_idempotency_key text, p_metadata jsonb) RETURNS TABLE(id uuid, cancellation_token text, confirmation_token text) LANGUAGE sql AS $fn$ SELECT gen_random_uuid(), 'cancel', 'confirm' $fn$;
+          CREATE FUNCTION public.create_widget_appointment(p_receptionist_id uuid, p_customer_name text, p_service text, p_start_time timestamptz, p_end_time timestamptz, p_customer_email text, p_customer_phone text, p_service_id uuid, p_notes text, p_booking_source text, p_idempotency_key text, p_metadata jsonb) RETURNS TABLE(id uuid, cancellation_token text, confirmation_token text) LANGUAGE plpgsql SECURITY DEFINER AS $fn$ DECLARE v_token bytea; BEGIN v_token := gen_random_bytes(32); RETURN QUERY SELECT gen_random_uuid(), encode(v_token, 'hex'), encode(v_token, 'hex'); END; $fn$;
           CREATE FUNCTION public.revert_config_version(p_receptionist_id uuid, p_target_version integer) RETURNS jsonb LANGUAGE sql AS $$ SELECT '{}'::jsonb $$;
           CREATE FUNCTION public.record_manual_version(uuid, text) RETURNS jsonb LANGUAGE sql AS $fn$ SELECT '{}'::jsonb $fn$;
           CREATE FUNCTION public.handle_new_user() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
@@ -90,4 +94,14 @@ jobs:
       - name: Apply security migration to disposable database
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261016000002_secure_definer_rpc_access.sql
       - name: Assert least privilege, positive inventory quantities, and owner-scoped revert
-        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/secure_definer_rpc_access.sql
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/secure_definer_rpc_access.sql
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $
+          BEGIN
+            PERFORM * FROM public.create_widget_appointment(
+              NULL, 'Test customer', 'Test service', now(), now() + interval '30 minutes',
+              NULL, NULL, NULL, NULL, 'test', NULL, '{}'::jsonb
+            );
+          END $;
+          SQL
