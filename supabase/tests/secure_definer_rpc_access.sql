@@ -34,7 +34,9 @@ BEGIN
       'public.handle_new_user()'::regprocedure,
       'public.touch_build_thread()'::regprocedure,
       'public.touch_director_thread()'::regprocedure,
-      'public.update_business_modules_updated_at()'::regprocedure
+      'public.update_business_modules_updated_at()'::regprocedure,
+      'public.handle_new_organization()'::regprocedure,
+      'public.sync_receptionist_phones()'::regprocedure
     )
     AND NOT (p.proconfig @> ARRAY['search_path=public'])
   ) THEN
@@ -47,7 +49,11 @@ BEGIN
      OR has_function_privilege('anon', 'public.touch_director_thread()', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.touch_director_thread()', 'EXECUTE')
      OR has_function_privilege('anon', 'public.update_business_modules_updated_at()', 'EXECUTE')
-     OR has_function_privilege('authenticated', 'public.update_business_modules_updated_at()', 'EXECUTE') THEN
+     OR has_function_privilege('authenticated', 'public.update_business_modules_updated_at()', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.handle_new_organization()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.handle_new_organization()', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.sync_receptionist_phones()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.sync_receptionist_phones()', 'EXECUTE') THEN
     RAISE EXCEPTION 'client roles must not directly execute trigger routines';
   END IF;
 
