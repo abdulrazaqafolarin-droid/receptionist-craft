@@ -73,6 +73,10 @@ The `worker-registry` Edge Function supports scoped list/detail reads plus draft
 5. Add integration tests for authorization, rate limits, task transitions, approval enforcement, idempotency and recovery.
 6. Only after those checks, evaluate deployment targets beyond the initial Rutex-managed runtime.
 
+### Task state safety contract (prerequisite, not an executor)
+
+The pure helper `workerTaskState.ts` now specifies and tests allowed transitions before a future trusted runner persists them. It requires an active worker before starting queued work, explicit approval before approved work is re-queued, a resolved blocking condition before resumption, safe retry classification within the attempt budget, and a stopped executor before cancelling in-flight work. A task cannot become `done` without bounded structured evidence. This helper is not yet wired to a task API or runner; it is the tested contract the next runtime slice must enforce.
+
 ## Deliberately out of scope for this slice
 
 - Replacing the receptionist engine or renaming existing receptionist pages as workers.
