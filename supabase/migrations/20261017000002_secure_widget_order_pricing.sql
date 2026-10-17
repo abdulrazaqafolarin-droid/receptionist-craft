@@ -77,7 +77,7 @@ BEGIN
 
   -- Calculate totals from catalog prices only. Client-supplied unit_price and
   -- product_name are intentionally ignored.
-  FOR v_item IN SELECT value FROM jsonb_array_elements(p_items) AS value
+  FOR v_item IN SELECT items.value FROM jsonb_array_elements(p_items) AS items(value)
   LOOP
     IF jsonb_typeof(v_item) <> 'object' THEN
       RAISE EXCEPTION 'Each item must be an object';
@@ -141,7 +141,7 @@ BEGIN
     RAISE;
   END;
 
-  FOR v_item IN SELECT value FROM jsonb_array_elements(p_items) AS value
+  FOR v_item IN SELECT items.value FROM jsonb_array_elements(p_items) AS items(value)
   LOOP
     v_product_id := (v_item->>'product_id')::uuid;
     v_quantity := COALESCE((v_item->>'quantity')::integer, 1);
