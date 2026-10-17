@@ -86,6 +86,27 @@ export function lookAtPage(): Record<string, unknown> {
       const rect = el.getBoundingClientRect();
       if (rect.width < 2 || rect.height < 2) return;
       if (rect.bottom < 0 || rect.top > window.innerHeight + 200) return;
+
+      // Do not offer controls that cannot currently receive an interaction.
+      // The brain only sees candidates that the click host can plausibly hit.
+      if (
+        el.matches(":disabled") ||
+        el.closest('[aria-disabled="true"]') ||
+        el.closest("[inert]") ||
+        el.closest('[aria-hidden="true"]')
+      ) return;
+      const style = window.getComputedStyle(el);
+      if (
+        style.display === "none" ||
+        style.visibility === "hidden" ||
+        style.pointerEvents === "none" ||
+        Number(style.opacity) === 0
+      ) return;
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const hit = document.elementFromPoint(cx, cy);
+      if (!hit || !(hit === el || el.contains(hit))) return;
+
       const role = liveRole(el);
       const label = describeLiveLabel(el);
       if (!label) return;
@@ -97,15 +118,25 @@ export function lookAtPage(): Record<string, unknown> {
       // Deeper view, values never included: link destinations ride along as
       // extra segments so the brain can tell same-named targets apart.
       // The label (segment 2) stays clean for expect-verification.
-      let extra = "";
+      const extras: string[] = [];
       try {
         if (el.tagName.toLowerCase() === "a") {
           const href = (el.getAttribute("href") || "").slice(0, 80);
-          if (href) extra = ` | href=${href}`;
+          if (href) extras.push(`href=${href}`);
+        }
+        // Expose control state, never entered values, so the brain can
+        // distinguish toggled/expanded controls and verify visible changes.
+        for (const attr of ["aria-expanded", "aria-pressed", "aria-selected", "aria-checked"]) {
+          const value = el.getAttribute(attr);
+          if (value !== null) extras.push(`${attr.slice(5)}=${value}`);
+        }
+        if (el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio")) {
+          extras.push(`checked=${el.checked}`);
         }
       } catch {
-        // destination hint best-effort
+        // state/destination hints are best-effort
       }
+      const extra = extras.length > 0 ? ` | ${extras.join(" | ")}` : "";
       table.push(`[${n}] ${role} | ${label}${extra}`);
     });
     out.elements = table;
@@ -123,6 +154,27 @@ export function lookAtPage(): Record<string, unknown> {
   return out;
 }
 
+type DynamicResult = { data: unknown; error: unknown };
+
+type DynamicQuery = PromiseLike<DynamicResult> & {
+  eq(column: string, value: unknown): DynamicQuery;
+  is(column: string, value: unknown): DynamicQuery;
+  order(column: string, options: { ascending: boolean }): DynamicQuery;
+  limit(count: number): DynamicQuery;
+  select(columns?: string): DynamicQuery;
+  maybeSingle(): PromiseLike<DynamicResult>;
+};
+
+type DynamicTable = {
+  update(values: Record<string, unknown>): DynamicQuery;
+  insert(values: Record<string, unknown>): PromiseLike<DynamicResult>;
+  select(columns?: string): DynamicQuery;
+};
+
+function fromDynamicTable(name: string): DynamicTable {
+  return (supabase as unknown as { from: (table: string) => DynamicTable }).from(name);
+}
+
 export function DirectorHands() {
   const host = useActorHost();
   const busyRef = useRef(false);
@@ -133,7 +185,7 @@ export function DirectorHands() {
     let cancelled = false;
     let channel: { unsubscribe: () => void } | null = null;
 
-    const table = (supabase.from as unknown as (t: string) => any)("director_commands");
+    const table = fromDynamicTable("director_commands");
 
     const finish = async (id: string, ok: boolean, result: unknown, error: string | null) => {
       try {
@@ -152,7 +204,7 @@ export function DirectorHands() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        await (supabase.from as unknown as (t: string) => any)("director_actions").insert({
+        await fromDynamicTable("director_actions").insert({
           user_id: user.id,
           kind: "hands",
           status: ok ? "done" : "failed",
@@ -207,9 +259,19 @@ export function DirectorHands() {
 
     const execute = async (cmd: HandsCommand) => {
       if (cancelled) return;
+      // Claim atomically. Realtime can be delivered to more than one tab,
+      // and a SELECT followed by an unconditional UPDATE is not a lock.
+      // Only the executor that changes queued -> running may perform the work.
       try {
-        await table.update({ status: "running" }).eq("id", cmd.id);
+        const { data: claimed, error: claimError } = await table
+          .update({ status: "running" })
+          .eq("id", cmd.id)
+          .eq("status", "queued")
+          .select("id")
+          .maybeSingle();
+        if (claimError || !claimed) return;
       } catch {
+        // Never execute a command unless its claim was confirmed.
         return;
       }
       try {
@@ -225,7 +287,7 @@ export function DirectorHands() {
           await ledger(cmd, `Refused unknown hands tool: ${cmd.tool}`, false, null);
           return;
         }
-        const receipts = await hostRef.current.start(actions, { tour: "director-hands", mode: "ride" });
+        const receipts = await hostRef.current.start(actions, { tour: "director-hands", mode: "ride", pace: "human" });
         const failed = receipts.find((r) => !r.ok);
         if (failed) {
           await finish(cmd.id, false, { receipts }, failed.detail);

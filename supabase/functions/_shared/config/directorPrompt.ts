@@ -81,7 +81,8 @@ export interface ThreadMemory {
 /** Long threads (>12 messages) earn a brief; refresh every 6 new ones. */
 export function briefDue(total: number, mem: ThreadMemory | null): boolean {
   if (total <= 12) return false;
-  if (!mem || !mem.brief) return true;
+  if (!mem) return true;
+  // An intentionally empty brief still records that this range was reviewed.
   return total - mem.briefed_through >= 6;
 }
 
@@ -113,7 +114,7 @@ export interface DirectorContext {
   unreadNotifications: DirectorNotification[];
   /** Paired computers/phones/runners — the only hands that exist. */
   devices: DirectorDevice[];
-  /** Facts other brains agreed with the owner (onboarding, builder). */
+  /** Compact fact briefs from earlier Director conversations; live rows override them. */
   sharedMemory: Array<{ source: string; content: string; created_at: string }>;
   /** The owner's id, so hands calls carry the right user_id. */
   ownerId: string;

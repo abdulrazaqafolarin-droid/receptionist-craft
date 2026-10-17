@@ -1,0 +1,76 @@
+name: Director quality gates
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [audit/director-entry-and-command-claims]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: director-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend build, targeted lint and actor map
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        id: install
+        run: npm ci
+      # The repository-wide typecheck currently fails on unrelated baseline files.
+      # Keep it visible while gating this PR on the production build and changed-file checks.
+      - name: Report repository-wide typecheck baseline
+        continue-on-error: true
+        run: npm run typecheck
+      - name: Build
+        if: always() && steps.install.outcome == 'success'
+        run: npm run build
+      # The repository-wide lint currently reports existing debt across unrelated files.
+      # Changed Director files remain strictly linted in the next step.
+      - name: Report repository-wide lint baseline
+        if: always() && steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run lint
+      - name: Lint changed Director UI and command files
+        if: always() && steps.install.outcome == 'success'
+        run: npx eslint src/components/ActorCursor.tsx src/components/DirectorHands.tsx src/components/DirectorChat.tsx src/components/widget/UISignalRenderer.tsx src/lib/actorRunner.ts src/lib/directorLocalCommands.ts src/pages/Widget.tsx
+      - name: Verify actor map
+        if: always() && steps.install.outcome == 'success'
+        run: npm run verify:actor-map
+
+  edge-contracts:
+    name: Director decision and task contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check changed edge functions
+        run: deno check supabase/functions/director-task/index.ts supabase/functions/director-chat/index.ts supabase/functions/companion-link/index.ts
+      - name: Test Director task request parsing
+        run: deno test supabase/functions/_shared/directorTaskRequest.test.ts
+      - name: Test browser actor engine and guardrails
+        run: deno test --no-check --unstable-sloppy-imports src/lib/actorEngine.test.ts
+      - name: Test decision contract
+        run: deno test supabase/functions/_shared/directorDecide.test.ts
+      - name: Test task-loop mechanics
+        run: deno test supabase/functions/_shared/directorTask.test.ts
+      - name: Test Director memory formatting
+        run: deno test supabase/functions/_shared/ownerMemory.test.ts
+      - name: Test Director prompt and memory cadence
+        run: deno test supabase/functions/_shared/config/directorPrompt.test.ts

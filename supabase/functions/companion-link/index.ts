@@ -101,8 +101,21 @@ serve(async (req) => {
         const cmd = (Array.isArray(rows) ? rows : [])[0] as
           | { id: string; tool: string; args: unknown } | undefined;
         if (!cmd) return jsonRes({ ok: true, command: null });
-        await supabase.from("director_commands").update({ status: "running" }).eq("id", cmd.id);
-        return jsonRes({ ok: true, command: { id: cmd.id, tool: cmd.tool, args: cmd.args ?? {} } });
+        // Claim atomically. Two companion pollers may read the same queued
+        // row; only one may transition it to running and receive the command.
+        const { data: claimed, error: claimError } = await supabase
+          .from("director_commands")
+          .update({ status: "running" })
+          .eq("id", cmd.id)
+          .eq("status", "queued")
+          .select("id,tool,args")
+          .maybeSingle();
+        if (claimError) return jsonRes({ ok: false, error: "command claim failed" }, 500);
+        if (!claimed) return jsonRes({ ok: true, command: null });
+        return jsonRes({
+          ok: true,
+          command: { id: claimed.id, tool: claimed.tool, args: claimed.args ?? {} },
+        });
       }
 
       if (action === "complete") {

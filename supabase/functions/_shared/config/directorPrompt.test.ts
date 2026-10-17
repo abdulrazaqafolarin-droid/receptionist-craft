@@ -4,7 +4,7 @@
  * Run: deno test supabase/functions/_shared/config/directorPrompt.test.ts
  */
 
-import { buildDirectorSystemPrompt, parseDirectorReply } from "./directorPrompt.ts";
+import { briefDue, buildDirectorSystemPrompt, parseDirectorReply } from "./directorPrompt.ts";
 import type { DirectorContext } from "./directorPrompt.ts";
 
 function check(cond: boolean, msg: string): void {
@@ -32,6 +32,7 @@ const CTX: DirectorContext = {
     { id: "dev-1", name: "Office PC", platform: "windows", enabled: true, last_seen: "2026-10-09T12:00:00Z" },
     { id: "dev-2", name: "Old laptop", platform: "windows", enabled: false, last_seen: null },
   ],
+  sharedMemory: [],
 };
 
 Deno.test("prompt cites live rows, never filler", () => {
@@ -59,6 +60,7 @@ Deno.test("empty context is explicit, not invented", () => {
     activeJobs: 0, connectorsDown: [], attentionTotal: 0,
     pastChats: [], recentWork: [], unreadNotifications: [],
     devices: [],
+    sharedMemory: [],
     ownerId: "owner-1",
   });
   check(p.includes("No operators yet"), "emptiness stated");
@@ -203,4 +205,12 @@ Deno.test("hands actions validate steps strictly or drop whole", () => {
     const parsed = parseDirectorReply(JSON.stringify({ reply: "x", suggestions: [], actions: [action] }));
     check(parsed.actions.length === 0, `dropped whole: ${why}`);
   }
+});
+
+Deno.test("memory briefs start after 12 messages and refresh every six", () => {
+  check(!briefDue(12, null), "short chats do not need a brief");
+  check(briefDue(13, null), "long chat without a brief needs one");
+  check(!briefDue(20, { brief: "", briefed_through: 20 }), "empty brief still records a completed review");
+  check(!briefDue(25, { brief: "facts", briefed_through: 20 }), "brief does not refresh early");
+  check(briefDue(26, { brief: "facts", briefed_through: 20 }), "brief refreshes after six new messages");
 });

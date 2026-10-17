@@ -53,7 +53,16 @@ type ReceptionistData = {
   tone: string | null;
   business_model: 'services' | 'products' | 'both' | 'internal' | null;
   widget_surface?: WidgetPieces | null;
-  business_info: {
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  website?: string | null;
+  currency?: string | null;
+  business_info?: {
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    website?: string | null;
     widget_customization?: {
       primaryColor?: string;
       secondaryColor?: string;
@@ -65,19 +74,32 @@ type ReceptionistData = {
 type ServiceItem = {
   id: string;
   name: string;
-  description: string | null;
-  price: number | null;
-  duration_minutes: number | null;
-  is_product: boolean | null;
-  active: boolean;
-  receptionist_id: string;
+  description?: string | null;
+  price?: number | null;
+  duration_minutes?: number | null;
+  is_product?: boolean | null;
+  active?: boolean | null;
+  receptionist_id?: string | null;
+  stock_quantity?: number | null;
+  user_id?: string | null;
+  created_at?: string;
+  buffer_before_minutes?: number;
+  buffer_after_minutes?: number;
 };
 
 type BookingState = {
   serviceId: string | null;
   serviceName: string | null;
   date: Date | null;
-  timeSlot: { start: string; end: string; display: string } | null;
+  timeSlot: {
+    startTime?: string;
+    start?: string;
+    endTime?: string;
+    end?: string;
+    display?: string;
+    score?: number;
+    reason?: string;
+  } | null;
 };
 
 const defaultBookingState: BookingState = {
@@ -130,7 +152,7 @@ export default function Widget() {
     }
   }
 
-  const [bookingState, setBookingState] = useState(defaultBookingState);
+  const [bookingState, setBookingState] = useState<BookingState>(defaultBookingState);
   
   // Whenever bookingState changes, persist it
   useEffect(() => {
@@ -148,7 +170,7 @@ export default function Widget() {
   const [greetingStored, setGreetingStored] = useState(false);
   const [hasExistingSession, setHasExistingSession] = useState(false);
   const [showSessionOverlay, setShowSessionOverlay] = useState(false);
-  const [existingMessages, setExistingMessages] = useState<ServiceItem[]>([]);
+  const [existingMessages, setExistingMessages] = useState<Array<{ message: string; sender: string; created_at: string }>>([]);
   const [sessionCheckComplete, setSessionCheckComplete] = useState(false);
   const [voiceChatOpen, setVoiceChatOpen] = useState(false);
   const [activeUISignal, setActiveUISignal] = useState<UISignal | null>(null);
@@ -444,7 +466,15 @@ export default function Widget() {
     let data: ReceptionistData | null = null;
     
     const rpcResult = await supabase.rpc("get_public_receptionist", { p_receptionist_id: receptionistId });
-    if (rpcResult.data && rpcResult.data.length > 0) data = rpcResult.data[0];
+    if (rpcResult.data && rpcResult.data.length > 0) {
+      const raw = rpcResult.data[0];
+      const model = raw.business_model;
+      const normalizedModel =
+        model === "services" || model === "products" || model === "both" || model === "internal"
+          ? model
+          : null;
+      data = { ...raw, business_model: normalizedModel } as ReceptionistData;
+    }
     
     if (!data) {
       toast({ title: "Error", description: "Receptionist not found", variant: "destructive" });
@@ -499,7 +529,7 @@ export default function Widget() {
     }
 
     if (items) {
-      const serviceItems = items.filter((item) => item.duration_minutes > 0);
+      const serviceItems = items.filter((item) => typeof item.duration_minutes === "number" && item.duration_minutes > 0);
       const productItems = items.filter((item) => item.duration_minutes === 0 || item.is_product === true);
       setServices(serviceItems);
       setProducts(productItems);
@@ -590,7 +620,7 @@ export default function Widget() {
       setMessages(prev => [...prev, botMessage]);
     } catch (err) {
       console.error("Chat error:", err);
-      toast({ title: "Error", description: err.message || "Failed to send message", variant: "destructive" });
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to send message", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -657,8 +687,12 @@ export default function Widget() {
     }
   }
 
-  async function handleTimeSlotSelect(slot: { startTime?: string; start?: string; end: string; display: string; score?: number; reason?: string }) {
+  async function handleTimeSlotSelect(slot: { startTime?: string; start?: string; endTime?: string; end?: string; display?: string; score?: number; reason?: string }) {
     const startTime = slot.startTime || slot.start;
+    if (!startTime) {
+      toast({ title: "Time unavailable", description: "Please choose another available time.", variant: "destructive" });
+      return;
+    }
     setBookingState(prev => ({ 
       ...prev, 
       timeSlot: { ...slot, startTime }
@@ -827,7 +861,7 @@ export default function Widget() {
           hasExistingSession={showSessionOverlay}
           onContinue={handleContinueChat}
           onNewChat={handleNewChat}
-          businessName={receptionist.business_name}
+          businessName={receptionist?.business_name || undefined}
         />
         {/* Header */}
         <div 

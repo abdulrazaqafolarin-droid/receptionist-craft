@@ -14,10 +14,13 @@ import { askRutex, RutexMcpError } from "../_shared/rutexMcp.ts";
 import { researchNeed } from "../_shared/config/solutionResearch.ts";
 import { resolveNeed } from "../_shared/config/capabilityRegistry.ts";
 import {
+  briefDue,
+  buildBriefUpdatePrompt,
   buildDirectorSystemPrompt,
   parseDirectorReply,
   type DirectorContext,
 } from "../_shared/config/directorPrompt.ts";
+import { parseMemoryBrief } from "../_shared/ownerMemory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -160,7 +163,7 @@ serve(async (req) => {
         return null;
       }
     };
-    const [versRes, threadsRes, jobsRes, connRes, dirThreadsRes, ledgerRes, notifRes, devRes] = await Promise.all([
+    const [versRes, threadsRes, jobsRes, connRes, dirThreadsRes, ledgerRes, notifRes, devRes, memoryRes] = await Promise.all([
       safeQ(supabase.from("config_versions").select("receptionist_id,version_number,change_source,owner_input,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(15)),
       safeQ(supabase.from("build_threads").select("title,status,receptionist_id,updated_at").eq("user_id", user_id).order("updated_at", { ascending: false }).limit(12)),
       safeQ(supabase.from("plan_jobs").select("id,receptionist_id,status,error_text,created_at").in("receptionist_id", opIds.length > 0 ? opIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(20)),
@@ -169,6 +172,7 @@ serve(async (req) => {
       safeQ(supabase.from("director_actions").select("kind,summary,created_at").eq("user_id", user_id).eq("visible", true).order("created_at", { ascending: false }).limit(5)),
       safeQ(supabase.from("notifications").select("title,created_at").eq("user_id", user_id).eq("read", false).order("created_at", { ascending: false }).limit(5)),
       safeQ(supabase.from("companion_devices").select("id,name,platform,enabled,last_seen").eq("user_id", user_id).order("last_seen", { ascending: false, nullsFirst: true })),
+      safeQ(supabase.from("director_memory").select("thread_id,brief,updated_at").eq("user_id", user_id).order("updated_at", { ascending: false }).limit(12)),
     ]);
     const jobs = ((((jobsRes as { data?: unknown } | null)?.data) || []) as unknown) as Array<{ id: string; receptionist_id: string; status: string; error_text: string | null; created_at: string }>;
     const failedDetail = jobs.filter((j) => j.status === "failed").slice(0, 8).map((j) => ({
@@ -196,6 +200,18 @@ serve(async (req) => {
     const devices = (((((devRes as { data?: unknown } | null)?.data) || []) as unknown) as Array<{
       id: string; name: string; platform: string; enabled: boolean; last_seen: string | null;
     }>);
+    const memoryRows = (((((memoryRes as { data?: unknown } | null)?.data) || []) as unknown) as Array<{
+      thread_id: string; brief: string; updated_at: string;
+    }>);
+    const currentThreadId = typeof body.thread_id === "string" ? body.thread_id : "";
+    const sharedMemory = memoryRows
+      .filter((m) => m.thread_id !== currentThreadId && typeof m.brief === "string" && m.brief.trim())
+      .slice(0, 10)
+      .map((m) => ({
+        source: dirThreads.find((t) => t.id === m.thread_id)?.title || "Earlier Director conversation",
+        content: m.brief,
+        created_at: m.updated_at,
+      }));
 
     const ctx: DirectorContext = {
       ownerId: user_id,
@@ -222,6 +238,7 @@ serve(async (req) => {
       recentWork: reports.map((r) => ({ kind: r.kind, summary: r.summary, created_at: r.created_at })),
       unreadNotifications: unread.map((n) => ({ title: n.title, created_at: n.created_at })),
       devices: devices.map((d) => ({ id: d.id, name: d.name, platform: d.platform, enabled: d.enabled, last_seen: d.last_seen })),
+      sharedMemory,
     };
 
     const system = buildDirectorSystemPrompt(ctx);
@@ -257,6 +274,61 @@ serve(async (req) => {
       }
       // Contract broken but words exist: show the words, invent no actions.
       return jsonRes({ ok: true, reply: "I could not shape that into a clean answer — try asking once more, simply.", suggestions: [], actions: [] });
+    }
+
+    // Keep a compact fact brief for long Director conversations. Memory is
+    // best-effort: a failure must never turn a good chat answer into an error.
+    try {
+      const memoryThreadId = typeof body.thread_id === "string" ? body.thread_id : "";
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(memoryThreadId);
+      if (isUuid) {
+        const { data: threadOwner } = await supabase
+          .from("director_threads")
+          .select("id,user_id")
+          .eq("id", memoryThreadId)
+          .maybeSingle();
+        // Service-role queries must verify ownership explicitly before an upsert.
+        if (threadOwner && (threadOwner as { user_id: string }).user_id === user_id) {
+          const [memoryRes, countRes] = await Promise.all([
+            supabase.from("director_memory")
+              .select("brief,briefed_through")
+              .eq("thread_id", memoryThreadId)
+              .maybeSingle(),
+            supabase.from("director_messages")
+              .select("id", { count: "exact", head: true })
+              .eq("thread_id", memoryThreadId),
+          ]);
+          const currentMemory = (memoryRes.data || null) as { brief: string; briefed_through: number } | null;
+          const persistedCount = typeof countRes.count === "number" ? countRes.count : 0;
+          // The user message is saved asynchronously by the client; include the
+          // current user/Director pair even if one of those writes is not visible yet.
+          const totalMessages = Math.max(persistedCount + 1, history.length + 2);
+          if (briefDue(totalMessages, currentMemory)) {
+            const recent = [
+              ...history.map((m) => `${m.role === "assistant" ? "Director" : "Owner"}: ${m.content}`),
+              `Owner: ${message}`,
+              `Director: ${reply.reply}`,
+            ].slice(-30);
+            const memoryReply = await askRutex(
+              `director-memory-${memoryThreadId.slice(0, 8)}`,
+              buildBriefUpdatePrompt(currentMemory?.brief || "", recent),
+              { timeoutMs: 20000 },
+            );
+            const brief = parseMemoryBrief(memoryReply.text || "");
+            if (brief !== null) {
+              await supabase.from("director_memory").upsert({
+                user_id,
+                thread_id: memoryThreadId,
+                brief,
+                briefed_through: totalMessages,
+                updated_at: new Date().toISOString(),
+              }, { onConflict: "thread_id" });
+            }
+          }
+        }
+      }
+    } catch {
+      // Memory is an enhancement; preserve the actual Director answer.
     }
 
     return jsonRes({ ok: true, ...reply });

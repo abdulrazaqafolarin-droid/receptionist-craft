@@ -19,9 +19,9 @@ import { toast } from "sonner";
 import { ActorCursor, ActorOverlay, useActorHost } from "@/components/ActorCursor";
 import { useBuildThreads } from "@/hooks/useBuildThreads";
 import { speakDirectorText, stopSpeaking, type DirectorVoiceProvider } from "@/utils/textToSpeech";
-import { parseLocalCommand, extractClickPhrase, extractMovementTarget, matchAnchorOrRoute, splitTargets } from "@/lib/directorLocalCommands";
+import { parseLocalCommand, parseLocalGestureCommand, extractClickPhrase, extractMovementTarget, matchAnchorOrRoute, splitTargets } from "@/lib/directorLocalCommands";
 import { lookAtPage } from "@/components/DirectorHands";
-import { parseLiveTable, pickLiveCandidate, type LiveCandidate } from "@/lib/actorGuard";
+import { parseLiveTable, pickLiveCandidate, type ActorAction, type LiveCandidate } from "@/lib/actorGuard";
 import type { GrantScope } from "@/lib/directorGrantRules";
 import { retryDirectorJob, adjustDirectorOperator, draftDirectorHelper } from "@/lib/directorExecutors";
 import type { DirectorAction } from "../../supabase/functions/_shared/config/directorPrompt";
@@ -181,7 +181,7 @@ export function DirectorChat({
       // Reply-embedded cursor work: needs no second call, no extra key —
       // it rides the moment the owner taps. Same guard, receipts, stop.
       const steps = (Array.isArray(action.steps) ? action.steps : []).slice(0, 3);
-      const actorSteps = steps.flatMap((s) => {
+      const actorSteps = steps.flatMap<ActorAction>((s): ActorAction[] => {
         switch (s.op) {
           case "click": return s.target ? [{ type: "click" as const, target: s.target }] : [];
           case "point": return s.target ? [{ type: "point" as const, target: s.target }] : [];
@@ -208,10 +208,29 @@ export function DirectorChat({
         return;
       }
       setExecuting(`hands-${msgIdx}`);
+      const needsOutcomeCheck = actorSteps.some((step) =>
+        step.type === "click" || step.type === "goto" || step.type === "drag"
+      );
+      const hasType = actorSteps.some((step) => step.type === "type");
+      const before = needsOutcomeCheck ? pageSignature() : "";
       const receipts = await ride.start(actorSteps, { tour: "director-hands-reply", userId });
+      if (needsOutcomeCheck) await new Promise<void>((resolve) => setTimeout(resolve, 450));
+      const after = needsOutcomeCheck ? pageSignature() : "";
+      if (needsOutcomeCheck) clearLiveStamps();
+      const visibleChange = needsOutcomeCheck && before !== after;
       setExecuting(null);
       const failed = receipts.find((r) => !r.ok);
-      toast[failed ? "error" : "success"](failed ? `Stopped: ${failed.detail}` : "Done.");
+      toast[failed ? "error" : "success"](
+        failed
+          ? `Stopped: ${failed.detail}`
+          : needsOutcomeCheck
+            ? visibleChange
+              ? "Action dispatched; a visible page change was detected. Confirm the intended result."
+              : "Action dispatched, but I couldn't verify a visible result. I won't repeat it automatically."
+            : hasType
+              ? "Text entry dispatched. I did not read the field contents to verify it."
+              : "Guide action finished.",
+      );
       return;
     }
     if (!userId) return;
@@ -282,6 +301,17 @@ export function DirectorChat({
     }
   }
 
+  function pageSignature(): string {
+    const snapshot = lookAtPage() as Record<string, unknown>;
+    return JSON.stringify({
+      route: snapshot.route,
+      title: snapshot.title,
+      elements: snapshot.elements,
+      headings: snapshot.headings,
+      anchors: snapshot.anchors,
+    });
+  }
+
   async function runTransientSteps(
     hits: Array<{ phrase: string; cand: LiveCandidate }>,
   ): Promise<string | null> {
@@ -294,15 +324,20 @@ export function DirectorChat({
         { type: "live_point" as const, index: h.cand.index, expect: h.cand.label },
         { type: "live_click" as const, index: h.cand.index, expect: h.cand.label },
       ]));
+      const before = pageSignature();
       const receipts = await ride.start(steps, { tour: "director-transient-click", userId, pace: "human" });
+      await new Promise<void>((resolve) => setTimeout(resolve, 450));
+      const after = pageSignature();
+      const visibleChange = before !== after;
       const failedIdx = receipts.findIndex((r) => !r.ok);
       const detail = failedIdx >= 0 ? receipts[failedIdx]?.detail || "unknown" : "";
       const doneNames = hits.slice(0, failedIdx >= 0 ? Math.floor(failedIdx / 2) : hits.length)
         .map((h) => h.cand.label);
       if (failedIdx < 0) {
-        return hits.length === 1
-          ? `Done — clicked ${hits[0].cand.label}.`
-          : `Done: ${hits.map((h) => h.cand.label).join(", ")}.`;
+        const names = hits.map((h) => h.cand.label).join(", ");
+        return visibleChange
+          ? `I sent the click to ${names}; the page changed. Please confirm it did what you wanted.`
+          : `I sent the click to ${names}, but couldn't verify a visible result. I won't repeat it automatically.`;
       }
       if (detail.startsWith("refused-live-label") || detail.startsWith("stale-expect")) {
         const which = hits[Math.floor(failedIdx / 2)]?.cand.label || "it";
@@ -355,6 +390,35 @@ export function DirectorChat({
       threadIdRef.current = tid;
       void saveMsg(tid, "user", content);
     }
+    // Explicit anchored cursor gestures are safe local actions: the shared
+    // parser resolves only registered anchors and the runner re-checks all
+    // gesture bounds. Unanchored requests go to the Director for clarification.
+    const gesture = parseLocalGestureCommand(content);
+    if (gesture) {
+      try {
+        const receipts = await ride.start(
+          [{ type: "gesture", kind: gesture.kind, target: gesture.target }],
+          { tour: "director-local-gesture", userId, pace: "human" },
+        );
+        const receipt = receipts.find((item) => !item.ok);
+        const reply = receipt
+          ? `I couldn't complete that cursor gesture on ${gesture.label}: ${receipt.detail}.`
+          : `Moved the cursor in a ${gesture.kind === "circle" ? "circle" : "wiggle"} around ${gesture.label}. No click or page action was performed.`;
+        setMessages((prev) => [...prev, { role: "ai", content: reply, timestamp: new Date().toISOString() }]);
+        if (tid) void saveMsg(tid, "assistant", reply);
+        if (voiceOn) void speakDirectorText(reply, voiceProvider).catch(() => {
+          // Voice is best-effort; it must not change the action receipt.
+        });
+      } catch {
+        const reply = "I couldn't complete that cursor gesture. Nothing else was attempted.";
+        setMessages((prev) => [...prev, { role: "ai", content: reply, timestamp: new Date().toISOString() }]);
+        if (tid) void saveMsg(tid, "assistant", reply);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     // Strict lanes first (fed commands), then the understanding lane:
     // a movement verb ANYWHERE resolves through the same snapshot,
     // anchors, and routes — natural phrasing moves the cursor too.
@@ -396,13 +460,20 @@ export function DirectorChat({
           await runAction({ type: "navigate", path: local.route }, -1);
           reply = `On ${local.label} now.`;
         } else {
+          const before = pageSignature();
           const receipts = await ride.start(
             [{ type: "click", target: local.target }],
             { tour: "director-local", userId },
           );
-          reply = receipts[0]?.ok
-            ? `Done — clicked ${local.label}.`
-            : `I found ${local.label} but the click didn't land (${receipts[0]?.detail || "unknown"}). It's still there if you want to tap it yourself.`;
+          await new Promise<void>((resolve) => setTimeout(resolve, 450));
+          const after = pageSignature();
+          clearLiveStamps();
+          const visibleChange = before !== after;
+          reply = !receipts[0]?.ok
+            ? `I found ${local.label} but the click didn't land (${receipts[0]?.detail || "unknown"}). It's still there if you want to tap it yourself.`
+            : visibleChange
+              ? `I sent the click to ${local.label}; the page changed. Please confirm the intended result.`
+              : `I sent the click to ${local.label}, but couldn't verify a visible result. I won't repeat it automatically.`;
         }
         setMessages((prev) => [...prev, {
           role: "ai",
@@ -421,7 +492,9 @@ export function DirectorChat({
       return;
     }
     try {
-      const history = [...messages, ownerMsg].slice(-10).map((m) => ({
+      // The current message is sent separately below; history contains prior
+      // turns only, otherwise the edge prompt repeats the owner's message.
+      const history = messages.slice(-9).map((m) => ({
         role: m.role === "ai" ? "assistant" : "user",
         content: m.content,
       }));

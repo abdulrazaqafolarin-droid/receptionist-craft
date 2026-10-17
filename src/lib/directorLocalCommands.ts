@@ -169,3 +169,53 @@ export function parseLocalCommand(text: string): LocalCommand | null {
   if (!phrase) return null;
   return matchAnchorOrRoute(phrase, false);
 }
+
+export type LocalGestureCommand = {
+  kind: "oscillate" | "circle";
+  target: string;
+  label: string;
+};
+
+/**
+ * Resolve explicit, anchored cursor gestures locally. The target must match
+ * a registered UI anchor; unanchored requests fall through to the Director
+ * so it can clarify rather than guessing where to move the cursor.
+ */
+export function parseLocalGestureCommand(text: string): LocalGestureCommand | null {
+  const clean = text.trim();
+  if (!clean) return null;
+
+  // Gesture verbs can appear in descriptions ("I saw the cursor wiggle").
+  // Only treat clear imperatives / direct requests as local actions.
+  const command = /^(?:(?:please|kindly)\s+)*(?:(?:can|could|would)\s+you\s+)?(?:(?<verb1>wiggle|wriggle|oscillate|circle)\s+(?:the\s+)?(?:cursor|mouse|pointer)\b|(?:make|have)\s+(?:the\s+)?(?:cursor|mouse|pointer)\s+(?<verb2>wiggle|wriggle|oscillate|circle)\b)/i.exec(clean);
+  if (!command) return null;
+  const verbText = command.groups?.verb1 ?? command.groups?.verb2;
+  if (!verbText || NEGATION_RES.test(clean.slice(0, command[0].indexOf(verbText)))) return null;
+  const verb = { 0: verbText, index: command[0].indexOf(verbText) } as RegExpExecArray;
+
+  const kind = /^circle$/i.test(verb[0]) ? "circle" : "oscillate";
+  const remainder = clean.slice(command[0].length);
+  const targetMatch = /\b(?:at|around|over|on|near)\s+(?:the\s+)?(.+?)\s*$/i.exec(remainder);
+  if (!targetMatch) return null;
+
+  const targetPhrase = targetMatch[1]
+    .replace(TRAIL_FILLER_RES, "")
+    .replace(/[.!?]+$/, "")
+    .trim();
+  if (!targetPhrase) return null;
+
+  // Require enough identifying words and exactly one registered anchor.
+  // The general navigation matcher intentionally picks a best effort match;
+  // gestures must not wiggle around the first of several plausible targets.
+  const identifyingWords = words(targetPhrase).filter((word) => word.length > 3);
+  if (identifyingWords.length < 2) return null;
+  const candidates = ACTOR_TARGETS.filter((entry) =>
+    covers(`${entry.key.replace(/[-_]/g, " ")} ${entry.label}`, targetPhrase)
+  );
+  if (candidates.length !== 1) return null;
+
+  // Gestures are anchored movement only. Never translate a route into a
+  // guessed DOM target, and never allow this parser to perform a click.
+  const target = candidates[0];
+  return { kind, target: target.key, label: target.label };
+}

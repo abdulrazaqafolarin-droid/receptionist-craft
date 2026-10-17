@@ -18,7 +18,7 @@ import type { SVGProps } from "react";
 import { BlueySpeechBubble } from "@/components/BlueySpeechBubble";
 import { useNavigate } from "react-router-dom";
 import { Square } from "lucide-react";
-import { runActorScript, claimActorRun, type ActorReceipt, type ActorMode } from "@/lib/actorRunner";
+import { runActorScript, claimActorRun, isActorRunCurrent, type ActorReceipt, type ActorMode } from "@/lib/actorRunner";
 import type { ActorAction } from "@/lib/actorGuard";
 import { describeLiveLabel } from "@/lib/actorGuard";
 import { useDirectorPresence } from "@/hooks/useDirectorPresence";
@@ -159,7 +159,7 @@ export function ActorCursor({
   const g2 = `actor-glow2-${uid}`;
   return (
     <div
-      className={`pointer-events-none fixed left-0 top-0 z-[90] motion-reduce:transition-none ${arriving && !point ? "actor-arrive" : "transition-transform duration-500 ease-out"} ${bouncing ? "bluey-bounce" : ""}`}
+      className={`pointer-events-none fixed left-0 top-0 z-[90] motion-reduce:transition-none ${arriving && !point ? "actor-arrive" : "transition-transform duration-[45ms] ease-linear"} ${bouncing ? "bluey-bounce" : ""}`}
       style={
         arriving && !point
           ? { left: "50%", top: "96px" }
@@ -224,6 +224,74 @@ export interface RingRect {
 function centerOf(el: Element): CursorPoint {
   const r = el.getBoundingClientRect();
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+/**
+ * Dispatch the browser-like event sequence used by pointer-driven controls.
+ * HTMLElement.click() alone skips pointerdown/up, which breaks many menus,
+ * popovers and custom controls. This still runs inside the page (not OS input)
+ * and must fail closed when the target is disabled, hidden or covered.
+ */
+function clickDomTarget(value: unknown): void {
+  if (!(value instanceof HTMLElement) || !value.isConnected) {
+    throw new Error("click-target-detached");
+  }
+  const el = value;
+  if (
+    el.matches(":disabled") ||
+    el.closest('[aria-disabled="true"]') ||
+    el.closest("[inert]") ||
+    el.closest('[aria-hidden="true"]')
+  ) {
+    throw new Error("click-target-disabled-or-inert");
+  }
+
+  const style = window.getComputedStyle(el);
+  if (
+    style.display === "none" ||
+    style.visibility === "hidden" ||
+    style.pointerEvents === "none" ||
+    Number(style.opacity) === 0
+  ) {
+    throw new Error("click-target-not-interactive");
+  }
+
+  const rect = el.getBoundingClientRect();
+  if (rect.width < 2 || rect.height < 2) throw new Error("click-target-no-rect");
+  const x = Math.max(rect.left + 1, Math.min(rect.right - 1, rect.left + rect.width / 2));
+  const y = Math.max(rect.top + 1, Math.min(rect.bottom - 1, rect.top + rect.height / 2));
+  const hit = document.elementFromPoint(x, y);
+  if (!hit || !(hit === el || el.contains(hit))) {
+    throw new Error("click-target-obscured");
+  }
+
+  const init = {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    view: window,
+    clientX: x,
+    clientY: y,
+    button: 0,
+    buttons: 1,
+  };
+  const pointerInit = { ...init, pointerId: 1, isPrimary: true, pointerType: "mouse" };
+  el.focus({ preventScroll: true });
+  if (typeof PointerEvent !== "undefined") {
+    hit.dispatchEvent(new PointerEvent("pointerdown", pointerInit));
+  }
+  hit.dispatchEvent(new MouseEvent("mousedown", init));
+
+  const upInit = { ...init, buttons: 0 };
+  if (typeof PointerEvent !== "undefined") {
+    hit.dispatchEvent(new PointerEvent("pointerup", { ...pointerInit, buttons: 0 }));
+  }
+  hit.dispatchEvent(new MouseEvent("mouseup", upInit));
+
+  // Use the native DOM click for the single click event/default action;
+  // do not manually dispatch a second click event.
+  if (!el.isConnected) return;
+  el.click();
 }
 
 function rectOf(el: Element): RingRect {
@@ -299,7 +367,9 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
   }, []);
 
   const goHome = useCallback(() => {
-    setPoint(dockPoint());
+    const p = dockPoint();
+    pointRef.current = p;
+    setPoint(p);
   }, [dockPoint]);
 
   const toggleFollow = useCallback((on?: boolean) => {
@@ -322,6 +392,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     }
     setCursorHidden(!visible);
     if (!visible) {
+      pointRef.current = null;
       setPoint(null);
       publishCursorPoint(null);
     }
@@ -345,7 +416,11 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
       if (!raf) {
         raf = requestAnimationFrame(() => {
           raf = 0;
-          if (pending && !runningRef.current) setPoint(pending);
+          if (pending && !runningRef.current) {
+            // Keep the synchronous planner origin aligned with follow-mode position.
+            pointRef.current = pending;
+            setPoint(pending);
+          }
           pending = null;
         });
       }
@@ -373,6 +448,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
           setTimeout(() => {
             if (alive) {
               setArriving(false);
+              pointRef.current = null;
               setPoint(null);
             }
           }, 1600);
@@ -433,7 +509,19 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
         }
       }
     });
-    activeRuns.set(runId, { stop: () => { stopRef.current = true; setRunning(false); }, mode });
+    activeRuns.set(runId, {
+      stop: () => {
+        stopRef.current = true;
+        setRunning(false);
+        // A preempted host must not leave a second cursor parked on screen.
+        pointRef.current = null;
+        setPoint(null);
+        setRing(null);
+        setSwallow(false);
+        setArriving(false);
+      },
+      mode,
+    });
     publishRuns();
     const out = await runActorScript(actions, {
       resolve: (selector) => {
@@ -457,6 +545,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
         setSwallow(true);
         await new Promise<void>((r) => setTimeout(r, 480));
         setSwallow(false);
+        pointRef.current = null;
         setPoint(null);
         try {
           sessionStorage.setItem("rutex-actor-arrival", JSON.stringify({ at: Date.now() }));
@@ -513,7 +602,7 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
         setPoint(p);
       },
       click: async (el) => {
-        (el as HTMLElement).click();
+        clickDomTarget(el);
       },
       describe: (el) => describeLiveLabel(el as Element),
       dragInto: async (fromEl, toEl) => {
@@ -571,7 +660,8 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
           ? HTMLTextAreaElement.prototype
           : HTMLInputElement.prototype;
         const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-        setter ? setter.call(input, text) : (input.value = text);
+        if (setter) setter.call(input, text);
+        else input.value = text;
         input.dispatchEvent(new Event("input", { bubbles: true }));
         input.dispatchEvent(new Event("change", { bubbles: true }));
         if (pressReturn) {
@@ -598,16 +688,21 @@ export function useActorHost(handlers?: { onCollect?: (connectorKey: string) => 
     publishRuns();
     // Resting place: when no follow mode is waiting to take over, glide
     // home after a beat so the cursor visibly finishes its work.
-    if (!follow) {
+    if (!follow && isActorRunCurrent(token)) {
       const seq = mySeq;
       setTimeout(() => {
-        if (runSeqRef.current === seq && !runningRef.current) goHome();
+        if (
+          runSeqRef.current === seq &&
+          !runningRef.current &&
+          isActorRunCurrent(token)
+        ) goHome();
       }, 2200);
     }
     return out;
   }, [navigate, follow, goHome]);
 
   const clear = useCallback(() => {
+    pointRef.current = null;
     setPoint(null);
     setSwallow(false);
     setArriving(false);

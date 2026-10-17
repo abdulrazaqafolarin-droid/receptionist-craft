@@ -133,6 +133,11 @@ function tokenStale(token: number | undefined): boolean {
   return token !== undefined && token !== liveRunToken;
 }
 
+/** True only while this run still owns the shared cursor/action lane. */
+export function isActorRunCurrent(token: number): boolean {
+  return token === liveRunToken;
+}
+
 /**
  * Resolve a stamped live-table index against the CURRENT page: element
  * present, rect alive, label verified against expect, refusal patterns
