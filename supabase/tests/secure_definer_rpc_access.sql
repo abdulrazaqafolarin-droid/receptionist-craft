@@ -1,4 +1,21 @@
 -- Run after secure_definer_rpc_access.sql on an isolated PostgreSQL database.
+DO $director_table_acl$
+BEGIN
+  IF has_table_privilege('anon', 'public.director_tasks', 'SELECT')
+     OR has_table_privilege('anon', 'public.director_tasks', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.director_tasks', 'SELECT')
+     OR has_table_privilege('authenticated', 'public.director_tasks', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.director_tasks', 'UPDATE')
+     OR has_table_privilege('authenticated', 'public.director_tasks', 'DELETE') THEN
+    RAISE EXCEPTION 'director_tasks must be accessible only through trusted server functions';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.director_tasks', 'SELECT')
+     OR NOT has_table_privilege('service_role', 'public.director_tasks', 'INSERT')
+     OR NOT has_table_privilege('service_role', 'public.director_tasks', 'UPDATE') THEN
+    RAISE EXCEPTION 'service_role must retain Director task access';
+  END IF;
+END $director_table_acl$;
+
 DO $privileges$
 BEGIN
   IF has_function_privilege('anon', 'public.cleanup_old_conversations(integer)', 'EXECUTE') THEN
