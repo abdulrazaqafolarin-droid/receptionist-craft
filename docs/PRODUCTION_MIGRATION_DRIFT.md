@@ -188,3 +188,14 @@ The existing migration `20261007000020_director_memory.sql` is part of the histo
 - Widget actions, orders, and conversation persistence are routed through the public `widget-chat` Edge Function. The deployed `widget-chat` database client uses the service-role key first and performs the relevant writes server-side.
 - PR #56 therefore restricts direct client execution of `create_widget_order`, `create_widget_appointment`, `deduct_stock`, `insert_booking_suggestion`, `insert_conversion_event`, `upsert_conversation_state`, and `upsert_conversation_summary`, while preserving the server-side service-role path.
 - PR #56 now introduces `get_public_appointment_by_token(text)`, which returns only the fields used by the public confirmation/cancellation pages and omits both stored action tokens. It revokes client execution of the legacy full-row `get_appointment_by_token(text)` and updates those two pages to use the safe projection. Apply/reconcile the migration before deploying the updated UI, and verify both confirmation and cancellation flows in staging.
+
+
+## Follow-up hardening PRs — draft only (17 October 2026)
+
+The read-only findings have now been converted into isolated, tested changes on draft PRs. **None of these changes has been applied to the live database.**
+
+- [PR #54 — safe metadata views](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/54): revokes direct mutation/DDL grants on `companion_devices_safe`, `plan_limits`, and `vault_keys_safe`, preserving the intended read access. Its isolated PostgreSQL privilege regression workflow passed.
+- [PR #56 — SECURITY DEFINER and Director task access](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/56): restricts maintenance/write RPC execution, hardens search paths, adds owner checks for config rollback, replaces the public full-row appointment-token lookup with a narrow projection, and revokes unnecessary direct client grants on `director_tasks`. Its isolated PostgreSQL regression workflow passed on commit `6536bc00b395bae07da0119a95237acc941885eb`.
+- [PR #68 — widget order integrity](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/68): validates product ownership, catalog price, quantity and idempotency server-side. Its isolated PostgreSQL regression workflow passed.
+
+These passing fixtures are evidence for the specific assertions they exercise, not proof that the complete live schema is equivalent to the fixture. Keep all three PRs in draft until migration-history reconciliation and staging validation are complete. In particular, apply the order-pricing migration and RPC grant hardening as one coordinated release before treating public widget ordering as safe; RPC grant revocation alone does not validate server-side order prices.
