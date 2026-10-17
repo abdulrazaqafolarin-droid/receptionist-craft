@@ -151,7 +151,7 @@ GRANT EXECUTE ON FUNCTION public.get_appointment_by_token(text) TO service_role;
 ALTER FUNCTION public.get_appointment_by_token(text) SET search_path = pg_catalog, public, pg_temp;
 
 -- Revert must be owner-scoped because SECURITY DEFINER bypasses table RLS.
--- Preserve the live business-model recomputation and complete config mapping.
+-- Map historical configuration into columns that exist in the current schema.
 CREATE OR REPLACE FUNCTION public.revert_config_version(
   p_receptionist_id uuid,
   p_target_version integer
@@ -162,31 +162,30 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $function$
 DECLARE
-  v_target record;
+  v_target public.config_versions%ROWTYPE;
   v_business jsonb;
   v_capabilities jsonb;
   v_contact jsonb;
+  v_channels jsonb;
+  v_customer_fields jsonb;
+  v_hours jsonb;
+  v_policies jsonb;
   v_model text;
   v_booking boolean;
   v_ordering boolean;
   v_new_version integer;
-  v_result jsonb;
 BEGIN
   IF auth.uid() IS NULL OR NOT EXISTS (
-    SELECT 1
-    FROM public.receptionists r
-    WHERE r.id = p_receptionist_id
-      AND r.user_id = auth.uid()
+    SELECT 1 FROM public.receptionists r
+    WHERE r.id = p_receptionist_id AND r.user_id = auth.uid()
   ) THEN
-    RAISE EXCEPTION 'not_your_operator'
-      USING ERRCODE = '42501';
+    RAISE EXCEPTION 'not_your_operator' USING ERRCODE = '42501';
   END IF;
 
   SELECT * INTO v_target
   FROM public.config_versions
   WHERE receptionist_id = p_receptionist_id
     AND version_number = p_target_version;
-
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'error', 'Version ' || p_target_version || ' not found');
   END IF;
@@ -194,9 +193,11 @@ BEGIN
   v_business := COALESCE(v_target.config_json -> 'business', '{}'::jsonb);
   v_capabilities := COALESCE(v_target.config_json -> 'capabilities', '{}'::jsonb);
   v_contact := v_target.config_json -> 'contact';
+  v_channels := v_target.config_json -> 'channels';
+  v_customer_fields := v_target.config_json -> 'customer_fields';
+  v_hours := v_target.config_json -> 'hours';
+  v_policies := v_target.config_json -> 'policies';
 
-  -- Keep the live business_model derivation: bare true, {enabled}, and {steps}
-  -- workflow shapes have established behavior and must not regress on rollback.
   v_booking := COALESCE((v_capabilities ->> 'books_appointments')::boolean, false)
     OR (v_target.config_json -> 'workflows' ? 'appointment_booking'
         AND COALESCE((((v_target.config_json -> 'workflows') -> 'appointment_booking') ->> 'enabled')::boolean, true));
@@ -216,27 +217,32 @@ BEGIN
       business_name = COALESCE(v_business ->> 'display_name', business_name),
       business_type = COALESCE(v_business ->> 'business_type', business_type),
       greeting_message = COALESCE(v_business ->> 'greeting_message', greeting_message),
-      tone = COALESCE((v_business ->> 'tone')::public.receptionist_tone, tone),
+      tone = CASE
+        WHEN v_business ->> 'tone' IN ('friendly', 'professional', 'playful')
+          THEN (v_business ->> 'tone')::public.receptionist_tone
+        ELSE tone
+      END,
       language = COALESCE(v_business ->> 'language', language),
       currency = COALESCE(v_business ->> 'currency', currency),
       business_phone = COALESCE(v_contact ->> 'phone', business_phone),
       address = COALESCE(v_contact ->> 'address', address),
       website = COALESCE(v_contact ->> 'website', website),
-      business_info = CASE
-        WHEN v_contact IS NOT NULL THEN COALESCE(business_info, '{}'::jsonb) || jsonb_build_object('contact', v_contact)
-        ELSE business_info
-      END,
-      capabilities = CASE
-        WHEN v_capabilities <> '{}'::jsonb THEN v_capabilities
-        ELSE capabilities
-      END,
+      hours_of_operation = CASE WHEN jsonb_typeof(v_hours) = 'object' THEN v_hours ELSE hours_of_operation END,
+      customer_fields = CASE WHEN jsonb_typeof(v_customer_fields) = 'array' THEN v_customer_fields ELSE customer_fields END,
+      business_info = COALESCE(business_info, '{}'::jsonb) ||
+        jsonb_strip_nulls(jsonb_build_object(
+          'contact', v_contact,
+          'policies', v_policies,
+          'channels', v_channels,
+          'industry', v_business -> 'industry'
+        )),
+      capabilities = CASE WHEN v_capabilities <> '{}'::jsonb THEN v_capabilities ELSE capabilities END,
       knowledge_base = COALESCE(NULLIF(v_target.config_json ->> 'knowledge_base', ''), knowledge_base),
       business_model = v_model
   WHERE id = p_receptionist_id;
 
   SELECT COALESCE(MAX(version_number), 0) + 1 INTO v_new_version
-  FROM public.config_versions
-  WHERE receptionist_id = p_receptionist_id;
+  FROM public.config_versions WHERE receptionist_id = p_receptionist_id;
 
   INSERT INTO public.config_versions (
     receptionist_id, version_number, config_json, plan_text,
@@ -247,11 +253,7 @@ BEGIN
     p_receptionist_id, now()
   );
 
-  RETURN jsonb_build_object(
-    'ok', true,
-    'reverted_to', p_target_version,
-    'new_version', v_new_version
-  );
+  RETURN jsonb_build_object('ok', true, 'reverted_to', p_target_version, 'new_version', v_new_version);
 END;
 $function$;
 
