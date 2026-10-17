@@ -29,6 +29,13 @@ BEGIN
      OR has_function_privilege('authenticated', 'public.deduct_stock(uuid,integer)', 'EXECUTE') THEN
     RAISE EXCEPTION 'client roles must not call deduct_stock directly';
   END IF;
+  IF has_function_privilege('anon', 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'client roles must not bypass server-side widget order validation';
+  END IF;
+  IF NOT has_function_privilege('service_role', 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'service_role must retain widget order creation access';
+  END IF;
   IF has_function_privilege('anon', 'public.revert_config_version(uuid,integer)', 'EXECUTE') THEN
     RAISE EXCEPTION 'anon must not execute config revert';
   END IF;
