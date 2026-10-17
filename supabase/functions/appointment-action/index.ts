@@ -24,7 +24,6 @@ serve(async (req) => {
       confirmationToken: z.string().optional().nullable(),
       reason: z.string().optional().nullable(),
       new_start_time: z.string().optional().nullable(),
-      userId: z.string().uuid().optional().nullable(),
     });
     const parsed = schema.parse(body);
     
@@ -180,7 +179,7 @@ serve(async (req) => {
             ...appt.metadata,
             cancelled_reason: reason || "Customer cancelled",
             cancelled_at: new Date().toISOString(),
-            via_token: !!token,
+            via_token: !!actionToken,
           }
         })
         .eq("id", appointmentId)
@@ -194,11 +193,11 @@ serve(async (req) => {
         await supabase.from("appointment_logs").insert({
           appointment_id: appointmentId,
           action: "cancelled",
-          actor_id: userId || null,
+          actor_id: callerUserId,
           payload: { 
             reason: reason || "Customer cancelled",
             cancelled_at: new Date().toISOString(),
-            via_token: !!token,
+            via_token: !!actionToken,
           },
         });
       } catch (logErr) {
@@ -269,12 +268,12 @@ serve(async (req) => {
         await supabase.from("appointment_logs").insert({
           appointment_id: appointmentId,
           action: "rescheduled",
-          actor_id: userId || null,
+          actor_id: callerUserId,
           payload: { 
             old_time: appt.start_time,
             new_time: newStart.toISOString(),
             reason,
-            via_token: !!token,
+            via_token: !!actionToken,
           },
         });
       } catch (logErr) {
