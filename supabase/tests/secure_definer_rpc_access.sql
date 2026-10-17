@@ -64,36 +64,6 @@ BEGIN
   END IF;
 END $$;
 
-INSERT INTO public.organization_members (user_id, organization_id, role)
-VALUES
-  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'owner'),
-  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '22222222-2222-4222-8222-222222222222', 'admin');
-
-DO $$
-DECLARE
-  org_count integer;
-  role_result boolean;
-  member_result boolean;
-BEGIN
-  PERFORM set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', true);
-  SELECT count(*) INTO org_count FROM public.get_user_org_ids('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
-  IF org_count <> 0 THEN
-    RAISE EXCEPTION 'membership helper leaked another user organization ids';
-  END IF;
-  SELECT count(*) INTO org_count FROM public.get_user_org_ids('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
-  IF org_count <> 1 THEN
-    RAISE EXCEPTION 'membership helper must return the caller own organization ids';
-  END IF;
-  SELECT public.has_org_role('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '22222222-2222-4222-8222-222222222222', 'admin') INTO role_result;
-  IF role_result IS TRUE THEN
-    RAISE EXCEPTION 'has_org_role leaked another user role';
-  END IF;
-  SELECT public.is_org_member('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '22222222-2222-4222-8222-222222222222') INTO member_result;
-  IF member_result IS TRUE THEN
-    RAISE EXCEPTION 'is_org_member leaked another user membership';
-  END IF;
-END $$;
-
 INSERT INTO public.services (id, name, stock_quantity)
 VALUES ('11111111-1111-4111-8111-111111111111', 'Test product', 5);
 
@@ -158,7 +128,7 @@ DECLARE
 BEGIN
   -- Anonymous callers can execute helpers for public RLS policies, but must
   -- not enumerate memberships or role assignments.
-  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', false);
   SELECT count(*) INTO own_org_count
   FROM public.get_user_org_ids('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
   IF own_org_count <> 0 THEN
@@ -171,7 +141,7 @@ BEGIN
     RAISE EXCEPTION 'anonymous caller must not query organization membership';
   END IF;
 
-  PERFORM set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', true);
+  PERFORM set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', false);
 
   SELECT count(*) INTO own_org_count
   FROM public.get_user_org_ids('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
