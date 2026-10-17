@@ -44,10 +44,10 @@ jobs:
           CREATE SCHEMA auth;
           CREATE SCHEMA extensions;
           CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
-            $ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $;
+            $fn$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $fn$;
           CREATE FUNCTION extensions.gen_random_bytes(integer) RETURNS bytea
             LANGUAGE sql IMMUTABLE AS
-            $ SELECT decode(repeat('ab', $1), 'hex') $;
+            $fn$ SELECT decode(repeat('ab', $1), 'hex') $fn$;
           CREATE TYPE public.receptionist_tone AS ENUM ('friendly', 'professional', 'playful');
           CREATE TYPE public.app_role AS ENUM ('owner', 'admin', 'member', 'viewer');
           CREATE TABLE public.organization_members (
@@ -97,11 +97,11 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -f supabase/tests/secure_definer_rpc_access.sql
           psql -v ON_ERROR_STOP=1 <<'SQL'
-          DO $
+          DO $test$
           BEGIN
             PERFORM * FROM public.create_widget_appointment(
               NULL, 'Test customer', 'Test service', now(), now() + interval '30 minutes',
               NULL, NULL, NULL, NULL, 'test', NULL, '{}'::jsonb
             );
-          END $;
+          END $test$;
           SQL
