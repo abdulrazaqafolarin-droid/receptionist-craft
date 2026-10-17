@@ -6,6 +6,7 @@ on:
       - "supabase/functions/_shared/appointmentActionAuth.ts"
       - "supabase/functions/_shared/appointmentActionAuth.test.ts"
       - "supabase/functions/appointment-action/index.ts"
+      - "supabase/functions/send-reminder/index.ts"
       - ".github/workflows/appointment-action-auth.yml"
   push:
     branches: [main, fix/appointment-action-authz]
@@ -13,6 +14,7 @@ on:
       - "supabase/functions/_shared/appointmentActionAuth.ts"
       - "supabase/functions/_shared/appointmentActionAuth.test.ts"
       - "supabase/functions/appointment-action/index.ts"
+      - "supabase/functions/send-reminder/index.ts"
       - ".github/workflows/appointment-action-auth.yml"
 
 permissions:
@@ -31,4 +33,4 @@ jobs:
       - name: Run authorization regression tests
         run: deno test supabase/functions/_shared/appointmentActionAuth.test.ts
       - name: Type-check appointment action endpoint
-        run: deno check supabase/functions/appointment-action/index.ts
+        run: deno check supabase/functions/appointment-action/index.ts supabase/functions/send-reminder/index.ts
