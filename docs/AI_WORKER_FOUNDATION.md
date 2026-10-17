@@ -58,7 +58,7 @@ The service layer must still validate that a task's `worker_id` belongs to the s
 
 The first UI slice now includes a separate AI Workers navigation group, a registry page, personal/organization scope selection, draft creation, and a dedicated worker workspace for editing the draft specification and reviewing its current permissions. The UI explicitly states that workers do not execute tasks yet.
 
-The `worker-registry` Edge Function supports scoped list/detail reads plus draft creation, draft updates and archive. It deliberately has no publish/activate or task-run action.
+The `worker-registry` Edge Function supports scoped list/detail reads plus draft creation, draft updates and archive. It applies a per-verified-user in-memory rate limit (30 requests/minute, burst cap 6 per 5 seconds) and returns `429` with `Retry-After` when exceeded. This is a first-line guard only: isolate restarts can reset it, so persistent/distributed limiting remains required before higher-volume production use. The registry deliberately has no publish/activate or task-run action.
 
 ## Next implementation stages
 
@@ -67,7 +67,7 @@ The `worker-registry` Edge Function supports scoped list/detail reads plus draft
 **Live-schema comparison:** a read-only catalog check confirms that `ai_workers`, `ai_worker_tasks`, and `director_memory` are absent from the live project. The repository type update does not mean the tables are deployed. Reconcile the missing historical migration ledger and validate the complete migration chain in staging before applying anything to production.
 
 1. Complete migration-history reconciliation and validate the worker schema/RLS against staging.
-2. Extend lifecycle validation with action audit records, rate limits and explicit worker-version semantics.
+2. Add durable lifecycle audit records, persistent/distributed rate limiting (the current in-memory limit is only a first-line guard), and explicit worker-version semantics.
 3. Connect Director planning/building to this lifecycle using durable jobs and checkpoint/resume.
 4. Implement generic task execution, approval handling, evidence-based completion and resumable checkpoints.
 5. Add integration tests for authorization, rate limits, task transitions, approval enforcement, idempotency and recovery.
