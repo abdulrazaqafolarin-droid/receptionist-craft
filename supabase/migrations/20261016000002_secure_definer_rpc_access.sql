@@ -252,6 +252,8 @@ REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated
 REVOKE ALL ON FUNCTION public.touch_build_thread() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.touch_director_thread() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.update_business_modules_updated_at() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.handle_new_organization() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.sync_receptionist_phones() FROM PUBLIC, anon, authenticated;
 
 REVOKE ALL ON FUNCTION public.record_manual_version(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.record_manual_version(uuid, text) TO authenticated;
