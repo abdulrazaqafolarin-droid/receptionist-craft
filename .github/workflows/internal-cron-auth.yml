@@ -20,6 +20,9 @@ on:
       - "supabase/functions/plan-worker/index.ts"
       - "supabase/functions/appointment-reminder-runner/index.ts"
       - "supabase/functions/director-sweep/index.ts"
+      - "supabase/config.toml"
+      - "supabase/migrations/*secure_internal_cron_jobs.sql"
+      - "docs/INTERNAL_CRON_AUTH_ROLLOUT.md"
       - ".github/workflows/internal-cron-auth.yml"
 
 permissions:
