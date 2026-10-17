@@ -5,7 +5,7 @@ function check(condition: boolean, message: string): void {
 }
 
 Deno.test("notification target cannot be redirected to another user", () => {
-  check(canCreateNotification({ callerUserId: "user-a" }), "own notification allowed");
+  check(canCreateNotification({ callerUserId: "user-a", hasReceptionistTarget: false }), "own notification allowed");
   check(!canCreateNotification({ callerUserId: "user-a", requestedUserId: "user-b" }), "other user target denied");
 });
 
