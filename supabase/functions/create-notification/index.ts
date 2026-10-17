@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { canCreateNotification } from "../_shared/notificationAuth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -36,7 +37,7 @@ serve(async (req) => {
 
     const required = ["type", "title", "body"];
     for (const r of required) {
-      if (!body[r]) {
+      if (typeof body[r] !== "string" || !body[r].trim()) {
         return new Response(
           JSON.stringify({ error: `Missing required field: ${r}` }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -44,15 +45,49 @@ serve(async (req) => {
       }
     }
 
+    const requestedUserId = typeof body.user_id === "string" ? body.user_id : null;
+    const receptionistId = typeof body.receptionist_id === "string" ? body.receptionist_id : null;
+    if (body.receptionist_id != null && !receptionistId) {
+      return new Response(JSON.stringify({ error: "Invalid receptionist_id" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    let receptionistOwnerId: string | null = null;
+    if (receptionistId) {
+      const { data: receptionist, error: receptionistError } = await supabaseAdmin
+        .from("receptionists")
+        .select("user_id")
+        .eq("id", receptionistId)
+        .maybeSingle();
+      if (receptionistError || !receptionist) {
+        return new Response(JSON.stringify({ error: "Receptionist not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      receptionistOwnerId = typeof receptionist.user_id === "string" ? receptionist.user_id : null;
+    }
+
+    if (!canCreateNotification({
+      callerUserId: user.id,
+      requestedUserId,
+      receptionistOwnerId,
+      hasReceptionistTarget: !!receptionistId,
+    })) {
+      return new Response(JSON.stringify({ error: "Forbidden notification target" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { error: insertError } = await supabaseAdmin
       .from("notifications")
       .insert({
-        type: body.type,
-        title: body.title,
-        message: body.body,
-        body: body.body,
-        user_id: body.user_id ?? user.id,
-        receptionist_id: body.receptionist_id ?? null,
+        type: body.type.slice(0, 80),
+        title: body.title.slice(0, 200),
+        message: body.body.slice(0, 2000),
+        body: body.body.slice(0, 2000),
+        user_id: user.id,
+        receptionist_id: receptionistId,
         severity: body.severity ?? "info",
         priority: body.severity === "critical" ? "high" : "normal",
         metadata: body.meta ?? {},
