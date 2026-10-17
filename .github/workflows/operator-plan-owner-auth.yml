@@ -1,0 +1,38 @@
+name: Owner auth for operator planning
+
+on:
+  pull_request:
+    paths:
+      - "supabase/functions/_shared/ownerAuth.ts"
+      - "supabase/functions/_shared/ownerAuth.test.ts"
+      - "supabase/functions/propose-operator-plan/index.ts"
+      - "supabase/functions/request-change/index.ts"
+      - "supabase/functions/approve-operator-plan/index.ts"
+      - ".github/workflows/operator-plan-owner-auth.yml"
+  push:
+    branches: [main, fix/operator-plan-owner-auth]
+    paths:
+      - "supabase/functions/_shared/ownerAuth.ts"
+      - "supabase/functions/_shared/ownerAuth.test.ts"
+      - "supabase/functions/propose-operator-plan/index.ts"
+      - "supabase/functions/request-change/index.ts"
+      - "supabase/functions/approve-operator-plan/index.ts"
+      - ".github/workflows/operator-plan-owner-auth.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  owner-auth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check auth helper and tests
+        run: deno check supabase/functions/_shared/ownerAuth.ts supabase/functions/_shared/ownerAuth.test.ts
+      - name: Run owner auth regression tests
+        run: deno test supabase/functions/_shared/ownerAuth.test.ts
+      - name: Type-check owner-facing planning endpoints
+        run: deno check supabase/functions/propose-operator-plan/index.ts supabase/functions/request-change/index.ts supabase/functions/approve-operator-plan/index.ts
