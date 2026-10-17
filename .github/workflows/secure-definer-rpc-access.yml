@@ -69,6 +69,11 @@ jobs:
             created_at timestamptz DEFAULT now()
           );
           CREATE TABLE public.services (id uuid PRIMARY KEY, name text NOT NULL, stock_quantity integer);
+          CREATE TABLE public.appointments (
+            id uuid PRIMARY KEY, service text NOT NULL, start_time timestamptz NOT NULL,
+            customer_name text NOT NULL, customer_phone text, customer_email text, status text,
+            cancellation_token text, confirmation_token text
+          );
           CREATE TABLE public.ai_booking_suggestions (created_at timestamptz);
           CREATE TABLE public.chat_messages (created_at timestamptz);
           CREATE TABLE public.conversation_state (last_message_at timestamptz);
@@ -84,6 +89,7 @@ jobs:
           CREATE FUNCTION public.insert_conversion_event(p_receptionist_id uuid, p_session_id text, p_event_type text, p_revenue_value numeric, p_currency text, p_metadata jsonb) RETURNS uuid LANGUAGE sql AS $fn$ SELECT gen_random_uuid() $fn$;
           CREATE FUNCTION public.upsert_conversation_state(p_receptionist_id uuid, p_session_id text, p_active_flow text, p_active_topic text, p_flow_step text, p_topic_confidence double precision, p_slots jsonb) RETURNS uuid LANGUAGE sql AS $fn$ SELECT gen_random_uuid() $fn$;
           CREATE FUNCTION public.upsert_conversation_summary(p_receptionist_id uuid, p_session_id text, p_summary text, p_key_facts jsonb, p_user_fingerprint text) RETURNS uuid LANGUAGE sql AS $fn$ SELECT gen_random_uuid() $fn$;
+          CREATE FUNCTION public.get_appointment_by_token(p_token text) RETURNS SETOF public.appointments LANGUAGE sql STABLE SECURITY DEFINER AS $fn$ SELECT * FROM public.appointments WHERE p_token IS NOT NULL AND length(p_token) > 10 AND (confirmation_token = p_token OR cancellation_token = p_token) LIMIT 1 $fn$;
           CREATE FUNCTION public.revert_config_version(p_receptionist_id uuid, p_target_version integer) RETURNS jsonb LANGUAGE sql AS $body$ SELECT '{}'::jsonb $body$;
           CREATE FUNCTION public.record_manual_version(uuid, text) RETURNS jsonb LANGUAGE sql AS $fn$ SELECT '{}'::jsonb $fn$;
           CREATE FUNCTION public.handle_new_user() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
