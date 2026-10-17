@@ -72,11 +72,9 @@ $function$;
 REVOKE ALL ON FUNCTION public.deduct_stock(uuid, integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.deduct_stock(uuid, integer) TO service_role;
 
--- Order creation is deliberately routed through the server-side inventory
--- validator. Direct client execution would let callers submit arbitrary
--- quantities/prices and bypass product-catalog validation.
-REVOKE ALL ON FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) TO service_role;
+-- Widget checkout is intentionally a public RPC. Its SECURITY DEFINER body
+-- must validate catalog ownership, prices, and quantities rather than trusting
+-- caller-supplied item data. Harden name resolution without disabling the widget.
 ALTER FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) SET search_path = pg_catalog, public, pg_temp;
 
 -- The current booking flows perform availability/conflict checks in the
