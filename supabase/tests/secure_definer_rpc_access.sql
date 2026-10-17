@@ -43,16 +43,14 @@ BEGIN
   IF NOT has_function_privilege('service_role', 'public.create_widget_appointment(uuid,text,text,timestamp with time zone,timestamp with time zone,text,text,uuid,text,text,text,jsonb)', 'EXECUTE') THEN
     RAISE EXCEPTION 'service_role must retain legacy widget booking access';
   END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_proc p
+  IF (
+    SELECT count(*) FROM pg_proc p
     WHERE p.oid IN (
       'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)'::regprocedure,
       'public.create_widget_appointment(uuid,text,text,timestamp with time zone,timestamp with time zone,text,text,uuid,text,text,text,jsonb)'::regprocedure
     )
     AND p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']
-    GROUP BY true
-    HAVING count(*) = 2
-  ) THEN
+  ) <> 2 THEN
     RAISE EXCEPTION 'widget order and appointment SECURITY DEFINER functions must have hardened search_path';
   END IF;
   IF has_function_privilege('anon', 'public.revert_config_version(uuid,integer)', 'EXECUTE') THEN
