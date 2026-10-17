@@ -10,6 +10,7 @@ on:
       - "supabase/functions/director-sweep/index.ts"
       - "supabase/functions/setup-reminder-cron/index.ts"
       - "supabase/functions/send-booking-email/index.ts"
+      - "supabase/functions/send-booking-confirmation/index.ts"
       - "supabase/functions/activate-reminders/index.ts"
       - "supabase/functions/book-appointment/index.ts"
       - "supabase/config.toml"
@@ -45,7 +46,7 @@ jobs:
       - name: Run authorization regression tests
         run: deno test supabase/functions/_shared/internalCron.test.ts
       - name: Type-check privileged workers
-        run: deno check supabase/functions/plan-worker/index.ts supabase/functions/appointment-reminder-runner/index.ts supabase/functions/director-sweep/index.ts supabase/functions/setup-reminder-cron/index.ts supabase/functions/send-booking-email/index.ts supabase/functions/activate-reminders/index.ts supabase/functions/book-appointment/index.ts
+        run: deno check supabase/functions/plan-worker/index.ts supabase/functions/appointment-reminder-runner/index.ts supabase/functions/director-sweep/index.ts supabase/functions/setup-reminder-cron/index.ts supabase/functions/send-booking-email/index.ts supabase/functions/send-booking-confirmation/index.ts supabase/functions/activate-reminders/index.ts supabase/functions/book-appointment/index.ts
       - name: Verify scheduler migration uses Vault-backed secret and covers all workers
         run: |
           grep -q "rutex_internal_cron_secret" supabase/migrations/20261017000001_secure_internal_cron_jobs.sql
