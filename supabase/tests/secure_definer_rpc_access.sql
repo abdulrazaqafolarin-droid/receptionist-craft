@@ -247,7 +247,18 @@ VALUES
   ('33333333-3333-4333-8333-333333333333', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'Owner B', 'Owner B', 'friendly');
 
 INSERT INTO public.config_versions (receptionist_id, version_number, config_json, plan_text)
-VALUES ('33333333-3333-4333-8333-333333333333', 1, '{}'::jsonb, 'fixture');
+VALUES
+  ('33333333-3333-4333-8333-333333333333', 1, '{}'::jsonb, 'other owner fixture'),
+  ('22222222-2222-4222-8222-222222222222', 1, jsonb_build_object(
+    'business', jsonb_build_object('display_name', 'Restored Business', 'business_type', 'retail', 'tone', 'playful'),
+    'contact', jsonb_build_object('phone', '+2348000000000', 'address', 'Restored address', 'website', 'https://example.test'),
+    'hours', jsonb_build_object('monday', jsonb_build_object('open', '09:00', 'close', '17:00')),
+    'policies', jsonb_build_object('returns', '14 days'),
+    'channels', jsonb_build_object('web', true),
+    'customer_fields', jsonb_build_array(jsonb_build_object('key', 'full_name')),
+    'capabilities', jsonb_build_object('books_appointments', true),
+    'knowledge_base', 'Restored knowledge'
+  ), 'fixture');
 
 DO $$
 DECLARE
@@ -267,6 +278,19 @@ BEGIN
   result := public.revert_config_version('22222222-2222-4222-8222-222222222222', 999);
   IF result->>'error' NOT LIKE 'Version % not found' THEN
     RAISE EXCEPTION 'owner should reach normal version lookup';
+  END IF;
+
+  result := public.revert_config_version('22222222-2222-4222-8222-222222222222', 1);
+  IF result->>'ok' <> 'true' THEN
+    RAISE EXCEPTION 'owner should be able to restore their own config';
+  END IF;
+  IF (SELECT business_name FROM public.receptionists WHERE id = '22222222-2222-4222-8222-222222222222') <> 'Restored Business'
+     OR (SELECT tone::text FROM public.receptionists WHERE id = '22222222-2222-4222-8222-222222222222') <> 'playful'
+     OR (SELECT hours_of_operation->'monday'->>'open' FROM public.receptionists WHERE id = '22222222-2222-4222-8222-222222222222') <> '09:00'
+     OR (SELECT customer_fields->0->>'key' FROM public.receptionists WHERE id = '22222222-2222-4222-8222-222222222222') <> 'full_name'
+     OR (SELECT business_info->'policies'->>'returns' FROM public.receptionists WHERE id = '22222222-2222-4222-8222-222222222222') <> '14 days'
+     OR (SELECT business_info->'channels'->>'web' FROM public.receptionists WHERE id = '22222222-2222-4222-8222-222222222222') <> 'true' THEN
+    RAISE EXCEPTION 'config revert should restore current-schema business fields';
   END IF;
 END $$;
 
