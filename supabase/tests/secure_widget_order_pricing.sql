@@ -24,7 +24,7 @@ VALUES ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbb
 
 -- Ensure later migrations cannot reset the public SECURITY DEFINER RPC to
 -- an unsafe search_path after the general function-hardening migration.
-DO $
+DO $search_path$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_proc p
@@ -33,9 +33,9 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'widget order SECURITY DEFINER function must use hardened search_path';
   END IF;
-END $;
+END $search_path$;
 
-DO $
+DO $pricing_test$
 DECLARE
   v_order_id uuid;
   v_replay_id uuid;
@@ -134,4 +134,4 @@ BEGIN
     v_caught := true;
   END;
   IF NOT v_caught THEN RAISE EXCEPTION 'non-array items payload must be rejected'; END IF;
-END $$;
+END $pricing_test$;
