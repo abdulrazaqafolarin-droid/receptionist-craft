@@ -7,6 +7,9 @@ The following Edge Functions use a service-role Supabase client and are intended
 - `plan-worker`
 - `appointment-reminder-runner`
 - `director-sweep`
+- `setup-reminder-cron` (called internally after an owner approves booking)
+- `send-booking-email` (called internally by booking/reminder flows)
+- `activate-reminders` (superseded legacy endpoint, guarded so it cannot be triggered publicly)
 
 Their Supabase gateway configuration has JWT verification disabled. The gateway's publishable/anon key is public and cannot prove that a request came from pg_cron. These handlers now fail closed unless the caller supplies `x-rutex-cron-secret` matching the server secret.
 
@@ -27,8 +30,8 @@ The SQL migration reads the value from `vault.decrypted_secrets` when each job r
 2. Generate the secret locally using a cryptographically secure generator. Store it directly in the Supabase Edge Function secrets UI/CLI and Vault secret manager. Do not include it in tickets, PRs, shell history, or chat.
 3. Verify the Vault entry exists and its length is at least 32 bytes without selecting or printing its value.
 4. Apply `20261017000001_secure_internal_cron_jobs.sql` in staging first. It reschedules the three jobs to send the header fetched from Vault at runtime.
-5. Deploy the three guarded Edge Functions. Until the functions are deployed, the old versions ignore the extra header; after deployment, calls without the secret receive 401, and missing/weak server configuration receives 503.
-6. Invoke each function once with an invalid header and confirm 401; invoke through the scheduler path and confirm successful execution. Do not expose the secret in request logs.
+5. Deploy the guarded background functions and the updated `book-appointment` caller. Until the guarded functions are deployed, old versions ignore the extra header; after deployment, calls without the secret receive 401, and missing/weak server configuration receives 503.
+6. Invoke each internal-only function once with an invalid header and confirm 401; invoke through the scheduler/booking path and confirm successful execution. Do not expose the secret in request logs.
 7. Check cron job run history and Edge Function logs for successful invocations before declaring the rollout complete.
 
 ## Rollback
