@@ -13,13 +13,19 @@ GRANT EXECUTE ON FUNCTION public.cleanup_old_chat_messages(integer) TO service_r
 GRANT EXECUTE ON FUNCTION public.cleanup_old_conversation_state(integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.cleanup_old_conversations(integer) TO service_role;
 
+-- Keep the maintenance routines safe from temporary-schema object shadowing.
+ALTER FUNCTION public.cleanup_old_booking_suggestions(integer) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.cleanup_old_chat_messages(integer) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.cleanup_old_conversation_state(integer) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.cleanup_old_conversations(integer) SET search_path = pg_catalog, public, pg_temp;
+
 -- Inventory deduction is an internal order-processing primitive, not a public
 -- RPC. Reject non-positive quantities even when called by a trusted server.
 CREATE OR REPLACE FUNCTION public.deduct_stock(p_product_id uuid, p_quantity integer)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
 DECLARE
   v_current_qty integer;
@@ -75,7 +81,7 @@ CREATE OR REPLACE FUNCTION public.revert_config_version(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
 DECLARE
   v_target record;
@@ -182,7 +188,7 @@ RETURNS SETOF uuid
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
   SELECT organization_id
   FROM public.organization_members
@@ -195,7 +201,7 @@ RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
   SELECT COALESCE(
     _user_id = auth.uid()
@@ -215,7 +221,7 @@ RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
   SELECT COALESCE(
     _user_id = auth.uid()
@@ -238,17 +244,17 @@ GRANT EXECUTE ON FUNCTION public.is_org_member(uuid, uuid) TO anon, authenticate
 
 -- This helper already checks auth.uid() against the receptionist owner. Keep
 -- it callable only by signed-in users rather than exposing it as a public RPC.
-ALTER FUNCTION public.record_manual_version(uuid, text) SET search_path = public;
+ALTER FUNCTION public.record_manual_version(uuid, text) SET search_path = pg_catalog, public, pg_temp;
 
 -- Trigger-only SECURITY DEFINER functions use fully-qualified application tables,
 -- but still need an explicit search_path. Their existing triggers continue to
 -- fire without granting clients direct EXECUTE access to these trigger routines.
-ALTER FUNCTION public.handle_new_user() SET search_path = public;
-ALTER FUNCTION public.touch_build_thread() SET search_path = public;
-ALTER FUNCTION public.touch_director_thread() SET search_path = public;
-ALTER FUNCTION public.update_business_modules_updated_at() SET search_path = public;
-ALTER FUNCTION public.handle_new_organization() SET search_path = public;
-ALTER FUNCTION public.sync_receptionist_phones() SET search_path = public;
+ALTER FUNCTION public.handle_new_user() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.touch_build_thread() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.touch_director_thread() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.update_business_modules_updated_at() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.handle_new_organization() SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.sync_receptionist_phones() SET search_path = pg_catalog, public, pg_temp;
 
 REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.touch_build_thread() FROM PUBLIC, anon, authenticated;
