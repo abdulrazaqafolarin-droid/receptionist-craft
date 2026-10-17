@@ -50,7 +50,18 @@ BEGIN
      OR has_function_privilege('authenticated', 'public.update_business_modules_updated_at()', 'EXECUTE') THEN
     RAISE EXCEPTION 'client roles must not directly execute trigger routines';
   END IF;
-END $$;
+
+  IF has_function_privilege('anon', 'public.get_user_org_ids(uuid)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.has_org_role(uuid,uuid,public.app_role)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.is_org_member(uuid,uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'anon must not call organization membership helpers';
+  END IF;
+  IF NOT has_function_privilege('authenticated', 'public.get_user_org_ids(uuid)', 'EXECUTE')
+     OR NOT has_function_privilege('authenticated', 'public.has_org_role(uuid,uuid,public.app_role)', 'EXECUTE')
+     OR NOT has_function_privilege('authenticated', 'public.is_org_member(uuid,uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'authenticated role must retain membership helper access for RLS';
+  END IF;
+END $;
 
 INSERT INTO public.services (id, stock_quantity)
 VALUES ('11111111-1111-4111-8111-111111111111', 5);
@@ -102,5 +113,39 @@ BEGIN
   result := public.revert_config_version('22222222-2222-4222-8222-222222222222', 999);
   IF result->>'error' NOT LIKE 'Version % not found' THEN
     RAISE EXCEPTION 'owner should reach normal version lookup';
+  END IF;
+END $$;
+
+INSERT INTO public.organization_members (user_id, organization_id, role)
+VALUES
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '44444444-4444-4444-8444-444444444444', 'owner'),
+  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '55555555-5555-4555-8555-555555555555', 'admin');
+
+DO $$
+DECLARE
+  own_org_count integer;
+BEGIN
+  PERFORM set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', true);
+
+  SELECT count(*) INTO own_org_count
+  FROM public.get_user_org_ids('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  IF own_org_count <> 1 THEN
+    RAISE EXCEPTION 'caller should see their own organization ids';
+  END IF;
+
+  SELECT count(*) INTO own_org_count
+  FROM public.get_user_org_ids('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+  IF own_org_count <> 0 THEN
+    RAISE EXCEPTION 'caller must not enumerate another user organizations';
+  END IF;
+
+  IF public.has_org_role('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '55555555-5555-4555-8555-555555555555', 'admin') THEN
+    RAISE EXCEPTION 'caller must not query another user role';
+  END IF;
+  IF public.is_org_member('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '55555555-5555-4555-8555-555555555555') THEN
+    RAISE EXCEPTION 'caller must not query another user membership';
+  END IF;
+  IF NOT public.has_org_role('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '44444444-4444-4444-8444-444444444444', 'owner') THEN
+    RAISE EXCEPTION 'caller should still resolve their own role';
   END IF;
 END $$;
