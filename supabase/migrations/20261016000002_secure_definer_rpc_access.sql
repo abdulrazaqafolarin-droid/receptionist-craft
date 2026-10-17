@@ -283,6 +283,10 @@ GRANT EXECUTE ON FUNCTION public.is_org_member(uuid, uuid) TO anon, authenticate
 -- it callable only by signed-in users rather than exposing it as a public RPC.
 ALTER FUNCTION public.record_manual_version(uuid, text) SET search_path = pg_catalog, public, pg_temp;
 
+-- Event-trigger handlers cannot be invoked as ordinary RPCs, but their
+-- default PUBLIC EXECUTE grant is unnecessary; keep the ACL least-privilege.
+REVOKE ALL ON FUNCTION public.rls_auto_enable() FROM PUBLIC, anon, authenticated;
+
 -- Trigger-only SECURITY DEFINER functions use fully-qualified application tables,
 -- but still need an explicit search_path. Their existing triggers continue to
 -- fire without granting clients direct EXECUTE access to these trigger routines.
