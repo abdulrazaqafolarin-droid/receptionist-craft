@@ -77,12 +77,14 @@ GRANT EXECUTE ON FUNCTION public.deduct_stock(uuid, integer) TO service_role;
 -- quantities/prices and bypass product-catalog validation.
 REVOKE ALL ON FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) TO service_role;
+ALTER FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) SET search_path = pg_catalog, public, pg_temp;
 
 -- The current booking flows perform availability/conflict checks in the
 -- server-side book-appointment/widget-chat paths. This legacy SECURITY DEFINER
 -- RPC inserts directly and can bypass those checks if called by a client.
 REVOKE ALL ON FUNCTION public.create_widget_appointment(uuid, text, text, timestamptz, timestamptz, text, text, uuid, text, text, text, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_widget_appointment(uuid, text, text, timestamptz, timestamptz, text, text, uuid, text, text, text, jsonb) TO service_role;
+ALTER FUNCTION public.create_widget_appointment(uuid, text, text, timestamptz, timestamptz, text, text, uuid, text, text, text, jsonb) SET search_path = pg_catalog, public, pg_temp;
 
 -- Revert must be owner-scoped because SECURITY DEFINER bypasses table RLS.
 -- Preserve the live business-model recomputation and complete config mapping.
