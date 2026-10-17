@@ -174,3 +174,8 @@ The table above audits the migration ledger through `20261007000021`. Later feat
 ### Mandatory rollout rule
 
 This order is only the proposed order **among these draft files**. It is not a substitute for reconciling the missing historical migration ledger entries listed above. Do not apply this sequence directly to production, do not bulk-mark versions as applied based on object presence, and do not deploy PR #50 code before its schema. First compare the historical migrations to live definitions and stage the complete chain in a disposable/preview database.
+
+
+### Specific blocker for PR #50: Director memory
+
+The existing migration `20261007000020_director_memory.sql` is part of the historical set missing from the live migration ledger, and the live catalog audit did not find `public.director_memory`. PR #50's long-conversation memory restore must not be deployed until this is resolved. During reconciliation, verify the migration's complete table definition, indexes, RLS policy, grants, and owner-scoped access against staging. If the migration is not safely applicable as written, prepare a corrective migration rather than deploying code that assumes the table exists.
