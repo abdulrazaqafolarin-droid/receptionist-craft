@@ -78,6 +78,12 @@ GRANT EXECUTE ON FUNCTION public.deduct_stock(uuid, integer) TO service_role;
 REVOKE ALL ON FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) TO service_role;
 
+-- The current booking flows perform availability/conflict checks in the
+-- server-side book-appointment/widget-chat paths. This legacy SECURITY DEFINER
+-- RPC inserts directly and can bypass those checks if called by a client.
+REVOKE ALL ON FUNCTION public.create_widget_appointment(uuid, text, text, timestamptz, timestamptz, text, text, uuid, text, text, text, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_widget_appointment(uuid, text, text, timestamptz, timestamptz, text, text, uuid, text, text, text, jsonb) TO service_role;
+
 -- Revert must be owner-scoped because SECURITY DEFINER bypasses table RLS.
 -- Preserve the live business-model recomputation and complete config mapping.
 CREATE OR REPLACE FUNCTION public.revert_config_version(
