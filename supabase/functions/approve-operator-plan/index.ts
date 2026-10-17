@@ -293,17 +293,17 @@ serve(async (req) => {
       if (workflows.appointment_booking?.enabled === true) {
         trace.start("schedule-cron");
         const baseUrl = Deno.env.get("SUPABASE_URL") || "";
-        const svcKey = Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-        if (baseUrl && svcKey) {
+        const cronSecret = Deno.env.get("RUTEX_INTERNAL_CRON_SECRET") || "";
+        if (baseUrl && cronSecret) {
           const cronRes = await fetch(`${baseUrl}/functions/v1/setup-reminder-cron`, {
             method: "POST",
-            headers: { Authorization: `Bearer ${svcKey}`, "Content-Type": "application/json" },
+            headers: { "x-rutex-cron-secret": cronSecret, "Content-Type": "application/json" },
             body: "{}",
           });
           console.log("[approve-operator-plan] Reminder cron setup:", cronRes.status);
           trace.end("schedule-cron", "Reminder schedule armed", [`setup:${cronRes.status}`]);
         } else {
-          trace.skip("schedule-cron", "Reminder schedule skipped", ["no runtime URL available"]);
+          trace.skip("schedule-cron", "Reminder schedule skipped", ["internal cron auth is not configured"]);
         }
       } else {
         trace.skip("schedule-cron", "No booking workflow — no reminders needed");
