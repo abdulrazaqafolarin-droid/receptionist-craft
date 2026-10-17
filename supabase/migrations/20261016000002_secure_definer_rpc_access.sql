@@ -1,4 +1,10 @@
 -- Restrict maintenance/security-definer RPCs to trusted callers.
+-- director_tasks is server-managed by director-task and has no client RLS
+-- policies. Remove unnecessary broad table grants; Edge Functions use service_role.
+REVOKE ALL ON TABLE public.director_tasks FROM PUBLIC, anon, authenticated;
+GRANT ALL ON TABLE public.director_tasks TO service_role;
+
+
 -- The live function definitions were inspected read-only before preparing this migration.
 -- Apply only after migration-history reconciliation and staging verification.
 
