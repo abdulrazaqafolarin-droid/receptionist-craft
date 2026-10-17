@@ -72,6 +72,12 @@ $function$;
 REVOKE ALL ON FUNCTION public.deduct_stock(uuid, integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.deduct_stock(uuid, integer) TO service_role;
 
+-- Order creation is deliberately routed through the server-side inventory
+-- validator. Direct client execution would let callers submit arbitrary
+-- quantities/prices and bypass product-catalog validation.
+REVOKE ALL ON FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) TO service_role;
+
 -- Revert must be owner-scoped because SECURITY DEFINER bypasses table RLS.
 -- Preserve the live business-model recomputation and complete config mapping.
 CREATE OR REPLACE FUNCTION public.revert_config_version(
