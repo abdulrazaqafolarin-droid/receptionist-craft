@@ -15,7 +15,7 @@ The live Supabase project was inspected read-only. The findings below identify r
 | Operator planning/approval | Request user_id was trusted as identity; async paths could queue work before ownership validation | PR #64 verifies bearer JWT identity, checks ownership before queueing, and scopes version approval | Draft; focused Deno CI passed |
 | Appointment actions | Appointment mutations only checked an action token if one was supplied; reminder endpoint did not verify the owner | PR #65 requires owner JWT or action-specific token and owner auth for reminders | Draft; focused Deno CI passed |
 | Director voice | Voice endpoint could invoke the private gateway and use the single-owner vault key without caller authentication | PR #66 authenticates and restricts access to the current vault owner | Draft; focused Deno CI passed |
-| Notifications | Authenticated caller could override notification recipient user_id and select another receptionist | PR #67 binds notification target to verified caller and owned receptionist | Draft; initial CI failure found and test fixture corrected; latest run pending |
+| Notifications | Authenticated caller could override notification recipient user_id and select another receptionist | PR #67 binds notification target to verified caller and owned receptionist | Draft; focused Deno tests and endpoint type-check passed after correcting test fixtures |
 
 ## Deployment blocker: migration history drift
 
