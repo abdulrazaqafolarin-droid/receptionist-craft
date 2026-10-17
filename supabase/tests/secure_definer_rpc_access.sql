@@ -38,9 +38,22 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_proc p
     WHERE p.oid = 'public.record_manual_version(uuid,text)'::regprocedure
-      AND p.proconfig @> ARRAY['search_path=public']
+      AND p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']
   ) THEN
-    RAISE EXCEPTION 'record_manual_version must have a fixed search_path';
+    RAISE EXCEPTION 'record_manual_version must have a hardened search_path';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid IN (
+      'public.cleanup_old_booking_suggestions(integer)'::regprocedure,
+      'public.cleanup_old_chat_messages(integer)'::regprocedure,
+      'public.cleanup_old_conversation_state(integer)'::regprocedure,
+      'public.cleanup_old_conversations(integer)'::regprocedure
+    )
+    AND NOT (p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp'])
+  ) THEN
+    RAISE EXCEPTION 'cleanup SECURITY DEFINER functions must have a hardened search_path';
   END IF;
 
   IF EXISTS (
@@ -53,7 +66,7 @@ BEGIN
       'public.handle_new_organization()'::regprocedure,
       'public.sync_receptionist_phones()'::regprocedure
     )
-    AND NOT (p.proconfig @> ARRAY['search_path=public'])
+    AND NOT (p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp'])
   ) THEN
     RAISE EXCEPTION 'trigger SECURITY DEFINER functions must have a fixed search_path';
   END IF;
