@@ -390,6 +390,9 @@ const hasConflict = (conflicts || []).some((appt: Appointment) => {
       try {
         await supabase.functions.invoke("send-booking-email", {
           body: { appointmentId: appointment.id },
+          headers: {
+            "x-rutex-cron-secret": Deno.env.get("RUTEX_INTERNAL_CRON_SECRET") || "",
+          },
         });
         console.log(`[book-appointment] Confirmation email sent`);
       } catch (emailErr) {

@@ -5,16 +5,20 @@
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { authorizeInternalCron } from "../_shared/internalCron.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-rutex-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const authFailure = authorizeInternalCron(req, Deno.env.get("RUTEX_INTERNAL_CRON_SECRET"));
+  if (authFailure) return authFailure;
 
   try {
     const supabase = createClient(
@@ -57,6 +61,9 @@ serve(async (req) => {
             body: {
               appointmentId: apt.id,
               isReminder: true,
+            },
+            headers: {
+              "x-rutex-cron-secret": Deno.env.get("RUTEX_INTERNAL_CRON_SECRET") || "",
             },
           });
 

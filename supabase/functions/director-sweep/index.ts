@@ -32,10 +32,11 @@ import { classifyJobError } from "../_shared/directorTriage.ts";
 import { ledgerStart, ledgerFinish } from "../_shared/directorLedger.ts";
 import { stockSteps, requeueSteps, draftSteps } from "../_shared/directorSteps.ts";
 import type { PresenceStep } from "../_shared/directorSteps.ts";
+import { authorizeInternalCron } from "../_shared/internalCron.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-rutex-cron-secret",
 };
 
 function jsonRes(body: unknown, status = 200) {
@@ -434,6 +435,8 @@ async function sweepUser(
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const authFailure = authorizeInternalCron(req, Deno.env.get("RUTEX_INTERNAL_CRON_SECRET"));
+  if (authFailure) return authFailure;
   try {
     const body = await req.json().catch(() => ({}));
     const dry = (body as Record<string, unknown>).dry_run === true;
