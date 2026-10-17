@@ -1,0 +1,74 @@
+name: Director task table privilege regression
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/*secure_director_task_table_grants.sql"
+      - "supabase/tests/director_task_table_grants.sql"
+      - ".github/workflows/director-task-table-grants.yml"
+  push:
+    branches: [main, fix/director-task-table-grants]
+    paths:
+      - "supabase/migrations/*secure_director_task_table_grants.sql"
+      - "supabase/tests/director_task_table_grants.sql"
+      - ".github/workflows/director-task-table-grants.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  director-task-table-grants:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rutex_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rutex_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: rutex_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+      - name: Create representative server-only Director task table
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+
+          CREATE TABLE public.director_tasks (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id uuid NOT NULL,
+            goal text NOT NULL,
+            lane text NOT NULL DEFAULT 'inapp',
+            device_id uuid,
+            budget integer NOT NULL DEFAULT 12,
+            history jsonb NOT NULL DEFAULT '[]'::jsonb,
+            status text NOT NULL DEFAULT 'running',
+            result text,
+            created_at timestamptz NOT NULL DEFAULT now(),
+            updated_at timestamptz NOT NULL DEFAULT now()
+          );
+          ALTER TABLE public.director_tasks ENABLE ROW LEVEL SECURITY;
+          GRANT ALL ON TABLE public.director_tasks TO anon, authenticated, service_role;
+          SQL
+      - name: Apply least-privilege migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261017000003_secure_director_task_table_grants.sql
+      - name: Assert clients cannot read, mutate, or truncate server-managed tasks
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/director_task_table_grants.sql
