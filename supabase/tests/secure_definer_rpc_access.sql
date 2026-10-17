@@ -7,8 +7,23 @@ BEGIN
   IF has_function_privilege('authenticated', 'public.cleanup_old_conversations(integer)', 'EXECUTE') THEN
     RAISE EXCEPTION 'authenticated must not execute cleanup routines';
   END IF;
-  IF NOT has_function_privilege('service_role', 'public.cleanup_old_conversations(integer)', 'EXECUTE') THEN
+  IF has_function_privilege('anon', 'public.cleanup_old_booking_suggestions(integer)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.cleanup_old_booking_suggestions(integer)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.cleanup_old_chat_messages(integer)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.cleanup_old_chat_messages(integer)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.cleanup_old_conversation_state(integer)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.cleanup_old_conversation_state(integer)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'all cleanup routines must be inaccessible to client roles';
+  END IF;
+  IF NOT has_function_privilege('service_role', 'public.cleanup_old_conversations(integer)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'public.cleanup_old_booking_suggestions(integer)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'public.cleanup_old_chat_messages(integer)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'public.cleanup_old_conversation_state(integer)', 'EXECUTE') THEN
     RAISE EXCEPTION 'service_role must retain maintenance execution';
+  END IF;
+  IF has_function_privilege('anon', 'public.record_manual_version(uuid,text)', 'EXECUTE')
+     OR NOT has_function_privilege('authenticated', 'public.record_manual_version(uuid,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'manual version snapshots must be signed-in owner-only RPCs';
   END IF;
   IF has_function_privilege('anon', 'public.deduct_stock(uuid,integer)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.deduct_stock(uuid,integer)', 'EXECUTE') THEN
