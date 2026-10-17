@@ -1,4 +1,15 @@
 -- Run after the secure_widget_order_pricing migration on a disposable database.
+DO $pricing_acl$
+BEGIN
+  IF has_function_privilege('anon', 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'widget order write RPC must not be directly callable by client roles';
+  END IF;
+  IF NOT has_function_privilege('service_role', 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'service_role must retain widget order RPC execution';
+  END IF;
+END $pricing_acl$;
+
 INSERT INTO public.receptionists (id, active) VALUES
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', true),
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', true);
