@@ -33,6 +33,7 @@ import {
   type TaskStep,
 } from "../_shared/directorTask.ts";
 import { ledgerStart, ledgerFinish } from "../_shared/directorLedger.ts";
+import { parseDirectorTaskBody } from "../_shared/directorTaskRequest.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,9 +112,9 @@ serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
 
-    // Read the request body exactly once: Fetch request bodies are streams.
-    // The gateway-authenticated path also needs user_id from this same body.
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    // Parse once before auth branching so gateway identity and action share
+    // the same validated object. Request bodies are one-shot streams.
+    const body = await parseDirectorTaskBody(req);
 
     // Identity: gateway key first, session JWT second. Body never decides
     // identity for the owner-JWT path; the gateway key is the trusted brain lane.
