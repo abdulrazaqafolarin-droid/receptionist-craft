@@ -114,7 +114,9 @@ BEGIN
      OR has_function_privilege('anon', 'public.handle_new_organization()', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.handle_new_organization()', 'EXECUTE')
      OR has_function_privilege('anon', 'public.sync_receptionist_phones()', 'EXECUTE')
-     OR has_function_privilege('authenticated', 'public.sync_receptionist_phones()', 'EXECUTE') THEN
+     OR has_function_privilege('authenticated', 'public.sync_receptionist_phones()', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.rls_auto_enable()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.rls_auto_enable()', 'EXECUTE') THEN
     RAISE EXCEPTION 'client roles must not directly execute trigger routines';
   END IF;
 
