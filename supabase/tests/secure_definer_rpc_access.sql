@@ -1,5 +1,5 @@
 -- Run after secure_definer_rpc_access.sql on an isolated PostgreSQL database.
-DO $$
+DO $privileges$
 BEGIN
   IF has_function_privilege('anon', 'public.cleanup_old_conversations(integer)', 'EXECUTE') THEN
     RAISE EXCEPTION 'anon must not execute cleanup routines';
@@ -121,7 +121,7 @@ BEGIN
      OR NOT has_function_privilege('authenticated', 'public.is_org_member(uuid,uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'authenticated role must retain membership helper access for RLS';
   END IF;
-END $;
+END $privileges$;
 
 -- The SECURITY DEFINER membership helpers must not become an oracle for
 -- arbitrary user IDs supplied by an authenticated caller.
