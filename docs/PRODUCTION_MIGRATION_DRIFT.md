@@ -156,3 +156,21 @@ This matrix records object-presence evidence from read-only catalog queries. **â
 - The active Director sweep cron job and realtime publication membership are runtime state, not proof that the corresponding migration ledger rows were recorded.
 - The table/function presence of the other Director migrations suggests manual or out-of-band schema changes may have occurred. Do not mark them applied until full DDL, policy, grants, triggers, indexes and backfills match.
 - This is still read-only evidence. No production DDL, data writes, ledger repair or deployment was performed.
+
+
+## Additional draft migrations created after this audit
+
+The table above audits the migration ledger through `20261007000021`. Later feature/security PRs introduce additional migration files that are **not evidence of production application**. Keep them separate from the 29-version reconciliation list until each PR is reviewed and its rollout approved.
+
+| Order by filename | Draft PR | Migration | Rollout dependency |
+|---|---|---|---|
+| 1 | [PR #50](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/50) | `20261015000001_director_task_pending_command.sql` | Apply the schema change before deploying Director code that reads/writes `pending_command`. The live table was observed without this column. |
+| 2 | [PR #54](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/54) | `20261016000000_secure_safe_view_grants.sql` | Verify legitimate view reads and writes before rollout; keep the safe views read-only for client roles. |
+| 3 | [PR #52](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/52) | `20261016000001_ai_worker_foundation.sql` | Verify the full worker schema, RLS and registry Edge Function against staging before enabling the UI. |
+| 4 | [PR #56](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/56) | `20261016000002_secure_definer_rpc_access.sql` | Run the least-privilege regression tests. Public widget order execution is intentionally preserved; PR #68 adds catalog validation later in the sequence. |
+| 5 | [PR #63](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/63) | `20261017000001_secure_internal_cron_jobs.sql` | Configure a strong `RUTEX_INTERNAL_CRON_SECRET` in Edge Function secrets and Vault first. Coordinate with PR #64: deploy its caller before guarded functions, and verify scheduler/booking paths in staging. |
+| 6 | [PR #68](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/68) | `20261017000002_secure_widget_order_pricing.sql` | Keep the public RPC callable; validate product ownership, catalog price, quantity and idempotency in the function body. Preserve `search_path = pg_catalog, public, pg_temp` when replacing the function. |
+
+### Mandatory rollout rule
+
+This order is only the proposed order **among these draft files**. It is not a substitute for reconciling the missing historical migration ledger entries listed above. Do not apply this sequence directly to production, do not bulk-mark versions as applied based on object presence, and do not deploy PR #50 code before its schema. First compare the historical migrations to live definitions and stage the complete chain in a disposable/preview database.
