@@ -50,6 +50,7 @@ jobs:
             $fn$ SELECT decode(repeat('ab', $1), 'hex') $fn$;
           CREATE TYPE public.receptionist_tone AS ENUM ('friendly', 'professional', 'playful');
           CREATE TYPE public.app_role AS ENUM ('owner', 'admin', 'member', 'viewer');
+          CREATE TABLE public.director_tasks (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL, status text NOT NULL DEFAULT 'queued');
           CREATE TABLE public.organization_members (
             user_id uuid NOT NULL, organization_id uuid NOT NULL, role public.app_role NOT NULL
           );
