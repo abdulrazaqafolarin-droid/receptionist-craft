@@ -247,6 +247,8 @@ ALTER FUNCTION public.handle_new_user() SET search_path = public;
 ALTER FUNCTION public.touch_build_thread() SET search_path = public;
 ALTER FUNCTION public.touch_director_thread() SET search_path = public;
 ALTER FUNCTION public.update_business_modules_updated_at() SET search_path = public;
+ALTER FUNCTION public.handle_new_organization() SET search_path = public;
+ALTER FUNCTION public.sync_receptionist_phones() SET search_path = public;
 
 REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.touch_build_thread() FROM PUBLIC, anon, authenticated;
