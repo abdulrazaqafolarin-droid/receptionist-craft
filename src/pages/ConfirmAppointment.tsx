@@ -39,7 +39,7 @@ export default function ConfirmAppointment() {
     try {
       // Use the secure RPC function that works without auth
       const { data, error: rpcError } = await supabase
-        .rpc("get_appointment_by_token", { p_token: token });
+        .rpc("get_public_appointment_by_token", { p_token: token });
 
       if (rpcError) throw rpcError;
 
