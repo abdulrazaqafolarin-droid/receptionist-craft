@@ -4,10 +4,11 @@ import { generateOperatorPlan, generateChangePlan } from "../_shared/config/enha
 import { getLatestVersion, getReasoningHistory, saveConfigVersion } from "../_shared/config/versioning.ts";
 import { researchNeeds } from "../_shared/config/solutionResearch.ts";
 import { TraceCollector } from "../_shared/config/trace.ts";
+import { authorizeInternalCron } from "../_shared/internalCron.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-rutex-cron-secret",
 };
 
 function jsonRes(body: unknown, status = 200) {
@@ -42,6 +43,9 @@ interface PlanJob {
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const authFailure = authorizeInternalCron(req, Deno.env.get("RUTEX_INTERNAL_CRON_SECRET"));
+  if (authFailure) return authFailure;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
