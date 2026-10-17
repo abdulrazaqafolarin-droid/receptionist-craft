@@ -121,7 +121,55 @@ BEGIN
      OR NOT has_function_privilege('authenticated', 'public.is_org_member(uuid,uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'authenticated role must retain membership helper access for RLS';
   END IF;
-END $$;
+END $;
+
+-- The SECURITY DEFINER membership helpers must not become an oracle for
+-- arbitrary user IDs supplied by an authenticated caller.
+INSERT INTO public.organization_members (user_id, organization_id, role) VALUES
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-aaaa-4111-8111-111111111111', 'owner'),
+  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '22222222-bbbb-4222-8222-222222222222', 'admin');
+
+DO $
+DECLARE
+  can_see_other_org boolean;
+  other_role boolean;
+  other_member boolean;
+  own_role boolean;
+BEGIN
+  PERFORM set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', true);
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public.get_user_org_ids('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+    WHERE organization_id = '11111111-aaaa-4111-8111-111111111111'
+  ) THEN
+    RAISE EXCEPTION 'user must be able to resolve their own organization IDs';
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM public.get_user_org_ids('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
+  ) INTO can_see_other_org;
+  SELECT public.has_org_role(
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    '22222222-bbbb-4222-8222-222222222222',
+    'admin'::public.app_role
+  ) INTO other_role;
+  SELECT public.is_org_member(
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    '22222222-bbbb-4222-8222-222222222222'
+  ) INTO other_member;
+  SELECT public.has_org_role(
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    '11111111-aaaa-4111-8111-111111111111',
+    'owner'::public.app_role
+  ) INTO own_role;
+
+  IF can_see_other_org OR other_role OR other_member THEN
+    RAISE EXCEPTION 'membership helpers must not disclose another user organization or role';
+  END IF;
+  IF NOT own_role THEN
+    RAISE EXCEPTION 'membership helper must retain the current user role check';
+  END IF;
+END $;
 
 INSERT INTO public.services (id, name, stock_quantity)
 VALUES ('11111111-1111-4111-8111-111111111111', 'Test product', 5);
