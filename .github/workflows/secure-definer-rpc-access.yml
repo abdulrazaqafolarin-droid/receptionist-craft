@@ -49,6 +49,9 @@ jobs:
           CREATE TABLE public.organization_members (
             user_id uuid NOT NULL, organization_id uuid NOT NULL, role public.app_role NOT NULL
           );
+          CREATE FUNCTION public.get_user_org_ids(_user_id uuid) RETURNS SETOF uuid LANGUAGE sql STABLE AS $fn$ SELECT organization_id FROM public.organization_members WHERE user_id = _user_id $fn$;
+          CREATE FUNCTION public.has_org_role(_user_id uuid, _org_id uuid, _role public.app_role) RETURNS boolean LANGUAGE sql STABLE AS $fn$ SELECT EXISTS (SELECT 1 FROM public.organization_members WHERE user_id = _user_id AND organization_id = _org_id AND role = _role) $fn$;
+          CREATE FUNCTION public.is_org_member(_user_id uuid, _org_id uuid) RETURNS boolean LANGUAGE sql STABLE AS $fn$ SELECT EXISTS (SELECT 1 FROM public.organization_members WHERE user_id = _user_id AND organization_id = _org_id) $fn$;
           CREATE TABLE public.receptionists (
             id uuid PRIMARY KEY, user_id uuid NOT NULL, name text, business_name text,
             business_type text, greeting_message text, tone public.receptionist_tone,
