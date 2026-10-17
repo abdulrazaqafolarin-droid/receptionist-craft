@@ -109,6 +109,47 @@ REVOKE ALL ON FUNCTION public.upsert_conversation_summary(uuid, text, text, json
 GRANT EXECUTE ON FUNCTION public.upsert_conversation_summary(uuid, text, text, jsonb, text) TO service_role;
 ALTER FUNCTION public.upsert_conversation_summary(uuid, text, text, jsonb, text) SET search_path = pg_catalog, public, pg_temp;
 
+-- Tokenized confirmation/cancellation pages need only a small appointment
+-- projection. Do not expose the opposite action token or unrelated columns
+-- when a caller presents either one of the two bearer tokens.
+CREATE OR REPLACE FUNCTION public.get_public_appointment_by_token(p_token text)
+RETURNS TABLE(
+  id uuid,
+  service text,
+  start_time timestamptz,
+  customer_name text,
+  customer_phone text,
+  customer_email text,
+  status text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $function$
+  SELECT
+    a.id,
+    a.service,
+    a.start_time,
+    a.customer_name,
+    a.customer_phone,
+    a.customer_email,
+    a.status::text
+  FROM public.appointments a
+  WHERE p_token IS NOT NULL
+    AND length(p_token) > 10
+    AND (a.confirmation_token = p_token OR a.cancellation_token = p_token)
+  LIMIT 1;
+$function$;
+
+REVOKE ALL ON FUNCTION public.get_public_appointment_by_token(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_public_appointment_by_token(text) TO anon, authenticated, service_role;
+
+-- Retain the legacy full-row RPC only for trusted server-side callers.
+REVOKE ALL ON FUNCTION public.get_appointment_by_token(text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_appointment_by_token(text) TO service_role;
+ALTER FUNCTION public.get_appointment_by_token(text) SET search_path = pg_catalog, public, pg_temp;
+
 -- Revert must be owner-scoped because SECURITY DEFINER bypasses table RLS.
 -- Preserve the live business-model recomputation and complete config mapping.
 CREATE OR REPLACE FUNCTION public.revert_config_version(
