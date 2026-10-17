@@ -80,6 +80,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Type-check Supabase database types, including AI Worker tables
+        run: npx tsc --noEmit --strict --skipLibCheck --target ES2022 --moduleResolution bundler --module ESNext src/integrations/supabase/types.ts
       - name: Build application
         run: npm run build
       - name: Lint worker UI
