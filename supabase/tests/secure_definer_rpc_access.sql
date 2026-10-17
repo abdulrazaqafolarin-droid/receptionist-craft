@@ -61,7 +61,7 @@ BEGIN
      OR NOT has_function_privilege('authenticated', 'public.is_org_member(uuid,uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'authenticated role must retain membership helper access for RLS';
   END IF;
-END $;
+END $$;
 
 INSERT INTO public.services (id, stock_quantity)
 VALUES ('11111111-1111-4111-8111-111111111111', 5);
