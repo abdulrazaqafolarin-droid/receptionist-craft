@@ -1,4 +1,4 @@
-name: AI Worker contract
+name: AI Worker contract # includes task lifecycle checks
 
 on:
   pull_request:
