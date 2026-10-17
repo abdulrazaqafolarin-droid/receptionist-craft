@@ -19,20 +19,6 @@ permissions:
 jobs:
   widget-order-pricing:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: rutex_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d rutex_test"
-          --health-interval 5s
-          --timeout 5s
-          --retries 10
     env:
       PGHOST: localhost
       PGPORT: 5432
@@ -41,9 +27,14 @@ jobs:
       PGDATABASE: rutex_test
     steps:
       - uses: actions/checkout@v4
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
-      - name: Apply schema fixture and security migration
+      - name: Install and start PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql postgresql-client
+          sudo service postgresql start
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          sudo -u postgres createdb rutex_test
+      - name: Create minimal representative schema
         run: |
           psql -v ON_ERROR_STOP=1 <<'SQL'
           CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -68,6 +59,7 @@ jobs:
             product_name text NOT NULL, quantity integer NOT NULL DEFAULT 1, unit_price numeric
           );
           SQL
-          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261017000002_secure_widget_order_pricing.sql
+      - name: Apply widget order pricing migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261017000002_secure_widget_order_pricing.sql
       - name: Run widget order pricing and idempotency regression tests
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/secure_widget_order_pricing.sql
