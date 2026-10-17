@@ -92,6 +92,7 @@ jobs:
           CREATE FUNCTION public.update_business_modules_updated_at() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
           CREATE FUNCTION public.handle_new_organization() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
           CREATE FUNCTION public.sync_receptionist_phones() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
+          CREATE FUNCTION public.rls_auto_enable() RETURNS event_trigger LANGUAGE plpgsql AS $fn$ BEGIN NULL; END $fn$;
           GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO PUBLIC;
           GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
           SQL
