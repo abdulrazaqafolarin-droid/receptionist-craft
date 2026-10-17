@@ -163,3 +163,9 @@ BEGIN
   RETURN v_order_id;
 END;
 $function$;
+
+-- Public widget traffic is routed through the widget-chat Edge Function using
+-- the server-side service-role client. Do not expose this write RPC directly.
+REVOKE ALL ON FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) TO service_role;
+
