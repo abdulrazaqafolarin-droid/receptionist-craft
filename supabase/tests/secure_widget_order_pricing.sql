@@ -11,7 +11,20 @@ INSERT INTO public.services (id, receptionist_id, name, price, active, is_produc
 INSERT INTO public.orders (id, receptionist_id, customer_name, total_amount, status, idempotency_key)
 VALUES ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'Other Tenant', 99.00, 'pending', 'foreign-key');
 
-DO $$
+-- Ensure later migrations cannot reset the public SECURITY DEFINER RPC to
+-- an unsafe search_path after the general function-hardening migration.
+DO $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid = 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)'::regprocedure
+      AND p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']
+  ) THEN
+    RAISE EXCEPTION 'widget order SECURITY DEFINER function must use hardened search_path';
+  END IF;
+END $;
+
+DO $
 DECLARE
   v_order_id uuid;
   v_replay_id uuid;
