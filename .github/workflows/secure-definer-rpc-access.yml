@@ -45,6 +45,10 @@ jobs:
           CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
             $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
           CREATE TYPE public.receptionist_tone AS ENUM ('friendly', 'professional', 'playful');
+          CREATE TYPE public.app_role AS ENUM ('owner', 'admin', 'member', 'viewer');
+          CREATE TABLE public.organization_members (
+            user_id uuid NOT NULL, organization_id uuid NOT NULL, role public.app_role NOT NULL
+          );
           CREATE TABLE public.receptionists (
             id uuid PRIMARY KEY, user_id uuid NOT NULL, name text, business_name text,
             business_type text, greeting_message text, tone public.receptionist_tone,
