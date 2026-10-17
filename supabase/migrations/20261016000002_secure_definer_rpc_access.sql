@@ -89,6 +89,26 @@ GRANT EXECUTE ON FUNCTION public.create_widget_appointment(uuid, text, text, tim
 -- explicitly or booking will fail after hardening the SECURITY DEFINER path.
 ALTER FUNCTION public.create_widget_appointment(uuid, text, text, timestamptz, timestamptz, text, text, uuid, text, text, text, jsonb) SET search_path = pg_catalog, extensions, public, pg_temp;
 
+-- These legacy widget write helpers are not called directly by the current
+-- browser UI; widget-chat performs the corresponding writes server-side. Keep
+-- clients from forging analytics revenue, conversation state, summaries, or
+-- booking-suggestion rows through SECURITY DEFINER RPCs.
+REVOKE ALL ON FUNCTION public.insert_booking_suggestion(uuid, text, jsonb, text, integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.insert_booking_suggestion(uuid, text, jsonb, text, integer) TO service_role;
+ALTER FUNCTION public.insert_booking_suggestion(uuid, text, jsonb, text, integer) SET search_path = pg_catalog, public, pg_temp;
+
+REVOKE ALL ON FUNCTION public.insert_conversion_event(uuid, text, text, numeric, text, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.insert_conversion_event(uuid, text, text, numeric, text, jsonb) TO service_role;
+ALTER FUNCTION public.insert_conversion_event(uuid, text, text, numeric, text, jsonb) SET search_path = pg_catalog, public, pg_temp;
+
+REVOKE ALL ON FUNCTION public.upsert_conversation_state(uuid, text, text, text, text, double precision, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.upsert_conversation_state(uuid, text, text, text, text, double precision, jsonb) TO service_role;
+ALTER FUNCTION public.upsert_conversation_state(uuid, text, text, text, text, double precision, jsonb) SET search_path = pg_catalog, public, pg_temp;
+
+REVOKE ALL ON FUNCTION public.upsert_conversation_summary(uuid, text, text, jsonb, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.upsert_conversation_summary(uuid, text, text, jsonb, text) TO service_role;
+ALTER FUNCTION public.upsert_conversation_summary(uuid, text, text, jsonb, text) SET search_path = pg_catalog, public, pg_temp;
+
 -- Revert must be owner-scoped because SECURITY DEFINER bypasses table RLS.
 -- Preserve the live business-model recomputation and complete config mapping.
 CREATE OR REPLACE FUNCTION public.revert_config_version(
