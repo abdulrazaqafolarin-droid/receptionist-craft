@@ -150,6 +150,13 @@ REVOKE ALL ON FUNCTION public.get_appointment_by_token(text) FROM PUBLIC, anon, 
 GRANT EXECUTE ON FUNCTION public.get_appointment_by_token(text) TO service_role;
 ALTER FUNCTION public.get_appointment_by_token(text) SET search_path = pg_catalog, public, pg_temp;
 
+-- Public widget read RPCs are intentionally executable by anonymous visitors,
+-- but their search paths must not allow temporary-schema shadowing. These
+-- functions expose only the widget's public projection/service catalog.
+ALTER FUNCTION public.get_public_receptionist(uuid) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.get_safe_receptionist_for_widget(uuid) SET search_path = pg_catalog, public, pg_temp;
+ALTER FUNCTION public.get_services_for_receptionist(uuid) SET search_path = pg_catalog, public, pg_temp;
+
 -- Revert must be owner-scoped because SECURITY DEFINER bypasses table RLS.
 -- Map historical configuration into columns that exist in the current schema.
 CREATE OR REPLACE FUNCTION public.revert_config_version(
