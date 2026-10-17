@@ -136,6 +136,18 @@ BEGIN
      OR NOT has_function_privilege('authenticated', 'public.get_public_appointment_by_token(text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'public appointment pages must retain safe token lookup access';
   END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid IN (
+      'public.get_public_receptionist(uuid)'::regprocedure,
+      'public.get_safe_receptionist_for_widget(uuid)'::regprocedure,
+      'public.get_services_for_receptionist(uuid)'::regprocedure
+    )
+    AND NOT (p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp'])
+  ) THEN
+    RAISE EXCEPTION 'public widget read RPCs must use hardened search paths';
+  END IF;
+
   IF NOT EXISTS (
     SELECT 1 FROM pg_proc p
     WHERE p.oid = 'public.get_public_appointment_by_token(text)'::regprocedure
