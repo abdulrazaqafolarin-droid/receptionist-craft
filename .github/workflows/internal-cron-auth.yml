@@ -1,0 +1,38 @@
+name: Internal cron authentication
+
+on:
+  pull_request:
+    paths:
+      - "supabase/functions/_shared/internalCron.ts"
+      - "supabase/functions/_shared/internalCron.test.ts"
+      - "supabase/functions/plan-worker/index.ts"
+      - "supabase/functions/appointment-reminder-runner/index.ts"
+      - "supabase/functions/director-sweep/index.ts"
+      - ".github/workflows/internal-cron-auth.yml"
+  push:
+    branches: [main, fix/internal-cron-auth]
+    paths:
+      - "supabase/functions/_shared/internalCron.ts"
+      - "supabase/functions/_shared/internalCron.test.ts"
+      - "supabase/functions/plan-worker/index.ts"
+      - "supabase/functions/appointment-reminder-runner/index.ts"
+      - "supabase/functions/director-sweep/index.ts"
+      - ".github/workflows/internal-cron-auth.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  internal-cron-auth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check shared authorization helper and tests
+        run: deno check supabase/functions/_shared/internalCron.ts supabase/functions/_shared/internalCron.test.ts
+      - name: Run authorization regression tests
+        run: deno test supabase/functions/_shared/internalCron.test.ts
+      - name: Type-check privileged workers
+        run: deno check supabase/functions/plan-worker/index.ts supabase/functions/appointment-reminder-runner/index.ts supabase/functions/director-sweep/index.ts
