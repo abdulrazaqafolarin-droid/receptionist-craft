@@ -9,6 +9,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseWorkerDefinition } from "../_shared/workerContract.ts";
+import { checkRateLimit, RATE_LIMITS } from "../_shared/rateLimiter.ts";
 import { canArchiveWorker, canCreateOrganizationWorker, canEditWorker, canReadWorker } from "../_shared/workerAccess.ts";
 
 type JsonRecord = Record<string, unknown>;
@@ -26,10 +27,15 @@ function corsFor(req: Request): Record<string, string> | null {
   };
 }
 
-function jsonRes(body: unknown, status = 200, cors: Record<string, string> = {}) {
+function jsonRes(
+  body: unknown,
+  status = 200,
+  cors: Record<string, string> = {},
+  extraHeaders: Record<string, string> = {},
+) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...cors, "Content-Type": "application/json" },
+    headers: { ...cors, ...extraHeaders, "Content-Type": "application/json" },
   });
 }
 
@@ -115,6 +121,18 @@ Deno.serve(async (req: Request) => {
     });
     const { data: { user }, error: authError } = await service.auth.getUser(token);
     if (authError || !user) return jsonRes({ ok: false, error: "invalid_token" }, 401, cors);
+
+    // Key by the verified user ID, never by an untrusted request field.
+    const rate = checkRateLimit(`worker-registry:${user.id}`, RATE_LIMITS.workerRegistry);
+    if (!rate.allowed) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((rate.retryAfterMs ?? 60_000) / 1000));
+      return jsonRes(
+        { ok: false, error: "rate_limited", retry_after_seconds: retryAfterSeconds },
+        429,
+        cors,
+        { "Retry-After": String(retryAfterSeconds), "X-RateLimit-Reason": rate.reason || "window" },
+      );
+    }
 
     const body = asRecord(await req.json().catch(() => ({})));
     if (!body) return jsonRes({ ok: false, error: "invalid_body" }, 400, cors);
