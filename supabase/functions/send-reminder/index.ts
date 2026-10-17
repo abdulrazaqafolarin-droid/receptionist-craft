@@ -20,8 +20,25 @@ serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "")
+      (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
+      { auth: { autoRefreshToken: false, persistSession: false } },
     );
+
+    // This endpoint writes reminder logs and notifications using service-role
+    // access. Verify the owner session instead of trusting an appointment ID.
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!bearerToken) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: { user }, error: authError } = await supabase.auth.getUser(bearerToken);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Fetch appointment details
     const { data: appointment, error: aptErr } = await supabase
@@ -29,6 +46,7 @@ serve(async (req) => {
       .select(`
         *,
         receptionists (
+          user_id,
           name,
           business_name,
           business_phone,
@@ -43,6 +61,11 @@ serve(async (req) => {
     }
 
     const receptionist = appointment.receptionists;
+    if (!receptionist?.user_id || receptionist.user_id !== user.id) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const appointmentDate = new Date(appointment.start_time);
     const formattedDate = appointmentDate.toLocaleDateString('en-US', {
       weekday: 'long',
