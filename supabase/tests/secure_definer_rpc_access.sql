@@ -1,5 +1,5 @@
 -- Run after secure_definer_rpc_access.sql on an isolated PostgreSQL database.
-DO $$
+DO $$$
 BEGIN
   IF has_function_privilege('anon', 'public.cleanup_old_conversations(integer)', 'EXECUTE') THEN
     RAISE EXCEPTION 'anon must not execute cleanup routines';
@@ -66,7 +66,7 @@ END $$;
 INSERT INTO public.services (id, stock_quantity)
 VALUES ('11111111-1111-4111-8111-111111111111', 5);
 
-DO $$
+DO $$$
 DECLARE
   result jsonb;
 BEGIN
@@ -95,7 +95,7 @@ VALUES
 INSERT INTO public.config_versions (receptionist_id, version_number, config_json, plan_text)
 VALUES ('33333333-3333-4333-8333-333333333333', 1, '{}'::jsonb, 'fixture');
 
-DO $$
+DO $$$
 DECLARE
   denied boolean := false;
   result jsonb;
@@ -121,7 +121,7 @@ VALUES
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '44444444-4444-4444-8444-444444444444', 'owner'),
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '55555555-5555-4555-8555-555555555555', 'admin');
 
-DO $
+DO $$
 DECLARE
   own_org_count integer;
 BEGIN
