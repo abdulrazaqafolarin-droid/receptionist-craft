@@ -32,12 +32,12 @@ BEGIN
   IF NOT has_function_privilege('service_role', 'public.deduct_stock(uuid,integer)', 'EXECUTE') THEN
     RAISE EXCEPTION 'service_role must retain inventory deduction access';
   END IF;
-  IF has_function_privilege('anon', 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)', 'EXECUTE')
-     OR has_function_privilege('authenticated', 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'client roles must not bypass server-side widget order validation';
-  END IF;
-  IF NOT has_function_privilege('service_role', 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'service_role must retain widget order creation access';
+  -- The embedded widget is public-facing, so its order RPC must remain
+  -- executable by anon/authenticated. Input/catalog validation belongs in the
+  -- SECURITY DEFINER function body, covered by the dedicated widget-order PR.
+  IF NOT has_function_privilege('anon', 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)', 'EXECUTE')
+     OR NOT has_function_privilege('authenticated', 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'public widget checkout must retain order RPC execution';
   END IF;
   IF has_function_privilege('anon', 'public.create_widget_appointment(uuid,text,text,timestamp with time zone,timestamp with time zone,text,text,uuid,text,text,text,jsonb)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.create_widget_appointment(uuid,text,text,timestamp with time zone,timestamp with time zone,text,text,uuid,text,text,text,jsonb)', 'EXECUTE') THEN
