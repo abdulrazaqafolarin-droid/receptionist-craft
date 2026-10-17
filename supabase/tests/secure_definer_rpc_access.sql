@@ -51,10 +51,10 @@ BEGIN
     RAISE EXCEPTION 'client roles must not directly execute trigger routines';
   END IF;
 
-  IF has_function_privilege('anon', 'public.get_user_org_ids(uuid)', 'EXECUTE')
-     OR has_function_privilege('anon', 'public.has_org_role(uuid,uuid,public.app_role)', 'EXECUTE')
-     OR has_function_privilege('anon', 'public.is_org_member(uuid,uuid)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'anon must not call organization membership helpers';
+  IF NOT has_function_privilege('anon', 'public.get_user_org_ids(uuid)', 'EXECUTE')
+     OR NOT has_function_privilege('anon', 'public.has_org_role(uuid,uuid,public.app_role)', 'EXECUTE')
+     OR NOT has_function_privilege('anon', 'public.is_org_member(uuid,uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'public RLS policies require helper execution with identity checks inside functions';
   END IF;
   IF NOT has_function_privilege('authenticated', 'public.get_user_org_ids(uuid)', 'EXECUTE')
      OR NOT has_function_privilege('authenticated', 'public.has_org_role(uuid,uuid,public.app_role)', 'EXECUTE')
@@ -121,10 +121,25 @@ VALUES
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '44444444-4444-4444-8444-444444444444', 'owner'),
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '55555555-5555-4555-8555-555555555555', 'admin');
 
-DO $$
+DO $
 DECLARE
   own_org_count integer;
 BEGIN
+  -- Anonymous callers can execute helpers for public RLS policies, but must
+  -- not enumerate memberships or role assignments.
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  SELECT count(*) INTO own_org_count
+  FROM public.get_user_org_ids('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  IF own_org_count <> 0 THEN
+    RAISE EXCEPTION 'anonymous caller must not enumerate organization ids';
+  END IF;
+  IF public.has_org_role('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '44444444-4444-4444-8444-444444444444', 'owner') THEN
+    RAISE EXCEPTION 'anonymous caller must not query organization roles';
+  END IF;
+  IF public.is_org_member('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '44444444-4444-4444-8444-444444444444') THEN
+    RAISE EXCEPTION 'anonymous caller must not query organization membership';
+  END IF;
+
   PERFORM set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', true);
 
   SELECT count(*) INTO own_org_count
