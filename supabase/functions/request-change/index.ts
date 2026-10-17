@@ -5,6 +5,7 @@ import { getLatestVersion, getReasoningHistory, saveConfigVersion, type Reasonin
 import { researchNeeds } from "../_shared/config/solutionResearch.ts";
 import { TraceCollector } from "../_shared/config/trace.ts";
 import { RutexMcpError } from "../_shared/rutexMcp.ts";
+import { requireAuthenticatedUserId, RequestAuthError } from "../_shared/ownerAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -60,6 +61,20 @@ serve(async (req) => {
       (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
     );
 
+    const authenticatedUserId = await requireAuthenticatedUserId(req, supabase);
+    if (user_id !== authenticatedUserId) {
+      return jsonRes({ ok: false, error: "user_mismatch" }, 403);
+    }
+
+    // Check ownership before either synchronous planning or async queueing.
+    const { data: ownedReceptionist } = await supabase
+      .from("receptionists")
+      .select("id")
+      .eq("id", receptionist_id)
+      .eq("user_id", authenticatedUserId)
+      .maybeSingle();
+    if (!ownedReceptionist) return jsonRes({ ok: false, error: "not_found" }, 404);
+
     // Async mode (fallback C): queue a background job and return in <1s.
     if ((body as Record<string, unknown>).async === true) {
       const { data: job, error: jobErr } = await supabase
@@ -80,18 +95,6 @@ serve(async (req) => {
         return jsonRes({ ok: false, error: "job_queue_failed" }, 500);
       }
       return jsonRes({ ok: true, job_queued: true, job_id: (job as { id: string }).id });
-    }
-
-    // Verify ownership
-    const { data: rec } = await supabase
-      .from("receptionists")
-      .select("id")
-      .eq("id", receptionist_id)
-      .eq("user_id", user_id)
-      .maybeSingle();
-
-    if (!rec) {
-      return jsonRes({ ok: false, error: "not_found" }, 404);
     }
 
     // Get current config (latest version)
@@ -178,6 +181,9 @@ serve(async (req) => {
       reasoning: typeof result.reasoning_notes === "string" ? result.reasoning_notes.slice(0, 1500) : "",
     });
   } catch (e) {
+    if (e instanceof RequestAuthError) {
+      return jsonRes({ ok: false, error: e.message }, e.status);
+    }
     console.error("[request-change] Error:", e);
     const traceOut = trace.steps();
     const traceSummary = trace.summary();
