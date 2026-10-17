@@ -125,6 +125,29 @@ BEGIN
      OR NOT has_function_privilege('authenticated', 'public.is_org_member(uuid,uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'authenticated role must retain membership helper access for RLS';
   END IF;
+  IF has_function_privilege('anon', 'public.get_appointment_by_token(text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.get_appointment_by_token(text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'legacy full-row appointment token lookup must not be client-executable';
+  END IF;
+  IF NOT has_function_privilege('service_role', 'public.get_appointment_by_token(text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'service_role must retain legacy appointment token lookup access';
+  END IF;
+  IF NOT has_function_privilege('anon', 'public.get_public_appointment_by_token(text)', 'EXECUTE')
+     OR NOT has_function_privilege('authenticated', 'public.get_public_appointment_by_token(text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'public appointment pages must retain safe token lookup access';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid = 'public.get_public_appointment_by_token(text)'::regprocedure
+      AND p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']
+  ) OR NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid = 'public.get_appointment_by_token(text)'::regprocedure
+      AND p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']
+  ) THEN
+    RAISE EXCEPTION 'appointment token lookup functions must use hardened search paths';
+  END IF;
+
 END $privileges$;
 
 DO $legacy_rpc_acl$
@@ -163,6 +186,36 @@ BEGIN
     RAISE EXCEPTION 'legacy widget write RPCs must use a hardened search_path';
   END IF;
 END $legacy_rpc_acl$;
+
+INSERT INTO public.appointments (
+  id, service, start_time, customer_name, customer_phone, customer_email,
+  status, cancellation_token, confirmation_token
+) VALUES (
+  '66666666-6666-4666-8666-666666666666', 'Test service', now(),
+  'Token Customer', '555-0100', 'customer@example.test', 'booked',
+  'cancel-token-1234567890', 'confirm-token-1234567890'
+);
+
+DO $token_projection$
+DECLARE
+  result record;
+  result_json jsonb;
+BEGIN
+  SELECT * INTO result
+  FROM public.get_public_appointment_by_token('confirm-token-1234567890');
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'valid confirmation token should resolve appointment details';
+  END IF;
+  result_json := to_jsonb(result);
+  IF result.id <> '66666666-6666-4666-8666-666666666666'
+     OR result.customer_name <> 'Token Customer'
+     OR result.customer_email <> 'customer@example.test' THEN
+    RAISE EXCEPTION 'safe appointment lookup must return the required public display fields';
+  END IF;
+  IF result_json ? 'cancellation_token' OR result_json ? 'confirmation_token' THEN
+    RAISE EXCEPTION 'safe appointment lookup must not disclose either stored action token';
+  END IF;
+END $token_projection$;
 
 INSERT INTO public.services (id, name, stock_quantity)
 VALUES ('11111111-1111-4111-8111-111111111111', 'Test product', 5);
