@@ -129,7 +129,7 @@ INSERT INTO public.organization_members (user_id, organization_id, role) VALUES
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-aaaa-4111-8111-111111111111', 'owner'),
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '22222222-bbbb-4222-8222-222222222222', 'admin');
 
-DO $
+DO $membership$
 DECLARE
   can_see_other_org boolean;
   other_role boolean;
@@ -170,7 +170,7 @@ BEGIN
   IF NOT own_role THEN
     RAISE EXCEPTION 'membership helper must retain the current user role check';
   END IF;
-END $;
+END $membership$;
 
 INSERT INTO public.services (id, name, stock_quantity)
 VALUES ('11111111-1111-4111-8111-111111111111', 'Test product', 5);
