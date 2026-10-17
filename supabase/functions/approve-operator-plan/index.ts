@@ -4,6 +4,7 @@ import { knownPageKeys } from "../_shared/config/surfaceManifest.ts";
 import { saveConfigVersion } from "../_shared/config/versioning.ts";
 import { researchNeeds } from "../_shared/config/solutionResearch.ts";
 import { TraceCollector } from "../_shared/config/trace.ts";
+import { requireAuthenticatedUserId, RequestAuthError } from "../_shared/ownerAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,12 +47,17 @@ serve(async (req) => {
       (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
     );
 
+    const authenticatedUserId = await requireAuthenticatedUserId(req, supabase);
+    if (user_id !== authenticatedUserId) {
+      return jsonRes({ ok: false, error: "user_mismatch" }, 403);
+    }
+
     // Verify ownership
     const { data: rec } = await supabase
       .from("receptionists")
       .select("id")
       .eq("id", receptionist_id)
-      .eq("user_id", user_id)
+      .eq("user_id", authenticatedUserId)
       .maybeSingle();
 
     if (!rec) {
@@ -72,14 +78,31 @@ serve(async (req) => {
       version_id = created.id;
     }
 
-    // Mark the config version as approved
-    await supabase
+    // A supplied version must belong to the same operator being approved.
+    // Otherwise a valid owner could cross-link another operator's version.
+    if (typeof version_id !== "string") {
+      return jsonRes({ ok: false, error: "invalid_version_id" }, 400);
+    }
+    const { data: ownedVersion } = await supabase
+      .from("config_versions")
+      .select("id")
+      .eq("id", version_id)
+      .eq("receptionist_id", receptionist_id)
+      .maybeSingle();
+    if (!ownedVersion) return jsonRes({ ok: false, error: "version_not_found" }, 404);
+
+    // Mark only this operator's version as approved.
+    const { error: approvalErr } = await supabase
       .from("config_versions")
       .update({
-        approved_by: user_id,
+        approved_by: authenticatedUserId,
         approved_at: new Date().toISOString(),
       })
-      .eq("id", version_id);
+      .eq("id", version_id)
+      .eq("receptionist_id", receptionist_id);
+    if (approvalErr) {
+      return jsonRes({ ok: false, error: "approval_record_failed" }, 500);
+    }
 
     // Apply config to live receptionist
     const business = (config.business || {}) as Record<string, string>;
@@ -270,17 +293,17 @@ serve(async (req) => {
       if (workflows.appointment_booking?.enabled === true) {
         trace.start("schedule-cron");
         const baseUrl = Deno.env.get("SUPABASE_URL") || "";
-        const svcKey = Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-        if (baseUrl && svcKey) {
+        const cronSecret = Deno.env.get("RUTEX_INTERNAL_CRON_SECRET") || "";
+        if (baseUrl && cronSecret) {
           const cronRes = await fetch(`${baseUrl}/functions/v1/setup-reminder-cron`, {
             method: "POST",
-            headers: { Authorization: `Bearer ${svcKey}`, "Content-Type": "application/json" },
+            headers: { "x-rutex-cron-secret": cronSecret, "Content-Type": "application/json" },
             body: "{}",
           });
           console.log("[approve-operator-plan] Reminder cron setup:", cronRes.status);
           trace.end("schedule-cron", "Reminder schedule armed", [`setup:${cronRes.status}`]);
         } else {
-          trace.skip("schedule-cron", "Reminder schedule skipped", ["no runtime URL available"]);
+          trace.skip("schedule-cron", "Reminder schedule skipped", ["internal cron auth is not configured"]);
         }
       } else {
         trace.skip("schedule-cron", "No booking workflow — no reminders needed");
@@ -330,6 +353,9 @@ serve(async (req) => {
       trace_summary: trace.summary(),
     });
   } catch (e) {
+    if (e instanceof RequestAuthError) {
+      return jsonRes({ ok: false, error: e.message }, e.status);
+    }
     console.error("[approve-operator-plan] Error:", e);
     return jsonRes({ ok: false, error: "internal_error", trace: trace.steps(), trace_summary: trace.summary() }, 500);
   }
