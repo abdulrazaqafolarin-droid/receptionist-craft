@@ -19,6 +19,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { askRutex } from "../_shared/rutexMcp.ts";
 import { getActiveVaultKey, VAULT_OWNER_ID } from "../_shared/vault.ts";
+import { isDirectorVoiceOwner } from "../_shared/directorVoiceAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -115,6 +116,24 @@ async function cloudSpeak(text: string, voiceId: string): Promise<Uint8Array | n
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
+    // This endpoint can invoke the private gateway and consume the vault
+    // owner's ElevenLabs key, so authenticate and enforce the current
+    // single-owner vault boundary before processing any speech request.
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!bearerToken) return jsonRes({ error: "unauthorized" }, 401);
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""),
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+    const { data: { user }, error: authError } = await supabase.auth.getUser(bearerToken);
+    if (authError || !user) return jsonRes({ error: "unauthorized" }, 401);
+    if (!isDirectorVoiceOwner(user.id, VAULT_OWNER_ID)) {
+      return jsonRes({ error: "forbidden" }, 403);
+    }
+
     const body = await req.json().catch(() => ({}));
     const raw = typeof body.text === "string" ? body.text : "";
     const provider = body.provider === "local" || body.provider === "cloud" ? body.provider : "auto";
