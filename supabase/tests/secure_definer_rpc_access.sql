@@ -122,13 +122,11 @@ VALUES
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '44444444-4444-4444-8444-444444444444', 'owner'),
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '55555555-5555-4555-8555-555555555555', 'admin');
 
+SELECT set_config('request.jwt.claim.sub', '', false);
 DO $$
 DECLARE
   own_org_count integer;
 BEGIN
-  -- Anonymous callers can execute helpers for public RLS policies, but must
-  -- not enumerate memberships or role assignments.
-  PERFORM set_config('request.jwt.claim.sub', '', false);
   SELECT count(*) INTO own_org_count
   FROM public.get_user_org_ids('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
   IF own_org_count <> 0 THEN
@@ -140,9 +138,13 @@ BEGIN
   IF public.is_org_member('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '44444444-4444-4444-8444-444444444444') THEN
     RAISE EXCEPTION 'anonymous caller must not query organization membership';
   END IF;
+END $$;
 
-  PERFORM set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', false);
-
+SELECT set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', false);
+DO $$
+DECLARE
+  own_org_count integer;
+BEGIN
   SELECT count(*) INTO own_org_count
   FROM public.get_user_org_ids('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
   IF own_org_count <> 1 THEN
@@ -165,3 +167,5 @@ BEGIN
     RAISE EXCEPTION 'caller should still resolve their own role';
   END IF;
 END $$;
+
+SELECT set_config('request.jwt.claim.sub', '', false);
