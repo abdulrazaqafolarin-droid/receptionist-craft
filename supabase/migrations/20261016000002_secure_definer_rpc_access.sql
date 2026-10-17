@@ -174,6 +174,68 @@ $function$;
 REVOKE ALL ON FUNCTION public.revert_config_version(uuid, integer) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.revert_config_version(uuid, integer) TO authenticated;
 
+-- Membership helpers are used by RLS policies. They must never answer
+-- membership questions for arbitrary user IDs supplied by an anonymous or
+-- different authenticated caller.
+CREATE OR REPLACE FUNCTION public.get_user_org_ids(_user_id uuid)
+RETURNS SETOF uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $function$
+  SELECT organization_id
+  FROM public.organization_members
+  WHERE user_id = _user_id
+    AND _user_id = auth.uid();
+$function$;
+
+CREATE OR REPLACE FUNCTION public.has_org_role(_user_id uuid, _org_id uuid, _role public.app_role)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $function$
+  SELECT COALESCE(
+    _user_id = auth.uid()
+    AND EXISTS (
+      SELECT 1
+      FROM public.organization_members
+      WHERE user_id = _user_id
+        AND organization_id = _org_id
+        AND role = _role
+    ),
+    false
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION public.is_org_member(_user_id uuid, _org_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $function$
+  SELECT COALESCE(
+    _user_id = auth.uid()
+    AND EXISTS (
+      SELECT 1
+      FROM public.organization_members
+      WHERE user_id = _user_id
+        AND organization_id = _org_id
+    ),
+    false
+  );
+$function$;
+
+REVOKE ALL ON FUNCTION public.get_user_org_ids(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.has_org_role(uuid, uuid, public.app_role) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.is_org_member(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_user_org_ids(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.has_org_role(uuid, uuid, public.app_role) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_org_member(uuid, uuid) TO authenticated, service_role;
+
 -- This helper already checks auth.uid() against the receptionist owner. Keep
 -- it callable only by signed-in users rather than exposing it as a public RPC.
 ALTER FUNCTION public.record_manual_version(uuid, text) SET search_path = public;
