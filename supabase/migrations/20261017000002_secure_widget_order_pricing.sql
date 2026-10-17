@@ -37,9 +37,11 @@ BEGIN
     RAISE EXCEPTION 'Customer name is required and must be at most 200 characters';
   END IF;
 
-  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array'
-     OR jsonb_array_length(p_items) < 1 OR jsonb_array_length(p_items) > 50 THEN
-    RAISE EXCEPTION 'Items must be an array containing 1 to 50 products';
+  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN
+    RAISE EXCEPTION 'Items must be a JSON array';
+  END IF;
+  IF jsonb_array_length(p_items) < 1 OR jsonb_array_length(p_items) > 50 THEN
+    RAISE EXCEPTION 'Items must contain 1 to 50 products';
   END IF;
 
   IF p_notes IS NOT NULL AND length(p_notes) > 2000 THEN
