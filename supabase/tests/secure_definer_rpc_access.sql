@@ -69,7 +69,7 @@ VALUES
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'owner'),
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '22222222-2222-4222-8222-222222222222', 'admin');
 
-DO $
+DO $$
 DECLARE
   org_count integer;
   role_result boolean;
@@ -92,7 +92,7 @@ BEGIN
   IF member_result IS TRUE THEN
     RAISE EXCEPTION 'is_org_member leaked another user membership';
   END IF;
-END $;
+END $$;
 
 INSERT INTO public.services (id, name, stock_quantity)
 VALUES ('11111111-1111-4111-8111-111111111111', 'Test product', 5);
