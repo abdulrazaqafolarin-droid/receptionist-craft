@@ -72,9 +72,12 @@ $function$;
 REVOKE ALL ON FUNCTION public.deduct_stock(uuid, integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.deduct_stock(uuid, integer) TO service_role;
 
--- Widget checkout is intentionally a public RPC. Its SECURITY DEFINER body
--- must validate catalog ownership, prices, and quantities rather than trusting
--- caller-supplied item data. Harden name resolution without disabling the widget.
+-- Public widget traffic goes through widget-chat, which uses the server-side
+-- service-role database client. Do not expose the write RPC directly to browsers.
+-- Catalog price/tenant/quantity validation is implemented in the separate
+-- widget-order pricing migration; this grant boundary prevents RPC bypass.
+REVOKE ALL ON FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) TO service_role;
 ALTER FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, jsonb, text) SET search_path = pg_catalog, public, pg_temp;
 
 -- The current booking flows perform availability/conflict checks in the
