@@ -60,6 +60,7 @@ jobs:
             id uuid PRIMARY KEY, user_id uuid NOT NULL, name text, business_name text,
             business_type text, greeting_message text, tone public.receptionist_tone,
             language text, currency text, business_phone text, address text, website text,
+            hours_of_operation jsonb, customer_fields jsonb, services_and_prices jsonb,
             business_info jsonb, capabilities jsonb, knowledge_base text, business_model text
           );
           CREATE TABLE public.config_versions (
