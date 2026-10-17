@@ -62,7 +62,11 @@ The `worker-registry` Edge Function supports scoped list/detail reads plus draft
 
 ## Next implementation stages
 
-1. Generate/update Supabase TypeScript types from the validated migration and compare the repository schema against the live project.
+**Completed in the repository:** `src/integrations/supabase/types.ts` now includes `ai_workers` and `ai_worker_tasks`, and the worker CI workflow type-checks that file independently of the known repository-wide TypeScript baseline debt.
+
+**Live-schema comparison:** a read-only catalog check confirms that `ai_workers`, `ai_worker_tasks`, and `director_memory` are absent from the live project. The repository type update does not mean the tables are deployed. Reconcile the missing historical migration ledger and validate the complete migration chain in staging before applying anything to production.
+
+1. Complete migration-history reconciliation and validate the worker schema/RLS against staging.
 2. Extend lifecycle validation with action audit records, rate limits and explicit worker-version semantics.
 3. Connect Director planning/building to this lifecycle using durable jobs and checkpoint/resume.
 4. Implement generic task execution, approval handling, evidence-based completion and resumable checkpoints.
