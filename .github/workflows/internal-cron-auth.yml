@@ -8,6 +8,9 @@ on:
       - "supabase/functions/plan-worker/index.ts"
       - "supabase/functions/appointment-reminder-runner/index.ts"
       - "supabase/functions/director-sweep/index.ts"
+      - "supabase/config.toml"
+      - "supabase/migrations/*secure_internal_cron_jobs.sql"
+      - "docs/INTERNAL_CRON_AUTH_ROLLOUT.md"
       - ".github/workflows/internal-cron-auth.yml"
   push:
     branches: [main, fix/internal-cron-auth]
@@ -36,3 +39,11 @@ jobs:
         run: deno test supabase/functions/_shared/internalCron.test.ts
       - name: Type-check privileged workers
         run: deno check supabase/functions/plan-worker/index.ts supabase/functions/appointment-reminder-runner/index.ts supabase/functions/director-sweep/index.ts
+      - name: Verify scheduler migration uses Vault-backed secret and covers all workers
+        run: |
+          grep -q "rutex_internal_cron_secret" supabase/migrations/20261017000001_secure_internal_cron_jobs.sql
+          grep -q "plan-worker-sweep" supabase/migrations/20261017000001_secure_internal_cron_jobs.sql
+          grep -q "appointment-reminders-24h" supabase/migrations/20261017000001_secure_internal_cron_jobs.sql
+          grep -q "director-sweep" supabase/migrations/20261017000001_secure_internal_cron_jobs.sql
+          grep -q "x-rutex-cron-secret" supabase/migrations/20261017000001_secure_internal_cron_jobs.sql
+          grep -q "\[functions.plan-worker\]" supabase/config.toml
