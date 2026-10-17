@@ -79,7 +79,7 @@ type ServiceItem = {
   duration_minutes?: number | null;
   is_product?: boolean | null;
   active?: boolean | null;
-  receptionist_id?: string;
+  receptionist_id?: string | null;
   stock_quantity?: number | null;
   user_id?: string | null;
   created_at?: string;
@@ -152,7 +152,7 @@ export default function Widget() {
     }
   }
 
-  const [bookingState, setBookingState] = useState(defaultBookingState);
+  const [bookingState, setBookingState] = useState<BookingState>(defaultBookingState);
   
   // Whenever bookingState changes, persist it
   useEffect(() => {
@@ -466,7 +466,15 @@ export default function Widget() {
     let data: ReceptionistData | null = null;
     
     const rpcResult = await supabase.rpc("get_public_receptionist", { p_receptionist_id: receptionistId });
-    if (rpcResult.data && rpcResult.data.length > 0) data = rpcResult.data[0];
+    if (rpcResult.data && rpcResult.data.length > 0) {
+      const raw = rpcResult.data[0];
+      const model = raw.business_model;
+      const normalizedModel =
+        model === "services" || model === "products" || model === "both" || model === "internal"
+          ? model
+          : null;
+      data = { ...raw, business_model: normalizedModel } as ReceptionistData;
+    }
     
     if (!data) {
       toast({ title: "Error", description: "Receptionist not found", variant: "destructive" });
