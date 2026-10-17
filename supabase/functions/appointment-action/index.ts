@@ -3,6 +3,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { z } from "https://esm.sh/zod@3.21.4";
+import { canPerformAppointmentAction } from "../_shared/appointmentActionAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,20 +29,30 @@ serve(async (req) => {
     const parsed = schema.parse(body);
     
     const appointmentId = parsed.appointment_id || parsed.appointmentId;
-    const token = parsed.token || parsed.cancellationToken || parsed.confirmationToken;
+    const actionToken = parsed.token || parsed.cancellationToken || parsed.confirmationToken;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       (Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "")
     );
 
-    const { action, reason, new_start_time, userId } = parsed;
+    const { action, reason, new_start_time } = parsed;
 
     if (!appointmentId) {
       throw new Error("appointmentId is required");
     }
 
     console.log(`[appointment-action] ${action} for ${appointmentId}`);
+
+    // Verify an optional signed-in owner identity. Customer actions may
+    // instead use the action-specific token delivered with the booking.
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    let callerUserId: string | null = null;
+    if (bearerToken) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(bearerToken);
+      if (!authError && user) callerUserId = user.id;
+    }
 
     // Get appointment details
     const { data: appt, error: fetchErr } = await supabase
@@ -59,24 +70,23 @@ serve(async (req) => {
       );
     }
 
-    // TOKEN VALIDATION for confirm/cancel actions (if token provided)
-    if (token && (action === "confirm" || action === "cancel")) {
-      const storedCancellationToken = appt.cancellation_token || appt.metadata?.cancellation_token;
-      const storedConfirmationToken = appt.confirmation_token || appt.metadata?.confirmation_token;
-      
-      const isValidToken = 
-        (action === "cancel" && token === storedCancellationToken) ||
-        (action === "confirm" && token === storedConfirmationToken);
-
-      if (!isValidToken) {
-        console.log(`[appointment-action] Invalid token for ${action}`);
-        return new Response(
-          JSON.stringify({ error: "Invalid or expired token" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      console.log(`[appointment-action] Token validated successfully`);
+    // Every mutation requires either a verified owner session or a
+    // valid action-specific customer token. Never treat a body userId as auth.
+    const storedCancellationToken = appt.cancellation_token || appt.metadata?.cancellation_token || null;
+    const storedConfirmationToken = appt.confirmation_token || appt.metadata?.confirmation_token || null;
+    const ownerId = appt.receptionists?.user_id || null;
+    if (!canPerformAppointmentAction({
+      action,
+      callerUserId,
+      receptionistOwnerId: ownerId,
+      providedToken: typeof actionToken === "string" ? actionToken : null,
+      cancellationToken: typeof storedCancellationToken === "string" ? storedCancellationToken : null,
+      confirmationToken: typeof storedConfirmationToken === "string" ? storedConfirmationToken : null,
+    })) {
+      return new Response(
+        JSON.stringify({ error: "Authentication or a valid appointment action token is required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     if (action === "confirm") {
@@ -112,11 +122,11 @@ serve(async (req) => {
         await supabase.from("appointment_logs").insert({
           appointment_id: appointmentId,
           action: "confirmed",
-          actor_id: userId || null,
+          actor_id: callerUserId,
           payload: { 
             reason,
             confirmed_at: new Date().toISOString(),
-            via_token: !!token,
+            via_token: !!actionToken,
           },
         });
       } catch (logErr) {
