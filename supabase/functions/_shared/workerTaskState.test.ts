@@ -5,7 +5,7 @@ function assert(condition: boolean, message: string): void {
 }
 
 const evidence: CompletionEvidence[] = [
-  { kind: "verification", summary: "Output matched the required schema." },
+  { kind: "verification", summary: "Output matched the required schema.", reference: "test-run:worker-contract-1" },
 ];
 
 Deno.test("queued tasks can only start when their worker is active", () => {
@@ -17,7 +17,10 @@ Deno.test("completion requires bounded structured evidence", () => {
   assert(!canTransitionWorkerTask("running", "done").ok, "model claim alone cannot complete task");
   assert(!canTransitionWorkerTask("running", "done", { completionEvidence: [] }).ok, "empty evidence is rejected");
   assert(!canTransitionWorkerTask("running", "done", {
-    completionEvidence: [{ kind: "verification", summary: "x".repeat(1001) }],
+    completionEvidence: [{ kind: "verification", summary: "Output matched." }],
+  }).ok, "evidence without a durable reference is rejected");
+  assert(!canTransitionWorkerTask("running", "done", {
+    completionEvidence: [{ kind: "verification", summary: "x".repeat(1001), reference: "test-run:too-long" }],
   }).ok, "oversized evidence is rejected");
   assert(canTransitionWorkerTask("running", "done", { completionEvidence: evidence }).ok, "verified output can complete");
 });
@@ -29,6 +32,7 @@ Deno.test("approval gates the return to queued execution", () => {
 });
 
 Deno.test("unknown outcomes cannot be blindly retried", () => {
+  assert(!canTransitionWorkerTask("running", "queued", { retryable: true }).ok, "missing retry budget must fail closed");
   assert(!canTransitionWorkerTask("running", "queued", { retryable: false, attemptCount: 1, maxRetries: 2 }).ok, "unknown outcome must not retry");
   assert(!canTransitionWorkerTask("running", "queued", { retryable: true, attemptCount: 3, maxRetries: 2 }).ok, "retry budget is enforced");
   assert(canTransitionWorkerTask("running", "queued", { retryable: true, attemptCount: 1, maxRetries: 2 }).ok, "known safe retry may requeue");
