@@ -274,6 +274,121 @@ export type Database = {
           },
         ]
       }
+      ai_worker_tasks: {
+        Row: {
+          attempt_count: number
+          checkpoint_json: Json
+          created_at: string
+          created_by: string
+          error_text: string | null
+          finished_at: string | null
+          goal: string
+          id: string
+          input_json: Json
+          output_json: Json | null
+          started_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          worker_id: string
+        }
+        Insert: {
+          attempt_count?: number
+          checkpoint_json?: Json
+          created_at?: string
+          created_by: string
+          error_text?: string | null
+          finished_at?: string | null
+          goal: string
+          id?: string
+          input_json?: Json
+          output_json?: Json | null
+          started_at?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          worker_id: string
+        }
+        Update: {
+          attempt_count?: number
+          checkpoint_json?: Json
+          created_at?: string
+          created_by?: string
+          error_text?: string | null
+          finished_at?: string | null
+          goal?: string
+          id?: string
+          input_json?: Json
+          output_json?: Json | null
+          started_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_worker_tasks_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "ai_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_workers: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string
+          definition: Json
+          description: string
+          id: string
+          name: string
+          organization_id: string | null
+          published_at: string | null
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by: string
+          definition?: Json
+          description?: string
+          id?: string
+          name: string
+          organization_id?: string | null
+          published_at?: string | null
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string
+          definition?: Json
+          description?: string
+          id?: string
+          name?: string
+          organization_id?: string | null
+          published_at?: string | null
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_workers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       analytics_cache: {
         Row: {
           data: Json

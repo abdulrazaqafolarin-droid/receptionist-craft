@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BarChart, Home, Calendar, CalendarDays, MessageSquare, Settings, HelpCircle, ClipboardCheck, Lightbulb, Activity, Bell, Radio, Briefcase, MessageCircleQuestion, Building2, Plug, DollarSign, Users, UserCog, AlertTriangle, CreditCard, GitBranch, ChevronDown, Puzzle, Clock, Terminal } from "lucide-react";
+import { BarChart, Home, Calendar, CalendarDays, MessageSquare, Settings, HelpCircle, ClipboardCheck, Lightbulb, Activity, Bell, Radio, Briefcase, MessageCircleQuestion, Building2, Plug, DollarSign, Users, UserCog, AlertTriangle, CreditCard, GitBranch, ChevronDown, Puzzle, Clock, Terminal, Bot } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import rutexLogo from "@/assets/rutex-logo.jpg";
@@ -40,6 +40,10 @@ const groups = [
       { title: "FAQs", url: "/faqs", icon: MessageCircleQuestion },
       { title: "Operator Console", url: "/console", icon: Terminal },
     ],
+  },
+  {
+    label: "AI Workers",
+    items: [{ title: "AI Workers", url: "/workers", icon: Bot }],
   },
   {
     label: "Conversations",
@@ -88,10 +92,10 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const currentPath = location.pathname;
 
-  const isActive = (path: string) => currentPath === path;
+  const isActive = (path: string) => currentPath === path || (path === "/workers" && currentPath.startsWith("/workers/"));
 
   const isGroupActive = (items: Array<{ url: string }>) =>
-    items.some((item) => item.url === currentPath);
+    items.some((item) => isActive(item.url));
 
   // Operator surface: hide nav items the active operator's approved plan
   // excluded. No surface (older operators) -> show everything. Empty

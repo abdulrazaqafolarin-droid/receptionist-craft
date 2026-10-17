@@ -129,6 +129,9 @@ export const RATE_LIMITS = {
   
   // Analytics: 10 per minute
   analytics: { windowMs: 60_000, maxRequests: 10, burstWindowMs: 5000, maxBurst: 3 },
+  
+  // Authenticated worker registry: 30 requests/minute, 6 in 5 seconds per user
+  workerRegistry: { windowMs: 60_000, maxRequests: 30, burstWindowMs: 5000, maxBurst: 6 },
 } as const;
 
 /**

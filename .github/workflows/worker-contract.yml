@@ -1,0 +1,88 @@
+name: AI Worker contract
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feature/ai-worker-foundation-clean]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  worker-contract:
+    name: Validate AI Worker definition contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check worker contracts and access rules
+        run: deno check supabase/functions/_shared/workerContract.ts supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskState.ts supabase/functions/_shared/workerTaskState.test.ts
+      - name: Type-check worker registry Edge Function
+        run: deno check supabase/functions/worker-registry/index.ts
+      - name: Test worker contract and safety invariants
+        run: deno test supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskState.test.ts
+
+  migration-rls:
+    name: Validate worker migration and RLS
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Bootstrap isolated test schema
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/worker_foundation_bootstrap.sql
+      - name: Apply worker migration to disposable database
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20261016000001_ai_worker_foundation.sql
+      - name: Verify tenant isolation and server-managed writes
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/ai_worker_foundation_rls.sql
+
+  frontend-worker-ui:
+    name: Build worker registry UI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type-check Supabase database types, including AI Worker tables
+        run: npx tsc --noEmit --strict --skipLibCheck --target ES2022 --moduleResolution bundler --module ESNext src/integrations/supabase/types.ts
+      - name: Build application
+        run: npm run build
+      - name: Lint worker UI
+        run: npx eslint src/pages/Workers.tsx src/pages/WorkerWorkspace.tsx src/lib/workerDefinition.ts
