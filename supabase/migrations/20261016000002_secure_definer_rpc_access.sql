@@ -84,7 +84,9 @@ ALTER FUNCTION public.create_widget_order(uuid, text, jsonb, text, text, text, j
 -- RPC inserts directly and can bypass those checks if called by a client.
 REVOKE ALL ON FUNCTION public.create_widget_appointment(uuid, text, text, timestamptz, timestamptz, text, text, uuid, text, text, text, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_widget_appointment(uuid, text, text, timestamptz, timestamptz, text, text, uuid, text, text, text, jsonb) TO service_role;
-ALTER FUNCTION public.create_widget_appointment(uuid, text, text, timestamptz, timestamptz, text, text, uuid, text, text, text, jsonb) SET search_path = pg_catalog, public, pg_temp;
+-- gen_random_bytes lives in Supabase's locked-down extensions schema; include it
+-- explicitly or booking will fail after hardening the SECURITY DEFINER path.
+ALTER FUNCTION public.create_widget_appointment(uuid, text, text, timestamptz, timestamptz, text, text, uuid, text, text, text, jsonb) SET search_path = pg_catalog, extensions, public, pg_temp;
 
 -- Revert must be owner-scoped because SECURITY DEFINER bypasses table RLS.
 -- Preserve the live business-model recomputation and complete config mapping.
