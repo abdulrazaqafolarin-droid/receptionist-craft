@@ -9,6 +9,7 @@ The following Edge Functions use a service-role Supabase client and are intended
 - `director-sweep`
 - `setup-reminder-cron` (called internally after an owner approves booking)
 - `send-booking-email` (called internally by booking/reminder flows)
+- `send-booking-confirmation` (legacy email sender, guarded because it uses service-role access)
 - `activate-reminders` (superseded legacy endpoint, guarded so it cannot be triggered publicly)
 
 Their Supabase gateway configuration has JWT verification disabled. The gateway's publishable/anon key is public and cannot prove that a request came from pg_cron. These handlers now fail closed unless the caller supplies `x-rutex-cron-secret` matching the server secret.
