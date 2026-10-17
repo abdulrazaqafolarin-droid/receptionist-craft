@@ -170,6 +170,7 @@ The table above audits the migration ledger through `20261007000021`. Later feat
 | 4 | [PR #56](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/56) | `20261016000002_secure_definer_rpc_access.sql` | Run the least-privilege regression tests. Public widget interactions are routed through `widget-chat`; direct execution of the underlying order-write RPC is restricted to `service_role`. PR #68 adds catalog validation and must preserve that grant boundary. |
 | 5 | [PR #63](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/63) | `20261017000001_secure_internal_cron_jobs.sql` | Configure a strong `RUTEX_INTERNAL_CRON_SECRET` in Edge Function secrets and Vault first. Coordinate with PR #64: deploy its caller before guarded functions, and verify scheduler/booking paths in staging. |
 | 6 | [PR #68](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/68) | `20261017000002_secure_widget_order_pricing.sql` | Keep the public RPC callable; validate product ownership, catalog price, quantity and idempotency in the function body. Preserve `search_path = pg_catalog, public, pg_temp` when replacing the function. |
+| 7 | [PR #70](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/70) | `20261017000003_secure_director_task_table_grants.sql` | Remove client table grants (including `TRUNCATE`) from server-managed `director_tasks`; keep service-role access and RLS enabled. Apply only after confirming the live Director access path in staging. |
 
 ### Mandatory rollout rule
 
