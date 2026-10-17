@@ -63,8 +63,8 @@ BEGIN
   END IF;
 END $$;
 
-INSERT INTO public.services (id, stock_quantity)
-VALUES ('11111111-1111-4111-8111-111111111111', 5);
+INSERT INTO public.services (id, name, stock_quantity)
+VALUES ('11111111-1111-4111-8111-111111111111', 'Test product', 5);
 
 DO $$
 DECLARE
