@@ -125,6 +125,43 @@ BEGIN
   END IF;
 END $privileges$;
 
+DO $legacy_rpc_acl$
+DECLARE
+  fn regprocedure;
+BEGIN
+  IF has_function_privilege('anon', 'public.insert_booking_suggestion(uuid,text,jsonb,text,integer)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.insert_booking_suggestion(uuid,text,jsonb,text,integer)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.insert_conversion_event(uuid,text,text,numeric,text,jsonb)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.insert_conversion_event(uuid,text,text,numeric,text,jsonb)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.upsert_conversation_state(uuid,text,text,text,text,double precision,jsonb)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.upsert_conversation_state(uuid,text,text,text,text,double precision,jsonb)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.upsert_conversation_summary(uuid,text,text,jsonb,text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.upsert_conversation_summary(uuid,text,text,jsonb,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'legacy widget write RPCs must not be callable by client roles';
+  END IF;
+
+  IF NOT has_function_privilege('service_role', 'public.insert_booking_suggestion(uuid,text,jsonb,text,integer)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'public.insert_conversion_event(uuid,text,text,numeric,text,jsonb)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'public.upsert_conversation_state(uuid,text,text,text,text,double precision,jsonb)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'public.upsert_conversation_summary(uuid,text,text,jsonb,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'service_role must retain internal widget write RPC access';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    WHERE p.oid IN (
+      'public.insert_booking_suggestion(uuid,text,jsonb,text,integer)'::regprocedure,
+      'public.insert_conversion_event(uuid,text,text,numeric,text,jsonb)'::regprocedure,
+      'public.upsert_conversation_state(uuid,text,text,text,text,double precision,jsonb)'::regprocedure,
+      'public.upsert_conversation_summary(uuid,text,text,jsonb,text)'::regprocedure
+    )
+    AND NOT (p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp'])
+  ) THEN
+    RAISE EXCEPTION 'legacy widget write RPCs must use a hardened search_path';
+  END IF;
+END $legacy_rpc_acl$;
+
 INSERT INTO public.services (id, name, stock_quantity)
 VALUES ('11111111-1111-4111-8111-111111111111', 'Test product', 5);
 
