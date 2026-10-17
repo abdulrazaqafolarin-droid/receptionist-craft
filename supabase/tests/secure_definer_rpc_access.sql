@@ -140,8 +140,8 @@ BEGIN
 
   IF NOT EXISTS (
     SELECT 1
-    FROM public.get_user_org_ids('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa') AS org_id
-    WHERE org_id = '11111111-aaaa-4111-8111-111111111111'
+    FROM public.get_user_org_ids('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa') AS memberships(org_id)
+    WHERE memberships.org_id = '11111111-aaaa-4111-8111-111111111111'
   ) THEN
     RAISE EXCEPTION 'user must be able to resolve their own organization IDs';
   END IF;
