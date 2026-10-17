@@ -36,6 +36,13 @@ BEGIN
   IF NOT has_function_privilege('service_role', 'public.create_widget_order(uuid,text,jsonb,text,text,text,jsonb,text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'service_role must retain widget order creation access';
   END IF;
+  IF has_function_privilege('anon', 'public.create_widget_appointment(uuid,text,text,timestamp with time zone,timestamp with time zone,text,text,uuid,text,text,text,jsonb)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.create_widget_appointment(uuid,text,text,timestamp with time zone,timestamp with time zone,text,text,uuid,text,text,text,jsonb)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'clients must not bypass server-side widget booking validation';
+  END IF;
+  IF NOT has_function_privilege('service_role', 'public.create_widget_appointment(uuid,text,text,timestamp with time zone,timestamp with time zone,text,text,uuid,text,text,text,jsonb)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'service_role must retain legacy widget booking access';
+  END IF;
   IF has_function_privilege('anon', 'public.revert_config_version(uuid,integer)', 'EXECUTE') THEN
     RAISE EXCEPTION 'anon must not execute config revert';
   END IF;
