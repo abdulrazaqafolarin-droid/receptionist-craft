@@ -179,3 +179,11 @@ This order is only the proposed order **among these draft files**. It is not a s
 ### Specific blocker for PR #50: Director memory
 
 The existing migration `20261007000020_director_memory.sql` is part of the historical set missing from the live migration ledger, and the live catalog audit did not find `public.director_memory`. PR #50's long-conversation memory restore must not be deployed until this is resolved. During reconciliation, verify the migration's complete table definition, indexes, RLS policy, grants, and owner-scoped access against staging. If the migration is not safely applicable as written, prepare a corrective migration rather than deploying code that assumes the table exists.
+
+
+## RPC exposure decisions from the latest live-code audit
+
+- The active browser widget directly uses the public read RPCs `get_public_receptionist` and `get_services_for_receptionist`; retain these public reads and keep their return shapes limited to widget-safe data.
+- Widget actions, orders, and conversation persistence are routed through the public `widget-chat` Edge Function. The deployed `widget-chat` database client uses the service-role key first and performs the relevant writes server-side.
+- PR #56 therefore restricts direct client execution of `create_widget_order`, `create_widget_appointment`, `deduct_stock`, `insert_booking_suggestion`, `insert_conversion_event`, `upsert_conversation_state`, and `upsert_conversation_summary`, while preserving the server-side service-role path.
+- **Separate follow-up audit still needed:** `get_appointment_by_token(text)` is public and returns a full `appointments` row when either confirmation or cancellation token matches. Review whether the return shape exposes the opposite token or unnecessary customer fields, and preserve current confirmation/cancellation UI behavior when designing any fix. Do not change its return type without checking callers first.
