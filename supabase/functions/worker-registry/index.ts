@@ -155,6 +155,7 @@ Deno.serve(async (req: Request) => {
         .select(columns)
         .is("organization_id", null)
         .eq("created_by", user.id)
+        .neq("status", "archived")
         .order("updated_at", { ascending: false })
         .limit(100);
       if (personalError) return jsonRes({ ok: false, error: "worker_list_failed" }, 500, cors);
@@ -165,6 +166,7 @@ Deno.serve(async (req: Request) => {
           .from("ai_workers")
           .select(columns)
           .in("organization_id", organizationIds)
+          .neq("status", "archived")
           .order("updated_at", { ascending: false })
           .limit(100);
         if (error) return jsonRes({ ok: false, error: "worker_list_failed" }, 500, cors);
