@@ -13,7 +13,7 @@ CREATE OR REPLACE FUNCTION public.create_widget_order(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
 DECLARE
   v_order_id uuid;
