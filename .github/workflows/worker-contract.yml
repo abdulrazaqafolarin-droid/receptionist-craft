@@ -2,9 +2,9 @@ name: AI Worker contract
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feature/ai-worker-foundation-clean]
   push:
-    branches: [feature/ai-worker-foundation-clean]
+    branches: [feature/ai-worker-foundation-clean, feature/ai-worker-task-lifecycle]
   workflow_dispatch:
 
 permissions:
@@ -26,11 +26,11 @@ jobs:
         with:
           deno-version: v2.x
       - name: Type-check worker contracts and access rules
-        run: deno check supabase/functions/_shared/workerContract.ts supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.ts supabase/functions/_shared/rateLimiter.test.ts
+        run: deno check supabase/functions/_shared/workerContract.ts supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskLifecycle.ts supabase/functions/_shared/workerTaskLifecycle.test.ts
       - name: Type-check worker registry Edge Function
         run: deno check supabase/functions/worker-registry/index.ts
       - name: Test worker contract and safety invariants
-        run: deno test supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.test.ts
+        run: deno test supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskLifecycle.test.ts
 
   migration-rls:
     name: Validate worker migration and RLS
