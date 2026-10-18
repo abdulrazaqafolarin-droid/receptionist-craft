@@ -155,6 +155,7 @@ DECLARE
   v_kind text;
   v_summary text;
   v_reference text;
+  v_has_verification boolean := false;
   v_event text;
 BEGIN
   IF p_task_id IS NULL OR p_lease_token IS NULL
@@ -196,7 +197,13 @@ BEGIN
          OR v_reference IS NULL OR length(btrim(v_reference)) NOT BETWEEN 1 AND 500 THEN
         RETURN jsonb_build_object('ok', false, 'error', 'invalid_completion_evidence');
       END IF;
+      IF v_kind = 'verification' THEN
+        v_has_verification := true;
+      END IF;
     END LOOP;
+    IF NOT v_has_verification THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'verification_evidence_required');
+    END IF;
     v_event := 'verification_recorded';
   ELSIF p_outcome = 'cancelled' THEN
     IF v_task.cancel_requested_at IS NULL THEN
