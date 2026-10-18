@@ -28,9 +28,9 @@ jobs:
       - name: Type-check worker contracts and access rules
         run: deno check supabase/functions/_shared/workerContract.ts supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskState.ts supabase/functions/_shared/workerTaskState.test.ts
       - name: Type-check worker registry and task Edge Functions
-        run: deno check supabase/functions/worker-registry/index.ts supabase/functions/worker-tasks/index.ts supabase/functions/worker-runner/index.ts supabase/functions/_shared/workerTaskRequest.ts supabase/functions/_shared/workerTaskRequest.test.ts supabase/functions/_shared/workerDraftExecution.ts supabase/functions/_shared/workerDraftExecution.test.ts
+        run: deno check supabase/functions/worker-registry/index.ts supabase/functions/worker-tasks/index.ts supabase/functions/worker-runner/index.ts supabase/functions/worker-verification/index.ts supabase/functions/_shared/workerTaskRequest.ts supabase/functions/_shared/workerTaskRequest.test.ts supabase/functions/_shared/workerDraftExecution.ts supabase/functions/_shared/workerDraftExecution.test.ts supabase/functions/_shared/workerVerification.ts supabase/functions/_shared/workerVerification.test.ts
       - name: Test worker contract and safety invariants
-        run: deno test supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskState.test.ts supabase/functions/_shared/workerTaskRequest.test.ts supabase/functions/_shared/workerDraftExecution.test.ts
+        run: deno test supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskState.test.ts supabase/functions/_shared/workerTaskRequest.test.ts supabase/functions/_shared/workerDraftExecution.test.ts supabase/functions/_shared/workerVerification.test.ts
 
   migration-rls:
     name: Validate worker migration and RLS
@@ -70,18 +70,26 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20261018000001_ai_worker_task_lifecycle.sql
-      - name: Verify idempotency, approvals, cancellation and audit boundaries
-        env:
-          PGPASSWORD: postgres
-        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/ai_worker_task_lifecycle.sql
       - name: Apply execution lease migration
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20261018000002_ai_worker_execution_leases.sql
+      - name: Apply worker verification and publication migration
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20261018000003_ai_worker_verification_and_publish.sql
+      - name: Verify idempotency, approvals, cancellation and audit boundaries
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/ai_worker_task_lifecycle.sql
       - name: Verify lease claims, heartbeats, completion evidence and recovery
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/ai_worker_execution_leases.sql
+      - name: Verify worker verification, publication and pause/resume gates
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/ai_worker_verification_publish.sql
 
   frontend-worker-ui:
     name: Build worker registry UI
