@@ -132,5 +132,7 @@ jobs:
           SQL
       - name: Set up Deno
         uses: denoland/setup-deno@v2
+      - name: Type-check appointment action Edge Function
+        run: deno check supabase/functions/appointment-action/index.ts
       - name: Test appointment action authorization policy
         run: deno test supabase/functions/appointment-action/authorization.test.ts
