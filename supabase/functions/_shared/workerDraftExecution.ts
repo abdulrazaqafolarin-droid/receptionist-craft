@@ -20,6 +20,7 @@ const SECRET_PATTERNS = [
   /Bearer\s+[A-Za-z0-9._~+/-]{24,}/i,
 ];
 const SIDE_EFFECT_VERBS = /\b(send|publish|delete|purchase|pay|book|submit|deploy|install|update|change|post|transfer|refund|cancel|execute|remove|invite|grant|revoke)\b/i;
+const DRAFT_GOAL_VERBS = /\b(draft|write|compose|prepare|outline|summarize|format|rewrite)\b/i;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -79,6 +80,9 @@ export function validateDraftTaskInput(
   }
   if (SIDE_EFFECT_VERBS.test(task.goal)) {
     return { ok: false, error: "goal_requires_external_action" };
+  }
+  if (!DRAFT_GOAL_VERBS.test(task.goal)) {
+    return { ok: false, error: "goal_must_be_draft_only" };
   }
   if (task.input_json.execution_mode !== "draft") {
     return { ok: false, error: "unsupported_execution_mode" };
