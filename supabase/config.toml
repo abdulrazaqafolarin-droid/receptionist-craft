@@ -70,6 +70,10 @@ verify_jwt = false
 [functions.appointment-reminder-runner]
 verify_jwt = false
 
+# Privileged worker requires RUTEX_INTERNAL_CRON_SECRET at handler level.
+[functions.plan-worker]
+verify_jwt = false
+
 [functions.activate-reminders]
 verify_jwt = false
 
