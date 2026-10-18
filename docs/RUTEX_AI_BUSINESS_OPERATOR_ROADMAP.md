@@ -119,7 +119,7 @@ The current PR #52 branch contains:
 - [ ] Add retry classes: safe transient, permanent, rate-limited, needs user input, approval denied and unknown side-effect outcome. Unknown must stop for reconciliation, not auto-retry.
 - [ ] Enforce max steps, timeout, max retries, input/output byte limits, token/cost budgets and capability-specific quotas.
 - [ ] Validate outputs against declared schemas and success criteria; require adapter receipts or independent verification for completion claims.
-- [x] Reconcile expired task leases before each runner claim in bounded batches; tasks with unknown outcomes are blocked for review rather than blindly retried.
+- [x] Reconcile expired task leases before each runner claim in bounded batches, scoped to the already-authorized worker; tasks with unknown outcomes are blocked for review rather than blindly retried, and one tenant cannot block another tenant's tasks.
 - [ ] Improve cooperative cancellation during an active model request and add operator-visible recovery controls for blocked tasks.
 - [ ] Add a dead-letter/reconciliation path for stuck tasks and operator-visible diagnostics.
 
