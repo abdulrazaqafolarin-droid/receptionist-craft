@@ -28,7 +28,7 @@ A durable worker identity and versioned JSON definition. The definition is expec
 - execution limits, retry/recovery policy and verification criteria;
 - workspace presentation/configuration.
 
-The database stores definitions as JSONB. The trusted application validates the contract, and the database independently enforces version-pinned verification and the narrow runner allowlist before activation.
+The database stores definitions as JSONB. The trusted application validates the contract, and the database independently enforces version-pinned verification, owner/admin publication for shared workers, and the narrow runner allowlist before activation. Only the `draft` action is currently supported; research/internal-read declarations remain unpublished until verified adapters exist.
 
 ### `ai_worker_tasks`
 
