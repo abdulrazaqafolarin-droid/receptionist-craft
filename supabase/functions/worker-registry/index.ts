@@ -204,6 +204,14 @@ Deno.serve(async (req: Request) => {
       if (!canReadWorker(user.id, worker, membership)) {
         return jsonRes({ ok: false, error: "worker_access_denied" }, 403, cors);
       }
+      const { data: reconciliation, error: reconciliationError } = await service.rpc("reconcile_stale_ai_worker_verification_runs", {
+        p_worker_id: worker.id,
+        p_stale_seconds: 300,
+        p_limit: 10,
+      });
+      if (reconciliationError || asRecord(reconciliation)?.ok !== true) {
+        console.warn("[worker-registry] stale verification reconciliation unavailable");
+      }
       const { data: verification, error: verificationError } = await service
         .from("ai_worker_verification_runs")
         .select("id, worker_id, worker_version, definition_hash, status, tests, summary, created_at, completed_at")
