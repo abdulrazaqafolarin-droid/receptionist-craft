@@ -1,6 +1,6 @@
 import type { WorkerDefinition } from "./workerContract.ts";
 
-const SAFE_ACTIONS = new Set(["research", "internal_read", "draft"]);
+const SAFE_ACTIONS = new Set(["draft"]);
 
 export function draftPublicationBlockReason(definition: WorkerDefinition): string | null {
   if (!definition.allowed_actions.includes("draft")) return "draft_action_not_allowed";
