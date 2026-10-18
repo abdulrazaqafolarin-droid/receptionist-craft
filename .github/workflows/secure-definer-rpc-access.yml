@@ -7,12 +7,14 @@ on:
       - "supabase/migrations/*secure_definer_rpc_access.sql"
       - "supabase/tests/secure_definer_rpc_access.sql"
       - ".github/workflows/secure-definer-rpc-access.yml"
+      - "supabase/functions/appointment-action/**"
   push:
     branches: [main, fix/security-definer-rpc-access]
     paths:
       - "supabase/migrations/*secure_definer_rpc_access.sql"
       - "supabase/tests/secure_definer_rpc_access.sql"
       - ".github/workflows/secure-definer-rpc-access.yml"
+      - "supabase/functions/appointment-action/**"
 
 permissions:
   contents: read
@@ -128,3 +130,7 @@ jobs:
             );
           END $test$;
           SQL
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+      - name: Test appointment action authorization policy
+        run: deno test supabase/functions/appointment-action/authorization.test.ts
