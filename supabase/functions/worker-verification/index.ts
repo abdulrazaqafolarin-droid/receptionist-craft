@@ -158,6 +158,15 @@ Deno.serve(async (req: Request) => {
       return jsonRes({ ok: false, error: "worker_access_denied" }, 403);
     }
 
+    const { data: reconciliation, error: reconciliationError } = await service.rpc("reconcile_stale_ai_worker_verification_runs", {
+      p_worker_id: worker.id,
+      p_stale_seconds: 300,
+      p_limit: 10,
+    });
+    if (reconciliationError || asRecord(reconciliation)?.ok !== true) {
+      console.warn("[worker-verification] stale verification reconciliation unavailable");
+    }
+
     const parsed = parseWorkerDefinition(worker.definition);
     if (!parsed.ok) return jsonRes({ ok: false, error: "invalid_worker_definition", details: parsed.errors }, 400);
     const definition = parsed.value;
