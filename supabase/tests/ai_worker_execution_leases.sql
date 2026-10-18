@@ -32,7 +32,7 @@ INSERT INTO public.ai_worker_verification_runs (
 ) VALUES
   ('42000000-0000-0000-0000-000000000001', '22000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 1, repeat('b', 64), '{}'::jsonb, 'passed', '[]'::jsonb, 'SQL lease fixture', now()),
   ('42000000-0000-0000-0000-000000000002', '22000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 1, repeat('c', 64), '{}'::jsonb, 'passed', '[]'::jsonb, 'SQL lease fixture', now()),
-  ('42000000-0000-0000-0000-000000000003', '22000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 1, repeat('d', 64), '{}'::jsonb, 'passed', '[]'::jsonb, 'SQL lease fixture', now());
+  ('42000000-0000-0000-0000-000000000003', '22000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001', 1, repeat('d', 64), '{}'::jsonb, 'passed', '[]'::jsonb, 'SQL lease fixture', now());
 UPDATE public.ai_workers SET status = 'active', verified_version = 1, verification_run_id = '42000000-0000-0000-0000-000000000001'
 WHERE id = '22000000-0000-0000-0000-000000000001';
 UPDATE public.ai_workers SET status = 'active', verified_version = 1, verification_run_id = '42000000-0000-0000-0000-000000000002'
