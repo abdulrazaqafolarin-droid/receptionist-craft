@@ -12,7 +12,8 @@
     "verify:manifest": "node scripts/verify-surface-manifest.mjs",
     "verify:actor-map": "node scripts/verify-actor-map.mjs",
     "preview": "vite preview",
-    "test:e2e": "playwright test --project=chromium"
+    "test:e2e": "playwright test --project=chromium",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
