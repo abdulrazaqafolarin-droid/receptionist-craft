@@ -110,14 +110,23 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'worker_not_active');
   END IF;
 
-  SELECT * INTO v_task
-  FROM public.ai_worker_tasks
-  WHERE worker_id = p_worker_id
-    AND created_by = p_actor_id
-    AND idempotency_key = p_idempotency_key
-  FOR UPDATE;
+  INSERT INTO public.ai_worker_tasks (
+    worker_id, created_by, title, goal, input_json, idempotency_key, status
+  ) VALUES (
+    p_worker_id, p_actor_id, btrim(p_title), btrim(p_goal), p_input, p_idempotency_key, 'queued'
+  )
+  ON CONFLICT (worker_id, created_by, idempotency_key)
+    WHERE idempotency_key IS NOT NULL
+  DO NOTHING
+  RETURNING * INTO v_task;
 
-  IF FOUND THEN
+  IF NOT FOUND THEN
+    SELECT * INTO v_task
+    FROM public.ai_worker_tasks
+    WHERE worker_id = p_worker_id
+      AND created_by = p_actor_id
+      AND idempotency_key = p_idempotency_key
+    FOR UPDATE;
     IF v_task.title <> btrim(p_title)
        OR v_task.goal <> btrim(p_goal)
        OR v_task.input_json <> p_input THEN
@@ -125,13 +134,6 @@ BEGIN
     END IF;
     RETURN jsonb_build_object('ok', true, 'replayed', true, 'task', to_jsonb(v_task));
   END IF;
-
-  INSERT INTO public.ai_worker_tasks (
-    worker_id, created_by, title, goal, input_json, idempotency_key, status
-  ) VALUES (
-    p_worker_id, p_actor_id, btrim(p_title), btrim(p_goal), p_input, p_idempotency_key, 'queued'
-  )
-  RETURNING * INTO v_task;
 
   INSERT INTO public.ai_worker_task_events(task_id, actor_id, event_type, from_status, to_status, details)
   VALUES (v_task.id, p_actor_id, 'task_created', NULL, 'queued',
@@ -162,9 +164,10 @@ DECLARE
   v_task public.ai_worker_tasks%ROWTYPE;
   v_next_status text;
   v_event text;
+  v_previous_status text;
   v_details jsonb := '{}'::jsonb;
 BEGIN
-  IF p_actor_id IS NULL OR p_action NOT IN ('approve', 'cancel') THEN
+  IF p_actor_id IS NULL OR p_action IS NULL OR p_action NOT IN ('approve', 'cancel') THEN
     RETURN jsonb_build_object('ok', false, 'error', 'invalid_transition');
   END IF;
 
@@ -173,12 +176,14 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'task_not_found');
   END IF;
 
+  v_previous_status := v_task.status;
+
   IF p_action = 'approve' THEN
     IF v_task.status <> 'waiting_approval' OR v_task.approval_request IS NULL THEN
       RETURN jsonb_build_object('ok', false, 'error', 'approval_not_pending');
     END IF;
     IF p_approval_id IS NULL
-       OR p_approval_id <> v_task.approval_request ->> 'approval_id' THEN
+       OR p_approval_id <> (v_task.approval_request ->> 'approval_id') THEN
       RETURN jsonb_build_object('ok', false, 'error', 'approval_request_mismatch');
     END IF;
 
@@ -218,10 +223,7 @@ BEGIN
   END IF;
 
   INSERT INTO public.ai_worker_task_events(task_id, actor_id, event_type, from_status, to_status, details)
-  VALUES (v_task.id, p_actor_id, v_event,
-    CASE WHEN p_action = 'approve' THEN 'waiting_approval' ELSE
-      CASE WHEN v_next_status = 'running' THEN 'running' ELSE NULL END END,
-    v_next_status, v_details);
+  VALUES (v_task.id, p_actor_id, v_event, v_previous_status, v_next_status, v_details);
 
   RETURN jsonb_build_object('ok', true, 'task', to_jsonb(v_task));
 END;
