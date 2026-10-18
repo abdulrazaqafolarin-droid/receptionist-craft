@@ -165,6 +165,31 @@ BEGIN
     RAISE EXCEPTION 'public widget read RPCs must use hardened search paths';
   END IF;
 
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid IN (
+      'public.schedule_appointment_reminder_cron(text,text)'::regprocedure,
+      'public.schedule_director_sweep_cron(text,text)'::regprocedure,
+      'public.schedule_plan_worker_cron(text,text)'::regprocedure
+    )
+    AND NOT (p.proconfig @> ARRAY['search_path=pg_catalog, cron, pg_temp'])
+  ) THEN
+    RAISE EXCEPTION 'cron SECURITY DEFINER functions must use a hardened search_path';
+  END IF;
+  IF has_function_privilege('anon', 'public.schedule_appointment_reminder_cron(text,text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.schedule_appointment_reminder_cron(text,text)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.schedule_director_sweep_cron(text,text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.schedule_director_sweep_cron(text,text)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.schedule_plan_worker_cron(text,text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.schedule_plan_worker_cron(text,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'cron SECURITY DEFINER functions must not be directly executable by client roles';
+  END IF;
+  IF NOT has_function_privilege('service_role', 'public.schedule_appointment_reminder_cron(text,text)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'public.schedule_director_sweep_cron(text,text)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'public.schedule_plan_worker_cron(text,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'service_role must retain cron scheduler execution';
+  END IF;
+
   IF NOT EXISTS (
     SELECT 1 FROM pg_proc p
     WHERE p.oid = 'public.get_public_appointment_by_token(text)'::regprocedure
