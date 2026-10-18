@@ -217,10 +217,12 @@ Deno.serve(async (req: Request) => {
         return jsonRes({ ok: true, task, events: Array.isArray(events) ? events : [] }, 200, cors);
       }
 
+      let approvalId: string | null = null;
       if (action === "approve") {
         if (!isBoundedApprovalId(body.approval_id)) {
           return jsonRes({ ok: false, error: "invalid_approval_id" }, 400, cors);
         }
+        approvalId = body.approval_id.trim();
         if (worker.status !== "active") return jsonRes({ ok: false, error: "worker_not_active" }, 409, cors);
       }
 
@@ -228,7 +230,7 @@ Deno.serve(async (req: Request) => {
         p_task_id: task.id,
         p_actor_id: user.id,
         p_action: action,
-        p_approval_id: action === "approve" ? body.approval_id.trim() : null,
+        p_approval_id: approvalId,
       });
       if (error) return jsonRes({ ok: false, error: "task_transition_failed" }, 500, cors);
       const result = asRecord(data);
