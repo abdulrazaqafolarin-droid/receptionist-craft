@@ -9,6 +9,11 @@ BEGIN
      OR has_function_privilege('service_role', 'public.enforce_ai_worker_task_concurrency()', 'EXECUTE') THEN
     RAISE EXCEPTION 'trigger-only concurrency guard must not be directly executable';
   END IF;
+  IF has_function_privilege('anon', 'public.block_expired_ai_worker_tasks_for_worker(uuid,integer)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.block_expired_ai_worker_tasks_for_worker(uuid,integer)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'public.block_expired_ai_worker_tasks_for_worker(uuid,integer)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'worker-scoped lease recovery must be service-role only';
+  END IF;
 END $acl$;
 
 -- Earlier worker regression tests may intentionally leave a running task to
@@ -83,6 +88,27 @@ BEGIN
   END;
   IF NOT denied THEN RAISE EXCEPTION 'per-user ceiling must reject a fourth active task'; END IF;
 END $user_cap$;
+
+-- Lease recovery exposed by the runner must only affect the authorized worker.
+INSERT INTO public.ai_worker_tasks(id, worker_id, created_by, title, goal, status, lease_token, lease_expires_at, worker_version, execution_attempt_id)
+VALUES
+ (md5('concurrency-worker-expired')::uuid, md5('concurrency-worker')::uuid, md5('concurrency-worker-user')::uuid,
+  'Expired task on authorized worker', 'Must be blocked', 'running', md5('lease-expired-own')::uuid, now() - interval '1 minute', 1, md5('attempt-expired-own')::uuid),
+ (md5('concurrency-user-expired')::uuid, md5('concurrency-user-worker-1')::uuid, md5('concurrency-user-shared')::uuid,
+  'Expired task on another worker', 'Must remain untouched', 'running', md5('lease-expired-other')::uuid, now() - interval '1 minute', 1, md5('attempt-expired-other')::uuid);
+
+DO $scoped_recovery$
+DECLARE recovered integer;
+BEGIN
+  recovered := public.block_expired_ai_worker_tasks_for_worker(md5('concurrency-worker')::uuid, 50);
+  IF recovered <> 1 THEN RAISE EXCEPTION 'worker-scoped recovery should block only one expired task'; END IF;
+  IF (SELECT status FROM public.ai_worker_tasks WHERE id = md5('concurrency-worker-expired')::uuid) <> 'blocked' THEN
+    RAISE EXCEPTION 'expired task on requested worker must be blocked';
+  END IF;
+  IF (SELECT status FROM public.ai_worker_tasks WHERE id = md5('concurrency-user-expired')::uuid) <> 'running' THEN
+    RAISE EXCEPTION 'request must not block an expired task on another worker';
+  END IF;
+END $scoped_recovery$;
 
 -- Per-organization cap: ten tasks across separate workers and users are running.
 INSERT INTO public.organizations(id) VALUES (md5('concurrency-org')::uuid);
