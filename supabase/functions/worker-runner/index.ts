@@ -213,7 +213,8 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
     const claim = asRecord(claimData);
     if (!claim || claim.ok !== true) {
       const reason = claim && typeof claim.error === "string" ? claim.error : "task_claim_rejected";
-      return jsonRes({ ok: false, error: reason }, reason === "worker_not_active" ? 409 : 500);
+      return jsonRes({ ok: false, error: reason },
+        ["worker_not_active", "worker_not_verified", "task_not_queued", "task_not_found"].includes(reason) ? 409 : 500);
     }
     if (claim.empty === true || claim.task === null) return jsonRes({ ok: true, empty: true }, 200);
 
