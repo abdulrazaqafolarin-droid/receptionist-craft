@@ -120,7 +120,8 @@ The current PR #52 branch contains:
 - [ ] Enforce max steps, timeout, max retries, input/output byte limits, token/cost budgets and capability-specific quotas.
 - [ ] Validate outputs against declared schemas and success criteria; require adapter receipts or independent verification for completion claims.
 - [x] Reconcile expired task leases before each runner claim in bounded batches, scoped to the already-authorized worker; tasks with unknown outcomes are blocked for review rather than blindly retried, and one tenant cannot block another tenant's tasks.
-- [ ] Improve cooperative cancellation during an active model request and add operator-visible recovery controls for blocked tasks.
+- [x] Add 15-second lease heartbeats during model generation; a cancellation request aborts the in-flight draft request and prevents output persistence.
+- [ ] Add operator-visible recovery controls for blocked tasks and safe reconciliation diagnostics.
 - [ ] Add a dead-letter/reconciliation path for stuck tasks and operator-visible diagnostics.
 
 **Exit gate:** chaos tests cover duplicate requests, process restarts, expired leases, network timeouts, unknown external outcomes, approval races, cancellation and stale checkpoints. No task is marked done based only on model prose.
@@ -146,7 +147,8 @@ The current PR #52 branch contains:
 - [ ] Activity timeline with decisions, tool calls, receipts, evidence, approvals, errors and cost/usage.
 - [ ] Output/artifact panels with source references and versioned files.
 - [ ] Approval inbox with exact pending action and before/after state.
-- [ ] Retry/recovery controls that explain whether retry is safe.
+- [x] Add a **Run queued task** control; capacity-limit errors explain the relevant scope and leave the task queued.
+- [ ] Expand retry/recovery controls to explain whether retry is safe.
 - [ ] Worker settings for allowed capabilities, autonomy, limits, notification rules and pause state.
 - [ ] Run history and replayable test fixtures that do not re-run live side effects.
 - [ ] Accessibility, keyboard operation, reduced-motion support, loading/empty/error states and mobile layout.
@@ -199,7 +201,7 @@ The current PR #52 branch contains:
 5. Implement capability adapters and worker verification before enabling activation.
 6. Extend the runner only through explicitly registered, typed, risk-classified adapters with approval gates.
 7. Integrate Director delegation only after retries, approval gates and evidence pass adversarial tests.
-7. Review the independent security PRs and verify their CI, dependencies and live call sites; do not merge a large stacked branch as a substitute for rollout sequencing.
+8. Review the independent security PRs and verify their CI, dependencies and live call sites; do not merge a large stacked branch as a substitute for rollout sequencing.
 
 ## Release blockers that must remain visible
 
@@ -210,3 +212,11 @@ The current PR #52 branch contains:
 - The new task queue needs staging integration tests, especially concurrent requests and failure recovery.
 - Director migration dependencies and authenticated-browser behavior remain unverified in production.
 - Existing repository-wide TypeScript/ESLint baseline debt is separate from focused feature gates and must not be concealed.
+
+
+## Latest worker-runtime hardening (2026-10-18)
+
+- Added periodic lease heartbeats during draft generation. The runner now aborts an in-flight model request when cancellation is requested, distinguishes lease loss from cancellation, and avoids persisting output after cancellation.
+- Added a retry action for queued tasks. Database concurrency-limit responses now explain whether global, user, organization or worker capacity is full while preserving the queued task.
+- **Passed:** AI Worker contract CI run #399 on `0dc67ad630689c73ec5eccb02e30eb7c1365cf52`; Deno checks/tests, PostgreSQL migration/RLS/concurrency tests, and frontend build/lint passed. A follow-up workflow run for documentation changes is pending.
+- Capability-specific/model-cost budgets, operator-visible blocked-task recovery, authenticated staging integration, Director delegation, and production migration reconciliation remain open.
