@@ -60,7 +60,7 @@ export function parseWorkerTaskCreateRequest(input: unknown): WorkerTaskRequestP
   if (new TextEncoder().encode(serialized).byteLength > 32768) {
     return { ok: false, error: "input_too_large" };
   }
-  if (hasSecretLikeValue(taskInput) || hasSecretLikeValue(input.goal)) {
+  if (hasSecretLikeValue(taskInput) || hasSecretLikeValue(input.goal) || hasSecretLikeValue(input.title)) {
     return { ok: false, error: "secret_like_value" };
   }
   return {
