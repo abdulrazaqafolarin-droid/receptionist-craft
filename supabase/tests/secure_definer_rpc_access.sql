@@ -285,8 +285,16 @@ BEGIN
   IF COALESCE((result->>'success')::boolean, true) THEN
     RAISE EXCEPTION 'negative stock quantity should be rejected';
   END IF;
+  result := public.deduct_stock('11111111-1111-4111-8111-111111111111', 0);
+  IF COALESCE((result->>'success')::boolean, true) THEN
+    RAISE EXCEPTION 'zero stock quantity should be rejected';
+  END IF;
+  result := public.deduct_stock('11111111-1111-4111-8111-111111111111', NULL);
+  IF COALESCE((result->>'success')::boolean, true) THEN
+    RAISE EXCEPTION 'null stock quantity should be rejected';
+  END IF;
   IF (SELECT stock_quantity FROM public.services WHERE id = '11111111-1111-4111-8111-111111111111') <> 5 THEN
-    RAISE EXCEPTION 'invalid quantity must not mutate inventory';
+    RAISE EXCEPTION 'invalid quantities must not mutate inventory';
   END IF;
 
   result := public.deduct_stock('11111111-1111-4111-8111-111111111111', 2);
@@ -295,6 +303,14 @@ BEGIN
   END IF;
   IF (SELECT stock_quantity FROM public.services WHERE id = '11111111-1111-4111-8111-111111111111') <> 3 THEN
     RAISE EXCEPTION 'valid stock deduction should reduce stock by requested quantity';
+  END IF;
+
+  result := public.deduct_stock('11111111-1111-4111-8111-111111111111', 4);
+  IF COALESCE((result->>'success')::boolean, true) THEN
+    RAISE EXCEPTION 'deduction above available stock should be rejected';
+  END IF;
+  IF (SELECT stock_quantity FROM public.services WHERE id = '11111111-1111-4111-8111-111111111111') <> 3 THEN
+    RAISE EXCEPTION 'oversell attempt must not mutate inventory';
   END IF;
 END $$;
 
