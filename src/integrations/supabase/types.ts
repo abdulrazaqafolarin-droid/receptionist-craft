@@ -379,13 +379,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "ai_worker_task_events_actor_id_fkey"
-            columns: ["actor_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "ai_worker_task_events_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
