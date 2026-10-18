@@ -11,7 +11,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseWorkerDefinition } from "../_shared/workerContract.ts";
 import { RATE_LIMITS } from "../_shared/rateLimiter.ts";
 import { consumePersistentRateLimit } from "../_shared/persistentRateLimit.ts";
-import { canArchiveWorker, canCreateOrganizationWorker, canEditWorker, canReadWorker } from "../_shared/workerAccess.ts";
+import { canArchiveWorker, canCreateOrganizationWorker, canEditWorker, canPublishWorker, canReadWorker } from "../_shared/workerAccess.ts";
 
 type JsonRecord = Record<string, unknown>;
 type ServiceClient = any;
@@ -232,8 +232,8 @@ Deno.serve(async (req: Request) => {
       const membership = worker.organization_id
         ? await activeMembership(service, worker.organization_id, user.id)
         : null;
-      if (!canEditWorker(user.id, worker, membership)) {
-        return jsonRes({ ok: false, error: "worker_access_denied" }, 403, cors);
+      if (!canPublishWorker(user.id, worker, membership)) {
+        return jsonRes({ ok: false, error: "worker_publish_denied" }, 403, cors);
       }
       const expectedStatus = action === "publish" ? "draft" : "paused";
       if (worker.status !== expectedStatus) {
