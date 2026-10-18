@@ -29,6 +29,13 @@ Deno.test("allows only supervised draft-safe definitions to publish on this runn
   const unsafe = parseWorkerDefinition({ ...draftDefinition, allowed_actions: ["draft", "send_message"] });
   assert(unsafe.ok, "consequential action can be a valid definition");
   if (unsafe.ok) assert(draftPublicationBlockReason(unsafe.value) === "unsupported_actions", "external actions must be blocked");
+  const research = parseWorkerDefinition({ ...draftDefinition, allowed_actions: ["draft", "research"] });
+  assert(research.ok, "research action can be a valid definition");
+  if (research.ok) assert(draftPublicationBlockReason(research.value) === "unsupported_actions", "research must remain unpublished until a research adapter exists");
+
+  const internalRead = parseWorkerDefinition({ ...draftDefinition, allowed_actions: ["draft", "internal_read"] });
+  assert(internalRead.ok, "internal read action can be a valid definition");
+  if (internalRead.ok) assert(draftPublicationBlockReason(internalRead.value) === "unsupported_actions", "internal reads must remain unpublished until a verified adapter exists");
 });
 
 Deno.test("builds synthetic required input values and rejects required files", () => {
