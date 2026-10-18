@@ -39,13 +39,13 @@ The current PR #52 branch contains:
 
 - Migration 20261018000001_ai_worker_task_lifecycle.sql: idempotency keys, exact approval references, cancellation-request metadata and an audit-event table.
 - Migration 20261018000002_ai_worker_execution_leases.sql: atomic skip-locked claims, worker-version pinning, per-claim lease tokens, heartbeats, evidence-gated completion and expired-lease blocking. Lease internals are not readable by browser roles.
-- worker-runner now executes a narrow draft-only task mode through direct Gemini API without tool declarations. It is not deployed; runner secret configuration and staging integration tests remain outstanding.
+- worker-runner executes a narrow supervised draft-only task mode through direct Gemini API without tool declarations. Publication is enabled only for definitions that pass version-pinned verification and the SQL-enforced draft-runner allowlist. It is not deployed; runner secret configuration and staging integration tests remain outstanding.
 - Atomic SQL task creation plus a task-created audit event.
 - Atomic approval and cancellation transitions. A running task remains running when cancellation is requested until an executor confirms it has stopped.
 - worker-tasks Edge Function: authenticated create/list/get/approve/cancel operations, worker-scope checks, definition validation, request bounds, secret-like input rejection and rate limiting.
 - Task request tests, SQL lifecycle/RLS tests, generated database types and CI coverage.
 
-**This is a durable queue, not yet an executor.** Worker publication remains disabled. Do not manually set a worker active in production to bypass the missing test-and-verification pipeline.
+**This is a restricted draft executor, not yet a general-purpose executor.** It cannot browse, read internal systems, run code, use integrations, send messages, or perform external writes. Do not manually set a worker active in production to bypass the verification/publication gate.
 
 ## Phased build plan
 
@@ -69,7 +69,8 @@ The current PR #52 branch contains:
 - [x] Idempotent task creation and atomic creation audit.
 - [x] Approval-ID-bound resume and safe cancellation-request semantics.
 - [x] Scoped task history and client-read-only audit grants.
-- [ ] Add lifecycle audit records for draft create/edit/archive, verification runs, activation and pause.
+- [x] Add atomic lifecycle audit records for draft create/edit/archive and activation/pause/resume; these append in the same transaction as the worker mutation.
+- [ ] Add lifecycle audit events for verification-run start/pass/failure and verify that every run is durably reconciled.
 - [ ] Add persistent/distributed rate limiting; current in-memory limits reset on Edge Function cold starts.
 - [ ] Add task pagination and retention policy for outputs, events and large evidence payloads.
 - [ ] Add integration tests for cross-tenant access, concurrent duplicate creation, stale approvals, retries and concurrent cancel/approve races.
@@ -98,7 +99,8 @@ The current PR #52 branch contains:
 - [ ] Require mandatory tests to pass and an authorized owner/admin to approve publication.
 - [ ] Publish immutable worker versions; edits to an active worker create a new draft version and do not silently mutate a running task's contract.
 - [ ] Support pause, rollback to a prior version and emergency disable with audit history.
-- [ ] Keep publish/activate unavailable until the verifier and version semantics exist.
+- [x] Gate publication on current passed verification and version-pinned definitions for the draft-only subset.
+- [ ] Keep unsupported capabilities unpublished until their adapters and adapter-specific tests exist.
 
 **Exit gate:** an active worker is pinned to a verified immutable version and capability allowlist; any change requires re-verification.
 
