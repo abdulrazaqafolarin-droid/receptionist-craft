@@ -86,6 +86,15 @@ BEGIN
 
   result := public.finish_ai_worker_task(
     '32000000-0000-0000-0000-000000000001', v_lease, 'done', '{"result":"report"}'::jsonb,
+    '[{"kind":"source","summary":"Source was collected","reference":"source:lease-001"}]'::jsonb,
+    NULL
+  );
+  IF result->>'error' <> 'verification_evidence_required' THEN
+    RAISE EXCEPTION 'source evidence alone must not complete a task: %', result;
+  END IF;
+
+  result := public.finish_ai_worker_task(
+    '32000000-0000-0000-0000-000000000001', v_lease, 'done', '{"result":"report"}'::jsonb,
     '[{"kind":"verification","summary":"Output schema passed","reference":"test-run:lease-001"}]'::jsonb,
     NULL
   );
