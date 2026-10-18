@@ -344,6 +344,59 @@ export default function WorkerWorkspace() {
     }
   }
 
+  async function runQueuedTask(taskId: string) {
+    if (!worker || worker.status !== "active" || !worker.permissions?.can_edit || !supportsDraftRunner(definition)) return;
+    setRunningTaskId(taskId);
+    try {
+      const { data, error } = await supabase.functions.invoke("worker-runner", {
+        body: { worker_id: worker.id, task_id: taskId },
+      });
+      await loadTasks(worker.id);
+
+      let runnerError = typeof data?.error === "string" ? data.error : "";
+      if (!runnerError && error && typeof error === "object" && "context" in error) {
+        const context = (error as { context?: unknown }).context;
+        if (context instanceof Response) {
+          const body = await context.clone().json().catch(() => null) as { error?: unknown } | null;
+          if (typeof body?.error === "string") runnerError = body.error;
+        }
+      }
+      if (!runnerError && error instanceof Error) runnerError = error.message;
+      if (!runnerError) runnerError = "unknown runner error";
+
+      if (error || !data?.ok) {
+        const capacityMessages: Record<string, string> = {
+          worker_concurrency_limit_global: "The worker service is at capacity.",
+          worker_concurrency_limit_user: "You already have the maximum number of tasks running.",
+          worker_concurrency_limit_organization: "Your organization has reached its active-task limit.",
+          worker_concurrency_limit_worker: "This worker is already running its maximum number of tasks.",
+        };
+        const capacityMessage = capacityMessages[runnerError];
+        if (capacityMessage) {
+          toast.message("Task remains queued. " + capacityMessage + " Try again after a running task finishes.");
+        } else if (runnerError === "task_recovery_unavailable") {
+          toast.message("Task remains queued. Lease recovery is temporarily unavailable; try again shortly.");
+        } else {
+          toast.error("Task execution did not finish: " + runnerError);
+        }
+      } else if (data.status === "done") {
+        toast.success("Draft task completed and its output was validated.");
+      } else if (data.status === "blocked") {
+        toast.error("Task blocked: " + (data.reason || "review the task requirements"));
+      } else if (data.status === "failed") {
+        toast.error("Task failed: " + (data.error || "review the task and retry safely"));
+      } else if (data.status === "cancelled") {
+        toast.message("Task cancelled before its draft was saved.");
+      } else if (data.empty) {
+        toast.message("No queued task was available to run.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to run task.");
+    } finally {
+      setRunningTaskId(null);
+    }
+  }
+
   async function createAndRunTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!worker || worker.status !== "active" || !worker.permissions?.can_edit) return;
@@ -381,22 +434,7 @@ export default function WorkerWorkspace() {
       const taskId = String(data.task.id);
       setTaskTitle("");
       setTaskGoal("");
-      setRunningTaskId(taskId);
-      const { data: runData, error: runError } = await supabase.functions.invoke("worker-runner", {
-        body: { worker_id: worker.id, task_id: taskId },
-      });
-      await loadTasks(worker.id);
-      if (runError || !runData?.ok) {
-        toast.error("Task queued, but execution did not finish: " + (runData?.error || runError?.message || "unknown runner error"));
-      } else if (runData.status === "done") {
-        toast.success("Draft task completed and its output was validated.");
-      } else if (runData.status === "blocked") {
-        toast.error("Task blocked: " + (runData.reason || "review the task requirements"));
-      } else if (runData.status === "failed") {
-        toast.error("Task failed: " + (runData.error || "review the task and retry safely"));
-      } else if (runData.empty) {
-        toast.message("No queued task was available to run.");
-      }
+      await runQueuedTask(taskId);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to run task.");
     } finally {
@@ -719,6 +757,19 @@ export default function WorkerWorkspace() {
                       {new Date(task.created_at).toLocaleString()} · Attempt {task.attempt_count}
                     </div>
                     {task.error_text && <p className="mt-3 text-sm text-destructive">{task.error_text}</p>}
+                    {task.status === "queued" && worker.status === "active" && worker.permissions?.can_edit && draftRunnerReady && (
+                      <div className="mt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void runQueuedTask(task.id)}
+                          disabled={Boolean(runningTaskId) || creatingTask || verifying || publishing}
+                        >
+                          {runningTaskId === task.id ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}
+                          Run queued task
+                        </Button>
+                      </div>
+                    )}
                     {task.output_json && (
                       <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted/60 p-3 text-xs">{JSON.stringify(task.output_json, null, 2)}</pre>
                     )}
