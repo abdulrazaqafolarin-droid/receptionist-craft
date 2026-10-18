@@ -36,6 +36,27 @@ function isUuid(value: unknown): value is string {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+async function finishVerification(
+  service: ServiceClient,
+  runId: string,
+  actorId: string,
+  status: "passed" | "failed",
+  tests: Array<{ name: string; passed: boolean; detail: string }>,
+  summary: string,
+): Promise<JsonRecord | null> {
+  const { data, error } = await service.rpc("finish_ai_worker_verification", {
+    p_run_id: runId,
+    p_actor_id: actorId,
+    p_status: status,
+    p_tests: tests,
+    p_summary: summary,
+  });
+  if (error) return null;
+  const result = asRecord(data);
+  const verification = asRecord(result?.verification);
+  return result?.ok === true && verification ? verification : null;
+}
+
 async function callGemini(prompt: string, apiKey: string): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 65_000);
@@ -136,18 +157,24 @@ Deno.serve(async (req: Request) => {
     if (!parsed.ok) return jsonRes({ ok: false, error: "invalid_worker_definition", details: parsed.errors }, 400);
     const definition = parsed.value;
     const definitionHash = await hashWorkerDefinition(definition);
-    const { data: run, error: runError } = await service.from("ai_worker_verification_runs").insert({
-      worker_id: worker.id,
-      actor_id: user.id,
-      worker_version: worker.version,
-      definition_hash: definitionHash,
-      definition_snapshot: worker.definition,
-      status: "running",
-      model: "gemini-2.5-flash-lite",
-      tests: [],
-      summary: "Verification is running.",
-    }).select("id, worker_id, worker_version, definition_hash, status, tests, summary, created_at, completed_at").single();
-    if (runError || !run) return jsonRes({ ok: false, error: "verification_run_create_failed" }, 500);
+    const { data: startData, error: startError } = await service.rpc("start_ai_worker_verification", {
+      p_worker_id: worker.id,
+      p_actor_id: user.id,
+      p_worker_version: worker.version,
+      p_definition_hash: definitionHash,
+      p_definition_snapshot: worker.definition,
+      p_model: "gemini-2.5-flash-lite",
+    });
+    if (startError) return jsonRes({ ok: false, error: "verification_run_create_failed" }, 500);
+    const startResult = asRecord(startData);
+    const run = asRecord(startResult?.verification);
+    if (!startResult || startResult.ok !== true || !run || typeof run.id !== "string") {
+      const reason = typeof startResult?.error === "string" ? startResult.error : "verification_run_create_failed";
+      const status = reason === "worker_access_denied" ? 403
+        : ["worker_changed_concurrently", "only_drafts_can_be_verified"].includes(reason) ? 409 : 500;
+      return jsonRes({ ok: false, error: reason }, status);
+    }
+    const runId = run.id;
 
     const tests: Array<{ name: string; passed: boolean; detail: string }> = [
       { name: "definition_contract", passed: true, detail: "Definition passed the versioned worker contract." },
@@ -156,10 +183,9 @@ Deno.serve(async (req: Request) => {
     if (blockReason) {
       tests.push({ name: "draft_runner_eligibility", passed: false, detail: blockReason });
       const summary = `Not publishable by the draft-only runner: ${blockReason}`;
-      const { data: failed } = await service.from("ai_worker_verification_runs").update({
-        status: "failed", tests, summary, completed_at: new Date().toISOString(),
-      }).eq("id", run.id).select("id, worker_id, worker_version, definition_hash, status, tests, summary, created_at, completed_at").single();
-      return jsonRes({ ok: true, verification: failed || { ...run, status: "failed", tests, summary } }, 200);
+      const failed = await finishVerification(service, runId, user.id, "failed", tests, summary);
+      if (!failed) return jsonRes({ ok: false, error: "verification_run_update_failed" }, 500);
+      return jsonRes({ ok: true, verification: failed }, 200);
     }
     tests.push({ name: "draft_runner_eligibility", passed: true, detail: "Only supervised draft-safe actions are enabled; no external capabilities are declared." });
 
@@ -170,10 +196,9 @@ Deno.serve(async (req: Request) => {
       const reason = error instanceof Error ? error.message : "synthetic_input_failed";
       tests.push({ name: "synthetic_input", passed: false, detail: reason });
       const summary = `Synthetic input could not be generated: ${reason}`;
-      const { data: failed } = await service.from("ai_worker_verification_runs").update({
-        status: "failed", tests, summary, completed_at: new Date().toISOString(),
-      }).eq("id", run.id).select("id, worker_id, worker_version, definition_hash, status, tests, summary, created_at, completed_at").single();
-      return jsonRes({ ok: true, verification: failed || { ...run, status: "failed", tests, summary } }, 200);
+      const failed = await finishVerification(service, runId, user.id, "failed", tests, summary);
+      if (!failed) return jsonRes({ ok: false, error: "verification_run_update_failed" }, 500);
+      return jsonRes({ ok: true, verification: failed }, 200);
     }
 
     const sampleTask = {
@@ -184,10 +209,9 @@ Deno.serve(async (req: Request) => {
     if (!inputCheck.ok) {
       tests.push({ name: "synthetic_input", passed: false, detail: inputCheck.error });
       const summary = `Synthetic input failed validation: ${inputCheck.error}`;
-      const { data: failed } = await service.from("ai_worker_verification_runs").update({
-        status: "failed", tests, summary, completed_at: new Date().toISOString(),
-      }).eq("id", run.id).select("id, worker_id, worker_version, definition_hash, status, tests, summary, created_at, completed_at").single();
-      return jsonRes({ ok: true, verification: failed || { ...run, status: "failed", tests, summary } }, 200);
+      const failed = await finishVerification(service, runId, user.id, "failed", tests, summary);
+      if (!failed) return jsonRes({ ok: false, error: "verification_run_update_failed" }, 500);
+      return jsonRes({ ok: true, verification: failed }, 200);
     }
     tests.push({ name: "synthetic_input", passed: true, detail: "Required input fields were populated with synthetic values." });
 
@@ -209,13 +233,8 @@ Deno.serve(async (req: Request) => {
     const summary = passed
       ? "Passed: the supervised draft-only worker produced a sample that matched its declared output schema. This is not a general behavioral or factual-accuracy certification."
       : "Failed: one or more draft-only verification checks did not pass.";
-    const { data: completed, error: updateError } = await service.from("ai_worker_verification_runs").update({
-      status: passed ? "passed" : "failed",
-      tests,
-      summary,
-      completed_at: new Date().toISOString(),
-    }).eq("id", run.id).select("id, worker_id, worker_version, definition_hash, status, tests, summary, created_at, completed_at").single();
-    if (updateError || !completed) return jsonRes({ ok: false, error: "verification_run_update_failed" }, 500);
+    const completed = await finishVerification(service, runId, user.id, passed ? "passed" : "failed", tests, summary);
+    if (!completed) return jsonRes({ ok: false, error: "verification_run_update_failed" }, 500);
     return jsonRes({ ok: true, verification: completed }, 200);
   } catch (error) {
     console.error("[worker-verification] request failed", error instanceof Error ? error.message : "unknown");
