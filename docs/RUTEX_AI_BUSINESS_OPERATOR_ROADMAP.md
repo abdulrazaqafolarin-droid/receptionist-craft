@@ -70,7 +70,8 @@ The current PR #52 branch contains:
 - [x] Approval-ID-bound resume and safe cancellation-request semantics.
 - [x] Scoped task history and client-read-only audit grants.
 - [x] Add atomic lifecycle audit records for draft create/edit/archive, verification-run start/pass/failure, activation and pause/resume; these append in the same transaction as the worker/run mutation.
-- [ ] Add stale verification-run reconciliation for unexpected Edge Function termination.
+- [x] Reconcile stale running verification records as failed on authorized worker reads and verification attempts, with an atomic failure audit event.
+- [ ] Add a scheduled reconciler so stale runs are recovered even when nobody opens the worker workspace again.
 - [x] Add persistent atomic per-user/per-endpoint rate limiting for the worker registry, task API, verifier and runner. Organization-wide, worker-wide and capability-wide budget enforcement remains pending.
 - [x] Add stable cursor pagination to the worker task list API and workspace load-more UI.
 - [ ] Define retention/redaction policy for outputs, task events and large evidence payloads.
@@ -97,7 +98,7 @@ The current PR #52 branch contains:
 - [ ] Extend verification to catalogued capability risk/approval compatibility, per-capability budgets, negative/permission-denial tests and adapter evidence.
 - [x] Run bounded synthetic-input/output tests in isolated CI; no real messages or production data are mutated by verification.
 - [x] Store durable verification runs with exact worker version, definition hash/snapshot, model, test outcomes, summary and timestamps.
-- [ ] Add explicit failure classifications, runtime version, full bounded test inputs and stale-run reconciliation.
+- [ ] Add explicit failure classifications, runtime version and bounded test-input snapshots to verification evidence.
 - [x] Require current verification to pass and an authorized organization owner/admin to approve shared-worker publication; personal workers require their creator.
 - [ ] Publish immutable worker versions; edits to an active worker create a new draft version and do not silently mutate a running task's contract.
 - [ ] Support pause, rollback to a prior version and emergency disable with audit history.
