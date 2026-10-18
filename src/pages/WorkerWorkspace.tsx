@@ -135,6 +135,7 @@ export default function WorkerWorkspace() {
   const [taskTitle, setTaskTitle] = useState("");
   const [taskGoal, setTaskGoal] = useState("");
   const [taskPayload, setTaskPayload] = useState("{}");
+  const [reusingTaskId, setReusingTaskId] = useState<string | null>(null);
 
   const definition = (worker?.definition && typeof worker.definition === "object"
     ? worker.definition
@@ -394,6 +395,45 @@ export default function WorkerWorkspace() {
       toast.error(error instanceof Error ? error.message : "Unable to run task.");
     } finally {
       setRunningTaskId(null);
+    }
+  }
+
+  async function reuseTaskInputs(taskId: string) {
+    if (!worker || worker.status !== "active" || !worker.permissions?.can_edit || !supportsDraftRunner(definition)) return;
+    setReusingTaskId(taskId);
+    try {
+      const { data, error } = await supabase.functions.invoke("worker-tasks", {
+        body: { action: "get", task_id: taskId },
+      });
+      if (error || !data?.ok || !data.task) {
+        throw new Error(data?.error || error?.message || "Unable to load the previous task.");
+      }
+      if (data.task.worker_id !== worker.id) {
+        throw new Error("The task does not belong to this worker.");
+      }
+      if (data.task.status !== "blocked" && data.task.status !== "failed") {
+        throw new Error("Only blocked or failed tasks can be used to prepare a recovery draft.");
+      }
+
+      const input = data.task.input_json;
+      if (!input || typeof input !== "object" || Array.isArray(input) || input.execution_mode !== "draft") {
+        throw new Error("The previous task does not contain a supported draft payload.");
+      }
+      const payload = input.payload;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        throw new Error("The previous task payload is missing or invalid.");
+      }
+
+      setTaskTitle((typeof data.task.title === "string" ? data.task.title : "Draft task").slice(0, 190) + " (revised)");
+      setTaskGoal(typeof data.task.goal === "string" ? data.task.goal : "");
+      setTaskPayload(JSON.stringify(payload, null, 2));
+      toast.message("Inputs copied into a new-task draft. Review and edit them before creating it; the blocked task remains unchanged.");
+      document.getElementById("worker-task-title")?.focus();
+      document.getElementById("worker-task-title")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to prepare task recovery.");
+    } finally {
+      setReusingTaskId(null);
     }
   }
 
@@ -767,6 +807,19 @@ export default function WorkerWorkspace() {
                         >
                           {runningTaskId === task.id ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}
                           Run queued task
+                        </Button>
+                      </div>
+                    )}
+                    {(task.status === "blocked" || task.status === "failed") && worker.status === "active" && worker.permissions?.can_edit && draftRunnerReady && (
+                      <div className="mt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void reuseTaskInputs(task.id)}
+                          disabled={Boolean(runningTaskId) || creatingTask || verifying || publishing || reusingTaskId !== null}
+                        >
+                          {reusingTaskId === task.id ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-2 h-3.5 w-3.5" />}
+                          Prepare recovery draft
                         </Button>
                       </div>
                     )}
