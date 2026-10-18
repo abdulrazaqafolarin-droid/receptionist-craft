@@ -353,12 +353,24 @@ ALTER FUNCTION public.update_business_modules_updated_at() SET search_path = pg_
 ALTER FUNCTION public.handle_new_organization() SET search_path = pg_catalog, public, pg_temp;
 ALTER FUNCTION public.sync_receptionist_phones() SET search_path = pg_catalog, public, pg_temp;
 
+-- Cron scheduling helpers are service-side SECURITY DEFINER functions. They
+-- reference cron objects explicitly, so they do not need public in search_path.
+ALTER FUNCTION public.schedule_appointment_reminder_cron(text, text) SET search_path = pg_catalog, cron, pg_temp;
+ALTER FUNCTION public.schedule_director_sweep_cron(text, text) SET search_path = pg_catalog, cron, pg_temp;
+ALTER FUNCTION public.schedule_plan_worker_cron(text, text) SET search_path = pg_catalog, cron, pg_temp;
+
 REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.touch_build_thread() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.touch_director_thread() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.update_business_modules_updated_at() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.handle_new_organization() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.sync_receptionist_phones() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.schedule_appointment_reminder_cron(text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.schedule_director_sweep_cron(text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.schedule_plan_worker_cron(text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.schedule_appointment_reminder_cron(text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.schedule_director_sweep_cron(text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.schedule_plan_worker_cron(text, text) TO service_role;
 
 REVOKE ALL ON FUNCTION public.record_manual_version(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.record_manual_version(uuid, text) TO authenticated;
