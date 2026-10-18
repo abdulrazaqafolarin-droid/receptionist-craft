@@ -199,9 +199,10 @@ Deno.serve(async (req: Request) => {
       return jsonRes({ ok: false, error: "worker_access_denied" }, 403);
     }
 
-    // Reconcile a bounded batch of expired leases before enforcing capacity.
-    // Expired tasks are blocked for manual reconciliation; they are never blindly retried.
-    const { error: recoveryError } = await service.rpc("block_expired_ai_worker_tasks", {
+    // Reconcile expired leases only for this already-authorized worker.
+    // A request must not mutate another tenant's task queue.
+    const { error: recoveryError } = await service.rpc("block_expired_ai_worker_tasks_for_worker", {
+      p_worker_id: record.worker_id,
       p_limit: 50,
     });
     if (recoveryError) return jsonRes({ ok: false, error: "task_recovery_unavailable" }, 503);
