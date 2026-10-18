@@ -71,7 +71,7 @@ The current PR #52 branch contains:
 - [x] Scoped task history and client-read-only audit grants.
 - [x] Add atomic lifecycle audit records for draft create/edit/archive, verification-run start/pass/failure, activation and pause/resume; these append in the same transaction as the worker/run mutation.
 - [ ] Add stale verification-run reconciliation for unexpected Edge Function termination.
-- [ ] Add persistent/distributed rate limiting; current in-memory limits reset on Edge Function cold starts.
+- [x] Add persistent atomic per-user/per-endpoint rate limiting for the worker registry, task API, verifier and runner. Organization-wide, worker-wide and capability-wide budget enforcement remains pending.
 - [ ] Add task pagination and retention policy for outputs, events and large evidence payloads.
 - [ ] Add integration tests for cross-tenant access, concurrent duplicate creation, stale approvals, retries and concurrent cancel/approve races.
 
@@ -190,7 +190,7 @@ The current PR #52 branch contains:
 1. Finish the current PR #52 CI cycle; fix every new task-runtime failure before adding more features.
 2. Re-run the isolated PostgreSQL task lifecycle test after each migration edit and inspect exact workflow logs.
 3. Verify the task API against authenticated staging only after migration-history reconciliation; no production DDL or deployment during this stage.
-4. Add worker lifecycle audit and distributed rate limiting; configure the draft runner secret in staging and exercise it end-to-end.
+4. Add stale verification-run reconciliation and organization/worker/capability budget ceilings; configure the draft runner secret in staging and exercise it end-to-end.
 5. Implement capability adapters and worker verification before enabling activation.
 6. Extend the runner only through explicitly registered, typed, risk-classified adapters with approval gates.
 7. Integrate Director delegation only after retries, approval gates and evidence pass adversarial tests.
