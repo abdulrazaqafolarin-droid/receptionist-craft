@@ -83,6 +83,8 @@ The `worker-tasks` Edge Function now exposes authenticated `create`, `list`, `ge
 
 Migration `20261018000001_ai_worker_task_lifecycle.sql` adds task idempotency, exact approval references, cancellation-request metadata, and a read-only-to-clients `ai_worker_task_events` audit trail. SQL functions create a task plus its creation event atomically and perform approval/cancellation transitions with row locks. Approval only re-queues a task when the supplied approval ID matches the trusted runner's pending approval record. Cancelling a running task records a stop request without falsely marking execution as stopped.
 
+The next migration, 20261018000002_ai_worker_execution_leases.sql, adds the execution protocol primitives needed by a future trusted runner: atomic skip-locked claims, version-pinned attempts, opaque per-claim lease tokens, heartbeats, evidence-gated finish, cooperative cancellation and expired-lease recovery. Expired work is blocked for reconciliation rather than automatically retried because its external side-effect outcome may be unknown. Browser roles cannot read lease tokens or execution internals, and task audit events are append-only to the service role.
+
 **Important runtime boundary:** this is a durable queue and lifecycle API, not yet an executor. The registry still does not publish/activate workers, so ordinary UI-created drafts cannot run tasks. A trusted runner, capability adapters, durable leases/heartbeats, retry classification, output verification, and an end-to-end approval UI remain required before the platform can truthfully execute and verify general work. Do not manually set a worker to active in production to bypass those missing controls.
 
 ## Deliberately out of scope for this slice
