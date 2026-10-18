@@ -102,7 +102,7 @@ function defaultPayload(definition: WorkerDefinitionView): string {
 }
 
 function supportsDraftRunner(definition: WorkerDefinitionView): boolean {
-  const safeActions = new Set(["research", "internal_read", "draft"]);
+  const safeActions = new Set(["draft"]);
   return (definition.allowed_actions || []).includes("draft")
     && (definition.allowed_actions || []).every((action) => safeActions.has(action))
     && (definition.capability_keys || []).length === 0
