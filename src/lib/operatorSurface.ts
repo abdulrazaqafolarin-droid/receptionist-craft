@@ -38,6 +38,7 @@ export const ALWAYS_VISIBLE_ROUTES = new Set([
   "/conversational-onboarding",
   "/builder",
   "/operator-management",
+  "/workers",
   "/conversations",
   "/organization",
   "/billing",

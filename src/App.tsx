@@ -59,6 +59,8 @@ import ConversationalManagementPage from "./pages/ConversationalManagementPage";
 import TestConversations from "./pages/TestConversations";
 import MEODashboard from "./pages/MEODashboard";
 import NotFound from "./pages/NotFound";
+import Workers from "./pages/Workers";
+import WorkerWorkspace from "./pages/WorkerWorkspace";
 
 const queryClient = new QueryClient();
 
@@ -212,6 +214,8 @@ const App = () => {
                               <Route path="/conversational-onboarding" element={<ConversationalOnboarding />} />
                               <Route path="/oauth/callback" element={<OAuthCallback />} />
                               <Route path="/operator-management" element={<ConversationalManagementPage />} />
+                              <Route path="/workers" element={<Workers />} />
+                              <Route path="/workers/:id" element={<WorkerWorkspace />} />
                               <Route path="/test/:id" element={<TestConversations />} />
                               <Route path="/settings" element={<Settings />} />
                               <Route path="/widget-install/:id" element={<WidgetInstall />} />

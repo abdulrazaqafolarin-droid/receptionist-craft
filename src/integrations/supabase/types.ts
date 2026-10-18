@@ -274,6 +274,299 @@ export type Database = {
           },
         ]
       }
+      ai_worker_tasks: {
+        Row: {
+          approval_request: Json | null
+          approved_at: string | null
+          approved_by: string | null
+          attempt_count: number
+          cancel_requested_at: string | null
+          checkpoint_json: Json
+          created_at: string
+          created_by: string
+          error_text: string | null
+          finished_at: string | null
+          goal: string
+          id: string
+          execution_attempt_id: string | null
+          heartbeat_at: string | null
+          idempotency_key: string | null
+          input_json: Json
+          lease_expires_at: string | null
+          lease_token: string | null
+          output_json: Json | null
+          started_at: string | null
+          worker_version: number | null
+          status: string
+          title: string
+          updated_at: string
+          worker_id: string
+        }
+        Insert: {
+          approval_request?: Json | null
+          approved_at?: string | null
+          approved_by?: string | null
+          attempt_count?: number
+          cancel_requested_at?: string | null
+          checkpoint_json?: Json
+          created_at?: string
+          created_by: string
+          error_text?: string | null
+          finished_at?: string | null
+          goal: string
+          id?: string
+          execution_attempt_id?: string | null
+          heartbeat_at?: string | null
+          idempotency_key?: string | null
+          input_json?: Json
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          output_json?: Json | null
+          started_at?: string | null
+          worker_version?: number | null
+          status?: string
+          title: string
+          updated_at?: string
+          worker_id: string
+        }
+        Update: {
+          approval_request?: Json | null
+          approved_at?: string | null
+          approved_by?: string | null
+          attempt_count?: number
+          cancel_requested_at?: string | null
+          checkpoint_json?: Json
+          created_at?: string
+          created_by?: string
+          error_text?: string | null
+          execution_attempt_id?: string | null
+          finished_at?: string | null
+          goal?: string
+          heartbeat_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          input_json?: Json
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          output_json?: Json | null
+          started_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          worker_id?: string
+          worker_version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_worker_tasks_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "ai_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_worker_task_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          details: Json
+          event_type: string
+          from_status: string | null
+          id: string
+          task_id: string
+          to_status: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type: string
+          from_status?: string | null
+          id?: string
+          task_id: string
+          to_status?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type?: string
+          from_status?: string | null
+          id?: string
+          task_id?: string
+          to_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_worker_task_events_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "ai_worker_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_worker_lifecycle_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          details: Json
+          event_type: string
+          from_status: string
+          id: string
+          to_status: string
+          worker_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type: string
+          from_status: string
+          id?: string
+          to_status: string
+          worker_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type?: string
+          from_status?: string
+          id?: string
+          to_status?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_worker_lifecycle_events_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "ai_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_worker_verification_runs: {
+        Row: {
+          actor_id: string
+          completed_at: string | null
+          created_at: string
+          definition_hash: string
+          definition_snapshot: Json
+          id: string
+          model: string
+          status: string
+          summary: string
+          tests: Json
+          worker_id: string
+          worker_version: number
+        }
+        Insert: {
+          actor_id: string
+          completed_at?: string | null
+          created_at?: string
+          definition_hash: string
+          definition_snapshot: Json
+          id?: string
+          model?: string
+          status?: string
+          summary?: string
+          tests?: Json
+          worker_id: string
+          worker_version: number
+        }
+        Update: {
+          actor_id?: string
+          completed_at?: string | null
+          created_at?: string
+          definition_hash?: string
+          definition_snapshot?: Json
+          id?: string
+          model?: string
+          status?: string
+          summary?: string
+          tests?: Json
+          worker_id?: string
+          worker_version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_worker_verification_runs_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "ai_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_workers: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string
+          definition: Json
+          description: string
+          id: string
+          name: string
+          organization_id: string | null
+          published_at: string | null
+          status: string
+          updated_at: string
+          verification_run_id: string | null
+          verified_version: number | null
+          version: number
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by: string
+          definition?: Json
+          description?: string
+          id?: string
+          name: string
+          organization_id?: string | null
+          published_at?: string | null
+          status?: string
+          updated_at?: string
+          verification_run_id?: string | null
+          verified_version?: number | null
+          version?: number
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string
+          definition?: Json
+          description?: string
+          id?: string
+          name?: string
+          organization_id?: string | null
+          published_at?: string | null
+          status?: string
+          updated_at?: string
+          verification_run_id?: string | null
+          verified_version?: number | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_workers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_workers_verification_run_id_fkey"
+            columns: ["verification_run_id"]
+            isOneToOne: false
+            referencedRelation: "ai_worker_verification_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       analytics_cache: {
         Row: {
           data: Json
@@ -2555,6 +2848,29 @@ export type Database = {
         Args: { retention_days?: number }
         Returns: number
       }
+      block_expired_ai_worker_tasks: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
+      claim_ai_worker_task_for_task: {
+        Args: { p_lease_seconds?: number; p_task_id: string; p_worker_id: string }
+        Returns: Json
+      }
+      claim_ai_worker_task: {
+        Args: { p_lease_seconds?: number; p_worker_id: string }
+        Returns: Json
+      }
+      create_ai_worker_task: {
+        Args: {
+          p_actor_id: string
+          p_goal: string
+          p_idempotency_key: string
+          p_input: Json
+          p_title: string
+          p_worker_id: string
+        }
+        Returns: Json
+      }
       create_widget_appointment: {
         Args: {
           p_booking_source?: string
@@ -2591,6 +2907,21 @@ export type Database = {
       }
       deduct_stock: {
         Args: { p_product_id: string; p_quantity: number }
+        Returns: Json
+      }
+      finish_ai_worker_task: {
+        Args: {
+          p_evidence?: Json
+          p_error?: string
+          p_outcome: string
+          p_output?: Json
+          p_lease_token: string
+          p_task_id: string
+        }
+        Returns: Json
+      }
+      heartbeat_ai_worker_task: {
+        Args: { p_lease_seconds?: number; p_lease_token: string; p_task_id: string }
         Returns: Json
       }
       get_appointment_by_token: {
@@ -2701,6 +3032,14 @@ export type Database = {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
+      pause_ai_worker: {
+        Args: { p_actor_id: string; p_worker_id: string }
+        Returns: Json
+      }
+      publish_ai_worker: {
+        Args: { p_actor_id: string; p_expected_status?: string; p_verification_run_id: string; p_worker_id: string }
+        Returns: Json
+      }
       revert_config_version: {
         Args: { p_receptionist_id: string; p_target_version: number }
         Returns: Json
@@ -2732,6 +3071,10 @@ export type Database = {
         Returns: string
       }
     }
+      transition_ai_worker_task: {
+        Args: { p_action: string; p_actor_id: string; p_approval_id?: string; p_task_id: string }
+        Returns: Json
+      }
     Enums: {
       ai_mode: "support" | "booking" | "sales"
       app_role: "owner" | "admin" | "member" | "viewer"

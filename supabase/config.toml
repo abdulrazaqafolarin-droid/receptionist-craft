@@ -147,3 +147,6 @@ verify_jwt = false
 
 [functions.test-mode]
 verify_jwt = false
+
+[functions.worker-registry]
+verify_jwt = false
