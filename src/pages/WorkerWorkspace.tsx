@@ -51,7 +51,7 @@ interface WorkerDetails {
   archived_at: string | null;
   verified_version?: number | null;
   verification_run_id?: string | null;
-  permissions?: { can_edit: boolean; can_archive: boolean };
+  permissions?: { can_edit: boolean; can_publish?: boolean; can_archive: boolean };
 }
 
 interface VerificationRecord {
@@ -139,7 +139,7 @@ export default function WorkerWorkspace() {
   const verificationCurrent = !!worker && !!verification
     && verification.worker_version === worker.version;
   const canPublish = !!worker && worker.status === "draft"
-    && worker.permissions?.can_edit === true
+    && worker.permissions?.can_publish === true
     && verificationCurrent && verification?.status === "passed"
     && supportsDraftRunner(definition);
 
@@ -460,7 +460,7 @@ export default function WorkerWorkspace() {
               Pause
             </Button>
           )}
-          {worker.status === "paused" && worker.permissions?.can_edit && verification?.status === "passed" && verificationCurrent && (
+          {worker.status === "paused" && worker.permissions?.can_publish && verification?.status === "passed" && verificationCurrent && (
             <Button onClick={() => void resumeWorker()} disabled={publishing}>
               {publishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
               Resume verified worker
