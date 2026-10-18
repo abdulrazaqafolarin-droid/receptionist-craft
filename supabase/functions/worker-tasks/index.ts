@@ -1,9 +1,9 @@
 /**
  * worker-tasks — authenticated durable task queue API.
  *
- * This endpoint records work and enforces task lifecycle boundaries. It does
- * not execute arbitrary code, call shell commands, or claim that a task ran.
- * A separate trusted runner must claim and execute queued work in a later slice.
+ * This endpoint records work and enforces task lifecycle boundaries. The
+ * separate worker-runner handles only verified supervised draft tasks; this
+ * API never executes arbitrary code or claims work ran without runner evidence.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { canEditWorker, canReadWorker } from "../_shared/workerAccess.ts";
@@ -12,6 +12,7 @@ import { isBoundedApprovalId, parseWorkerTaskCreateRequest } from "../_shared/wo
 import { validateDraftTaskInput } from "../_shared/workerDraftExecution.ts";
 import { RATE_LIMITS } from "../_shared/rateLimiter.ts";
 import { consumePersistentRateLimit } from "../_shared/persistentRateLimit.ts";
+import { decodeTaskCursor, encodeTaskCursor, parseTaskPageSize } from "../_shared/workerTaskPagination.ts";
 
 type JsonRecord = Record<string, unknown>;
 type ServiceClient = any;
@@ -202,16 +203,40 @@ Deno.serve(async (req: Request) => {
 
     if (action === "list") {
       if (!isUuid(body.worker_id)) return jsonRes({ ok: false, error: "invalid_worker_id" }, 400, cors);
+      const pageSize = parseTaskPageSize(body.limit);
+      if (pageSize === null) return jsonRes({ ok: false, error: "invalid_page_size" }, 400, cors);
+      let cursor = null;
+      if (body.cursor !== undefined && body.cursor !== null) {
+        cursor = decodeTaskCursor(body.cursor);
+        if (!cursor) return jsonRes({ ok: false, error: "invalid_cursor" }, 400, cors);
+      }
       const worker = await getWorker(service, body.worker_id);
       if (!worker) return jsonRes({ ok: false, error: "worker_not_found" }, 404, cors);
       if (!await authorizeWorker(service, user.id, worker, false)) {
         return jsonRes({ ok: false, error: "worker_access_denied" }, 403, cors);
       }
-      const { data, error } = await service.from("ai_worker_tasks").select(
+      let query = service.from("ai_worker_tasks").select(
         "id, worker_id, created_by, title, goal, status, output_json, error_text, attempt_count, checkpoint_json, approval_request, approved_by, approved_at, cancel_requested_at, created_at, updated_at",
-      ).eq("worker_id", worker.id).order("created_at", { ascending: false }).limit(100);
+      ).eq("worker_id", worker.id);
+      if (cursor) {
+        query = query.or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`);
+      }
+      const { data, error } = await query
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(pageSize + 1);
       if (error) return jsonRes({ ok: false, error: "task_list_failed" }, 500, cors);
-      return jsonRes({ ok: true, tasks: Array.isArray(data) ? data : [] }, 200, cors);
+      const rows = Array.isArray(data) ? data : [];
+      const hasMore = rows.length > pageSize;
+      const tasks = rows.slice(0, pageSize);
+      const nextCursor = hasMore && tasks.length > 0 ? encodeTaskCursor(tasks[tasks.length - 1]) : null;
+      return jsonRes({
+        ok: true,
+        tasks,
+        has_more: hasMore,
+        next_cursor: nextCursor,
+        page_size: pageSize,
+      }, 200, cors);
     }
 
     if (action === "get" || action === "approve" || action === "cancel") {
