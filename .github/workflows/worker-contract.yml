@@ -27,10 +27,10 @@ jobs:
           deno-version: v2.x
       - name: Type-check worker contracts and access rules
         run: deno check supabase/functions/_shared/workerContract.ts supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskState.ts supabase/functions/_shared/workerTaskState.test.ts
-      - name: Type-check worker registry Edge Function
-        run: deno check supabase/functions/worker-registry/index.ts
+      - name: Type-check worker registry and task Edge Functions
+        run: deno check supabase/functions/worker-registry/index.ts supabase/functions/worker-tasks/index.ts supabase/functions/_shared/workerTaskRequest.ts supabase/functions/_shared/workerTaskRequest.test.ts
       - name: Test worker contract and safety invariants
-        run: deno test supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskState.test.ts
+        run: deno test supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskState.test.ts supabase/functions/_shared/workerTaskRequest.test.ts
 
   migration-rls:
     name: Validate worker migration and RLS
@@ -66,6 +66,14 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/ai_worker_foundation_rls.sql
+      - name: Apply durable task lifecycle migration
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20261018000001_ai_worker_task_lifecycle.sql
+      - name: Verify idempotency, approvals, cancellation and audit boundaries
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/ai_worker_task_lifecycle.sql
 
   frontend-worker-ui:
     name: Build worker registry UI
