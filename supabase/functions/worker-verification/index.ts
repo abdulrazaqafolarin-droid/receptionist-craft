@@ -5,7 +5,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseWorkerDefinition } from "../_shared/workerContract.ts";
 import { canEditWorker } from "../_shared/workerAccess.ts";
-import { checkRateLimit, RATE_LIMITS } from "../_shared/rateLimiter.ts";
+import { RATE_LIMITS } from "../_shared/rateLimiter.ts";
+import { consumePersistentRateLimit } from "../_shared/persistentRateLimit.ts";
 import { buildDraftPrompt, parseDraftModelOutput, validateDraftTaskInput } from "../_shared/workerDraftExecution.ts";
 import { draftPublicationBlockReason, hashWorkerDefinition, makeVerificationPayload } from "../_shared/workerVerification.ts";
 
@@ -116,10 +117,14 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: authError } = await service.auth.getUser(token);
     if (authError || !user) return jsonRes({ ok: false, error: "invalid_token" }, 401);
 
-    const rate = checkRateLimit(`worker-verification:${user.id}`, RATE_LIMITS.workerRegistry);
+    const rate = await consumePersistentRateLimit(service, user.id, "worker-verification", RATE_LIMITS.workerRegistry);
+    if (!rate.available) return jsonRes({ ok: false, error: "rate_limiter_unavailable" }, 503);
     if (!rate.allowed) {
-      const retry = Math.max(1, Math.ceil((rate.retryAfterMs ?? 60_000) / 1000));
-      return jsonRes({ ok: false, error: "rate_limited", retry_after_seconds: retry }, 429);
+      const retry = rate.retryAfterSeconds;
+      return new Response(JSON.stringify({ ok: false, error: "rate_limited", retry_after_seconds: retry }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store", "Retry-After": String(retry), "X-RateLimit-Reason": rate.reason || "window" },
+      });
     }
 
     const raw = await req.text();
