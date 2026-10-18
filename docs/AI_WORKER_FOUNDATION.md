@@ -106,3 +106,12 @@ A first, deliberately narrow executor now exists at worker-runner. It uses direc
 - Added a **Run queued task** control to the worker workspace; global/user/organization/worker capacity errors are explained in plain language and do not discard the queued task.
 - **Passed:** AI Worker contract CI run #399 on commit `0dc67ad630689c73ec5eccb02e30eb7c1365cf52`; Deno checks/tests, PostgreSQL migration/RLS/concurrency tests, and frontend build/lint all passed. A documentation-only follow-up workflow is pending.
 - Capability-specific concurrency/model-token-cost budgets, richer blocked-task diagnostics, authenticated staging integration and production migration reconciliation remain open. Manual recovery-draft preparation is implemented, but automatic retry/requeue remains intentionally unavailable for blocked or unknown-outcome tasks.
+
+
+## Latest task recovery and task-data privacy hardening (18 October 2026)
+
+- The worker workspace now offers **Prepare recovery draft** for a blocked or failed task. It loads the task through the authenticated task API, checks that it belongs to the current worker and is a blocked/failed draft-only task, then prefills the existing form. The operator must review/edit and submit a new task; the original task is never re-queued or mutated.
+- Recovery preparation is implemented as a pure helper with tests for worker isolation, allowed source statuses, draft-only execution mode, malformed payloads, title bounds and source immutability.
+- The `worker-tasks` detail API now applies an edit-sensitive response projection. Read-only organization members receive the safe task-history fields; task inputs, checkpoints, idempotency keys and approval internals are returned only to editors. This matters because input payloads may contain customer/business data, and the task list intentionally does not expose those fields.
+- Added Deno regression tests for the viewer-safe projection and a targeted Vitest check for recovery preparation. **Passed:** AI Worker contract CI run #413 on commit `64357911ef4c525b976f09fd954b4dd57580647e` (all three jobs passed), plus Universal platform browser smoke run #66.
+- Automatic retries/requeue of blocked tasks remain disabled, especially when an expired lease has an unknown outcome. The next runtime work is richer blocked-task diagnostics, capability-specific concurrency/model-token-cost budgets, authenticated staging integration, and Director delegation.
