@@ -56,7 +56,7 @@ const ALLOWED: Record<WorkerTaskStatus, readonly WorkerTaskStatus[]> = {
 function validEvidence(value: unknown): value is CompletionEvidence[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 20) return false;
   const kinds = new Set<CompletionEvidenceKind>(["source", "action_receipt", "verification"]);
-  return value.every((item) => {
+  const allValid = value.every((item) => {
     if (typeof item !== "object" || item === null || Array.isArray(item)) return false;
     const record = item as Record<string, unknown>;
     if (!kinds.has(record.kind as CompletionEvidenceKind)) return false;
@@ -64,6 +64,11 @@ function validEvidence(value: unknown): value is CompletionEvidence[] {
     if (typeof record.reference !== "string" || record.reference.trim().length === 0 || record.reference.length > 500) return false;
     return true;
   });
+  const hasVerification = value.some((item) =>
+    typeof item === "object" && item !== null && !Array.isArray(item) &&
+    (item as Record<string, unknown>).kind === "verification"
+  );
+  return allValid && hasVerification;
 }
 
 export function canTransitionWorkerTask(
