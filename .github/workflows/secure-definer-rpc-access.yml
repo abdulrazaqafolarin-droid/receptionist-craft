@@ -43,6 +43,10 @@ jobs:
           CREATE ROLE service_role NOLOGIN;
           CREATE SCHEMA auth;
           CREATE SCHEMA extensions;
+          CREATE SCHEMA cron;
+          CREATE TABLE cron.job (jobname text);
+          CREATE FUNCTION cron.unschedule(text) RETURNS boolean LANGUAGE sql AS $fn$ SELECT true $fn$;
+          CREATE FUNCTION cron.schedule(text, text, text) RETURNS bigint LANGUAGE sql AS $fn$ SELECT 1::bigint $fn$;
           CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
             $fn$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $fn$;
           CREATE FUNCTION extensions.gen_random_bytes(integer) RETURNS bytea
@@ -104,6 +108,9 @@ jobs:
           CREATE FUNCTION public.handle_new_organization() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
           CREATE FUNCTION public.sync_receptionist_phones() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
           CREATE FUNCTION public.rls_auto_enable() RETURNS event_trigger LANGUAGE plpgsql AS $fn$ BEGIN NULL; END $fn$;
+          CREATE FUNCTION public.schedule_appointment_reminder_cron(p_supabase_url text, p_anon_key text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'cron' AS $fn$ BEGIN NULL; END $fn$;
+          CREATE FUNCTION public.schedule_director_sweep_cron(p_supabase_url text, p_anon_key text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'cron' AS $fn$ BEGIN NULL; END $fn$;
+          CREATE FUNCTION public.schedule_plan_worker_cron(p_supabase_url text, p_anon_key text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'cron' AS $fn$ BEGIN NULL; END $fn$;
           GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO PUBLIC;
           GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
           SQL
