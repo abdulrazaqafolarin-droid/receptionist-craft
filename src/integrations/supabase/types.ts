@@ -407,6 +407,100 @@ export type Database = {
           },
         ]
       }
+      ai_worker_lifecycle_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          details: Json
+          event_type: string
+          from_status: string
+          id: string
+          to_status: string
+          worker_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type: string
+          from_status: string
+          id?: string
+          to_status: string
+          worker_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type?: string
+          from_status?: string
+          id?: string
+          to_status?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_worker_lifecycle_events_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "ai_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_worker_verification_runs: {
+        Row: {
+          actor_id: string
+          completed_at: string | null
+          created_at: string
+          definition_hash: string
+          definition_snapshot: Json
+          id: string
+          model: string
+          status: string
+          summary: string
+          tests: Json
+          worker_id: string
+          worker_version: number
+        }
+        Insert: {
+          actor_id: string
+          completed_at?: string | null
+          created_at?: string
+          definition_hash: string
+          definition_snapshot: Json
+          id?: string
+          model?: string
+          status?: string
+          summary?: string
+          tests?: Json
+          worker_id: string
+          worker_version: number
+        }
+        Update: {
+          actor_id?: string
+          completed_at?: string | null
+          created_at?: string
+          definition_hash?: string
+          definition_snapshot?: Json
+          id?: string
+          model?: string
+          status?: string
+          summary?: string
+          tests?: Json
+          worker_id?: string
+          worker_version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_worker_verification_runs_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "ai_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_workers: {
         Row: {
           archived_at: string | null
@@ -420,6 +514,8 @@ export type Database = {
           published_at: string | null
           status: string
           updated_at: string
+          verification_run_id: string | null
+          verified_version: number | null
           version: number
         }
         Insert: {
@@ -434,6 +530,8 @@ export type Database = {
           published_at?: string | null
           status?: string
           updated_at?: string
+          verification_run_id?: string | null
+          verified_version?: number | null
           version?: number
         }
         Update: {
@@ -448,6 +546,8 @@ export type Database = {
           published_at?: string | null
           status?: string
           updated_at?: string
+          verification_run_id?: string | null
+          verified_version?: number | null
           version?: number
         }
         Relationships: [
@@ -456,6 +556,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_workers_verification_run_id_fkey"
+            columns: ["verification_run_id"]
+            isOneToOne: false
+            referencedRelation: "ai_worker_verification_runs"
             referencedColumns: ["id"]
           },
         ]
@@ -2745,6 +2852,10 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: number
       }
+      claim_ai_worker_task_for_task: {
+        Args: { p_lease_seconds?: number; p_task_id: string; p_worker_id: string }
+        Returns: Json
+      }
       claim_ai_worker_task: {
         Args: { p_lease_seconds?: number; p_worker_id: string }
         Returns: Json
@@ -2920,6 +3031,14 @@ export type Database = {
       is_org_member: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
+      }
+      pause_ai_worker: {
+        Args: { p_actor_id: string; p_worker_id: string }
+        Returns: Json
+      }
+      publish_ai_worker: {
+        Args: { p_actor_id: string; p_expected_status?: string; p_verification_run_id: string; p_worker_id: string }
+        Returns: Json
       }
       revert_config_version: {
         Args: { p_receptionist_id: string; p_target_version: number }
