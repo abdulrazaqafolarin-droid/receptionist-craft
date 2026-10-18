@@ -58,7 +58,7 @@ The service layer must still validate that a task's `worker_id` belongs to the s
 
 The UI includes a separate AI Workers navigation group, registry page, personal/organization scope selection, and dedicated workspace with definition editing, verification results, publication/pause controls, task creation, output display, and task history. The workspace labels execution as supervised draft-only work and makes clear that no external side effects occur.
 
-The worker registry, task API, verifier, and runner use a persistent database-backed limiter keyed by the Supabase-verified user ID and endpoint scope (30 requests/minute, burst cap 6 per 5 seconds). The bucket table is server-only, the SQL upsert is atomic across Edge Function isolates, and endpoints fail closed with 503 if the limiter RPC is unavailable. Organization-wide, worker-wide and capability-wide budgets are still pending.
+The worker registry, task API, verifier, and runner use a persistent database-backed limiter keyed by the Supabase-verified user ID and endpoint scope (30 requests/minute, burst cap 6 per 5 seconds). The bucket table is server-only, the SQL upsert is atomic across Edge Function isolates, and endpoints fail closed with 503 if the limiter RPC is unavailable. A separate database trigger now enforces race-safe concurrency ceilings (50 global, 3 per task creator, 10 per organization and 2 per worker). Capability-specific concurrency and model/cost budgets remain pending until verified capability adapters exist.
 
 ## Next implementation stages
 
@@ -67,7 +67,7 @@ The worker registry, task API, verifier, and runner use a persistent database-ba
 **Live-schema comparison:** a read-only catalog check confirms that `ai_workers`, `ai_worker_tasks`, and `director_memory` are absent from the live project. The repository type update does not mean the tables are deployed. Reconcile the missing historical migration ledger and validate the complete migration chain in staging before applying anything to production.
 
 1. Complete migration-history reconciliation and validate the worker schema/RLS against staging.
-2. Add stale verification-run reconciliation for unexpected Edge Function termination. Draft create/edit/archive, verification start/pass/failure, and publish/pause/resume events are recorded atomically. Add organization-wide, worker-wide and capability-wide budget ceilings.
+2. Stale verification-run reconciliation is now bounded and audited; the runner also blocks expired task leases before claiming new work rather than retrying unknown outcomes. Draft create/edit/archive, verification start/pass/failure, and publish/pause/resume events are recorded atomically. Next add capability-specific concurrency/model-cost budgets and operator-visible recovery for blocked tasks.
 3. Connect Director planning/building to this lifecycle using durable jobs and checkpoint/resume.
 4. Extend execution beyond the verified draft-only runner through registered capability adapters, approval handling, evidence-based completion and resumable checkpoints.
 5. Add integration tests for authorization, rate limits, task transitions, approval enforcement, idempotency and recovery.
@@ -96,3 +96,12 @@ A first, deliberately narrow executor now exists at worker-runner. It uses direc
 - Customer-controlled deployment agents.
 - New microservices or a new database.
 - Automatic production migration application or deployment.
+
+
+## Latest concurrency and lease recovery hardening (2026-10-18)
+
+- Added migration `20261018000008_ai_worker_concurrency_limits.sql` with database-enforced ceilings of 50 running tasks globally, 3 per task creator, 10 per organization and 2 per worker. Advisory transaction locks make the claim boundary race-safe; a rejected claim remains queued.
+- The worker runner now invokes bounded expired-lease reconciliation before claiming work. Expired tasks are blocked with an unknown-outcome reason and are not automatically retried.
+- Added PostgreSQL regression coverage for all four ceilings and verified that concurrency rejection does not change a queued task's state.
+- **Passed:** AI Worker contract CI run #387 on commit `0d8cfe941378a1916cecc2d75eb1703f47addcc9`; the Deno, PostgreSQL migration/RLS/concurrency tests, and frontend build/lint jobs passed. The separate browser smoke workflow is still running.
+- Capability-specific limits, model/token/cost budgets, active-request cancellation, staging integration and production migration reconciliation remain open.
