@@ -63,9 +63,9 @@ CREATE POLICY "worker task events visible through worker access"
     )
   );
 
-REVOKE ALL ON public.ai_worker_task_events FROM anon, authenticated;
+REVOKE ALL ON public.ai_worker_task_events FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT ON public.ai_worker_task_events TO authenticated;
-GRANT ALL ON public.ai_worker_task_events TO service_role;
+GRANT SELECT, INSERT ON public.ai_worker_task_events TO service_role;
 GRANT ALL ON public.ai_worker_tasks TO service_role;
 
 COMMENT ON TABLE public.ai_worker_task_events IS
@@ -179,6 +179,12 @@ BEGIN
   v_previous_status := v_task.status;
 
   IF p_action = 'approve' THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.ai_workers w
+      WHERE w.id = v_task.worker_id AND w.status = 'active'
+    ) THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'worker_not_active');
+    END IF;
     IF v_task.status <> 'waiting_approval' OR v_task.approval_request IS NULL THEN
       RETURN jsonb_build_object('ok', false, 'error', 'approval_not_pending');
     END IF;
