@@ -124,8 +124,6 @@ RETURNS TABLE(
   service text,
   start_time timestamptz,
   customer_name text,
-  customer_phone text,
-  customer_email text,
   status text
 )
 LANGUAGE sql
@@ -138,8 +136,6 @@ AS $function$
     a.service,
     a.start_time,
     a.customer_name,
-    a.customer_phone,
-    a.customer_email,
     a.status::text
   FROM public.appointments a
   WHERE p_token IS NOT NULL
