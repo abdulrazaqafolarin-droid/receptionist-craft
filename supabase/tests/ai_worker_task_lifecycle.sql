@@ -152,3 +152,46 @@ BEGIN
     RAISE EXCEPTION 'null transition action must fail closed';
   END IF;
 END $transition_safety$;
+
+-- Audit visibility follows the same worker scope as task visibility.
+INSERT INTO public.ai_worker_tasks (
+  id, worker_id, created_by, title, goal, status
+) VALUES (
+  '31000000-0000-0000-0000-000000000004',
+  '20000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000002',
+  'Other users private task', 'Must remain hidden', 'queued'
+);
+INSERT INTO public.ai_worker_task_events(task_id, actor_id, event_type, from_status, to_status)
+VALUES (
+  '31000000-0000-0000-0000-000000000004',
+  '00000000-0000-0000-0000-000000000002',
+  'task_created', NULL, 'queued'
+);
+
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
+DO $audit_scope$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.ai_worker_task_events
+    WHERE task_id = '31000000-0000-0000-0000-000000000001'
+  ) THEN
+    RAISE EXCEPTION 'worker owner should see task lifecycle events';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.ai_worker_task_events
+    WHERE task_id = '31000000-0000-0000-0000-000000000004'
+  ) THEN
+    RAISE EXCEPTION 'worker owner must not see another users task events';
+  END IF;
+  BEGIN
+    INSERT INTO public.ai_worker_task_events(task_id, event_type, to_status)
+    VALUES ('31000000-0000-0000-0000-000000000001', 'status_changed', 'done');
+    RAISE EXCEPTION 'authenticated client must not forge audit events';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+END $audit_scope$;
+ROLLBACK;
