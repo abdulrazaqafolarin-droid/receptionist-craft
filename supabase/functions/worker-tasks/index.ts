@@ -113,9 +113,9 @@ async function authorizeWorker(service: ServiceClient, actorId: string, worker: 
 function errorStatus(error: string): number {
   if (error === "worker_not_found" || error === "task_not_found") return 404;
   if (error === "worker_access_denied" || error === "task_access_denied") return 403;
-  if (error === "worker_not_active" || error === "approval_not_pending" ||
-      error === "approval_request_mismatch" || error === "idempotency_key_reused" ||
-      error === "task_terminal") return 409;
+  if (error === "worker_not_active" || error === "worker_definition_invalid" ||
+      error === "approval_not_pending" || error === "approval_request_mismatch" ||
+      error === "idempotency_key_reused" || error === "task_terminal") return 409;
   if (error === "invalid_task_input") return 400;
   return 500;
 }
@@ -182,7 +182,8 @@ Deno.serve(async (req: Request) => {
         const reason = result && typeof result.error === "string" ? result.error : "task_create_failed";
         return jsonRes({ ok: false, error: reason }, errorStatus(reason), cors);
       }
-      return jsonRes({ ok: true, replayed: result.replayed === true, task: result.task }, 201, cors);
+      const replayed = result.replayed === true;
+      return jsonRes({ ok: true, replayed, task: result.task }, replayed ? 200 : 201, cors);
     }
 
     if (action === "list") {
