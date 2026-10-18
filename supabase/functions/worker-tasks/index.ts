@@ -96,7 +96,9 @@ async function getWorker(service: ServiceClient, workerId: string): Promise<Work
 }
 
 async function getTask(service: ServiceClient, taskId: string): Promise<TaskRow | null> {
-  const { data, error } = await service.from("ai_worker_tasks").select("*").eq("id", taskId).maybeSingle();
+  const { data, error } = await service.from("ai_worker_tasks").select(
+    "id, worker_id, created_by, title, goal, status, input_json, output_json, error_text, attempt_count, checkpoint_json, idempotency_key, approval_request, approved_by, approved_at, cancel_requested_at, started_at, finished_at, created_at, updated_at",
+  ).eq("id", taskId).maybeSingle();
   if (error) throw new Error("task_lookup_failed");
   return data as TaskRow | null;
 }
