@@ -276,7 +276,11 @@ export type Database = {
       }
       ai_worker_tasks: {
         Row: {
+          approval_request: Json | null
+          approved_at: string | null
+          approved_by: string | null
           attempt_count: number
+          cancel_requested_at: string | null
           checkpoint_json: Json
           created_at: string
           created_by: string
@@ -284,6 +288,7 @@ export type Database = {
           finished_at: string | null
           goal: string
           id: string
+          idempotency_key: string | null
           input_json: Json
           output_json: Json | null
           started_at: string | null
@@ -293,7 +298,11 @@ export type Database = {
           worker_id: string
         }
         Insert: {
+          approval_request?: Json | null
+          approved_at?: string | null
+          approved_by?: string | null
           attempt_count?: number
+          cancel_requested_at?: string | null
           checkpoint_json?: Json
           created_at?: string
           created_by: string
@@ -301,6 +310,7 @@ export type Database = {
           finished_at?: string | null
           goal: string
           id?: string
+          idempotency_key?: string | null
           input_json?: Json
           output_json?: Json | null
           started_at?: string | null
@@ -332,6 +342,54 @@ export type Database = {
             columns: ["worker_id"]
             isOneToOne: false
             referencedRelation: "ai_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_worker_task_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          details: Json
+          event_type: string
+          from_status: string | null
+          id: string
+          task_id: string
+          to_status: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type: string
+          from_status?: string | null
+          id?: string
+          task_id: string
+          to_status?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type?: string
+          from_status?: string | null
+          id?: string
+          task_id?: string
+          to_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_worker_task_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_worker_task_events_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "ai_worker_tasks"
             referencedColumns: ["id"]
           },
         ]
