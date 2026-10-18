@@ -27,8 +27,20 @@ END $acl$;
 INSERT INTO public.ai_workers (id, organization_id, created_by, name, status, definition)
 VALUES (
   '21000000-0000-0000-0000-000000000001', NULL,
-  '00000000-0000-0000-0000-000000000001', 'Active task test worker', 'active', '{}'::jsonb
+  '00000000-0000-0000-0000-000000000001', 'Active task test worker', 'draft', '{}'::jsonb
 );
+
+INSERT INTO public.ai_worker_verification_runs (
+  id, worker_id, actor_id, worker_version, definition_hash, definition_snapshot, status, tests, summary, completed_at
+) VALUES (
+  '41000000-0000-0000-0000-000000000001',
+  '21000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000001',
+  1, repeat('a', 64), '{}'::jsonb, 'passed', '[]'::jsonb, 'SQL lifecycle fixture', now()
+);
+UPDATE public.ai_workers
+SET status = 'active', verified_version = 1, verification_run_id = '41000000-0000-0000-0000-000000000001'
+WHERE id = '21000000-0000-0000-0000-000000000001';
 
 DO $create_idempotency$
 DECLARE
