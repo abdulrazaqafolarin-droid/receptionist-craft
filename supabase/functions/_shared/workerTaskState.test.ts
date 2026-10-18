@@ -17,6 +17,12 @@ Deno.test("completion requires bounded structured evidence", () => {
   assert(!canTransitionWorkerTask("running", "done").ok, "model claim alone cannot complete task");
   assert(!canTransitionWorkerTask("running", "done", { completionEvidence: [] }).ok, "empty evidence is rejected");
   assert(!canTransitionWorkerTask("running", "done", {
+    completionEvidence: [{ kind: "source", summary: "Source collected.", reference: "source:1" }],
+  }).ok, "source evidence alone is not independent verification");
+  assert(!canTransitionWorkerTask("running", "done", {
+    completionEvidence: [{ kind: "action_receipt", summary: "Action dispatched.", reference: "receipt:1" }],
+  }).ok, "an action receipt alone is not independent verification");
+  assert(!canTransitionWorkerTask("running", "done", {
     completionEvidence: [{ kind: "verification", summary: "Output matched." }],
   }).ok, "evidence without a durable reference is rejected");
   assert(!canTransitionWorkerTask("running", "done", {
