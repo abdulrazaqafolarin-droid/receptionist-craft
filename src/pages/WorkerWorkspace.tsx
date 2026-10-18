@@ -7,6 +7,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { updateWorkerPurpose } from "@/lib/workerDefinition";
+import { prepareWorkerTaskRecovery } from "@/lib/workerTaskRecovery";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -408,25 +409,12 @@ export default function WorkerWorkspace() {
       if (error || !data?.ok || !data.task) {
         throw new Error(data?.error || error?.message || "Unable to load the previous task.");
       }
-      if (data.task.worker_id !== worker.id) {
-        throw new Error("The task does not belong to this worker.");
-      }
-      if (data.task.status !== "blocked" && data.task.status !== "failed") {
-        throw new Error("Only blocked or failed tasks can be used to prepare a recovery draft.");
-      }
+      const recovery = prepareWorkerTaskRecovery(data.task, worker.id);
+      if (!recovery.ok) throw new Error(recovery.error);
 
-      const input = data.task.input_json;
-      if (!input || typeof input !== "object" || Array.isArray(input) || input.execution_mode !== "draft") {
-        throw new Error("The previous task does not contain a supported draft payload.");
-      }
-      const payload = input.payload;
-      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-        throw new Error("The previous task payload is missing or invalid.");
-      }
-
-      setTaskTitle((typeof data.task.title === "string" ? data.task.title : "Draft task").slice(0, 190) + " (revised)");
-      setTaskGoal(typeof data.task.goal === "string" ? data.task.goal : "");
-      setTaskPayload(JSON.stringify(payload, null, 2));
+      setTaskTitle(recovery.value.title);
+      setTaskGoal(recovery.value.goal);
+      setTaskPayload(JSON.stringify(recovery.value.payload, null, 2));
       toast.message("Inputs copied into a new-task draft. Review and edit them before creating it; the blocked task remains unchanged.");
       document.getElementById("worker-task-title")?.focus();
       document.getElementById("worker-task-title")?.scrollIntoView({ behavior: "smooth", block: "center" });
