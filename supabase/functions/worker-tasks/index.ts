@@ -118,7 +118,8 @@ function errorStatus(error: string): number {
   if (error === "worker_access_denied" || error === "task_access_denied") return 403;
   if (error === "worker_not_active" || error === "worker_definition_invalid" ||
       error === "approval_not_pending" || error === "approval_request_mismatch" ||
-      error === "idempotency_key_reused" || error === "task_terminal") return 409;
+      error === "idempotency_key_reused" || error === "task_terminal" ||
+      error === "worker_not_verified" || error === "task_not_queued") return 409;
   if (error === "invalid_task_input") return 400;
   return 500;
 }
