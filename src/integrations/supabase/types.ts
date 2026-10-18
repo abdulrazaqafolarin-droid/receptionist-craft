@@ -330,21 +330,31 @@ export type Database = {
           worker_id: string
         }
         Update: {
+          approval_request?: Json | null
+          approved_at?: string | null
+          approved_by?: string | null
           attempt_count?: number
+          cancel_requested_at?: string | null
           checkpoint_json?: Json
           created_at?: string
           created_by?: string
           error_text?: string | null
+          execution_attempt_id?: string | null
           finished_at?: string | null
           goal?: string
+          heartbeat_at?: string | null
           id?: string
+          idempotency_key?: string | null
           input_json?: Json
+          lease_expires_at?: string | null
+          lease_token?: string | null
           output_json?: Json | null
           started_at?: string | null
           status?: string
           title?: string
           updated_at?: string
           worker_id?: string
+          worker_version?: number | null
         }
         Relationships: [
           {
