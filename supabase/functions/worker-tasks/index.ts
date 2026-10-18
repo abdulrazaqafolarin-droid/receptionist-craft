@@ -9,6 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { canEditWorker, canReadWorker } from "../_shared/workerAccess.ts";
 import { parseWorkerDefinition } from "../_shared/workerContract.ts";
 import { isBoundedApprovalId, parseWorkerTaskCreateRequest } from "../_shared/workerTaskRequest.ts";
+import { validateDraftTaskInput } from "../_shared/workerDraftExecution.ts";
 import { checkRateLimit, RATE_LIMITS } from "../_shared/rateLimiter.ts";
 
 type JsonRecord = Record<string, unknown>;
@@ -166,8 +167,16 @@ Deno.serve(async (req: Request) => {
         return jsonRes({ ok: false, error: "worker_access_denied" }, 403, cors);
       }
       if (worker.status !== "active") return jsonRes({ ok: false, error: "worker_not_active" }, 409, cors);
-      if (!parseWorkerDefinition(worker.definition).ok) {
+      const parsedDefinition = parseWorkerDefinition(worker.definition);
+      if (!parsedDefinition.ok) {
         return jsonRes({ ok: false, error: "worker_definition_invalid" }, 409, cors);
+      }
+      const draftCheck = validateDraftTaskInput(parsedDefinition.value, {
+        goal: request.goal,
+        input_json: request.input_json,
+      });
+      if (!draftCheck.ok) {
+        return jsonRes({ ok: false, error: draftCheck.error }, 400, cors);
       }
 
       const { data, error } = await service.rpc("create_ai_worker_task", {
