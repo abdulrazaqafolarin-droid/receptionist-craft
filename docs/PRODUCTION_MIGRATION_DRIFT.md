@@ -213,3 +213,43 @@ These passing fixtures are evidence for the specific assertions they exercise, n
 - [PR #70 — Director task table grants](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/70): isolated PostgreSQL grant regression passed; direct client table access remains prohibited.
 - [PR #52 — AI Worker runtime](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/pull/52): [run #401](https://github.com/abdulrazaqafolarin-droid/receptionist-craft/actions/runs/39157199116) passed the worker contract, Deno tests, PostgreSQL concurrency/recovery tests, frontend build and lint.
 
+
+## Re-check and cross-PR rollout gate (18 October 2026)
+
+A second read-only check on 18 October confirms the production migration ledger still ends at `20260826000012`. No migration history, schema, data, or deployed function was changed during this check.
+
+### Current live-state evidence
+
+- `public.director_tasks` and `public.director_commands` are present.
+- `public.director_tasks` still has `device_id`, but no `pending_command`. Its observed columns are `id`, `user_id`, `goal`, `lane`, `device_id`, `budget`, `history`, `status`, `result`, `created_at`, and `updated_at`.
+- `public.director_memory`, `public.ai_workers`, `public.ai_worker_tasks`, and the newer worker lifecycle/rate-limit tables checked in this pass were not found in the live `public` catalog.
+- The production catalog still shows client-role EXECUTE privileges on the security-definer functions targeted by draft PR #56. The new restrictions are repository changes only until their migration is safely rolled out.
+- The new safe appointment-token RPC is not present in the live database yet. Do not deploy the updated confirmation/cancellation pages ahead of the migration that creates it.
+
+This confirms the previous release blocker remains active. Object-presence checks are still not enough to repair the migration ledger; the 29 earlier migration files need full definition-by-definition comparison.
+
+### Pending draft changes that affect rollout planning
+
+The following are separate draft changes, not recorded as applied production migrations:
+
+| Change | Dependency / rollout constraint |
+|---|---|
+| PR #50 — Director task-loop hardening | The branch code requires `director_tasks.pending_command`; apply and verify its matching migration before deploying that Edge Function. |
+| PR #54 — safe-view least-privilege | Reconcile the base migration history first; test view SELECT and DML behavior with anon/authenticated roles before production rollout. |
+| PR #52 — AI Worker foundation and subsequent lifecycle/runtime migrations | The live database lacks the worker base tables and newer worker lifecycle/rate-limit tables. Validate the complete ordered migration chain on staging; do not apply only the latest migration. |
+| PR #56 — security-definer RPC access | Depends on the existing receptionist, appointment, organization, cron and Director objects matching the inspected definitions. The public appointment lookup RPC is currently absent, so the migration creates it. Deploy the database change before the updated public appointment pages. |
+| PR #68 — canonical widget order pricing | Must preserve PR #56's server-only `create_widget_order` execution boundary and hardened `search_path`. Verify its migration order and run both pricing and RPC-ACL regression suites together. |
+
+### Required release sequence
+
+1. **Freeze the baseline:** capture a fresh backup, export the current migration ledger, record deployed Edge Function versions, and retain the read-only catalog snapshots.
+2. **Finish the original 29-migration comparison:** classify each migration as verified-equivalent, partially applied/drifted, or absent. Compare complete definitions, grants, RLS policies, triggers, indexes, constraints, backfills, and cron jobs—not just object names.
+3. **Reconcile in a disposable/staging environment:** test migration repair and genuine reconciliation migrations from the actual recorded baseline. Preserve a reproducible report of every version marked applied and the evidence supporting it.
+4. **Apply dependent schema changes before dependent code:** coordinate the Director pending-command column with its Edge Function; create the worker schema before worker APIs/UI rely on it; create the safe appointment-token RPC before deploying the updated pages.
+5. **Test cross-PR interactions:** run PR #54 view-grant tests, PR #56 security-definer/RPC tests, PR #68 catalog-pricing tests, and the AI Worker migration/RLS/concurrency suite against the same staging branch. Confirm service-role paths still work and client roles cannot bypass them.
+6. **Run end-to-end staging checks:** owner/member/viewer authorization, public appointment confirmation and cancellation links, widget checkout with tampered prices/quantities and cross-tenant IDs, Director task claim/continuation, and worker task lease/recovery.
+7. **Request explicit production rollout approval** only after all staging evidence is green. Apply reviewed migrations in dependency order, verify deployed Edge Function versions, then run smoke tests. No automatic bulk migration repair.
+
+### Current decision
+
+**Production rollout remains blocked.** The latest isolated tests improve confidence in the individual draft changes, but neither the old migration-history discrepancy nor the missing worker schema has been reconciled against production. Do not run `supabase db push`, bulk-mark migrations applied, or deploy dependent Edge Functions/pages as a workaround.
