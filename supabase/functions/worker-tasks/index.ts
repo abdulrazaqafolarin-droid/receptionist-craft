@@ -13,6 +13,7 @@ import { validateDraftTaskInput } from "../_shared/workerDraftExecution.ts";
 import { RATE_LIMITS } from "../_shared/rateLimiter.ts";
 import { consumePersistentRateLimit } from "../_shared/persistentRateLimit.ts";
 import { decodeTaskCursor, encodeTaskCursor, parseTaskPageSize } from "../_shared/workerTaskPagination.ts";
+import { projectWorkerTaskResponse } from "../_shared/workerTaskResponse.ts";
 
 type JsonRecord = Record<string, unknown>;
 type ServiceClient = any;
@@ -245,7 +246,11 @@ Deno.serve(async (req: Request) => {
       if (!task) return jsonRes({ ok: false, error: "task_not_found" }, 404, cors);
       const worker = await getWorker(service, task.worker_id);
       if (!worker) return jsonRes({ ok: false, error: "worker_not_found" }, 404, cors);
-      if (!await authorizeWorker(service, user.id, worker, action !== "get")) {
+      const canEditTask = await authorizeWorker(service, user.id, worker, true);
+      if (action === "get") {
+        const canReadTask = canEditTask || await authorizeWorker(service, user.id, worker, false);
+        if (!canReadTask) return jsonRes({ ok: false, error: "task_access_denied" }, 403, cors);
+      } else if (!canEditTask) {
         return jsonRes({ ok: false, error: "task_access_denied" }, 403, cors);
       }
 
@@ -254,7 +259,11 @@ Deno.serve(async (req: Request) => {
           .select("id, actor_id, event_type, from_status, to_status, details, created_at")
           .eq("task_id", task.id).order("created_at", { ascending: true }).limit(200);
         if (error) return jsonRes({ ok: false, error: "task_events_lookup_failed" }, 500, cors);
-        return jsonRes({ ok: true, task, events: Array.isArray(events) ? events : [] }, 200, cors);
+        return jsonRes({
+          ok: true,
+          task: projectWorkerTaskResponse(task as unknown as Record<string, unknown>, canEditTask),
+          events: Array.isArray(events) ? events : [],
+        }, 200, cors);
       }
 
       let approvalId: string | null = null;
