@@ -30,7 +30,7 @@ DECLARE
   first_result jsonb;
   replay_result jsonb;
   conflict_result jsonb;
-  task_id uuid;
+  v_task_id uuid;
   event_count integer;
 BEGIN
   first_result := public.create_ai_worker_task(
@@ -42,7 +42,7 @@ BEGIN
   IF first_result->>'ok' <> 'true' OR first_result->>'replayed' <> 'false' THEN
     RAISE EXCEPTION 'first request should create a new queued task: %', first_result;
   END IF;
-  task_id := (first_result->'task'->>'id')::uuid;
+  v_task_id := (first_result->'task'->>'id')::uuid;
 
   replay_result := public.create_ai_worker_task(
     '21000000-0000-0000-0000-000000000001',
@@ -52,7 +52,7 @@ BEGIN
   );
   IF replay_result->>'ok' <> 'true'
      OR replay_result->>'replayed' <> 'true'
-     OR (replay_result->'task'->>'id')::uuid <> task_id THEN
+     OR (replay_result->'task'->>'id')::uuid <> v_task_id THEN
     RAISE EXCEPTION 'same idempotency key and payload must return the original task';
   END IF;
 
@@ -65,7 +65,7 @@ BEGIN
     RAISE EXCEPTION 'same idempotency key with different payload must fail closed';
   END IF;
 
-  SELECT count(*) INTO event_count FROM public.ai_worker_task_events WHERE task_id = task_id;
+  SELECT count(*) INTO event_count FROM public.ai_worker_task_events WHERE task_id = v_task_id;
   IF event_count <> 1 THEN
     RAISE EXCEPTION 'replays must not duplicate task-created audit events';
   END IF;
@@ -95,7 +95,7 @@ DO $transition_safety$
 DECLARE
   result jsonb;
   task_status text;
-  event_type text;
+  v_event_type text;
 BEGIN
   result := public.transition_ai_worker_task(
     '31000000-0000-0000-0000-000000000001',
@@ -124,10 +124,10 @@ BEGIN
      OR result->'task'->>'cancel_requested_at' IS NULL THEN
     RAISE EXCEPTION 'running task cancellation must request stop, not falsely mark cancelled';
   END IF;
-  SELECT event_type INTO event_type FROM public.ai_worker_task_events
+  SELECT event_type INTO v_event_type FROM public.ai_worker_task_events
     WHERE task_id = '31000000-0000-0000-0000-000000000002'
     ORDER BY created_at DESC LIMIT 1;
-  IF event_type <> 'cancel_requested' THEN
+  IF v_event_type <> 'cancel_requested' THEN
     RAISE EXCEPTION 'running task should append cancel_requested event';
   END IF;
 
