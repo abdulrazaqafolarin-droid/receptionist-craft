@@ -67,7 +67,7 @@ The worker registry, task API, verifier, and runner apply per-verified-user in-m
 **Live-schema comparison:** a read-only catalog check confirms that `ai_workers`, `ai_worker_tasks`, and `director_memory` are absent from the live project. The repository type update does not mean the tables are deployed. Reconcile the missing historical migration ledger and validate the complete migration chain in staging before applying anything to production.
 
 1. Complete migration-history reconciliation and validate the worker schema/RLS against staging.
-2. Extend durable lifecycle audit coverage to verification-run start/pass/failure; draft create/edit/archive and publish/pause/resume events are recorded. Add persistent/distributed rate limiting (the current in-memory limit is only a first-line guard).
+2. Add stale verification-run reconciliation for unexpected Edge Function termination. Draft create/edit/archive, verification start/pass/failure, and publish/pause/resume events are recorded atomically. Add persistent/distributed rate limiting (the current in-memory limit is only a first-line guard).
 3. Connect Director planning/building to this lifecycle using durable jobs and checkpoint/resume.
 4. Extend execution beyond the verified draft-only runner through registered capability adapters, approval handling, evidence-based completion and resumable checkpoints.
 5. Add integration tests for authorization, rate limits, task transitions, approval enforcement, idempotency and recovery.
