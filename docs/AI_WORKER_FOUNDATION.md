@@ -2,7 +2,7 @@
 
 ## Status
 
-This document describes the first persistence slice for the general-purpose AI Worker product. It does not claim the worker builder, generic runtime, integration onboarding flow, or dedicated workspace are implemented yet.
+This document describes the current staged foundation for the general-purpose AI Worker product: durable worker/task records, a dedicated workspace, version-pinned verification/publication for a narrow draft-only subset, and a restricted Gemini-backed draft executor. It does not claim that the general-purpose capability runtime, integration onboarding, or Director delegation are complete.
 
 ## Product boundaries
 
@@ -14,7 +14,7 @@ This document describes the first persistence slice for the general-purpose AI W
 
 ## First implementation slice
 
-The `worker-registry` Edge Function now provides authenticated `create_draft`, `update_draft`, and `archive` actions. It validates worker definitions, derives the actor from a verified bearer token, checks active organization membership, uses optimistic version checks for draft edits, and deliberately does not expose a publish/activate action before a test-and-verification pipeline exists. Browser reads remain governed by RLS.
+The `worker-registry` Edge Function provides authenticated list/detail, draft create/update/archive, verify/publish/resume and pause actions. It validates worker definitions, derives the actor from a verified bearer token, checks active organization membership, uses optimistic version checks, and only publishes a version that passed the verifier and is supported by the restricted draft-only runner. Lifecycle create/edit/archive writes now use service-role-only SQL RPCs that enforce authorization and append audit events in the same transaction.
 
 Migration `20261016000001_ai_worker_foundation.sql` adds:
 
@@ -28,7 +28,7 @@ A durable worker identity and versioned JSON definition. The definition is expec
 - execution limits, retry/recovery policy and verification criteria;
 - workspace presentation/configuration.
 
-The database currently stores the definition as JSONB; schema validation and publishing checks belong in the trusted application/runtime layer before a worker becomes active.
+The database stores definitions as JSONB. The trusted application validates the contract, and the database independently enforces version-pinned verification and the narrow runner allowlist before activation.
 
 ### `ai_worker_tasks`
 
@@ -38,7 +38,7 @@ A durable task record associated with a worker, including status, input/output p
 
 - A personal worker has `organization_id IS NULL` and is visible to its creator.
 - An organization worker is visible only to members with a completed membership (`joined_at IS NOT NULL`).
-- The authenticated client has read access only. Worker creation, definition edits, publishing and lifecycle transitions must go through trusted Edge Functions so clients cannot bypass validation by setting `status = 'active'`.
+- The authenticated client has read access only. Worker creation, definition edits, publishing and lifecycle transitions must go through trusted Edge Functions and service-role-only RPCs so clients cannot bypass validation by setting `status = 'active'`.
 - Task visibility is derived from the linked worker's access scope rather than trusting a duplicated organization ID on each task.
 - Task rows have no direct authenticated insert/update/delete policies; trusted Edge Functions own task creation and state transitions.
 
@@ -56,9 +56,9 @@ The service layer must still validate that a task's `worker_id` belongs to the s
 
 ## Current UI and runtime boundary
 
-The first UI slice now includes a separate AI Workers navigation group, a registry page, personal/organization scope selection, draft creation, and a dedicated worker workspace for editing the draft specification and reviewing its current permissions. The UI explicitly states that workers do not execute tasks yet.
+The UI includes a separate AI Workers navigation group, registry page, personal/organization scope selection, and dedicated workspace with definition editing, verification results, publication/pause controls, task creation, output display, and task history. The workspace labels execution as supervised draft-only work and makes clear that no external side effects occur.
 
-The `worker-registry` Edge Function supports scoped list/detail reads plus draft creation, draft updates and archive. It applies a per-verified-user in-memory rate limit (30 requests/minute, burst cap 6 per 5 seconds) and returns `429` with `Retry-After` when exceeded. This is a first-line guard only: isolate restarts can reset it, so persistent/distributed limiting remains required before higher-volume production use. The registry deliberately has no publish/activate or task-run action.
+The worker registry, task API, verifier, and runner apply per-verified-user in-memory rate limits (30 requests/minute, burst cap 6 per 5 seconds). This is a first-line guard only: isolate restarts can reset it, so persistent/distributed limiting remains required before higher-volume production use.
 
 ## Next implementation stages
 
@@ -67,15 +67,15 @@ The `worker-registry` Edge Function supports scoped list/detail reads plus draft
 **Live-schema comparison:** a read-only catalog check confirms that `ai_workers`, `ai_worker_tasks`, and `director_memory` are absent from the live project. The repository type update does not mean the tables are deployed. Reconcile the missing historical migration ledger and validate the complete migration chain in staging before applying anything to production.
 
 1. Complete migration-history reconciliation and validate the worker schema/RLS against staging.
-2. Add durable lifecycle audit records, persistent/distributed rate limiting (the current in-memory limit is only a first-line guard), and explicit worker-version semantics.
+2. Extend durable lifecycle audit coverage to verification-run start/pass/failure; draft create/edit/archive and publish/pause/resume events are recorded. Add persistent/distributed rate limiting (the current in-memory limit is only a first-line guard).
 3. Connect Director planning/building to this lifecycle using durable jobs and checkpoint/resume.
-4. Implement generic task execution, approval handling, evidence-based completion and resumable checkpoints.
+4. Extend execution beyond the verified draft-only runner through registered capability adapters, approval handling, evidence-based completion and resumable checkpoints.
 5. Add integration tests for authorization, rate limits, task transitions, approval enforcement, idempotency and recovery.
 6. Only after those checks, evaluate deployment targets beyond the initial Rutex-managed runtime.
 
-### Task state safety contract (prerequisite, not an executor)
+### Task state safety contract and durable task API
 
-The pure helper `workerTaskState.ts` now specifies and tests allowed transitions before a future trusted runner persists them. It requires an active worker before starting queued work, explicit approval before approved work is re-queued, a resolved blocking condition before resumption, safe retry classification within the attempt budget, and a stopped executor before cancelling in-flight work. A task cannot become `done` without bounded structured evidence. This helper is not yet wired to a task API or runner; it is the tested contract the next runtime slice must enforce.
+The pure helper `workerTaskState.ts` now specifies and tests allowed transitions before a future trusted runner persists them. It requires an active worker before starting queued work, explicit approval before approved work is re-queued, a resolved blocking condition before resumption, safe retry classification within the attempt budget, and a stopped executor before cancelling in-flight work. A task cannot become `done` without bounded structured evidence. These invariants are enforced by the task API and SQL transition/lease functions; the restricted runner is wired to the task-specific claim, heartbeat and evidence-gated finish RPCs.
 
 ### Durable task queue API (new foundation slice)
 
@@ -87,7 +87,7 @@ The next migration, 20261018000002_ai_worker_execution_leases.sql, adds executio
 
 A first, deliberately narrow executor now exists at worker-runner. It uses direct Gemini generateContent (no tool declarations) for draft-only tasks, validates the declared input/output fields, rejects credential-like values, records a structural verification receipt and never sends messages or performs external writes. It accepts an authenticated user request only when that user can edit the target worker, and it supports an optional task ID to run that exact queued task. The Supabase Edge Function gateway must validate the bearer JWT; the function also checks the user with Supabase Auth and enforces per-user rate limits. It requires the existing Gemini API key. It only accepts tasks whose input_json includes execution_mode=draft and a payload matching the worker's input schema. This endpoint has not been deployed or integration-tested against staging.
 
-**Important runtime boundary:** this is not yet a general-purpose executor. The registry still does not publish/activate workers, so ordinary UI-created drafts cannot run tasks. Research, internal data access, browser/device control and external capability adapters are not executed by worker-runner. Do not manually set a worker to active in production to bypass verification and publication controls.
+**Important runtime boundary:** this is not yet a general-purpose executor. Publication is enabled only for the supervised, no-capability draft subset that passes current-version verification. Research, internal data access, browser/device control, arbitrary code execution and external capability adapters are not executed by worker-runner. Do not manually set a worker to active in production to bypass verification and publication controls.
 
 ## Deliberately out of scope for this slice
 
