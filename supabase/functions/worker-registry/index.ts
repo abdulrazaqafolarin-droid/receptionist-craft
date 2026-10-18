@@ -86,6 +86,8 @@ interface WorkerRow {
   updated_at: string;
   published_at: string | null;
   archived_at: string | null;
+  verified_version?: number | null;
+  verification_run_id?: string | null;
 }
 
 async function workerForUser(
@@ -94,7 +96,7 @@ async function workerForUser(
 ): Promise<WorkerRow | null> {
   const { data, error } = await service
     .from("ai_workers")
-    .select("id, organization_id, created_by, name, description, status, version, definition, created_at, updated_at, published_at, archived_at")
+    .select("id, organization_id, created_by, name, description, status, version, definition, created_at, updated_at, published_at, archived_at, verified_version, verification_run_id")
     .eq("id", workerId)
     .maybeSingle();
   if (error) throw new Error("worker_lookup_failed");
@@ -190,14 +192,78 @@ Deno.serve(async (req: Request) => {
       if (!canReadWorker(user.id, worker, membership)) {
         return jsonRes({ ok: false, error: "worker_access_denied" }, 403, cors);
       }
+      const { data: verification, error: verificationError } = await service
+        .from("ai_worker_verification_runs")
+        .select("id, worker_id, worker_version, definition_hash, status, tests, summary, created_at, completed_at")
+        .eq("worker_id", worker.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (verificationError) return jsonRes({ ok: false, error: "verification_lookup_failed" }, 500, cors);
       return jsonRes({
         ok: true,
         worker,
+        verification: verification || null,
         permissions: {
           can_edit: canEditWorker(user.id, worker, membership),
           can_archive: canArchiveWorker(user.id, worker, membership),
         },
       }, 200, cors);
+    }
+
+    if (action === "publish" || action === "resume") {
+      if (!isUuid(body.worker_id) || !isUuid(body.verification_run_id)) {
+        return jsonRes({ ok: false, error: "invalid_publish_request" }, 400, cors);
+      }
+      const worker = await workerForUser(service, body.worker_id);
+      if (!worker) return jsonRes({ ok: false, error: "worker_not_found" }, 404, cors);
+      const membership = worker.organization_id
+        ? await activeMembership(service, worker.organization_id, user.id)
+        : null;
+      if (!canEditWorker(user.id, worker, membership)) {
+        return jsonRes({ ok: false, error: "worker_access_denied" }, 403, cors);
+      }
+      const expectedStatus = action === "publish" ? "draft" : "paused";
+      if (worker.status !== expectedStatus) {
+        return jsonRes({ ok: false, error: "worker_status_changed", status: worker.status }, 409, cors);
+      }
+      const { data, error } = await service.rpc("publish_ai_worker", {
+        p_worker_id: worker.id,
+        p_actor_id: user.id,
+        p_verification_run_id: body.verification_run_id,
+        p_expected_status: expectedStatus,
+      });
+      if (error) return jsonRes({ ok: false, error: "worker_publish_failed" }, 500, cors);
+      const result = asRecord(data);
+      if (!result || result.ok !== true) {
+        const reason = result && typeof result.error === "string" ? result.error : "worker_publish_failed";
+        const status = ["worker_status_changed", "current_verification_required", "worker_not_supported_by_draft_runner"].includes(reason) ? 409 : 500;
+        return jsonRes({ ok: false, error: reason }, status, cors);
+      }
+      return jsonRes({ ok: true, worker: result.worker }, 200, cors);
+    }
+
+    if (action === "pause") {
+      if (!isUuid(body.worker_id)) return jsonRes({ ok: false, error: "invalid_worker_id" }, 400, cors);
+      const worker = await workerForUser(service, body.worker_id);
+      if (!worker) return jsonRes({ ok: false, error: "worker_not_found" }, 404, cors);
+      const membership = worker.organization_id
+        ? await activeMembership(service, worker.organization_id, user.id)
+        : null;
+      if (!canEditWorker(user.id, worker, membership)) {
+        return jsonRes({ ok: false, error: "worker_access_denied" }, 403, cors);
+      }
+      const { data, error } = await service.rpc("pause_ai_worker", {
+        p_worker_id: worker.id,
+        p_actor_id: user.id,
+      });
+      if (error) return jsonRes({ ok: false, error: "worker_pause_failed" }, 500, cors);
+      const result = asRecord(data);
+      if (!result || result.ok !== true) {
+        const reason = result && typeof result.error === "string" ? result.error : "worker_pause_failed";
+        return jsonRes({ ok: false, error: reason }, reason === "active_tasks_must_be_resolved" ? 409 : 500, cors);
+      }
+      return jsonRes({ ok: true, worker: result.worker }, 200, cors);
     }
 
     if (action === "create_draft") {
@@ -289,6 +355,15 @@ Deno.serve(async (req: Request) => {
         : null;
       if (!canArchiveWorker(user.id, worker, archiveMembership)) {
         return jsonRes({ ok: false, error: "worker_archive_denied" }, 403, cors);
+      }
+      const { count: activeTaskCount, error: activeTaskError } = await service
+        .from("ai_worker_tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("worker_id", worker.id)
+        .in("status", ["running", "waiting_approval"]);
+      if (activeTaskError) return jsonRes({ ok: false, error: "active_task_lookup_failed" }, 500, cors);
+      if ((activeTaskCount || 0) > 0) {
+        return jsonRes({ ok: false, error: "active_tasks_must_be_resolved" }, 409, cors);
       }
       const { data, error } = await service.from("ai_workers").update({
         status: "archived",
