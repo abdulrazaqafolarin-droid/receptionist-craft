@@ -23,9 +23,22 @@ END $acl$;
 
 INSERT INTO public.ai_workers (id, organization_id, created_by, name, status, definition)
 VALUES
-  ('22000000-0000-0000-0000-000000000001', NULL, '00000000-0000-0000-0000-000000000001', 'Lease finish worker', 'active', '{}'::jsonb),
-  ('22000000-0000-0000-0000-000000000002', NULL, '00000000-0000-0000-0000-000000000001', 'Lease cancel worker', 'active', '{}'::jsonb),
-  ('22000000-0000-0000-0000-000000000003', NULL, '00000000-0000-0000-0000-000000000001', 'Lease expiry worker', 'active', '{}'::jsonb);
+  ('22000000-0000-0000-0000-000000000001', NULL, '00000000-0000-0000-0000-000000000001', 'Lease finish worker', 'draft', '{}'::jsonb),
+  ('22000000-0000-0000-0000-000000000002', NULL, '00000000-0000-0000-0000-000000000001', 'Lease cancel worker', 'draft', '{}'::jsonb),
+  ('22000000-0000-0000-0000-000000000003', NULL, '00000000-0000-0000-0000-000000000001', 'Lease expiry worker', 'draft', '{}'::jsonb);
+
+INSERT INTO public.ai_worker_verification_runs (
+  id, worker_id, actor_id, worker_version, definition_hash, definition_snapshot, status, tests, summary, completed_at
+) VALUES
+  ('42000000-0000-0000-0000-000000000001', '22000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 1, repeat('b', 64), '{}'::jsonb, 'passed', '[]'::jsonb, 'SQL lease fixture', now()),
+  ('42000000-0000-0000-0000-000000000002', '22000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 1, repeat('c', 64), '{}'::jsonb, 'passed', '[]'::jsonb, 'SQL lease fixture', now()),
+  ('42000000-0000-0000-0000-000000000003', '22000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 1, repeat('d', 64), '{}'::jsonb, 'passed', '[]'::jsonb, 'SQL lease fixture', now());
+UPDATE public.ai_workers SET status = 'active', verified_version = 1, verification_run_id = '42000000-0000-0000-0000-000000000001'
+WHERE id = '22000000-0000-0000-0000-000000000001';
+UPDATE public.ai_workers SET status = 'active', verified_version = 1, verification_run_id = '42000000-0000-0000-0000-000000000002'
+WHERE id = '22000000-0000-0000-0000-000000000002';
+UPDATE public.ai_workers SET status = 'active', verified_version = 1, verification_run_id = '42000000-0000-0000-0000-000000000003'
+WHERE id = '22000000-0000-0000-0000-000000000003';
 
 INSERT INTO public.ai_worker_tasks (id, worker_id, created_by, title, goal, status)
 VALUES
