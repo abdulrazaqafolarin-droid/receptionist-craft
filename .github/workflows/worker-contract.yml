@@ -28,9 +28,9 @@ jobs:
       - name: Type-check worker contracts and access rules
         run: deno check supabase/functions/_shared/workerContract.ts supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskState.ts supabase/functions/_shared/workerTaskState.test.ts
       - name: Type-check worker registry and task Edge Functions
-        run: deno check supabase/functions/worker-registry/index.ts supabase/functions/worker-tasks/index.ts supabase/functions/_shared/workerTaskRequest.ts supabase/functions/_shared/workerTaskRequest.test.ts
+        run: deno check supabase/functions/worker-registry/index.ts supabase/functions/worker-tasks/index.ts supabase/functions/worker-runner/index.ts supabase/functions/_shared/workerTaskRequest.ts supabase/functions/_shared/workerTaskRequest.test.ts supabase/functions/_shared/workerDraftExecution.ts supabase/functions/_shared/workerDraftExecution.test.ts
       - name: Test worker contract and safety invariants
-        run: deno test supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskState.test.ts supabase/functions/_shared/workerTaskRequest.test.ts
+        run: deno test supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskState.test.ts supabase/functions/_shared/workerTaskRequest.test.ts supabase/functions/_shared/workerDraftExecution.test.ts
 
   migration-rls:
     name: Validate worker migration and RLS
