@@ -124,6 +124,14 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/worker_verification_reconciliation.sql
+      - name: Apply worker concurrency limits migration
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20261018000008_ai_worker_concurrency_limits.sql
+      - name: Verify global and scoped worker concurrency ceilings
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/ai_worker_concurrency_limits.sql
 
   frontend-worker-ui:
     name: Build worker registry UI
