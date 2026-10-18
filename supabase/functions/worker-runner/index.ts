@@ -35,13 +35,6 @@ function isUuid(value: unknown): value is string {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-function constantTimeEqual(a: string, b: string): boolean {
-  if (!a || !b || a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -132,6 +125,7 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
   }
 }
 
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonRes({ ok: false, error: "method_not_allowed" }, 405);
 
@@ -177,26 +171,26 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
       return jsonRes({ ok: false, error: "invalid_task_id" }, 400);
     }
 
-    const { data: workerData, error: workerLookupError } = await service
+    const { data: authorizedWorker, error: workerLookupError } = await service
       .from("ai_workers")
       .select("id, organization_id, created_by, status, version, definition")
       .eq("id", record.worker_id)
       .maybeSingle();
     if (workerLookupError) return jsonRes({ ok: false, error: "worker_lookup_failed" }, 500);
-    if (!workerData) return jsonRes({ ok: false, error: "worker_not_found" }, 404);
-    if (workerData.status !== "active") return jsonRes({ ok: false, error: "worker_not_active" }, 409);
+    if (!authorizedWorker) return jsonRes({ ok: false, error: "worker_not_found" }, 404);
+    if (authorizedWorker.status !== "active") return jsonRes({ ok: false, error: "worker_not_active" }, 409);
 
     let membership: { role: string; joined_at: string | null } | null = null;
-    if (workerData.organization_id) {
+    if (authorizedWorker.organization_id) {
       const { data, error } = await service.from("organization_members")
         .select("role, joined_at")
-        .eq("organization_id", workerData.organization_id)
+        .eq("organization_id", authorizedWorker.organization_id)
         .eq("user_id", user.id)
         .maybeSingle();
       if (error) return jsonRes({ ok: false, error: "membership_lookup_failed" }, 500);
       membership = data;
     }
-    if (!canEditWorker(user.id, workerData, membership?.joined_at ? { role: membership.role } : null)) {
+    if (!canEditWorker(user.id, authorizedWorker, membership?.joined_at ? { role: membership.role } : null)) {
       return jsonRes({ ok: false, error: "worker_access_denied" }, 403);
     }
 
@@ -205,10 +199,6 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
       : { p_worker_id: record.worker_id, p_lease_seconds: 120 };
     const claimFunction = record.task_id ? "claim_ai_worker_task_for_task" : "claim_ai_worker_task";
     const { data: claimData, error: claimError } = await service.rpc(claimFunction, claimArgs);
-    const { data: claimData, error: claimError } = await service.rpc("claim_ai_worker_task", {
-      p_worker_id: record.worker_id,
-      p_lease_seconds: 120,
-    });
     if (claimError) return jsonRes({ ok: false, error: "task_claim_failed" }, 500);
     const claim = asRecord(claimData);
     if (!claim || claim.ok !== true) {
