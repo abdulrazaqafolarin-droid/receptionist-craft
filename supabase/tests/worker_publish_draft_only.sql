@@ -9,7 +9,14 @@ BEGIN
   END IF;
 END $acl$;
 
-INSERT INTO auth.users(id) VALUES ('56000000-0000-0000-0000-000000000001');
+INSERT INTO auth.users(id) VALUES
+ ('56000000-0000-0000-0000-000000000001'),
+ ('56000000-0000-0000-0000-000000000002'),
+ ('56000000-0000-0000-0000-000000000003');
+INSERT INTO public.organizations(id) VALUES ('57000000-0000-0000-0000-000000000001');
+INSERT INTO public.organization_members(organization_id, user_id, role, joined_at) VALUES
+ ('57000000-0000-0000-0000-000000000001', '56000000-0000-0000-0000-000000000002', 'member', now()),
+ ('57000000-0000-0000-0000-000000000001', '56000000-0000-0000-0000-000000000003', 'admin', now());
 
 DO $publication$
 DECLARE
@@ -44,7 +51,8 @@ BEGIN
     ('23000000-0000-0000-0000-000000000011', NULL, '56000000-0000-0000-0000-000000000001', 'Research must be blocked', 'draft', 1, v_research),
     ('23000000-0000-0000-0000-000000000012', NULL, '56000000-0000-0000-0000-000000000001', 'Internal read must be blocked', 'draft', 1, v_internal_read),
     ('23000000-0000-0000-0000-000000000013', NULL, '56000000-0000-0000-0000-000000000001', 'Null action must be blocked', 'draft', 1, v_null_action),
-    ('23000000-0000-0000-0000-000000000014', NULL, '56000000-0000-0000-0000-000000000001', 'Missing actions must be blocked', 'draft', 1, v_missing_actions);
+    ('23000000-0000-0000-0000-000000000014', NULL, '56000000-0000-0000-0000-000000000001', 'Missing actions must be blocked', 'draft', 1, v_missing_actions),
+    ('23000000-0000-0000-0000-000000000015', '57000000-0000-0000-0000-000000000001', '56000000-0000-0000-0000-000000000002', 'Org member needs admin approval', 'draft', 1, v_draft);
 
   INSERT INTO public.ai_worker_verification_runs(
     id, worker_id, actor_id, worker_version, definition_hash, definition_snapshot, status, tests, summary, completed_at
@@ -53,7 +61,8 @@ BEGIN
     ('43000000-0000-0000-0000-000000000011', '23000000-0000-0000-0000-000000000011', '56000000-0000-0000-0000-000000000001', 1, repeat('b',64), v_research, 'passed', '[{"name":"fixture","passed":true}]'::jsonb, 'forged pass fixture', now()),
     ('43000000-0000-0000-0000-000000000012', '23000000-0000-0000-0000-000000000012', '56000000-0000-0000-0000-000000000001', 1, repeat('c',64), v_internal_read, 'passed', '[{"name":"fixture","passed":true}]'::jsonb, 'forged pass fixture', now()),
     ('43000000-0000-0000-0000-000000000013', '23000000-0000-0000-0000-000000000013', '56000000-0000-0000-0000-000000000001', 1, repeat('d',64), v_null_action, 'passed', '[{"name":"fixture","passed":true}]'::jsonb, 'forged pass fixture', now()),
-    ('43000000-0000-0000-0000-000000000014', '23000000-0000-0000-0000-000000000014', '56000000-0000-0000-0000-000000000001', 1, repeat('e',64), v_missing_actions, 'passed', '[{"name":"fixture","passed":true}]'::jsonb, 'forged pass fixture', now());
+    ('43000000-0000-0000-0000-000000000014', '23000000-0000-0000-0000-000000000014', '56000000-0000-0000-0000-000000000001', 1, repeat('e',64), v_missing_actions, 'passed', '[{"name":"fixture","passed":true}]'::jsonb, 'forged pass fixture', now()),
+    ('43000000-0000-0000-0000-000000000015', '23000000-0000-0000-0000-000000000015', '56000000-0000-0000-0000-000000000002', 1, repeat('f',64), v_draft, 'passed', '[{"name":"fixture","passed":true}]'::jsonb, 'passed fixture', now());
 
   v_result := public.publish_ai_worker(
     '23000000-0000-0000-0000-000000000011',
@@ -89,6 +98,24 @@ BEGIN
   );
   IF v_result->>'error' <> 'worker_not_supported_by_draft_runner' THEN
     RAISE EXCEPTION 'missing action arrays must fail closed: %', v_result;
+  END IF;
+
+  v_result := public.publish_ai_worker(
+    '23000000-0000-0000-0000-000000000015',
+    '56000000-0000-0000-0000-000000000002',
+    '43000000-0000-0000-0000-000000000015', 'draft'
+  );
+  IF v_result->>'error' <> 'worker_publish_denied' THEN
+    RAISE EXCEPTION 'organization member cannot publish a shared worker: %', v_result;
+  END IF;
+
+  v_result := public.publish_ai_worker(
+    '23000000-0000-0000-0000-000000000015',
+    '56000000-0000-0000-0000-000000000003',
+    '43000000-0000-0000-0000-000000000015', 'draft'
+  );
+  IF v_result->>'ok' <> 'true' OR v_result->'worker'->>'status' <> 'active' THEN
+    RAISE EXCEPTION 'organization admin should publish verified shared worker: %', v_result;
   END IF;
 
   v_result := public.publish_ai_worker(
