@@ -58,7 +58,7 @@ The service layer must still validate that a task's `worker_id` belongs to the s
 
 The UI includes a separate AI Workers navigation group, registry page, personal/organization scope selection, and dedicated workspace with definition editing, verification results, publication/pause controls, task creation, output display, and task history. The workspace labels execution as supervised draft-only work and makes clear that no external side effects occur.
 
-The worker registry, task API, verifier, and runner apply per-verified-user in-memory rate limits (30 requests/minute, burst cap 6 per 5 seconds). This is a first-line guard only: isolate restarts can reset it, so persistent/distributed limiting remains required before higher-volume production use.
+The worker registry, task API, verifier, and runner use a persistent database-backed limiter keyed by the Supabase-verified user ID and endpoint scope (30 requests/minute, burst cap 6 per 5 seconds). The bucket table is server-only, the SQL upsert is atomic across Edge Function isolates, and endpoints fail closed with 503 if the limiter RPC is unavailable. Organization-wide, worker-wide and capability-wide budgets are still pending.
 
 ## Next implementation stages
 
@@ -67,7 +67,7 @@ The worker registry, task API, verifier, and runner apply per-verified-user in-m
 **Live-schema comparison:** a read-only catalog check confirms that `ai_workers`, `ai_worker_tasks`, and `director_memory` are absent from the live project. The repository type update does not mean the tables are deployed. Reconcile the missing historical migration ledger and validate the complete migration chain in staging before applying anything to production.
 
 1. Complete migration-history reconciliation and validate the worker schema/RLS against staging.
-2. Add stale verification-run reconciliation for unexpected Edge Function termination. Draft create/edit/archive, verification start/pass/failure, and publish/pause/resume events are recorded atomically. Add persistent/distributed rate limiting (the current in-memory limit is only a first-line guard).
+2. Add stale verification-run reconciliation for unexpected Edge Function termination. Draft create/edit/archive, verification start/pass/failure, and publish/pause/resume events are recorded atomically. Add organization-wide, worker-wide and capability-wide budget ceilings.
 3. Connect Director planning/building to this lifecycle using durable jobs and checkpoint/resume.
 4. Extend execution beyond the verified draft-only runner through registered capability adapters, approval handling, evidence-based completion and resumable checkpoints.
 5. Add integration tests for authorization, rate limits, task transitions, approval enforcement, idempotency and recovery.
