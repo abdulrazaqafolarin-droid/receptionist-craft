@@ -38,6 +38,7 @@ The repository-wide TypeScript/ESLint baseline has existing unrelated failures. 
 The current PR #52 branch contains:
 
 - Migration 20261018000001_ai_worker_task_lifecycle.sql: idempotency keys, exact approval references, cancellation-request metadata and an audit-event table.
+- Migration 20261018000002_ai_worker_execution_leases.sql: atomic skip-locked claims, worker-version pinning, per-claim lease tokens, heartbeats, evidence-gated completion and expired-lease blocking. Lease internals are not readable by browser roles.
 - Atomic SQL task creation plus a task-created audit event.
 - Atomic approval and cancellation transitions. A running task remains running when cancellation is requested until an executor confirms it has stopped.
 - worker-tasks Edge Function: authenticated create/list/get/approve/cancel operations, worker-scope checks, definition validation, request bounds, secret-like input rejection and rate limiting.
@@ -102,7 +103,8 @@ The current PR #52 branch contains:
 
 ### Phase 4 — Worker execution runtime
 
-- [ ] Add atomic task claiming with lease token, lease expiry, heartbeat and worker-version pinning.
+- [x] Add atomic task claiming with lease token, lease expiry, heartbeat and worker-version pinning (database primitives; not yet wired to a runner).
+- [x] Add evidence-gated finish, cooperative cancellation and expired-lease blocking rather than blind automatic retries (database primitives).
 - [ ] Add concurrency limits per user, organization, worker and capability; add global budget ceilings.
 - [ ] Define the execution loop: load task and pinned definition → plan bounded steps → validate each proposed action → check capability and approval policy → execute through adapter → persist receipt/checkpoint → verify postcondition.
 - [ ] Persist a checkpoint before and after every external side effect. Do not retry an action with an unknown outcome unless its adapter proves idempotency or verifies whether it already occurred.
