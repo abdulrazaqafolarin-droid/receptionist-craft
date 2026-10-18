@@ -214,6 +214,8 @@ export default function WorkerWorkspace() {
         await loadTasks(workerId);
       } else {
         setTasks([]);
+        setNextTaskCursor(null);
+        setHasMoreTasks(false);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to load this worker.");
