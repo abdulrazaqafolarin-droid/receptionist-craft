@@ -17,6 +17,11 @@ BEGIN
      OR has_table_privilege('authenticated', 'public.ai_worker_task_events', 'DELETE') THEN
     RAISE EXCEPTION 'clients must not mutate task audit events';
   END IF;
+  IF has_table_privilege('service_role', 'public.ai_worker_task_events', 'UPDATE')
+     OR has_table_privilege('service_role', 'public.ai_worker_task_events', 'DELETE')
+     OR has_table_privilege('service_role', 'public.ai_worker_task_events', 'TRUNCATE') THEN
+    RAISE EXCEPTION 'service_role must append audit events, not rewrite or delete them';
+  END IF;
 END $acl$;
 
 INSERT INTO public.ai_workers (id, organization_id, created_by, name, status, definition)
