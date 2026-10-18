@@ -249,7 +249,8 @@ Deno.serve(async (req: Request) => {
       const result = asRecord(data);
       if (!result || result.ok !== true) {
         const reason = result && typeof result.error === "string" ? result.error : "worker_publish_failed";
-        const status = ["worker_status_changed", "current_verification_required", "worker_not_supported_by_draft_runner"].includes(reason) ? 409 : 500;
+        const status = reason === "worker_publish_denied" ? 403
+          : ["worker_status_changed", "current_verification_required", "worker_not_supported_by_draft_runner"].includes(reason) ? 409 : 500;
         return jsonRes({ ok: false, error: reason }, status, cors);
       }
       return jsonRes({ ok: true, worker: result.worker }, 200, cors);
