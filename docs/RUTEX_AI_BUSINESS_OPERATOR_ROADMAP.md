@@ -69,8 +69,8 @@ The current PR #52 branch contains:
 - [x] Idempotent task creation and atomic creation audit.
 - [x] Approval-ID-bound resume and safe cancellation-request semantics.
 - [x] Scoped task history and client-read-only audit grants.
-- [x] Add atomic lifecycle audit records for draft create/edit/archive and activation/pause/resume; these append in the same transaction as the worker mutation.
-- [ ] Add lifecycle audit events for verification-run start/pass/failure and verify that every run is durably reconciled.
+- [x] Add atomic lifecycle audit records for draft create/edit/archive, verification-run start/pass/failure, activation and pause/resume; these append in the same transaction as the worker/run mutation.
+- [ ] Add stale verification-run reconciliation for unexpected Edge Function termination.
 - [ ] Add persistent/distributed rate limiting; current in-memory limits reset on Edge Function cold starts.
 - [ ] Add task pagination and retention policy for outputs, events and large evidence payloads.
 - [ ] Add integration tests for cross-tenant access, concurrent duplicate creation, stale approvals, retries and concurrent cancel/approve races.
