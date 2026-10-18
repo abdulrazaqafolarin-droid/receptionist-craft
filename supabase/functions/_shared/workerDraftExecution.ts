@@ -85,7 +85,10 @@ export function validateDraftTaskInput(
   }
   const payload = task.input_json.payload;
   if (!isRecord(payload)) return { ok: false, error: "task_payload_must_be_object" };
-  if (hasSecretLikeValue(task.goal) || hasSecretLikeValue(payload)) {
+  if (new TextEncoder().encode(JSON.stringify(task.input_json)).byteLength > 32768) {
+    return { ok: false, error: "task_input_too_large" };
+  }
+  if (hasSecretLikeValue(task.goal) || hasSecretLikeValue(task.input_json)) {
     return { ok: false, error: "secret_like_value" };
   }
   const error = validateFieldSet(definition.inputs, payload, "input");
