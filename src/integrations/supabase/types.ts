@@ -2628,6 +2628,18 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_public_appointment_by_token: {
+        Args: { p_token: string }
+        Returns: {
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string | null
+          id: string
+          service: string
+          start_time: string
+          status: string
+        }[]
+      }
       get_public_receptionist: {
         Args: { p_receptionist_id: string }
         Returns: {
