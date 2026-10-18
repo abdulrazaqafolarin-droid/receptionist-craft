@@ -288,10 +288,15 @@ export type Database = {
           finished_at: string | null
           goal: string
           id: string
+          execution_attempt_id: string | null
+          heartbeat_at: string | null
           idempotency_key: string | null
           input_json: Json
+          lease_expires_at: string | null
+          lease_token: string | null
           output_json: Json | null
           started_at: string | null
+          worker_version: number | null
           status: string
           title: string
           updated_at: string
@@ -310,10 +315,15 @@ export type Database = {
           finished_at?: string | null
           goal: string
           id?: string
+          execution_attempt_id?: string | null
+          heartbeat_at?: string | null
           idempotency_key?: string | null
           input_json?: Json
+          lease_expires_at?: string | null
+          lease_token?: string | null
           output_json?: Json | null
           started_at?: string | null
+          worker_version?: number | null
           status?: string
           title: string
           updated_at?: string
@@ -2721,6 +2731,25 @@ export type Database = {
         Args: { retention_days?: number }
         Returns: number
       }
+      block_expired_ai_worker_tasks: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
+      claim_ai_worker_task: {
+        Args: { p_lease_seconds?: number; p_worker_id: string }
+        Returns: Json
+      }
+      create_ai_worker_task: {
+        Args: {
+          p_actor_id: string
+          p_goal: string
+          p_idempotency_key: string
+          p_input: Json
+          p_title: string
+          p_worker_id: string
+        }
+        Returns: Json
+      }
       create_widget_appointment: {
         Args: {
           p_booking_source?: string
@@ -2757,6 +2786,21 @@ export type Database = {
       }
       deduct_stock: {
         Args: { p_product_id: string; p_quantity: number }
+        Returns: Json
+      }
+      finish_ai_worker_task: {
+        Args: {
+          p_evidence?: Json
+          p_error?: string
+          p_outcome: string
+          p_output?: Json
+          p_lease_token: string
+          p_task_id: string
+        }
+        Returns: Json
+      }
+      heartbeat_ai_worker_task: {
+        Args: { p_lease_seconds?: number; p_lease_token: string; p_task_id: string }
         Returns: Json
       }
       get_appointment_by_token: {
@@ -2898,6 +2942,10 @@ export type Database = {
         Returns: string
       }
     }
+      transition_ai_worker_task: {
+        Args: { p_action: string; p_actor_id: string; p_approval_id?: string; p_task_id: string }
+        Returns: Json
+      }
     Enums: {
       ai_mode: "support" | "booking" | "sales"
       app_role: "owner" | "admin" | "member" | "viewer"
