@@ -28,11 +28,11 @@ jobs:
       - name: Type-check worker registry and task Edge Functions
         run: deno check supabase/functions/worker-registry/index.ts supabase/functions/worker-tasks/index.ts supabase/functions/worker-runner/index.ts supabase/functions/worker-verification/index.ts supabase/functions/_shared/workerTaskRequest.ts supabase/functions/_shared/workerTaskRequest.test.ts supabase/functions/_shared/workerDraftExecution.ts supabase/functions/_shared/workerDraftExecution.test.ts supabase/functions/_shared/workerVerification.ts supabase/functions/_shared/workerVerification.test.ts
       - name: Type-check persistent rate-limit helper
-        run: deno check supabase/functions/_shared/persistentRateLimit.ts supabase/functions/_shared/persistentRateLimit.test.ts
+        run: deno check supabase/functions/_shared/persistentRateLimit.ts supabase/functions/_shared/persistentRateLimit.test.ts supabase/functions/_shared/workerTaskPagination.ts supabase/functions/_shared/workerTaskPagination.test.ts
       - name: Test worker contract and safety invariants
         run: deno test supabase/functions/_shared/workerContract.test.ts supabase/functions/_shared/workerAccess.test.ts supabase/functions/_shared/rateLimiter.test.ts supabase/functions/_shared/workerTaskState.test.ts supabase/functions/_shared/workerTaskRequest.test.ts supabase/functions/_shared/workerDraftExecution.test.ts supabase/functions/_shared/workerVerification.test.ts
       - name: Test persistent rate-limit client
-        run: deno test supabase/functions/_shared/persistentRateLimit.test.ts
+        run: deno test supabase/functions/_shared/persistentRateLimit.test.ts supabase/functions/_shared/workerTaskPagination.test.ts
 
   migration-rls:
     name: Validate worker migration and RLS
