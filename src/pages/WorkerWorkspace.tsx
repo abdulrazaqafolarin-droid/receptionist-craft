@@ -573,7 +573,7 @@ export default function WorkerWorkspace() {
             <form className="space-y-4 rounded-xl border border-border/60 p-4" onSubmit={createAndRunTask}>
               <div>
                 <h3 className="font-medium">Create and run a draft task</h3>
-                <p className="mt-1 text-sm text-muted-foreground">The runner uses the declared input/output schema, does not use tools or web access, and returns a draft for review.</p>
+                <p className="mt-1 text-sm text-muted-foreground">The declared input payload is sent to the configured Gemini model to produce a draft. The runner has no tools or web access and does not send messages or change external systems.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="worker-task-title">Task title</Label>
@@ -598,8 +598,11 @@ export default function WorkerWorkspace() {
             </form>
           )}
 
-          {worker.status !== "active" && (
+          {(worker.status === "draft" || worker.status === "paused") && (
             <p className="text-sm text-muted-foreground">Publish a verified draft to enable draft-only tasks. Paused and draft workers cannot claim new tasks.</p>
+          )}
+          {worker.status === "archived" && (
+            <p className="text-sm text-muted-foreground">This worker is archived and cannot run new tasks.</p>
           )}
 
           <div className="space-y-3">
