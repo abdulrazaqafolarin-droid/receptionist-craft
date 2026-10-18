@@ -10,7 +10,8 @@ import { canEditWorker, canReadWorker } from "../_shared/workerAccess.ts";
 import { parseWorkerDefinition } from "../_shared/workerContract.ts";
 import { isBoundedApprovalId, parseWorkerTaskCreateRequest } from "../_shared/workerTaskRequest.ts";
 import { validateDraftTaskInput } from "../_shared/workerDraftExecution.ts";
-import { checkRateLimit, RATE_LIMITS } from "../_shared/rateLimiter.ts";
+import { RATE_LIMITS } from "../_shared/rateLimiter.ts";
+import { consumePersistentRateLimit } from "../_shared/persistentRateLimit.ts";
 
 type JsonRecord = Record<string, unknown>;
 type ServiceClient = any;
@@ -145,9 +146,10 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: authError } = await service.auth.getUser(token);
     if (authError || !user) return jsonRes({ ok: false, error: "invalid_token" }, 401, cors);
 
-    const rate = checkRateLimit(`worker-tasks:${user.id}`, RATE_LIMITS.workerRegistry);
+    const rate = await consumePersistentRateLimit(service, user.id, "worker-tasks", RATE_LIMITS.workerRegistry);
+    if (!rate.available) return jsonRes({ ok: false, error: "rate_limiter_unavailable" }, 503, cors);
     if (!rate.allowed) {
-      const retry = Math.max(1, Math.ceil((rate.retryAfterMs ?? 60_000) / 1000));
+      const retry = rate.retryAfterSeconds;
       return jsonRes({ ok: false, error: "rate_limited", retry_after_seconds: retry }, 429, cors, {
         "Retry-After": String(retry),
         "X-RateLimit-Reason": rate.reason || "window",
