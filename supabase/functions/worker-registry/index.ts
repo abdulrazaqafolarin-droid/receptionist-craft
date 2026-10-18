@@ -218,6 +218,7 @@ Deno.serve(async (req: Request) => {
         verification: verification || null,
         permissions: {
           can_edit: canEditWorker(user.id, worker, membership),
+          can_publish: canPublishWorker(user.id, worker, membership),
           can_archive: canArchiveWorker(user.id, worker, membership),
         },
       }, 200, cors);
