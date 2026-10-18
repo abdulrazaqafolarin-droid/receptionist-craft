@@ -77,6 +77,14 @@ The `worker-registry` Edge Function supports scoped list/detail reads plus draft
 
 The pure helper `workerTaskState.ts` now specifies and tests allowed transitions before a future trusted runner persists them. It requires an active worker before starting queued work, explicit approval before approved work is re-queued, a resolved blocking condition before resumption, safe retry classification within the attempt budget, and a stopped executor before cancelling in-flight work. A task cannot become `done` without bounded structured evidence. This helper is not yet wired to a task API or runner; it is the tested contract the next runtime slice must enforce.
 
+### Durable task queue API (new foundation slice)
+
+The `worker-tasks` Edge Function now exposes authenticated `create`, `list`, `get`, `approve`, and `cancel` operations. It verifies the bearer token, checks worker scope and edit permissions, validates the active worker definition before queueing work, and rate-limits requests by verified user ID. Creation requires a client-generated idempotency key; replays with the same payload return the existing task, while key reuse with a different payload is rejected.
+
+Migration `20261018000001_ai_worker_task_lifecycle.sql` adds task idempotency, exact approval references, cancellation-request metadata, and a read-only-to-clients `ai_worker_task_events` audit trail. SQL functions create a task plus its creation event atomically and perform approval/cancellation transitions with row locks. Approval only re-queues a task when the supplied approval ID matches the trusted runner's pending approval record. Cancelling a running task records a stop request without falsely marking execution as stopped.
+
+**Important runtime boundary:** this is a durable queue and lifecycle API, not yet an executor. The registry still does not publish/activate workers, so ordinary UI-created drafts cannot run tasks. A trusted runner, capability adapters, durable leases/heartbeats, retry classification, output verification, and an end-to-end approval UI remain required before the platform can truthfully execute and verify general work. Do not manually set a worker to active in production to bypass those missing controls.
+
 ## Deliberately out of scope for this slice
 
 - Replacing the receptionist engine or renaming existing receptionist pages as workers.
