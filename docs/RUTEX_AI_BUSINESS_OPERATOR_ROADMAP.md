@@ -39,6 +39,7 @@ The current PR #52 branch contains:
 
 - Migration 20261018000001_ai_worker_task_lifecycle.sql: idempotency keys, exact approval references, cancellation-request metadata and an audit-event table.
 - Migration 20261018000002_ai_worker_execution_leases.sql: atomic skip-locked claims, worker-version pinning, per-claim lease tokens, heartbeats, evidence-gated completion and expired-lease blocking. Lease internals are not readable by browser roles.
+- worker-runner now executes a narrow draft-only task mode through direct Gemini API without tool declarations. It is not deployed; runner secret configuration and staging integration tests remain outstanding.
 - Atomic SQL task creation plus a task-created audit event.
 - Atomic approval and cancellation transitions. A running task remains running when cancellation is requested until an executor confirms it has stopped.
 - worker-tasks Edge Function: authenticated create/list/get/approve/cancel operations, worker-scope checks, definition validation, request bounds, secret-like input rejection and rate limiting.
@@ -187,9 +188,10 @@ The current PR #52 branch contains:
 1. Finish the current PR #52 CI cycle; fix every new task-runtime failure before adding more features.
 2. Re-run the isolated PostgreSQL task lifecycle test after each migration edit and inspect exact workflow logs.
 3. Verify the task API against authenticated staging only after migration-history reconciliation; no production DDL or deployment during this stage.
-4. Add worker lifecycle audit and distributed rate limiting, then implement a lease-based claim/heartbeat/finish runtime.
+4. Add worker lifecycle audit and distributed rate limiting; configure the draft runner secret in staging and exercise it end-to-end.
 5. Implement capability adapters and worker verification before enabling activation.
-6. Integrate Director delegation only after retries, approval gates and evidence pass adversarial tests.
+6. Extend the runner only through explicitly registered, typed, risk-classified adapters with approval gates.
+7. Integrate Director delegation only after retries, approval gates and evidence pass adversarial tests.
 7. Review the independent security PRs and verify their CI, dependencies and live call sites; do not merge a large stacked branch as a substitute for rollout sequencing.
 
 ## Release blockers that must remain visible
