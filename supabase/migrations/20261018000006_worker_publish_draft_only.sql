@@ -39,21 +39,36 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'current_verification_required');
   END IF;
 
-  IF v_worker.definition ->> 'autonomy_mode' <> 'supervised'
-     OR jsonb_typeof(v_worker.definition -> 'allowed_actions') <> 'array'
-     OR NOT ((v_worker.definition -> 'allowed_actions') ? 'draft')
+  IF v_worker.definition ->> 'autonomy_mode' IS DISTINCT FROM 'supervised'
+     OR jsonb_typeof(v_worker.definition -> 'allowed_actions') IS DISTINCT FROM 'array'
+     OR NOT COALESCE((v_worker.definition -> 'allowed_actions') ? 'draft', false)
      OR EXISTS (
-       SELECT 1 FROM jsonb_array_elements_text(v_worker.definition -> 'allowed_actions') AS action(value)
-       WHERE action.value <> 'draft'
+       SELECT 1
+       FROM jsonb_array_elements_text(
+         CASE WHEN jsonb_typeof(v_worker.definition -> 'allowed_actions') = 'array'
+           THEN v_worker.definition -> 'allowed_actions' ELSE '[]'::jsonb END
+       ) AS action(value)
+       WHERE action.value IS DISTINCT FROM 'draft'
      )
-     OR jsonb_typeof(v_worker.definition -> 'capability_keys') <> 'array'
-     OR jsonb_array_length(v_worker.definition -> 'capability_keys') <> 0
+     OR jsonb_typeof(v_worker.definition -> 'capability_keys') IS DISTINCT FROM 'array'
+     OR (CASE WHEN jsonb_typeof(v_worker.definition -> 'capability_keys') = 'array'
+         THEN jsonb_array_length(v_worker.definition -> 'capability_keys') ELSE -1 END) <> 0
+     OR jsonb_typeof(v_worker.definition -> 'outputs') IS DISTINCT FROM 'array'
      OR EXISTS (
-       SELECT 1 FROM jsonb_array_elements(v_worker.definition -> 'outputs') AS output(value)
+       SELECT 1
+       FROM jsonb_array_elements(
+         CASE WHEN jsonb_typeof(v_worker.definition -> 'outputs') = 'array'
+           THEN v_worker.definition -> 'outputs' ELSE '[]'::jsonb END
+       ) AS output(value)
        WHERE output.value ->> 'type' = 'file'
      )
+     OR jsonb_typeof(v_worker.definition -> 'inputs') IS DISTINCT FROM 'array'
      OR EXISTS (
-       SELECT 1 FROM jsonb_array_elements(v_worker.definition -> 'inputs') AS input(value)
+       SELECT 1
+       FROM jsonb_array_elements(
+         CASE WHEN jsonb_typeof(v_worker.definition -> 'inputs') = 'array'
+           THEN v_worker.definition -> 'inputs' ELSE '[]'::jsonb END
+       ) AS input(value)
        WHERE input.value ->> 'type' = 'file' AND COALESCE((input.value ->> 'required')::boolean, false)
      ) THEN
     RETURN jsonb_build_object('ok', false, 'error', 'worker_not_supported_by_draft_runner');
