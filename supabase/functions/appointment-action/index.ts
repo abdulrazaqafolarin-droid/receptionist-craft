@@ -66,7 +66,7 @@ serve(async (req) => {
     let authenticatedUserId: string | null = null;
     if (!token || action === "reschedule") {
       const authorizationHeader = req.headers.get("Authorization");
-      const bearerToken = authorizationHeader?.match(/^Bearer\\s+(.+)$/i)?.[1];
+      const bearerToken = authorizationHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
       if (bearerToken) {
         const { data: authData, error: authError } = await supabase.auth.getUser(bearerToken);
         if (!authError && authData.user) authenticatedUserId = authData.user.id;
