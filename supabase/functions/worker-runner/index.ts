@@ -7,6 +7,8 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseWorkerDefinition } from "../_shared/workerContract.ts";
+import { canEditWorker } from "../_shared/workerAccess.ts";
+import { checkRateLimit, RATE_LIMITS } from "../_shared/rateLimiter.ts";
 import { buildDraftPrompt, parseDraftModelOutput, validateDraftTaskInput } from "../_shared/workerDraftExecution.ts";
 
 type JsonRecord = Record<string, unknown>;
@@ -40,10 +42,16 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 function jsonRes(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }
 
@@ -124,29 +132,13 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
   }
 }
 
-Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonRes({ ok: false, error: "method_not_allowed" }, 405);
 
-  const expectedKey = Deno.env.get("RUTEX_WORKER_RUNNER_KEY") || "";
-  const presentedKey = req.headers.get("x-worker-runner-key") || "";
-  if (expectedKey.length < 32) return jsonRes({ ok: false, error: "runner_not_configured" }, 503);
-  if (!constantTimeEqual(presentedKey, expectedKey)) return jsonRes({ ok: false, error: "unauthorized" }, 401);
-
   try {
-    const rawBody = await req.text();
-    if (new TextEncoder().encode(rawBody).byteLength > 4096) {
-      return jsonRes({ ok: false, error: "request_too_large" }, 413);
-    }
-    let body: unknown;
-    try {
-      body = JSON.parse(rawBody);
-    } catch {
-      return jsonRes({ ok: false, error: "invalid_json" }, 400);
-    }
-    const record = asRecord(body);
-    if (!record || Object.keys(record).some((key) => key !== "worker_id") || !isUuid(record.worker_id)) {
-      return jsonRes({ ok: false, error: "invalid_worker_id" }, 400);
-    }
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!token) return jsonRes({ ok: false, error: "missing_authorization" }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const serviceKey = Deno.env.get("RUTEX_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -158,6 +150,61 @@ Deno.serve(async (req: Request) => {
     const service: ServiceClient = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    const { data: { user }, error: authError } = await service.auth.getUser(token);
+    if (authError || !user) return jsonRes({ ok: false, error: "invalid_token" }, 401);
+
+    const rate = checkRateLimit(`worker-runner:${user.id}`, RATE_LIMITS.workerRegistry);
+    if (!rate.allowed) {
+      const retry = Math.max(1, Math.ceil((rate.retryAfterMs ?? 60_000) / 1000));
+      return jsonRes({ ok: false, error: "rate_limited", retry_after_seconds: retry }, 429);
+    }
+
+    const rawBody = await req.text();
+    if (new TextEncoder().encode(rawBody).byteLength > 4096) {
+      return jsonRes({ ok: false, error: "request_too_large" }, 413);
+    }
+    let body: unknown;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return jsonRes({ ok: false, error: "invalid_json" }, 400);
+    }
+    const record = asRecord(body);
+    if (!record || Object.keys(record).some((key) => !["worker_id", "task_id"].includes(key)) || !isUuid(record.worker_id)) {
+      return jsonRes({ ok: false, error: "invalid_worker_id" }, 400);
+    }
+    if (record.task_id !== undefined && !isUuid(record.task_id)) {
+      return jsonRes({ ok: false, error: "invalid_task_id" }, 400);
+    }
+
+    const { data: workerData, error: workerLookupError } = await service
+      .from("ai_workers")
+      .select("id, organization_id, created_by, status, version, definition")
+      .eq("id", record.worker_id)
+      .maybeSingle();
+    if (workerLookupError) return jsonRes({ ok: false, error: "worker_lookup_failed" }, 500);
+    if (!workerData) return jsonRes({ ok: false, error: "worker_not_found" }, 404);
+    if (workerData.status !== "active") return jsonRes({ ok: false, error: "worker_not_active" }, 409);
+
+    let membership: { role: string; joined_at: string | null } | null = null;
+    if (workerData.organization_id) {
+      const { data, error } = await service.from("organization_members")
+        .select("role, joined_at")
+        .eq("organization_id", workerData.organization_id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (error) return jsonRes({ ok: false, error: "membership_lookup_failed" }, 500);
+      membership = data;
+    }
+    if (!canEditWorker(user.id, workerData, membership?.joined_at ? { role: membership.role } : null)) {
+      return jsonRes({ ok: false, error: "worker_access_denied" }, 403);
+    }
+
+    const claimArgs = record.task_id
+      ? { p_worker_id: record.worker_id, p_task_id: record.task_id, p_lease_seconds: 120 }
+      : { p_worker_id: record.worker_id, p_lease_seconds: 120 };
+    const claimFunction = record.task_id ? "claim_ai_worker_task_for_task" : "claim_ai_worker_task";
+    const { data: claimData, error: claimError } = await service.rpc(claimFunction, claimArgs);
     const { data: claimData, error: claimError } = await service.rpc("claim_ai_worker_task", {
       p_worker_id: record.worker_id,
       p_lease_seconds: 120,
