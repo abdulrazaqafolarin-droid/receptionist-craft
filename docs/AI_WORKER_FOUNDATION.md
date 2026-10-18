@@ -101,7 +101,7 @@ A first, deliberately narrow executor now exists at worker-runner. It uses direc
 ## Latest concurrency and lease recovery hardening (2026-10-18)
 
 - Added migration `20261018000008_ai_worker_concurrency_limits.sql` with database-enforced ceilings of 50 running tasks globally, 3 per task creator, 10 per organization and 2 per worker. Advisory transaction locks make the claim boundary race-safe; a rejected claim remains queued.
-- The worker runner now invokes bounded expired-lease reconciliation before claiming work. Expired tasks are blocked with an unknown-outcome reason and are not automatically retried.
+- The worker runner now invokes bounded expired-lease reconciliation only for the already-authorized worker before claiming work, so a request cannot block another tenant's tasks. Expired tasks are blocked with an unknown-outcome reason and are not automatically retried.
 - Added PostgreSQL regression coverage for all four ceilings and verified that concurrency rejection does not change a queued task's state.
-- **Passed:** AI Worker contract CI run #387 on commit `0d8cfe941378a1916cecc2d75eb1703f47addcc9`; the Deno, PostgreSQL migration/RLS/concurrency tests, and frontend build/lint jobs passed. The separate browser smoke workflow is still running.
+- **Passed:** AI Worker contract CI run #392 on commit `aac7d14ad7e94ad53f65b89eb117fb393f10d2d3`; Deno checks/tests, PostgreSQL migration/RLS/concurrency tests, and frontend build/lint all passed. The separate browser smoke workflow is still running.
 - Capability-specific limits, model/token/cost budgets, active-request cancellation, staging integration and production migration reconciliation remain open.
