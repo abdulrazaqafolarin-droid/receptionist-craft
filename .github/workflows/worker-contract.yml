@@ -110,6 +110,14 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/worker_persistent_rate_limits.sql
+      - name: Apply draft-only publication gate migration
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20261018000006_worker_publish_draft_only.sql
+      - name: Verify unsupported actions cannot publish
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/worker_publish_draft_only.sql
 
   frontend-worker-ui:
     name: Build worker registry UI
