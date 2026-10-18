@@ -34,6 +34,7 @@ Deno.test("accepts a draft-only task with the declared required input", () => {
 Deno.test("blocks external actions, undeclared capabilities and unsupported modes", () => {
   const task = { goal: "Draft a message", input_json: { execution_mode: "draft", payload: { request: "Hello" } } };
   assert(!validateDraftTaskInput(definition(), { ...task, goal: "Send a message to the customer" }).ok, "send intent blocked");
+  assert(!validateDraftTaskInput(definition(), { ...task, goal: "Research competitor pricing" }).ok, "research intent blocked until a research adapter exists");
   assert(!validateDraftTaskInput(definition(), { ...task, input_json: { execution_mode: "execute", payload: { request: "Hello" } } }).ok, "non-draft mode blocked");
   const withCapability = { ...definition(), capability_keys: ["email.send"] };
   assert(!validateDraftTaskInput(withCapability, task).ok, "external capability blocked");
