@@ -9,7 +9,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseWorkerDefinition } from "../_shared/workerContract.ts";
-import { checkRateLimit, RATE_LIMITS } from "../_shared/rateLimiter.ts";
+import { RATE_LIMITS } from "../_shared/rateLimiter.ts";
+import { consumePersistentRateLimit } from "../_shared/persistentRateLimit.ts";
 import { canArchiveWorker, canCreateOrganizationWorker, canEditWorker, canReadWorker } from "../_shared/workerAccess.ts";
 
 type JsonRecord = Record<string, unknown>;
@@ -134,10 +135,11 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: authError } = await service.auth.getUser(token);
     if (authError || !user) return jsonRes({ ok: false, error: "invalid_token" }, 401, cors);
 
-    // Key by the verified user ID, never by an untrusted request field.
-    const rate = checkRateLimit(`worker-registry:${user.id}`, RATE_LIMITS.workerRegistry);
+    // Use the Supabase-verified user ID as the persistent bucket key.
+    const rate = await consumePersistentRateLimit(service, user.id, "worker-registry", RATE_LIMITS.workerRegistry);
+    if (!rate.available) return jsonRes({ ok: false, error: "rate_limiter_unavailable" }, 503, cors);
     if (!rate.allowed) {
-      const retryAfterSeconds = Math.max(1, Math.ceil((rate.retryAfterMs ?? 60_000) / 1000));
+      const retryAfterSeconds = rate.retryAfterSeconds;
       return jsonRes(
         { ok: false, error: "rate_limited", retry_after_seconds: retryAfterSeconds },
         429,
