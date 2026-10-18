@@ -150,5 +150,7 @@ jobs:
         run: npx tsc --noEmit --strict --skipLibCheck --target ES2022 --moduleResolution bundler --module ESNext src/integrations/supabase/types.ts
       - name: Build application
         run: npm run build
-      - name: Lint worker UI
-        run: npx eslint src/pages/Workers.tsx src/pages/WorkerWorkspace.tsx src/lib/workerDefinition.ts
+      - name: Test safe worker task recovery preparation
+        run: npx vitest run tests/workerTaskRecovery.test.ts
+      - name: Lint worker UI and recovery contract
+        run: npx eslint src/pages/Workers.tsx src/pages/WorkerWorkspace.tsx src/lib/workerDefinition.ts src/lib/workerTaskRecovery.ts tests/workerTaskRecovery.test.ts
