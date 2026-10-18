@@ -6,21 +6,29 @@ on:
     paths:
       - "src/**"
       - "tests/e2e/**"
+      - "supabase/functions/**"
+      - "supabase/migrations/**"
+      - "supabase/tests/**"
       - "playwright.config.ts"
       - "vite.config.ts"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/platform-e2e-smoke.yml"
+      - ".github/workflows/worker-contract.yml"
   push:
     branches: [main, feature/ai-worker-foundation-clean]
     paths:
       - "src/**"
       - "tests/e2e/**"
+      - "supabase/functions/**"
+      - "supabase/migrations/**"
+      - "supabase/tests/**"
       - "playwright.config.ts"
       - "vite.config.ts"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/platform-e2e-smoke.yml"
+      - ".github/workflows/worker-contract.yml"
   workflow_dispatch:
 
 permissions:
