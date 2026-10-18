@@ -291,20 +291,20 @@ Deno.serve(async (req: Request) => {
         return jsonRes({ ok: false, error: "invalid_worker_definition", details: parsed.errors }, 400, cors);
       }
 
-      const { data, error } = await service.from("ai_workers").insert({
-        organization_id: organizationId,
-        created_by: user.id,
-        name,
-        description: description.trim(),
-        status: "draft",
-        version: 1,
-        definition: parsed.value,
-      }).select("id, organization_id, created_by, name, description, status, version, definition, created_at, updated_at").single();
-
-      if (error || !data) {
-        return jsonRes({ ok: false, error: "worker_create_failed" }, 500, cors);
+      const { data, error } = await service.rpc("create_ai_worker_draft", {
+        p_actor_id: user.id,
+        p_organization_id: organizationId,
+        p_name: name,
+        p_description: description.trim(),
+        p_definition: parsed.value,
+      });
+      if (error) return jsonRes({ ok: false, error: "worker_create_failed" }, 500, cors);
+      const result = asRecord(data);
+      if (!result || result.ok !== true) {
+        const reason = result && typeof result.error === "string" ? result.error : "worker_create_failed";
+        return jsonRes({ ok: false, error: reason }, errorStatus(reason), cors);
       }
-      return jsonRes({ ok: true, worker: data }, 201, cors);
+      return jsonRes({ ok: true, worker: result.worker }, 201, cors);
     }
 
     if (action === "update_draft") {
@@ -332,18 +332,21 @@ Deno.serve(async (req: Request) => {
         return jsonRes({ ok: false, error: "invalid_description" }, 400, cors);
       }
 
-      const { data, error } = await service.from("ai_workers").update({
-        name,
-        description: description.trim(),
-        definition: parsed.value,
-        version: Number(worker.version) + 1,
-        updated_at: new Date().toISOString(),
-      }).eq("id", worker.id).eq("status", "draft").eq("version", worker.version)
-        .select("id, organization_id, created_by, name, description, status, version, definition, created_at, updated_at").maybeSingle();
-
+      const { data, error } = await service.rpc("update_ai_worker_draft", {
+        p_actor_id: user.id,
+        p_worker_id: worker.id,
+        p_expected_version: worker.version,
+        p_name: name,
+        p_description: description.trim(),
+        p_definition: parsed.value,
+      });
       if (error) return jsonRes({ ok: false, error: "worker_update_failed" }, 500, cors);
-      if (!data) return jsonRes({ ok: false, error: "worker_changed_concurrently" }, 409, cors);
-      return jsonRes({ ok: true, worker: data }, 200, cors);
+      const result = asRecord(data);
+      if (!result || result.ok !== true) {
+        const reason = result && typeof result.error === "string" ? result.error : "worker_update_failed";
+        return jsonRes({ ok: false, error: reason }, errorStatus(reason), cors);
+      }
+      return jsonRes({ ok: true, worker: result.worker }, 200, cors);
     }
 
     if (action === "archive") {
@@ -356,25 +359,18 @@ Deno.serve(async (req: Request) => {
       if (!canArchiveWorker(user.id, worker, archiveMembership)) {
         return jsonRes({ ok: false, error: "worker_archive_denied" }, 403, cors);
       }
-      const { count: activeTaskCount, error: activeTaskError } = await service
-        .from("ai_worker_tasks")
-        .select("id", { count: "exact", head: true })
-        .eq("worker_id", worker.id)
-        .in("status", ["running", "waiting_approval"]);
-      if (activeTaskError) return jsonRes({ ok: false, error: "active_task_lookup_failed" }, 500, cors);
-      if ((activeTaskCount || 0) > 0) {
-        return jsonRes({ ok: false, error: "active_tasks_must_be_resolved" }, 409, cors);
-      }
-      const { data, error } = await service.from("ai_workers").update({
-        status: "archived",
-        archived_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq("id", worker.id).neq("status", "archived")
-        .select("id, organization_id, name, status, version, archived_at, updated_at").maybeSingle();
-
+      const { data, error } = await service.rpc("archive_ai_worker", {
+        p_actor_id: user.id,
+        p_worker_id: worker.id,
+        p_expected_version: worker.version,
+      });
       if (error) return jsonRes({ ok: false, error: "worker_archive_failed" }, 500, cors);
-      if (!data) return jsonRes({ ok: false, error: "worker_already_archived" }, 409, cors);
-      return jsonRes({ ok: true, worker: data }, 200, cors);
+      const result = asRecord(data);
+      if (!result || result.ok !== true) {
+        const reason = result && typeof result.error === "string" ? result.error : "worker_archive_failed";
+        return jsonRes({ ok: false, error: reason }, errorStatus(reason), cors);
+      }
+      return jsonRes({ ok: true, worker: result.worker }, 200, cors);
     }
 
     return jsonRes({ ok: false, error: "unsupported_action" }, 400, cors);
