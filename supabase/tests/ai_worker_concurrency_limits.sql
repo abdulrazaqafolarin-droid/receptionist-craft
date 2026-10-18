@@ -11,6 +11,14 @@ BEGIN
   END IF;
 END $acl$;
 
+-- Earlier worker regression tests may intentionally leave a running task to
+-- test pause/cancellation gates. Reset those disposable fixtures so the global
+-- cap assertion is exact and independent of test ordering.
+UPDATE public.ai_worker_tasks
+SET status = 'blocked', lease_token = NULL, lease_expires_at = NULL,
+    error_text = 'concurrency test fixture reset', updated_at = now()
+WHERE status = 'running';
+
 -- Per-worker cap: two active tasks already occupy this worker.
 INSERT INTO auth.users(id) VALUES (md5('concurrency-worker-user')::uuid);
 INSERT INTO public.ai_workers(id, organization_id, created_by, name, description, status, version, definition, verified_version)
