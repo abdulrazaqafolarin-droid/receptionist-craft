@@ -199,12 +199,25 @@ Deno.serve(async (req: Request) => {
       return jsonRes({ ok: false, error: "worker_access_denied" }, 403);
     }
 
+    // Reconcile a bounded batch of expired leases before enforcing capacity.
+    // Expired tasks are blocked for manual reconciliation; they are never blindly retried.
+    const { error: recoveryError } = await service.rpc("block_expired_ai_worker_tasks", {
+      p_limit: 50,
+    });
+    if (recoveryError) return jsonRes({ ok: false, error: "task_recovery_unavailable" }, 503);
+
     const claimArgs = record.task_id
       ? { p_worker_id: record.worker_id, p_task_id: record.task_id, p_lease_seconds: 120 }
       : { p_worker_id: record.worker_id, p_lease_seconds: 120 };
     const claimFunction = record.task_id ? "claim_ai_worker_task_for_task" : "claim_ai_worker_task";
     const { data: claimData, error: claimError } = await service.rpc(claimFunction, claimArgs);
-    if (claimError) return jsonRes({ ok: false, error: "task_claim_failed" }, 500);
+    if (claimError) {
+      const message = typeof claimError.message === "string" ? claimError.message : "";
+      if (message.startsWith("worker_concurrency_limit_")) {
+        return jsonRes({ ok: false, error: message }, 409);
+      }
+      return jsonRes({ ok: false, error: "task_claim_failed" }, 500);
+    }
     const claim = asRecord(claimData);
     if (!claim || claim.ok !== true) {
       const reason = claim && typeof claim.error === "string" ? claim.error : "task_claim_rejected";
