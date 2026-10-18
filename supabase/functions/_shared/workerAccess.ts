@@ -51,3 +51,17 @@ export function canArchiveWorker(
   if (!membership) return false;
   return membership.role === "owner" || membership.role === "admin";
 }
+
+/** Publication/resume is an organization-level authorization decision.
+ * A personal worker belongs to its creator; a shared worker may only be
+ * activated or resumed by a joined owner/admin, even if a member authored it.
+ */
+export function canPublishWorker(
+  actorId: string,
+  worker: WorkerScope,
+  membership: ActiveWorkerMembership | null,
+): boolean {
+  if (!worker.organization_id) return worker.created_by === actorId;
+  if (!membership) return false;
+  return membership.role === "owner" || membership.role === "admin";
+}
