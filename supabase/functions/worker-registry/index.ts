@@ -1,10 +1,10 @@
 /**
  * worker-registry — authenticated lifecycle entry point for general AI Workers.
  *
- * The browser can read workers through RLS, but all writes pass through this
- * function so definition validation and lifecycle rules cannot be bypassed by
- * direct table updates. Publishing/activation is intentionally not implemented
- * until a test-and-verification pipeline exists.
+ * Browser reads are governed by RLS. Writes pass through this function and
+ * service-role-only SQL RPCs so validation, role checks, version checks and
+ * lifecycle audit events are enforced at the server boundary. Publication is
+ * restricted to the version-pinned, verified draft-only runner subset.
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
