@@ -56,6 +56,16 @@ function isUuid(value: unknown): value is string {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function lifecycleErrorStatus(error: string): number {
+  if (error === "worker_not_found") return 404;
+  if (error === "worker_access_denied" || error === "worker_archive_denied" ||
+      error === "organization_access_denied") return 403;
+  if (error === "invalid_worker_draft" || error === "invalid_archive_request") return 400;
+  if (error === "worker_changed_concurrently" || error === "only_drafts_can_be_edited" ||
+      error === "worker_already_archived" || error === "active_tasks_must_be_resolved") return 409;
+  return 500;
+}
+
 async function activeMembership(
   service: ServiceClient,
   organizationId: string,
@@ -302,7 +312,7 @@ Deno.serve(async (req: Request) => {
       const result = asRecord(data);
       if (!result || result.ok !== true) {
         const reason = result && typeof result.error === "string" ? result.error : "worker_create_failed";
-        return jsonRes({ ok: false, error: reason }, errorStatus(reason), cors);
+        return jsonRes({ ok: false, error: reason }, lifecycleErrorStatus(reason), cors);
       }
       return jsonRes({ ok: true, worker: result.worker }, 201, cors);
     }
@@ -344,7 +354,7 @@ Deno.serve(async (req: Request) => {
       const result = asRecord(data);
       if (!result || result.ok !== true) {
         const reason = result && typeof result.error === "string" ? result.error : "worker_update_failed";
-        return jsonRes({ ok: false, error: reason }, errorStatus(reason), cors);
+        return jsonRes({ ok: false, error: reason }, lifecycleErrorStatus(reason), cors);
       }
       return jsonRes({ ok: true, worker: result.worker }, 200, cors);
     }
@@ -368,7 +378,7 @@ Deno.serve(async (req: Request) => {
       const result = asRecord(data);
       if (!result || result.ok !== true) {
         const reason = result && typeof result.error === "string" ? result.error : "worker_archive_failed";
-        return jsonRes({ ok: false, error: reason }, errorStatus(reason), cors);
+        return jsonRes({ ok: false, error: reason }, lifecycleErrorStatus(reason), cors);
       }
       return jsonRes({ ok: true, worker: result.worker }, 200, cors);
     }
