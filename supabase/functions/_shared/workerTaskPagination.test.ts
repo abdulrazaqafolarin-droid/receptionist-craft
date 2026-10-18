@@ -10,8 +10,15 @@ Deno.test("task cursor round-trips a stable timestamp and UUID", () => {
   if (!cursor) throw new Error("valid task should produce a cursor");
   assertEquals(decodeTaskCursor(cursor), {
     id: task.id,
-    created_at: "2026-10-18T17:00:00.123Z",
+    created_at: "2026-10-18T17:00:00.123+00:00",
   });
+
+  const precise = encodeTaskCursor({
+    id: task.id,
+    created_at: "2026-10-18T17:00:00.123456+00:00",
+  });
+  if (!precise) throw new Error("microsecond timestamp should produce a cursor");
+  assertEquals(decodeTaskCursor(precise)?.created_at, "2026-10-18T17:00:00.123456+00:00");
 });
 
 Deno.test("task cursor rejects malformed, oversized and non-UUID payloads", () => {
