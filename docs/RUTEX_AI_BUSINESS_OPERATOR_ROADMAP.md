@@ -111,14 +111,16 @@ The current PR #52 branch contains:
 
 - [x] Add atomic task claiming with lease token, lease expiry, heartbeat and worker-version pinning (database primitives; not yet wired to a runner).
 - [x] Add evidence-gated finish, cooperative cancellation and expired-lease blocking rather than blind automatic retries (database primitives).
-- [ ] Add concurrency limits per user, organization, worker and capability; add global budget ceilings.
+- [x] Enforce database-backed concurrency ceilings: 50 global, 3 per task creator, 10 per organization and 2 per worker. Advisory transaction locks serialize claims so concurrent requests cannot race past the limits.
+- [ ] Add capability-specific concurrency and model/cost budgets when verified capability adapters exist.
 - [ ] Define the execution loop: load task and pinned definition → plan bounded steps → validate each proposed action → check capability and approval policy → execute through adapter → persist receipt/checkpoint → verify postcondition.
 - [ ] Persist a checkpoint before and after every external side effect. Do not retry an action with an unknown outcome unless its adapter proves idempotency or verifies whether it already occurred.
 - [ ] Enforce queued, running, waiting approval, blocked, failed, done and cancelled states. Every terminal state has a reason and timestamps.
 - [ ] Add retry classes: safe transient, permanent, rate-limited, needs user input, approval denied and unknown side-effect outcome. Unknown must stop for reconciliation, not auto-retry.
 - [ ] Enforce max steps, timeout, max retries, input/output byte limits, token/cost budgets and capability-specific quotas.
 - [ ] Validate outputs against declared schemas and success criteria; require adapter receipts or independent verification for completion claims.
-- [ ] Implement cooperative cancellation and lease recovery. Expired leases can be reclaimed only after resolving whether an action was in flight and whether its outcome is known.
+- [x] Reconcile expired task leases before each runner claim in bounded batches; tasks with unknown outcomes are blocked for review rather than blindly retried.
+- [ ] Improve cooperative cancellation during an active model request and add operator-visible recovery controls for blocked tasks.
 - [ ] Add a dead-letter/reconciliation path for stuck tasks and operator-visible diagnostics.
 
 **Exit gate:** chaos tests cover duplicate requests, process restarts, expired leases, network timeouts, unknown external outcomes, approval races, cancellation and stale checkpoints. No task is marked done based only on model prose.
@@ -193,7 +195,7 @@ The current PR #52 branch contains:
 1. Finish the current PR #52 CI cycle; fix every new task-runtime failure before adding more features.
 2. Re-run the isolated PostgreSQL task lifecycle test after each migration edit and inspect exact workflow logs.
 3. Verify the task API against authenticated staging only after migration-history reconciliation; no production DDL or deployment during this stage.
-4. Add stale verification-run reconciliation and organization/worker/capability budget ceilings; configure the draft runner secret in staging and exercise it end-to-end.
+4. Add capability-specific/model-cost budgets, configure the draft runner secret in staging, and exercise claim/heartbeat/cancel/recovery end-to-end.
 5. Implement capability adapters and worker verification before enabling activation.
 6. Extend the runner only through explicitly registered, typed, risk-classified adapters with approval gates.
 7. Integrate Director delegation only after retries, approval gates and evidence pass adversarial tests.
