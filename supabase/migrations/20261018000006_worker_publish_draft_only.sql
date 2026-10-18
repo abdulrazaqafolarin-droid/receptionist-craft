@@ -16,6 +16,7 @@ DECLARE
   v_worker public.ai_workers%ROWTYPE;
   v_run public.ai_worker_verification_runs%ROWTYPE;
   v_event text;
+  v_allowed boolean := false;
 BEGIN
   IF p_actor_id IS NULL OR p_worker_id IS NULL OR p_verification_run_id IS NULL
      OR p_expected_status IS NULL OR p_expected_status NOT IN ('draft', 'paused') THEN
@@ -28,6 +29,24 @@ BEGIN
   END IF;
   IF v_worker.status <> p_expected_status THEN
     RETURN jsonb_build_object('ok', false, 'error', 'worker_status_changed');
+  END IF;
+
+  -- Publication/resume is an owner/admin decision for shared workers, even
+  -- when an ordinary member authored the draft. Personal workers belong to
+  -- their creator. Keep this check inside the privileged transaction too.
+  IF v_worker.organization_id IS NULL THEN
+    v_allowed := v_worker.created_by = p_actor_id;
+  ELSE
+    SELECT EXISTS (
+      SELECT 1 FROM public.organization_members om
+      WHERE om.organization_id = v_worker.organization_id
+        AND om.user_id = p_actor_id
+        AND om.joined_at IS NOT NULL
+        AND om.role IN ('owner', 'admin')
+    ) INTO v_allowed;
+  END IF;
+  IF NOT v_allowed THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'worker_publish_denied');
   END IF;
 
   SELECT * INTO v_run FROM public.ai_worker_verification_runs
