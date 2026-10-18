@@ -11,6 +11,7 @@ import { canEditWorker } from "../_shared/workerAccess.ts";
 import { RATE_LIMITS } from "../_shared/rateLimiter.ts";
 import { consumePersistentRateLimit } from "../_shared/persistentRateLimit.ts";
 import { buildDraftPrompt, parseDraftModelOutput, validateDraftTaskInput } from "../_shared/workerDraftExecution.ts";
+import { classifyWorkerHeartbeat } from "../_shared/workerHeartbeat.ts";
 
 type JsonRecord = Record<string, unknown>;
 type ServiceClient = any;
@@ -23,6 +24,11 @@ interface ClaimedTask {
   lease_token: string;
   worker_version: number;
   execution_attempt_id: string;
+}
+
+interface ModelCallControl {
+  controller: AbortController;
+  abortReason: string | null;
 }
 
 function asRecord(value: unknown): JsonRecord | null {
@@ -74,9 +80,13 @@ async function finishTask(
   return result;
 }
 
-async function callGemini(prompt: string, apiKey: string): Promise<string> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 65_000);
+async function callGemini(prompt: string, apiKey: string, control: ModelCallControl): Promise<string> {
+  const timer = setTimeout(() => {
+    if (!control.controller.signal.aborted) {
+      control.abortReason = "model_timeout";
+      control.controller.abort();
+    }
+  }, 65_000);
   try {
     const response = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
@@ -105,7 +115,7 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
             responseMimeType: "application/json",
           },
         }),
-        signal: controller.signal,
+        signal: control.controller.signal,
       },
     );
     if (!response.ok) throw new Error(`model_http_${response.status}`);
@@ -118,7 +128,9 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
     if (typeof first?.text !== "string" || !first.text.trim()) throw new Error("empty_model_output");
     return first.text;
   } catch (error) {
-    if (controller.signal.aborted) throw new Error("model_timeout");
+    if (control.controller.signal.aborted) {
+      throw new Error(control.abortReason || "model_request_aborted");
+    }
     if (error instanceof Error && /^(model_http_|empty_model_output)/.test(error.message)) throw error;
     throw new Error("model_request_failed");
   } finally {
@@ -255,27 +267,80 @@ Deno.serve(async (req: Request) => {
     if (!validation.ok) return await block(validation.error);
 
     const prompt = buildDraftPrompt(definition, { goal: task.goal, input_json: task.input_json }, validation.payload);
-    let modelText: string;
+    const modelControl: ModelCallControl = {
+      controller: new AbortController(),
+      abortReason: null,
+    };
+    let heartbeatStopped = false;
+    let heartbeatInFlight: Promise<void> | null = null;
+    const heartbeatTimer = setInterval(() => {
+      if (heartbeatStopped || heartbeatInFlight || modelControl.controller.signal.aborted) return;
+      heartbeatInFlight = (async () => {
+        const { data, error } = await service.rpc("heartbeat_ai_worker_task", {
+          p_task_id: task.id,
+          p_lease_token: task.lease_token,
+          p_lease_seconds: 120,
+        });
+        const outcome = classifyWorkerHeartbeat(data, Boolean(error));
+        if (outcome === "ok" || modelControl.controller.signal.aborted) return;
+        modelControl.abortReason = outcome;
+        modelControl.controller.abort();
+      })().catch(() => {
+        if (!modelControl.controller.signal.aborted) {
+          modelControl.abortReason = "unavailable";
+          modelControl.controller.abort();
+        }
+      }).finally(() => {
+        heartbeatInFlight = null;
+      });
+    }, 15_000);
+
+    let modelText: string | null = null;
+    let modelError: string | null = null;
     try {
-      modelText = await callGemini(prompt, geminiKey);
+      modelText = await callGemini(prompt, geminiKey, modelControl);
     } catch (error) {
-      const reason = error instanceof Error ? error.message : "model_request_failed";
+      modelError = error instanceof Error ? error.message : "model_request_failed";
+    } finally {
+      heartbeatStopped = true;
+      clearInterval(heartbeatTimer);
+      if (heartbeatInFlight) await heartbeatInFlight;
+    }
+
+    const executionFailure = modelControl.abortReason || modelError;
+    if (executionFailure === "cancellation_requested") {
+      await finishTask(service, task, "cancelled", null, null, null);
+      return jsonRes({ ok: true, task_id: task.id, status: "cancelled" }, 200);
+    }
+    if (executionFailure === "lease_lost") {
+      return jsonRes({ ok: false, task_id: task.id, error: "lease_lost" }, 409);
+    }
+    if (executionFailure === "unavailable") {
+      return jsonRes({ ok: false, task_id: task.id, error: "lease_heartbeat_failed" }, 503);
+    }
+    if (modelError || !modelText) {
+      const reason = executionFailure || "model_request_failed";
       await finishTask(service, task, "failed", null, null, reason.slice(0, 1000));
       return jsonRes({ ok: false, task_id: task.id, status: "failed", error: reason }, 502);
     }
 
-    const heartbeat = await service.rpc("heartbeat_ai_worker_task", {
+    // One final heartbeat closes the race where cancellation or lease expiry
+    // occurs after the last periodic heartbeat but before output persistence.
+    const finalHeartbeat = await service.rpc("heartbeat_ai_worker_task", {
       p_task_id: task.id,
       p_lease_token: task.lease_token,
       p_lease_seconds: 120,
     });
-    const heartbeatResult = asRecord(heartbeat.data);
-    if (heartbeat.error || !heartbeatResult || heartbeatResult.ok !== true) {
-      if (heartbeatResult?.error === "cancellation_requested") {
-        await finishTask(service, task, "cancelled", null, null, null);
-        return jsonRes({ ok: true, task_id: task.id, status: "cancelled" }, 200);
-      }
-      return jsonRes({ ok: false, task_id: task.id, error: "lease_heartbeat_failed" }, 409);
+    const finalOutcome = classifyWorkerHeartbeat(finalHeartbeat.data, Boolean(finalHeartbeat.error));
+    if (finalOutcome === "cancellation_requested") {
+      await finishTask(service, task, "cancelled", null, null, null);
+      return jsonRes({ ok: true, task_id: task.id, status: "cancelled" }, 200);
+    }
+    if (finalOutcome === "lease_lost") {
+      return jsonRes({ ok: false, task_id: task.id, error: "lease_lost" }, 409);
+    }
+    if (finalOutcome !== "ok") {
+      return jsonRes({ ok: false, task_id: task.id, error: "lease_heartbeat_failed" }, 503);
     }
 
     const output = parseDraftModelOutput(modelText, definition);
