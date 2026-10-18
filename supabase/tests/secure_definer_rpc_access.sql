@@ -263,8 +263,11 @@ BEGIN
   result_json := to_jsonb(result);
   IF result.id <> '66666666-6666-4666-8666-666666666666'
      OR result.customer_name <> 'Token Customer'
-     OR result.customer_email <> 'customer@example.test' THEN
+     OR result.service <> 'Test service' THEN
     RAISE EXCEPTION 'safe appointment lookup must return the required public display fields';
+  END IF;
+  IF result_json ? 'customer_phone' OR result_json ? 'customer_email' THEN
+    RAISE EXCEPTION 'public appointment lookup must not expose customer contact details';
   END IF;
   IF result_json ? 'cancellation_token' OR result_json ? 'confirmation_token' THEN
     RAISE EXCEPTION 'safe appointment lookup must not disclose either stored action token';
