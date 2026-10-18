@@ -17,6 +17,16 @@ CREATE INDEX IF NOT EXISTS idx_ai_worker_tasks_expired_leases
   ON public.ai_worker_tasks(lease_expires_at)
   WHERE status = 'running' AND lease_expires_at IS NOT NULL;
 
+-- Lease tokens and execution internals are not readable by browser roles.
+-- Clients keep read access to the task fields needed for history and workspace UI.
+REVOKE ALL ON public.ai_worker_tasks FROM PUBLIC, anon, authenticated;
+GRANT SELECT (
+  id, worker_id, created_by, title, goal, status, input_json, output_json,
+  error_text, attempt_count, checkpoint_json, started_at, finished_at,
+  created_at, updated_at, idempotency_key, approval_request, approved_by,
+  approved_at, cancel_requested_at
+) ON public.ai_worker_tasks TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.claim_ai_worker_task(
   p_worker_id uuid,
   p_lease_seconds integer DEFAULT 90
@@ -167,7 +177,8 @@ BEGIN
     IF v_task.cancel_requested_at IS NOT NULL THEN
       RETURN jsonb_build_object('ok', false, 'error', 'cancellation_requested');
     END IF;
-    IF jsonb_typeof(p_evidence) <> 'array'
+    IF p_evidence IS NULL
+       OR jsonb_typeof(p_evidence) <> 'array'
        OR jsonb_array_length(p_evidence) < 1
        OR jsonb_array_length(p_evidence) > 20
        OR pg_column_size(p_evidence) > 32768 THEN
@@ -179,6 +190,7 @@ BEGIN
       v_summary := v_evidence_item ->> 'summary';
       v_reference := v_evidence_item ->> 'reference';
       IF jsonb_typeof(v_evidence_item) <> 'object'
+         OR v_kind IS NULL
          OR v_kind NOT IN ('source', 'action_receipt', 'verification')
          OR v_summary IS NULL OR length(btrim(v_summary)) NOT BETWEEN 1 AND 1000
          OR v_reference IS NULL OR length(btrim(v_reference)) NOT BETWEEN 1 AND 500 THEN
