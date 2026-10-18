@@ -8,6 +8,9 @@ on:
       - "supabase/tests/secure_definer_rpc_access.sql"
       - ".github/workflows/secure-definer-rpc-access.yml"
       - "supabase/functions/appointment-action/**"
+      - "src/pages/ConfirmAppointment.tsx"
+      - "src/pages/CancelAppointment.tsx"
+      - "src/integrations/supabase/types.ts"
   push:
     branches: [main, fix/security-definer-rpc-access]
     paths:
@@ -15,6 +18,9 @@ on:
       - "supabase/tests/secure_definer_rpc_access.sql"
       - ".github/workflows/secure-definer-rpc-access.yml"
       - "supabase/functions/appointment-action/**"
+      - "src/pages/ConfirmAppointment.tsx"
+      - "src/pages/CancelAppointment.tsx"
+      - "src/integrations/supabase/types.ts"
 
 permissions:
   contents: read
@@ -136,3 +142,19 @@ jobs:
         run: deno check supabase/functions/appointment-action/index.ts
       - name: Test appointment action authorization policy
         run: deno test supabase/functions/appointment-action/authorization.test.ts
+  frontend-appointment-token-pages:
+    name: Build safe appointment token pages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build application
+        run: npm run build
+      - name: Lint changed appointment pages
+        run: npx eslint src/pages/ConfirmAppointment.tsx src/pages/CancelAppointment.tsx
