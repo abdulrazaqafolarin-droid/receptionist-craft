@@ -72,7 +72,8 @@ The current PR #52 branch contains:
 - [x] Add atomic lifecycle audit records for draft create/edit/archive, verification-run start/pass/failure, activation and pause/resume; these append in the same transaction as the worker/run mutation.
 - [ ] Add stale verification-run reconciliation for unexpected Edge Function termination.
 - [x] Add persistent atomic per-user/per-endpoint rate limiting for the worker registry, task API, verifier and runner. Organization-wide, worker-wide and capability-wide budget enforcement remains pending.
-- [ ] Add task pagination and retention policy for outputs, events and large evidence payloads.
+- [x] Add stable cursor pagination to the worker task list API and workspace load-more UI.
+- [ ] Define retention/redaction policy for outputs, task events and large evidence payloads.
 - [ ] Add integration tests for cross-tenant access, concurrent duplicate creation, stale approvals, retries and concurrent cancel/approve races.
 
 **Exit gate:** transitions are atomic, idempotent and scope-checked; task state cannot be changed directly by clients; tests cover concurrent and adversarial cases.
