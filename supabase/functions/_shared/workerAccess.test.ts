@@ -2,6 +2,7 @@ import {
   canArchiveWorker,
   canCreateOrganizationWorker,
   canEditWorker,
+  canPublishWorker,
   canReadWorker,
   type WorkerScope,
 } from "./workerAccess.ts";
@@ -27,6 +28,15 @@ Deno.test("active organization creator can edit but not archive as a member", ()
   assert(canReadWorker("user-a", organizationWorker, member), "active creator can read");
   assert(canEditWorker("user-a", organizationWorker, member), "active creator can edit");
   assert(!canArchiveWorker("user-a", organizationWorker, member), "member creator cannot archive org worker");
+});
+
+Deno.test("only a joined organization owner or admin may publish or resume", () => {
+  assert(!canPublishWorker("user-a", organizationWorker, member), "member creator cannot publish shared worker");
+  assert(canPublishWorker("user-b", organizationWorker, admin), "organization admin may publish shared worker");
+  assert(!canPublishWorker("user-b", organizationWorker, viewer), "viewer cannot publish shared worker");
+  assert(!canPublishWorker("user-a", organizationWorker, null), "former member cannot publish shared worker");
+  assert(canPublishWorker("user-a", personal, null), "personal creator may publish personal worker");
+  assert(!canPublishWorker("user-b", personal, admin), "organization admin cannot publish another user's personal worker");
 });
 
 Deno.test("organization admins can edit and archive shared workers", () => {
