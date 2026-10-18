@@ -92,11 +92,12 @@ The current PR #52 branch contains:
 
 ### Phase 3 — Worker verification and publication
 
-- [ ] Build a verifier that checks worker contract, capability keys, schemas, action/risk compatibility, approval rules, execution budgets and evidence requirements.
-- [ ] Generate bounded test suites from declared success criteria, including negative and permission-denial tests.
-- [ ] Run tests with mocked or read-only capabilities in an isolated environment; never send real messages or mutate production data in a test.
-- [ ] Store durable verification runs with exact worker version, test inputs, outcomes, evidence, failure classifications and runtime version.
-- [ ] Require mandatory tests to pass and an authorized owner/admin to approve publication.
+- [x] Build and enforce a draft-only verifier for worker contract, schemas, supervised mode, current action allowlist, no external capability keys, no file I/O, and version-pinned verification.
+- [ ] Extend verification to catalogued capability risk/approval compatibility, per-capability budgets, negative/permission-denial tests and adapter evidence.
+- [x] Run bounded synthetic-input/output tests in isolated CI; no real messages or production data are mutated by verification.
+- [x] Store durable verification runs with exact worker version, definition hash/snapshot, model, test outcomes, summary and timestamps.
+- [ ] Add explicit failure classifications, runtime version, full bounded test inputs and stale-run reconciliation.
+- [x] Require current verification to pass and an authorized organization owner/admin to approve shared-worker publication; personal workers require their creator.
 - [ ] Publish immutable worker versions; edits to an active worker create a new draft version and do not silently mutate a running task's contract.
 - [ ] Support pause, rollback to a prior version and emergency disable with audit history.
 - [x] Gate publication on current passed verification and version-pinned definitions for the draft-only subset.
