@@ -117,6 +117,9 @@ export default function WorkerWorkspace() {
   const [worker, setWorker] = useState<WorkerDetails | null>(null);
   const [verification, setVerification] = useState<VerificationRecord | null>(null);
   const [tasks, setTasks] = useState<WorkerTask[]>([]);
+  const [nextTaskCursor, setNextTaskCursor] = useState<string | null>(null);
+  const [hasMoreTasks, setHasMoreTasks] = useState(false);
+  const [loadingMoreTasks, setLoadingMoreTasks] = useState(false);
   const [lifecycleEvents, setLifecycleEvents] = useState<WorkerLifecycleEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -147,15 +150,32 @@ export default function WorkerWorkspace() {
     if (id) void loadWorker(id);
   }, [id]);
 
-  async function loadTasks(workerId: string) {
-    const { data, error } = await supabase.functions.invoke("worker-tasks", {
-      body: { action: "list", worker_id: workerId },
-    });
-    if (error || !data?.ok) {
-      setTasks([]);
-      return;
+  async function loadTasks(workerId: string, cursor?: string, append = false) {
+    if (append) setLoadingMoreTasks(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("worker-tasks", {
+        body: { action: "list", worker_id: workerId, limit: 50, ...(cursor ? { cursor } : {}) },
+      });
+      if (error || !data?.ok) {
+        if (!append) {
+          setTasks([]);
+          setNextTaskCursor(null);
+          setHasMoreTasks(false);
+        }
+        toast.error(data?.error || error?.message || "Unable to load worker tasks.");
+        return;
+      }
+      const page = Array.isArray(data.tasks) ? data.tasks as WorkerTask[] : [];
+      setTasks((current) => {
+        if (!append) return page;
+        const known = new Set(current.map((task) => task.id));
+        return [...current, ...page.filter((task) => !known.has(task.id))];
+      });
+      setNextTaskCursor(typeof data.next_cursor === "string" ? data.next_cursor : null);
+      setHasMoreTasks(data.has_more === true && typeof data.next_cursor === "string");
+    } finally {
+      if (append) setLoadingMoreTasks(false);
     }
-    setTasks(Array.isArray(data.tasks) ? data.tasks as WorkerTask[] : []);
   }
 
   async function loadLifecycleEvents(workerId: string) {
@@ -702,6 +722,19 @@ export default function WorkerWorkspace() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+            {hasMoreTasks && nextTaskCursor && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadTasks(worker.id, nextTaskCursor, true)}
+                  disabled={loadingMoreTasks}
+                >
+                  {loadingMoreTasks ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Load more tasks
+                </Button>
               </div>
             )}
           </div>
