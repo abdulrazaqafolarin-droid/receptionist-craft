@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, Bot, Loader2, Save, Archive, ShieldCheck, Plug, ClipboardList,
-  Rocket, RefreshCw, Pause, Play, CheckCircle2, AlertTriangle, Clock,
+  Rocket, RefreshCw, Pause, Play, CheckCircle2, AlertTriangle, Clock, History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -79,6 +79,15 @@ interface WorkerTask {
   updated_at: string;
 }
 
+interface WorkerLifecycleEvent {
+  id: string;
+  event_type: string;
+  from_status: string;
+  to_status: string;
+  details: unknown;
+  created_at: string;
+}
+
 function defaultPayload(definition: WorkerDefinitionView): string {
   const payload: Record<string, unknown> = {};
   for (const field of definition.inputs || []) {
@@ -108,6 +117,7 @@ export default function WorkerWorkspace() {
   const [worker, setWorker] = useState<WorkerDetails | null>(null);
   const [verification, setVerification] = useState<VerificationRecord | null>(null);
   const [tasks, setTasks] = useState<WorkerTask[]>([]);
+  const [lifecycleEvents, setLifecycleEvents] = useState<WorkerLifecycleEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [archiving, setArchiving] = useState(false);
@@ -148,6 +158,20 @@ export default function WorkerWorkspace() {
     setTasks(Array.isArray(data.tasks) ? data.tasks as WorkerTask[] : []);
   }
 
+  async function loadLifecycleEvents(workerId: string) {
+    const { data, error } = await supabase
+      .from("ai_worker_lifecycle_events")
+      .select("id, event_type, from_status, to_status, details, created_at")
+      .eq("worker_id", workerId)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) {
+      setLifecycleEvents([]);
+      return;
+    }
+    setLifecycleEvents(Array.isArray(data) ? data as WorkerLifecycleEvent[] : []);
+  }
+
   async function loadWorker(workerId: string) {
     setLoading(true);
     try {
@@ -165,6 +189,7 @@ export default function WorkerWorkspace() {
       const workerDefinition = record.definition as WorkerDefinitionView;
       setPurpose(workerDefinition?.purpose || "");
       setTaskPayload(defaultPayload(workerDefinition || {}));
+      await loadLifecycleEvents(workerId);
       if (record.status === "active" || record.status === "paused") {
         await loadTasks(workerId);
       } else {
@@ -559,6 +584,42 @@ export default function WorkerWorkspace() {
           )}
           {!draftRunnerReady && worker.status === "draft" && (
             <p className="text-sm text-amber-600">This definition includes actions or capabilities that the current draft-only runner cannot execute. It will not be publishable until a matching capability adapter exists.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/60 bg-card/70 backdrop-blur-xl">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><History className="h-5 w-5" /> Lifecycle audit</CardTitle>
+          <CardDescription>Append-only records of worker definition changes, verification and lifecycle transitions.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {lifecycleEvents.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No lifecycle events have been recorded for this worker yet.</p>
+          ) : (
+            <ol className="space-y-3">
+              {lifecycleEvents.map((event) => {
+                const details = event.details && typeof event.details === "object" && !Array.isArray(event.details)
+                  ? event.details as Record<string, unknown>
+                  : {};
+                const label = event.event_type.replace(/^worker_/, "").replaceAll("_", " ");
+                return (
+                  <li key={event.id} className="flex items-start gap-3 border-l border-border/70 pl-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium capitalize">{label}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {event.from_status} → {event.to_status}
+                        {typeof details.version === "number" ? " · version " + details.version : ""}
+                        {typeof details.test_count === "number" ? " · " + details.test_count + " checks" : ""}
+                      </p>
+                    </div>
+                    <time className="shrink-0 text-xs text-muted-foreground" dateTime={event.created_at}>
+                      {new Date(event.created_at).toLocaleString()}
+                    </time>
+                  </li>
+                );
+              })}
+            </ol>
           )}
         </CardContent>
       </Card>
