@@ -1,4 +1,4 @@
-name: Director client table privilege regression
+name: Public table privilege regression
 
 on:
   pull_request:
@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 jobs:
-  director-client-table-privileges:
+  public-table-privileges:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -45,25 +45,44 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
-      - name: Create representative Director tables with broad legacy grants
+      - name: Create representative roles, tables, and broad legacy defaults
         run: |
           psql -v ON_ERROR_STOP=1 <<'SQL'
           CREATE ROLE anon NOLOGIN;
           CREATE ROLE authenticated NOLOGIN;
           CREATE ROLE service_role NOLOGIN;
+          CREATE ROLE supabase_admin NOLOGIN;
+          GRANT CREATE, USAGE ON SCHEMA public TO supabase_admin;
 
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+            GRANT ALL ON TABLES TO anon, authenticated, service_role;
+          ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
+            GRANT ALL ON TABLES TO anon, authenticated, service_role;
+
+          CREATE TABLE public.appointments (id uuid PRIMARY KEY);
+          CREATE TABLE public.director_tasks (id uuid PRIMARY KEY);
           CREATE TABLE public.director_commands (id uuid PRIMARY KEY, user_id uuid NOT NULL, status text NOT NULL);
           CREATE TABLE public.director_messages (id uuid PRIMARY KEY, thread_id uuid NOT NULL, content text NOT NULL);
           CREATE TABLE public.director_threads (id uuid PRIMARY KEY, user_id uuid NOT NULL, title text NOT NULL);
 
+          ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE public.director_tasks ENABLE ROW LEVEL SECURITY;
           ALTER TABLE public.director_commands ENABLE ROW LEVEL SECURITY;
           ALTER TABLE public.director_messages ENABLE ROW LEVEL SECURITY;
           ALTER TABLE public.director_threads ENABLE ROW LEVEL SECURITY;
 
-          GRANT ALL ON TABLE public.director_commands, public.director_messages, public.director_threads
-            TO PUBLIC, anon, authenticated, service_role;
+          GRANT ALL ON TABLE public.appointments, public.director_tasks, public.director_commands,
+            public.director_messages, public.director_threads TO PUBLIC, anon, authenticated, service_role;
           SQL
-      - name: Apply least-privilege migration
+      - name: Apply public table privilege hardening
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261020000001_restrict_director_client_table_ddl_privileges.sql
-      - name: Assert intended row access and no client DDL privileges
+      - name: Create future tables as both supported owners
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE public.future_postgres_table (id uuid PRIMARY KEY);
+          SET ROLE supabase_admin;
+          CREATE TABLE public.future_supabase_admin_table (id uuid PRIMARY KEY);
+          RESET ROLE;
+          SQL
+      - name: Assert current and future table privilege boundaries
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/director_client_table_privileges.sql
