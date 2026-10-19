@@ -13,6 +13,8 @@ import { RATE_LIMITS } from "../_shared/rateLimiter.ts";
 import { consumePersistentRateLimit } from "../_shared/persistentRateLimit.ts";
 import { canArchiveWorker, canCreateOrganizationWorker, canEditWorker, canPublishWorker, canReadWorker } from "../_shared/workerAccess.ts";
 
+import { readBoundedJsonBody } from "../_shared/boundedJsonBody.ts";
+
 type JsonRecord = Record<string, unknown>;
 type ServiceClient = any;
 
@@ -148,7 +150,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const body = asRecord(await req.json().catch(() => ({})));
+    const boundedBody = await readBoundedJsonBody(req);
+    if (!boundedBody.ok) {
+      return jsonRes({ ok: false, error: boundedBody.error }, boundedBody.status, cors);
+    }
+    const body = asRecord(boundedBody.value);
     if (!body) return jsonRes({ ok: false, error: "invalid_body" }, 400, cors);
     const action = typeof body.action === "string" ? body.action : "";
 

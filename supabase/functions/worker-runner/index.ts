@@ -13,6 +13,8 @@ import { consumePersistentRateLimit } from "../_shared/persistentRateLimit.ts";
 import { buildDraftPrompt, parseDraftModelOutput, validateDraftTaskInput } from "../_shared/workerDraftExecution.ts";
 import { classifyWorkerHeartbeat } from "../_shared/workerHeartbeat.ts";
 
+import { readBoundedJsonBody } from "../_shared/boundedJsonBody.ts";
+
 type JsonRecord = Record<string, unknown>;
 type ServiceClient = any;
 
@@ -170,17 +172,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const rawBody = await req.text();
-    if (new TextEncoder().encode(rawBody).byteLength > 4096) {
-      return jsonRes({ ok: false, error: "request_too_large" }, 413);
+    const boundedBody = await readBoundedJsonBody(req, 4096);
+    if (!boundedBody.ok) {
+      return jsonRes({ ok: false, error: boundedBody.error }, boundedBody.status);
     }
-    let body: unknown;
-    try {
-      body = JSON.parse(rawBody);
-    } catch {
-      return jsonRes({ ok: false, error: "invalid_json" }, 400);
-    }
-    const record = asRecord(body);
+    const record = asRecord(boundedBody.value);
     if (!record || Object.keys(record).some((key) => !["worker_id", "task_id"].includes(key)) || !isUuid(record.worker_id)) {
       return jsonRes({ ok: false, error: "invalid_worker_id" }, 400);
     }
