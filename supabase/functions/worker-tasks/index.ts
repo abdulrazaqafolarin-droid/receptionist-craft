@@ -158,7 +158,19 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const body = asRecord(await req.json().catch(() => ({})));
+    // Bound request bodies before JSON parsing to prevent oversized payloads from
+    // consuming unbounded memory/CPU in this authenticated endpoint.
+    const rawBody = await req.text();
+    if (new TextEncoder().encode(rawBody).byteLength > 64 * 1024) {
+      return jsonRes({ ok: false, error: "request_too_large" }, 413, cors);
+    }
+    let parsedBody: unknown;
+    try {
+      parsedBody = JSON.parse(rawBody);
+    } catch {
+      return jsonRes({ ok: false, error: "invalid_json" }, 400, cors);
+    }
+    const body = asRecord(parsedBody);
     if (!body) return jsonRes({ ok: false, error: "invalid_body" }, 400, cors);
     const action = typeof body.action === "string" ? body.action : "";
 
