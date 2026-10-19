@@ -1,0 +1,88 @@
+name: Server-only RPC privilege regression
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/*harden_server_rpc_execute_privileges.sql"
+      - "supabase/tests/server_rpc_execute_privileges.sql"
+      - ".github/workflows/server-rpc-privileges.yml"
+  push:
+    branches: [fix/server-only-rpc-execute-privileges]
+    paths:
+      - "supabase/migrations/*harden_server_rpc_execute_privileges.sql"
+      - "supabase/tests/server_rpc_execute_privileges.sql"
+      - ".github/workflows/server-rpc-privileges.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  server-rpc-privileges:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rutex_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rutex_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: rutex_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+      - name: Bootstrap representative server-only RPCs and broad legacy defaults
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          CREATE ROLE supabase_admin NOLOGIN;
+          GRANT CREATE, USAGE ON SCHEMA public TO supabase_admin;
+
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+            GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
+          ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
+            GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
+
+          CREATE FUNCTION public.cleanup_old_booking_suggestions(integer) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 0 $$;
+          CREATE FUNCTION public.cleanup_old_chat_messages(integer) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 0 $$;
+          CREATE FUNCTION public.cleanup_old_conversation_state(integer) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 0 $$;
+          CREATE FUNCTION public.cleanup_old_conversations(integer) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 0 $$;
+          CREATE FUNCTION public.deduct_stock(uuid, integer) RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $$ SELECT '{}'::jsonb $$;
+          CREATE FUNCTION public.insert_booking_suggestion(uuid, text, jsonb, text, integer) RETURNS uuid LANGUAGE sql SECURITY DEFINER AS $$ SELECT NULL::uuid $$;
+          CREATE FUNCTION public.insert_conversion_event(uuid, text, text, numeric, text, jsonb) RETURNS uuid LANGUAGE sql SECURITY DEFINER AS $$ SELECT NULL::uuid $$;
+          CREATE FUNCTION public.upsert_conversation_state(uuid, text, text, text, text, double precision, jsonb) RETURNS uuid LANGUAGE sql SECURITY DEFINER AS $$ SELECT NULL::uuid $$;
+          CREATE FUNCTION public.upsert_conversation_summary(uuid, text, text, jsonb, text) RETURNS uuid LANGUAGE sql SECURITY DEFINER AS $$ SELECT NULL::uuid $$;
+          CREATE FUNCTION public.create_widget_appointment(uuid, text, text, timestamptz, timestamptz, text, text, uuid, text, text, text, jsonb)
+            RETURNS TABLE(id uuid, cancellation_token text, confirmation_token text)
+            LANGUAGE sql SECURITY DEFINER AS $$ SELECT NULL::uuid, NULL::text, NULL::text $$;
+
+          GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO PUBLIC, anon, authenticated, service_role;
+          SQL
+      - name: Apply server-only RPC and default privilege hardening
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261020000002_harden_server_rpc_execute_privileges.sql
+      - name: Create future functions as both supported owners
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE FUNCTION public.future_postgres_rpc() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+          SET ROLE supabase_admin;
+          CREATE FUNCTION public.future_supabase_admin_rpc() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+          RESET ROLE;
+          SQL
+      - name: Assert explicit server-only execution grants
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/server_rpc_execute_privileges.sql
