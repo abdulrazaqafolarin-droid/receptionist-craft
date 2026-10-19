@@ -10,6 +10,8 @@ import { consumePersistentRateLimit } from "../_shared/persistentRateLimit.ts";
 import { buildDraftPrompt, parseDraftModelOutput, validateDraftTaskInput } from "../_shared/workerDraftExecution.ts";
 import { draftPublicationBlockReason, hashWorkerDefinition, makeVerificationPayload } from "../_shared/workerVerification.ts";
 
+import { readBoundedJsonBody } from "../_shared/boundedJsonBody.ts";
+
 type JsonRecord = Record<string, unknown>;
 type ServiceClient = any;
 
@@ -127,11 +129,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const raw = await req.text();
-    if (new TextEncoder().encode(raw).byteLength > 4096) return jsonRes({ ok: false, error: "request_too_large" }, 413);
-    let body: unknown;
-    try { body = JSON.parse(raw); } catch { return jsonRes({ ok: false, error: "invalid_json" }, 400); }
-    const record = asRecord(body);
+    const boundedBody = await readBoundedJsonBody(req, 4096);
+    if (!boundedBody.ok) {
+      return jsonRes({ ok: false, error: boundedBody.error }, boundedBody.status);
+    }
+    const record = asRecord(boundedBody.value);
     if (!record || record.action !== "verify" || !isUuid(record.worker_id) ||
         Object.keys(record).some((key) => !["action", "worker_id"].includes(key))) {
       return jsonRes({ ok: false, error: "invalid_verification_request" }, 400);
