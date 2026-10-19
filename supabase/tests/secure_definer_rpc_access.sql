@@ -357,6 +357,15 @@ BEGIN
   IF result->>'ok' <> 'true' THEN
     RAISE EXCEPTION 'owner should be able to restore their own config';
   END IF;
+  IF (
+    SELECT approved_by
+    FROM public.config_versions
+    WHERE receptionist_id = '22222222-2222-4222-8222-222222222222'
+    ORDER BY version_number DESC
+    LIMIT 1
+  ) IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'config revert audit must record the authenticated owner, not the receptionist id';
+  END IF;
   IF (SELECT business_name FROM public.receptionists WHERE id = '22222222-2222-4222-8222-222222222222') <> 'Restored Business'
      OR (SELECT tone::text FROM public.receptionists WHERE id = '22222222-2222-4222-8222-222222222222') <> 'playful'
      OR (SELECT hours_of_operation->'monday'->>'open' FROM public.receptionists WHERE id = '22222222-2222-4222-8222-222222222222') <> '09:00'
