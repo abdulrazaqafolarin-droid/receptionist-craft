@@ -158,15 +158,40 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Bound request bodies before JSON parsing to prevent oversized payloads from
-    // consuming unbounded memory/CPU in this authenticated endpoint.
-    const rawBody = await req.text();
-    if (new TextEncoder().encode(rawBody).byteLength > 64 * 1024) {
+    // Reject oversized bodies before buffering or JSON parsing. Content-Length is
+    // only an early hint; the streaming byte count is authoritative.
+    const maxBodyBytes = 64 * 1024;
+    const contentLength = req.headers.get("content-length");
+    if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBodyBytes) {
       return jsonRes({ ok: false, error: "request_too_large" }, 413, cors);
+    }
+    if (!req.body) return jsonRes({ ok: false, error: "invalid_json" }, 400, cors);
+    const reader = req.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBodyBytes) {
+        try {
+          await reader.cancel();
+        } catch {
+          // The request may already be closed; the size limit still applies.
+        }
+        return jsonRes({ ok: false, error: "request_too_large" }, 413, cors);
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
     }
     let parsedBody: unknown;
     try {
-      parsedBody = JSON.parse(rawBody);
+      parsedBody = JSON.parse(new TextDecoder().decode(bytes));
     } catch {
       return jsonRes({ ok: false, error: "invalid_json" }, 400, cors);
     }
