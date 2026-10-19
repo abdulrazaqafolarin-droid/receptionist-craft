@@ -3,6 +3,8 @@ name: AI Worker contract
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [fix/worker-tasks-body-size-limit]
   workflow_dispatch:
 
 permissions:
