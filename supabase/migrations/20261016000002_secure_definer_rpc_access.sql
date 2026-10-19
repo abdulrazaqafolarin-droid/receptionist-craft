@@ -259,7 +259,7 @@ BEGIN
   ) VALUES (
     p_receptionist_id, v_new_version, v_target.config_json, v_target.plan_text,
     'owner_revert', 'Reverted to version ' || p_target_version,
-    p_receptionist_id, now()
+    auth.uid(), now()
   );
 
   RETURN jsonb_build_object('ok', true, 'reverted_to', p_target_version, 'new_version', v_new_version);
