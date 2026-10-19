@@ -10,8 +10,6 @@ interface AppointmentData {
   service: string;
   start_time: string;
   customer_name: string;
-  customer_phone?: string | null;
-  customer_email?: string | null;
   [key: string]: unknown;
 }
 
@@ -39,7 +37,7 @@ export default function ConfirmAppointment() {
     try {
       // Use the secure RPC function that works without auth
       const { data, error: rpcError } = await supabase
-        .rpc("get_appointment_by_token", { p_token: token });
+        .rpc("get_public_appointment_by_token", { p_token: token });
 
       if (rpcError) throw rpcError;
 
@@ -166,12 +164,6 @@ export default function ConfirmAppointment() {
               minute: '2-digit'
             }) : "Unknown"}</p>
             <p><strong>Customer:</strong> {appointment?.customer_name ?? "Unknown"}</p>
-            {appointment?.customer_phone && (
-              <p><strong>Phone:</strong> {appointment.customer_phone}</p>
-            )}
-            {appointment?.customer_email && (
-              <p><strong>Email:</strong> {appointment.customer_email}</p>
-            )}
           </div>
 
           <Button 

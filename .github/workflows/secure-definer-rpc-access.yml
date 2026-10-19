@@ -1,0 +1,160 @@
+name: Security definer RPC access regression
+# Uses a local disposable PostgreSQL service installed on the runner.
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/*secure_definer_rpc_access.sql"
+      - "supabase/tests/secure_definer_rpc_access.sql"
+      - ".github/workflows/secure-definer-rpc-access.yml"
+      - "supabase/functions/appointment-action/**"
+      - "src/pages/ConfirmAppointment.tsx"
+      - "src/pages/CancelAppointment.tsx"
+      - "src/integrations/supabase/types.ts"
+  push:
+    branches: [main, fix/security-definer-rpc-access]
+    paths:
+      - "supabase/migrations/*secure_definer_rpc_access.sql"
+      - "supabase/tests/secure_definer_rpc_access.sql"
+      - ".github/workflows/secure-definer-rpc-access.yml"
+      - "supabase/functions/appointment-action/**"
+      - "src/pages/ConfirmAppointment.tsx"
+      - "src/pages/CancelAppointment.tsx"
+      - "src/integrations/supabase/types.ts"
+
+permissions:
+  contents: read
+
+jobs:
+  security-definer-rpc-access:
+    runs-on: ubuntu-latest
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: rutex_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and start PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql postgresql-client
+          sudo service postgresql start
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          sudo -u postgres createdb rutex_test
+      - name: Create minimal representative schema
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          CREATE SCHEMA auth;
+          CREATE SCHEMA extensions;
+          CREATE SCHEMA cron;
+          CREATE TABLE cron.job (jobname text);
+          CREATE FUNCTION cron.unschedule(text) RETURNS boolean LANGUAGE sql AS $fn$ SELECT true $fn$;
+          CREATE FUNCTION cron.schedule(text, text, text) RETURNS bigint LANGUAGE sql AS $fn$ SELECT 1::bigint $fn$;
+          CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
+            $fn$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $fn$;
+          CREATE FUNCTION extensions.gen_random_bytes(integer) RETURNS bytea
+            LANGUAGE sql IMMUTABLE AS
+            $fn$ SELECT decode(repeat('ab', $1), 'hex') $fn$;
+          CREATE TYPE public.receptionist_tone AS ENUM ('friendly', 'professional', 'playful');
+          CREATE TYPE public.app_role AS ENUM ('owner', 'admin', 'member', 'viewer');
+          CREATE TABLE public.director_tasks (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL, status text NOT NULL DEFAULT 'queued');
+          CREATE TABLE public.organization_members (
+            user_id uuid NOT NULL, organization_id uuid NOT NULL, role public.app_role NOT NULL
+          );
+          CREATE FUNCTION public.get_user_org_ids(_user_id uuid) RETURNS SETOF uuid LANGUAGE sql STABLE AS $fn$ SELECT organization_id FROM public.organization_members WHERE user_id = _user_id $fn$;
+          CREATE FUNCTION public.has_org_role(_user_id uuid, _org_id uuid, _role public.app_role) RETURNS boolean LANGUAGE sql STABLE AS $fn$ SELECT EXISTS (SELECT 1 FROM public.organization_members WHERE user_id = _user_id AND organization_id = _org_id AND role = _role) $fn$;
+          CREATE FUNCTION public.is_org_member(_user_id uuid, _org_id uuid) RETURNS boolean LANGUAGE sql STABLE AS $fn$ SELECT EXISTS (SELECT 1 FROM public.organization_members WHERE user_id = _user_id AND organization_id = _org_id) $fn$;
+          CREATE TABLE public.receptionists (
+            id uuid PRIMARY KEY, user_id uuid NOT NULL, name text, business_name text,
+            business_type text, greeting_message text, tone public.receptionist_tone,
+            language text, currency text, business_phone text, address text, website text,
+            hours_of_operation jsonb, customer_fields jsonb, services_and_prices jsonb,
+            business_info jsonb, capabilities jsonb, knowledge_base text, business_model text
+          );
+          CREATE TABLE public.config_versions (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(), receptionist_id uuid NOT NULL,
+            version_number integer NOT NULL, config_json jsonb NOT NULL, plan_text text,
+            change_source text, owner_input text, approved_by uuid, approved_at timestamptz,
+            created_at timestamptz DEFAULT now()
+          );
+          CREATE TABLE public.services (id uuid PRIMARY KEY, name text NOT NULL, stock_quantity integer);
+          CREATE TABLE public.appointments (
+            id uuid PRIMARY KEY, service text NOT NULL, start_time timestamptz NOT NULL,
+            customer_name text NOT NULL, customer_phone text, customer_email text, status text,
+            cancellation_token text, confirmation_token text
+          );
+          CREATE TABLE public.ai_booking_suggestions (created_at timestamptz);
+          CREATE TABLE public.chat_messages (created_at timestamptz);
+          CREATE TABLE public.conversation_state (last_message_at timestamptz);
+          CREATE TABLE public.conversations (created_at timestamptz);
+          CREATE FUNCTION public.cleanup_old_booking_suggestions(integer) RETURNS integer LANGUAGE sql AS $body$ SELECT 0 $body$;
+          CREATE FUNCTION public.cleanup_old_chat_messages(integer) RETURNS integer LANGUAGE sql AS $body$ SELECT 0 $body$;
+          CREATE FUNCTION public.cleanup_old_conversation_state(integer) RETURNS integer LANGUAGE sql AS $body$ SELECT 0 $body$;
+          CREATE FUNCTION public.cleanup_old_conversations(integer) RETURNS integer LANGUAGE sql AS $body$ SELECT 0 $body$;
+          CREATE FUNCTION public.deduct_stock(p_product_id uuid, p_quantity integer) RETURNS jsonb LANGUAGE sql AS $fn$ SELECT '{}'::jsonb $fn$;
+          CREATE FUNCTION public.create_widget_order(p_receptionist_id uuid, p_customer_name text, p_items jsonb, p_customer_email text, p_customer_phone text, p_notes text, p_metadata jsonb, p_idempotency_key text) RETURNS uuid LANGUAGE sql AS $fn$ SELECT gen_random_uuid() $fn$;
+          CREATE FUNCTION public.create_widget_appointment(p_receptionist_id uuid, p_customer_name text, p_service text, p_start_time timestamptz, p_end_time timestamptz, p_customer_email text, p_customer_phone text, p_service_id uuid, p_notes text, p_booking_source text, p_idempotency_key text, p_metadata jsonb) RETURNS TABLE(id uuid, cancellation_token text, confirmation_token text) LANGUAGE plpgsql SECURITY DEFINER AS $fn$ DECLARE v_token bytea; BEGIN v_token := gen_random_bytes(32); RETURN QUERY SELECT gen_random_uuid(), encode(v_token, 'hex'), encode(v_token, 'hex'); END; $fn$;
+          CREATE FUNCTION public.insert_booking_suggestion(p_receptionist_id uuid, p_request_message text, p_suggestions jsonb, p_model text, p_latency_ms integer) RETURNS uuid LANGUAGE sql AS $fn$ SELECT gen_random_uuid() $fn$;
+          CREATE FUNCTION public.insert_conversion_event(p_receptionist_id uuid, p_session_id text, p_event_type text, p_revenue_value numeric, p_currency text, p_metadata jsonb) RETURNS uuid LANGUAGE sql AS $fn$ SELECT gen_random_uuid() $fn$;
+          CREATE FUNCTION public.upsert_conversation_state(p_receptionist_id uuid, p_session_id text, p_active_flow text, p_active_topic text, p_flow_step text, p_topic_confidence double precision, p_slots jsonb) RETURNS uuid LANGUAGE sql AS $fn$ SELECT gen_random_uuid() $fn$;
+          CREATE FUNCTION public.upsert_conversation_summary(p_receptionist_id uuid, p_session_id text, p_summary text, p_key_facts jsonb, p_user_fingerprint text) RETURNS uuid LANGUAGE sql AS $fn$ SELECT gen_random_uuid() $fn$;
+          CREATE FUNCTION public.get_public_receptionist(p_receptionist_id uuid) RETURNS TABLE(id uuid, name text, business_name text, greeting_message text, active boolean, timezone text, tone text, business_model text, widget_surface jsonb) LANGUAGE sql STABLE SECURITY DEFINER AS $fn$ SELECT NULL::uuid, NULL::text, NULL::text, NULL::text, NULL::boolean, NULL::text, NULL::text, NULL::text, NULL::jsonb WHERE false $fn$;
+          CREATE FUNCTION public.get_safe_receptionist_for_widget(p_receptionist_id uuid) RETURNS TABLE(id uuid, name text, business_name text, greeting_message text, timezone text, tone text) LANGUAGE sql STABLE SECURITY DEFINER AS $fn$ SELECT NULL::uuid, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text WHERE false $fn$;
+          CREATE FUNCTION public.get_services_for_receptionist(p_receptionist_id uuid) RETURNS TABLE(id uuid, name text, description text, duration_minutes integer, price numeric, active boolean, is_product boolean, stock_quantity integer, buffer_before_minutes integer, buffer_after_minutes integer) LANGUAGE sql STABLE SECURITY DEFINER AS $fn$ SELECT NULL::uuid, NULL::text, NULL::text, NULL::integer, NULL::numeric, NULL::boolean, NULL::boolean, NULL::integer, NULL::integer, NULL::integer WHERE false $fn$;
+          CREATE FUNCTION public.get_appointment_by_token(p_token text) RETURNS SETOF public.appointments LANGUAGE sql STABLE SECURITY DEFINER AS $fn$ SELECT * FROM public.appointments WHERE p_token IS NOT NULL AND length(p_token) > 10 AND (confirmation_token = p_token OR cancellation_token = p_token) LIMIT 1 $fn$;
+          CREATE FUNCTION public.revert_config_version(p_receptionist_id uuid, p_target_version integer) RETURNS jsonb LANGUAGE sql AS $body$ SELECT '{}'::jsonb $body$;
+          CREATE FUNCTION public.record_manual_version(uuid, text) RETURNS jsonb LANGUAGE sql AS $fn$ SELECT '{}'::jsonb $fn$;
+          CREATE FUNCTION public.handle_new_user() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
+          CREATE FUNCTION public.touch_build_thread() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
+          CREATE FUNCTION public.touch_director_thread() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
+          CREATE FUNCTION public.update_business_modules_updated_at() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
+          CREATE FUNCTION public.handle_new_organization() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
+          CREATE FUNCTION public.sync_receptionist_phones() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;
+          CREATE FUNCTION public.rls_auto_enable() RETURNS event_trigger LANGUAGE plpgsql AS $fn$ BEGIN NULL; END $fn$;
+          CREATE FUNCTION public.schedule_appointment_reminder_cron(p_supabase_url text, p_anon_key text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'cron' AS $fn$ BEGIN NULL; END $fn$;
+          CREATE FUNCTION public.schedule_director_sweep_cron(p_supabase_url text, p_anon_key text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'cron' AS $fn$ BEGIN NULL; END $fn$;
+          CREATE FUNCTION public.schedule_plan_worker_cron(p_supabase_url text, p_anon_key text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'cron' AS $fn$ BEGIN NULL; END $fn$;
+          GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO PUBLIC;
+          GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+          SQL
+      - name: Apply security migration to disposable database
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261016000002_secure_definer_rpc_access.sql
+      - name: Assert least privilege, positive inventory quantities, and owner-scoped revert
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/secure_definer_rpc_access.sql
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $test$
+          BEGIN
+            PERFORM * FROM public.create_widget_appointment(
+              NULL, 'Test customer', 'Test service', now(), now() + interval '30 minutes',
+              NULL, NULL, NULL, NULL, 'test', NULL, '{}'::jsonb
+            );
+          END $test$;
+          SQL
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+      - name: Type-check appointment action Edge Function
+        run: deno check supabase/functions/appointment-action/index.ts
+      - name: Test appointment action authorization policy
+        run: deno test supabase/functions/appointment-action/authorization.test.ts
+  frontend-appointment-token-pages:
+    name: Build safe appointment token pages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build application
+        run: npm run build
+      - name: Lint changed appointment pages
+        run: npx eslint src/pages/ConfirmAppointment.tsx src/pages/CancelAppointment.tsx
