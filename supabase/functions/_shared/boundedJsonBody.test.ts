@@ -55,3 +55,14 @@ Deno.test("rejects an absent request body", async () => {
   const result = await readBoundedJsonBody(new Request("https://example.test", { method: "POST" }));
   assert(!result.ok && result.status === 400, "missing body rejected");
 });
+
+Deno.test("does not trust a smaller declared content length", async () => {
+  const payload = JSON.stringify({ blob: "x".repeat(100) });
+  const request = new Request("https://example.test", {
+    method: "POST",
+    body: payload,
+    headers: { "content-length": "1" },
+  });
+  const result = await readBoundedJsonBody(request, 32);
+  assert(!result.ok && result.status === 413, "streamed bytes override a misleading content length");
+});
